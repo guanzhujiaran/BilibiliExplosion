@@ -1,0 +1,21 @@
+__pycache__
+# *.go
+*.json
+test.py
+go.mod
+go.sum
+*.exe
+login_info.txt
+users.yaml
+*.tmp
+.venv
+*.csv
+*.svg
+*.txt
+.idea/
+github/
+.vscode
+*.log
+*.zip
+utl/nlpcda_model/
+.git/
