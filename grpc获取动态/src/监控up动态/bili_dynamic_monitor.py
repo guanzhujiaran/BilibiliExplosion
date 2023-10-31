@@ -23,7 +23,7 @@ class monitor:
             }
         ]
         self.grpc_api = BiliGrpc()
-        self.sep_time = 60
+        self.sep_time =3 * 60
         self.lock = threading.Lock()
 
     def timeshift(self, timestamp):

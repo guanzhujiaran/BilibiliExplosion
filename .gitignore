@@ -19,3 +19,4 @@ github/
 *.zip
 utl/nlpcda_model/
 .git/
+!github/my_operator/

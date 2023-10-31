@@ -231,7 +231,15 @@ class LotDynSortByDate:
                     if author:
                         official_verify_type = str(author.get('official').get('type')) if author.get(
                             'official') and author.get('official').get('type') else '0'
-            if dynData.get('extend').get('origDesc'):
+                if module.get('moduleDesc'):
+                    moduleDesc = module.get('moduleDesc')
+                    desc = moduleDesc.get('desc')
+                    if desc:
+                        for descNode in desc:
+                            if descNode.get('type') == 'desc_type_lottery':  # 获取官方抽奖，这里的比较全
+                                lot_rid = dynData.get('extend').get('businessId')
+                                lot_type = '官方抽奖'
+            if dynData.get('extend').get('origDesc') and not lot_rid:
                 for descNode in dynData.get('extend').get('origDesc'):
                     if descNode.get('type') == 'desc_type_lottery':
                         lot_rid = dynData.get('extend').get('businessId')

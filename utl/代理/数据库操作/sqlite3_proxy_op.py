@@ -160,7 +160,7 @@ class SQLHelper:
         #         'avaliable_score': avaliable_score
         #     }).rowcount  # 刷新超过12小时的无效代理，改变status和score
         res2 = self.op_db.execute(
-            f"delete from proxy_tab where score<:avaliable_score and success_times <-5",
+            f"delete from proxy_tab where score<:avaliable_score and success_times <-3",
             {
                 'avaliable_score': avaliable_score
             }).rowcount  # 刷新超过12小时的无效代理，改变status和score 删除可能把一些好用的也删了？不清楚，反正先不删除了

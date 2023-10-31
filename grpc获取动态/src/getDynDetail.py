@@ -235,14 +235,14 @@ class DynDetailScrapy:
                 desc = moduleDesc.get('desc')
                 if desc:
                     for descNode in desc:
-                        if descNode.get('type') == 'desc_type_lottery':
+                        if descNode.get('type') == 'desc_type_lottery': # 获取官方抽奖，这里的比较全
                             lot_id = descNode.get('rid')
                             lot_rid = dynData.get('extend').get('businessId')
                             lot_notice_res = self.get_lot_notice(2, lot_rid)
                             lot_data = lot_notice_res.get('data')
                             if lot_data:
                                 lot_id = lot_data.get('lottery_id')
-        if dynData.get('extend').get('origDesc') and not lot_id:  # 获取官方抽奖
+        if dynData.get('extend').get('origDesc') and not lot_id:  # 获取官方抽奖，这里的可能会漏掉开头的官方抽奖
             for descNode in dynData.get('extend').get('origDesc'):
                 if descNode.get('type') == 'desc_type_lottery':
                     lot_id = descNode.get('rid')
