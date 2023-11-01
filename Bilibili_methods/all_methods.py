@@ -2372,7 +2372,7 @@ class methods:
         zhuanfapanduan15 = re.match('.*转评|.*转加关', str(dongtaineirong), re.DOTALL)
         if (zhuanfapanduan1 == None and zhuanfapanduan3 == None and zhuanfapanduan4 == None
                 and zhuanfapanduan5 == None and zhuanfapanduan6 == None and zhuanfapanduan10 == None and zhuanfapanduan11 == None and zhuanfapanduan12 == None
-                and zhuanfapanduan13 == None and zhuanfapanduan14 == None and zhuanfapanduan15 == None and zhuanfapanduan16 == None
+                and zhuanfapanduan13 == None and zhuanfapanduan14 == None and zhuanfapanduan15 == None
                 or zhuanfapanduan_1 != None or zhuanfapanduan_2 != None or zhuanfapanduan_3 != None or zhuanfapanduan_4 != None
         ):
             return None
