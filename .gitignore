@@ -13,10 +13,11 @@ users.yaml
 *.svg
 *.txt
 .idea/
-github/
 .vscode
 *.log
 *.zip
-utl/nlpcda_model/
+/utl/nlpcda_model/
 .git/
-!github/my_operator/*
+/github/
+!/github/my_operator
+/b站app/bilireq/

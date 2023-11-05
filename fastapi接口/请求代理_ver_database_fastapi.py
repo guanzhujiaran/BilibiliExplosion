@@ -5,6 +5,7 @@ import asyncio
 import fastapi
 import uvicorn
 from fastapi import Query
+from loguru import logger
 
 from utl.代理.请求代理_ver_database import request_with_proxy
 from grpc获取动态.src.SqlHelper import SQLHelper
@@ -27,10 +28,15 @@ def app_avaliable_api():
 # region 魔搭社区的各种ai模型
 @app.get('/damo/semantic/')
 def semantic(data=Query(default=None)):
-    if data:
-        return judge_semantic_cls(data)
-    else:
+    try:
+        if data:
+            return judge_semantic_cls(data)
+        else:
+            return False
+    except Exception as e:
+        logger.error(e)
         return False
+
 
 # endregion
 
@@ -72,8 +78,6 @@ async def upsert_grpc_proxy_status(request: fastapi.Request):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, grpc_sql_helper.upsert_lot_detail, request_body)
     return result
-
-
 
 
 @app.get('/get_others_lot_dyn/')

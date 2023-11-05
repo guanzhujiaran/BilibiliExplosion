@@ -70,15 +70,6 @@ class rid_get_dynamic:
         # login_check(cookie3, ua3)
         atexit.register(self.quit)
 
-        def get_attention(cookie, __ua):
-            url = 'https://api.vc.bilibili.com/feed/v1/feed/get_attention_list'
-            headers = {
-                'cookie': cookie,
-                'user-agent': __ua
-            }
-            req = requests.get(url=url, headers=headers)
-            return req.json().get('data').get('list')
-
         # self.followed_list = get_attention(cookie3, ua3)  # 关注的列表
         # print(f'共{len(self.followed_list)}个关注')
         self.list_type_wrong = list()  # 出错动态内容
