@@ -62,7 +62,7 @@ class request_with_proxy:
         self.get_proxy_page = 7  # 获取代理网站的页数
         self.write_proxy_lock = threading.Lock()
         self.fresh_proxy_lock = threading.Lock()
-        self.__dir_path = CONFIG.root_dir+'utl/代理/'
+        self.__dir_path = CONFIG.root_dir + 'utl/代理/'
         self.check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
         self.fresh_cookie_lock = threading.Lock()
         self._352_time = 0
@@ -172,7 +172,16 @@ class request_with_proxy:
                 req = self.s.request(*args, **kwargs, proxies=p, timeout=self.timeout)
                 if 'code' not in req.text and self.channel == 'bili':  # 如果返回的不是json那么就打印出来看看是什么
                     self.log.info(req.text)
-                req_dict = req.json()
+                try:
+                    req_dict = req.json()
+                except:
+                    logger.error(f'解析为dict时失败，相应内容为：{req.text}')
+                    raise ValueError
+                if type(req_dict) is list:
+                    p_dict['score'] += 10
+                    p_dict['status'] = status
+                    self._update_to_proxy_dict(p_dict, score_plus_Flag=True)
+                    return req_dict
                 if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
                     if not self.mode_fixed:
                         self.mode = 'rand'
@@ -195,7 +204,6 @@ class request_with_proxy:
                     p_dict['status'] = status
                     self._update_to_proxy_dict(p_dict, score_plus_Flag=True, change_score_num=10)
                     # return self.request_with_proxy(*args, **kwargs)
-
 
                     continue
                 if req_dict.get('code') == 0 or req_dict.get('code') == 4101131 or req_dict.get('code') == -9999:
@@ -1488,6 +1496,7 @@ class request_with_proxy:
         # else:
         #     return self.get_proxy()
         return
+
     def get_proxy(self):
         try:
             thd = threading.Thread(target=self.__get_proxy)

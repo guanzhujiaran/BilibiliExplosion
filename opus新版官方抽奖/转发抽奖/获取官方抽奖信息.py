@@ -732,6 +732,8 @@ class exctract_official_lottery:
             print(f'args_list:{args_list}')
             for args in args_list:
                 print(args)
+                if not args[0]:
+                    continue
                 thread = threading.Thread(target=thread_get_details, args=(args,))
                 thread.start()
                 thread_list.append(thread)

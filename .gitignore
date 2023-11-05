@@ -18,6 +18,6 @@ users.yaml
 *.zip
 /utl/nlpcda_model/
 .git/
-/github/
-!/github/my_operator
+/github/*
+!/github/my_operator/
 /b站app/bilireq/

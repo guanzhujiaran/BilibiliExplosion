@@ -4,11 +4,13 @@ import traceback
 import json
 import requests
 import aiohttp
+
+
 class request_with_proxy:
     def __init__(self):
         self.post_localhost_timeout = None
 
-    async def async_request_with_proxy(self,*args, **kwargs):
+    async def async_request_with_proxy(self, *args, **kwargs):
         """
         异步处理请求
         :param args:
@@ -27,13 +29,13 @@ class request_with_proxy:
                 pass
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post('http://localhost:23333/request_with_proxy', data=data,timeout=self.post_localhost_timeout) as response:
+                    async with session.post('http://localhost:23333/request_with_proxy', data=data,
+                                            timeout=self.post_localhost_timeout) as response:
                         return await response.json()
             except:
                 traceback.print_exc()
 
-
-    def request_with_proxy(self, *args, **kwargs)->dict:
+    def request_with_proxy(self, *args, **kwargs) -> dict or list[dict]:
         if args:
             kwargs.update(*args)
         data = json.dumps(kwargs)
@@ -50,7 +52,6 @@ class request_with_proxy:
                 return resp.json()
             except:
                 traceback.print_exc()
-
 
     def get_one_rand_proxy(self):
         """
