@@ -2369,7 +2369,7 @@ class methods:
         zhuanfapanduan12 = re.match('.*专.{0,20}抽.*', str(dongtaineirong), re.DOTALL)
         zhuanfapanduan13 = re.match('.*专.{0,20}抽.*', str(dongtaineirong), re.DOTALL)
         zhuanfapanduan14 = re.match('.*专.{0,20}送.*', str(dongtaineirong), re.DOTALL)
-        zhuanfapanduan15 = re.match('.*转评|.*转加关', str(dongtaineirong), re.DOTALL)
+        zhuanfapanduan15 = re.match('.*转评|.*转加关|.*转\+关', str(dongtaineirong), re.DOTALL)
         if (zhuanfapanduan1 == None and zhuanfapanduan3 == None and zhuanfapanduan4 == None
                 and zhuanfapanduan5 == None and zhuanfapanduan6 == None and zhuanfapanduan10 == None and zhuanfapanduan11 == None and zhuanfapanduan12 == None
                 and zhuanfapanduan13 == None and zhuanfapanduan14 == None and zhuanfapanduan15 == None

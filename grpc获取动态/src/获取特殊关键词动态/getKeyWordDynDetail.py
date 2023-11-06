@@ -138,4 +138,4 @@ class SearchKeyWordDyn:
 
 if __name__ == '__main__':
     a = SearchKeyWordDyn()
-    a.main(['因为考试改名转运'], [int(time.time()) - 7 * 24 * 3600, int(time.time())])
+    a.main(['招聘'], [int(time.time()) - 7 * 24 * 3600, int(time.time())])

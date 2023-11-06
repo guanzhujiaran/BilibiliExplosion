@@ -1411,7 +1411,7 @@ class GET_OTHERS_LOT_DYN:
                 all_lot_det.append(i.strip())
         filtered_list: list = list(filter(self.is_need_lot, all_lot_det))
         filtered_list.sort(key=lambda x: try_parse_int(x.split("\t")[5]), reverse=True)
-        self.push_lot_csv(f"{datetime.datetime.now().strftime('%m月%d日')} 抽奖信息", filtered_list[0:10])
+        self.push_lot_csv(f"动态抽奖信息", filtered_list[0:10])# {datetime.datetime.now().strftime('%m月%d日')}
         filtered_list.sort(key=lambda x: x.split("\t")[0], reverse=True)  # 按照降序排序
         return [x.split('\t')[0] for x in filtered_list]
     # </editor-fold>
