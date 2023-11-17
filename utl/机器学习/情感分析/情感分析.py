@@ -3,8 +3,9 @@ import re
 from modelscope.pipelines import pipeline
 from modelscope.utils.constant import Tasks
 from loguru import logger
+
 semantic_cls = pipeline(Tasks.text_classification,
-                        'damo/nlp_structbert_sentiment-classification_chinese-large',)
+                        'damo/nlp_structbert_sentiment-classification_chinese-large', )
 
 
 def judge_semantic_cls(input_str):

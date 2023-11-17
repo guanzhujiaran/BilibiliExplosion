@@ -7,6 +7,16 @@
 <br>[__定时获取预约抽奖__](opus新版官方抽奖/预约抽奖/定时提交预约抽奖.py)
 <br>[__监控ipv6变化__](K:/python测试专用/光猫测试/一键修改squidconfig.py)
 <br>[__天选抽奖监控__](K:\Bili_live_monitor\src\monitor.py)
+>>一键运行
+>>```bash
+>>C:\Users\Acer\.conda\envs\Bili\python.exe "K:\python test\fastapi接口\请求代理_ver_database_fastapi.py" 
+>>C:\Users\Acer\.conda\envs\Bili\python.exe "K:\python test\github\哔哩哔哩粉丝勋章助手\main.py" 
+>>C:\Users\Acer\.conda\envs\Bili\python.exe "K:\python test\grpc获取动态\src\监控up动态\bili_dynamic_monitor.py" 
+>>C:\Users\Acer\.conda\envs\Bili\python.exe "K:\python test\opus新版官方抽奖\转发抽奖\定时获取所有动态以及发布抽奖专栏.py" 
+>>C:\Users\Acer\.conda\envs\Bili\python.exe "K:\python test\opus新版官方抽奖\预约抽奖\定时提交预约抽奖.py" 
+>>C:\Users\Acer\.conda\envs\Bili\python.exe K:\python测试专用\光猫测试\一键修改squidconfig.py 
+>>C:\Users\Acer\.conda\envs\Bili\python.exe K:\Bili_live_monitor\src\monitor.py
+>>```
 
 >># __可选功能__
 > >>[根据日期获取抽奖信息](grpc获取动态\src\根据日期获取抽奖动态\getLotDynSortByDate.py)<br>

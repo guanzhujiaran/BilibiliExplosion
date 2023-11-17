@@ -3,6 +3,7 @@
 import asyncio
 
 import fastapi
+import redis
 import uvicorn
 from fastapi import Query
 from loguru import logger
@@ -18,6 +19,7 @@ get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
 grpc_sql_helper = SQLHelper()
 app = fastapi.FastAPI()
 req = request_with_proxy()
+r = redis.Redis(host='localhost', port=11451, db=0)
 
 
 @app.get('/test/')
@@ -35,7 +37,7 @@ def semantic(data=Query(default=None)):
             return False
     except Exception as e:
         logger.error(e)
-        return False
+        return True
 
 
 # endregion

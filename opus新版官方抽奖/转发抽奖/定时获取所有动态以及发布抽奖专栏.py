@@ -13,7 +13,7 @@ log = logger.bind(user="预约抽奖")
 
 def main():
     d = DynDetailScrapy()
-    d.main()#####
+    d.main()  #####
 
     e = exctract_official_lottery()
     e.main()
@@ -22,11 +22,17 @@ def main():
     g.main([int(time.time()) - 3600 * 24, int(time.time())])
 
     log.info('今天这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
-if __name__ == "__main__":
-    from apscheduler.schedulers.blocking import BlockingScheduler
-    from apscheduler.triggers.cron import CronTrigger
 
-    log.info('使用内置定时器,开启定时任务,等待时间到达后执行')
-    schedulers = BlockingScheduler()
-    schedulers.add_job(main, CronTrigger.from_crontab('0 0 * * *'), misfire_grace_time=3600)
-    schedulers.start()
+
+if __name__ == "__main__":
+    schedule_mark = True
+    if schedule_mark:
+        from apscheduler.schedulers.blocking import BlockingScheduler
+        from apscheduler.triggers.cron import CronTrigger
+
+        log.info('使用内置定时器,开启定时任务,等待时间到达后执行')
+        schedulers = BlockingScheduler()
+        schedulers.add_job(main, CronTrigger.from_crontab('0 0 * * *'), misfire_grace_time=3600)
+        schedulers.start()
+    else:
+        main()

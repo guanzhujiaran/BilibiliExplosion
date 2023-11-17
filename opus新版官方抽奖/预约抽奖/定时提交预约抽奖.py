@@ -39,10 +39,14 @@ def main():
 
 
 if __name__ == '__main__':
-    from apscheduler.schedulers.blocking import BlockingScheduler
-    from apscheduler.triggers.cron import CronTrigger
+    schedule_mark = True
+    if schedule_mark:
+        from apscheduler.schedulers.blocking import BlockingScheduler
+        from apscheduler.triggers.cron import CronTrigger
 
-    log.info('使用内置定时器,开启定时任务,等待时间到达后执行')
-    schedulers = BlockingScheduler()
-    schedulers.add_job(main, CronTrigger.from_crontab('0 0 * * *'), misfire_grace_time=3600)
-    schedulers.start()
+        log.info('使用内置定时器,开启定时任务,等待时间到达后执行')
+        schedulers = BlockingScheduler()
+        schedulers.add_job(main, CronTrigger.from_crontab('0 0 * * *'), misfire_grace_time=3600)
+        schedulers.start()
+    else:
+        main()

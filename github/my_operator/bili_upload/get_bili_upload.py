@@ -1189,7 +1189,7 @@ class renew:
                 #     time.sleep(10)
 
         if n <= 4 and time.time() - timelist[-1] >= self.SpareTime:
-            self.uidlist.remove(uid)
+            # self.uidlist.remove(uid)
             logger.info(f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
 
     def thread_judgedynamic(self, write_in_list):
