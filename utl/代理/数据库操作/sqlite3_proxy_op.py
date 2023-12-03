@@ -6,16 +6,18 @@ import time
 from copy import deepcopy
 from loguru import logger
 from CONFIG import CONFIG
+
 logger.bind(user='sqlite3')
 op_db_lock = threading.Lock()
 
-logger.add(CONFIG.root_dir+"utl/代理/log/sqlite3.log",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "sqlite3")
+logger.add(CONFIG.root_dir + "utl/代理/log/sqlite3.log",
+           encoding="utf-8",
+           enqueue=True,
+           rotation="500MB",
+           compression="zip",
+           retention="15 days",
+           filter=lambda record: record["extra"].get('user') == "sqlite3")
+
 
 def lock_wrapper(func: callable) -> callable:
     def wrapper(*args, **kwargs):
@@ -164,6 +166,46 @@ class SQLHelper:
             {
                 'avaliable_score': avaliable_score
             }).rowcount  # 刷新超过12小时的无效代理，改变status和score 删除可能把一些好用的也删了？不清楚，反正先不删除了
+        res3 = self.op_db.execute(
+            f"delete from SD_grpc_stat where proxy_id not in (select proxy_id from proxy_tab)")# 删除不在主表中的代理数据
+        self.op_db.conn.commit()
+        return res1
+
+    @logger.catch
+    @lock_wrapper
+    def grpc_refresh_412_proxy(self) -> int:
+        '''
+        更新412和负分的代理，返回更新的数量
+        :return:
+        '''
+        avaliable_score = 0
+        available_status = 0
+        now = int(time.time())
+        unavaliable_status = -412
+        res1 = self.op_db.execute(
+            f"update SD_grpc_stat set status=:available_status,update_ts=:now where status= :unavaliable_status and strftime('%s','now')-update_ts >= :_412_sep_time and score>=:avaliable_score",
+            {
+                'available_status': available_status,
+                'now': now,
+                'unavaliable_status': unavaliable_status,
+                '_412_sep_time': self._412_sep_time,
+                'avaliable_score': avaliable_score
+            }
+        ).rowcount  # 刷新超过两小时的412风控代理 不改变分数，只改变status
+        # res2 = self.op_db.execute(
+        #     f"update proxy_tab set status=:available_status, update_ts=:now, score=50 where score<:avaliable_score and strftime('%s','now')-update_ts >=:_underscore_spe_time",
+        #     {
+        #         'available_status': available_status,
+        #         'now': now,
+        #         'unavaliable_status': unavaliable_status,
+        #         '_underscore_spe_time': self._underscore_spe_time,
+        #         'avaliable_score': avaliable_score
+        #     }).rowcount  # 刷新超过12小时的无效代理，改变status和score
+        res2 = self.op_db.execute(
+            f"delete from SD_grpc_stat where score<:avaliable_score and success_times <-3",
+            {
+                'avaliable_score': avaliable_score
+            }).rowcount  # 刷新超过12小时的无效代理，改变status和score 删除可能把一些好用的也删了？不清楚，反正先不删除了
         self.op_db.conn.commit()
         return res1
 
@@ -236,6 +278,11 @@ class SQLHelper:
         return res
 
     @logger.catch
+    def grpc_get_412_proxy_num(self) -> int:
+        res = self.op_db_grpc_table.count_where(where='status=-412')
+        return res
+
+    @logger.catch
     def get_latest_add_ts(self) -> int:
         res = self.op_db_table.rows_where(order_by='add_ts desc', limit=1)
         max_status_ts = next(res)
@@ -244,6 +291,10 @@ class SQLHelper:
     @logger.catch
     def get_all_proxy_nums(self):
         return self.op_db_table.count
+
+    @logger.catch
+    def grpc_get_all_proxy_nums(self):
+        return self.op_db_grpc_table.count
 
     @logger.catch
     def get_available_proxy_nums(self):
@@ -276,6 +327,7 @@ class SQLHelper:
                     '_underscore_spe_time': self._underscore_spe_time,
                     'avaliable_score': avaliable_score
                 }).rowcount  # 刷新超过12小时的无效代理，改变status和score
+
         if self.op_db_grpc_table.count_where(where='score>=0 and status!=-412') == 0:
             fresh_grpc_proxy()
         available_status = 0
@@ -322,7 +374,7 @@ limit 1
             if score_change > 0:
                 success_times += 1
             else:
-                success_times-=1
+                success_times -= 1
             if grpc_proxy_detail[0]['score'] > 100:
                 score_change = 100 - grpc_proxy_detail[0]['score']
             elif grpc_proxy_detail[0]['score'] < -50:

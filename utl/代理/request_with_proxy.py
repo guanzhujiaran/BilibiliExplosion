@@ -9,6 +9,7 @@ import aiohttp
 class request_with_proxy:
     def __init__(self):
         self.post_localhost_timeout = None
+        self.base_url = 'http://localhost:23333'
 
     async def async_request_with_proxy(self, *args, **kwargs):
         """
@@ -29,7 +30,7 @@ class request_with_proxy:
                 pass
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post('http://localhost:23333/request_with_proxy', data=data,
+                    async with session.post(self.base_url + '/request_with_proxy', data=data,
                                             timeout=self.post_localhost_timeout) as response:
                         return await response.json()
             except:
@@ -47,7 +48,7 @@ class request_with_proxy:
                 # exit()  #
                 pass
             try:
-                resp = requests.request(url='http://localhost:23333/request_with_proxy', method='post', data=data,
+                resp = requests.request(url=self.base_url + '/request_with_proxy', method='post', data=data,
                                         timeout=self.post_localhost_timeout)
                 return resp.json()
             except:
@@ -73,7 +74,7 @@ class request_with_proxy:
         """
         while True:
             try:
-                resp = requests.request(url='http://localhost:23333/get_one_rand_proxy/', method='get')
+                resp = requests.request(url=self.base_url + '/get_one_rand_proxy/', method='get')
                 return resp.json()
             except:
                 traceback.print_exc()
@@ -81,7 +82,7 @@ class request_with_proxy:
     def get_one_rand_grpc_proxy(self):
         while True:
             try:
-                resp = requests.request(url='http://localhost:23333/grpc/get_one_rand_grpc_proxy/', method='get')
+                resp = requests.request(url=self.base_url + '/grpc/get_one_rand_grpc_proxy/', method='get')
                 return resp.json()
             except:
                 traceback.print_exc()
@@ -104,7 +105,7 @@ class request_with_proxy:
                 # exit()  #
                 pass
             try:
-                resp = requests.request(url='http://localhost:23333/grpc/upsert_grpc_proxy_status/',
+                resp = requests.request(url=self.base_url + '/grpc/upsert_grpc_proxy_status/',
                                         method='post',
                                         data=data,
                                         timeout=self.post_localhost_timeout)
@@ -124,13 +125,14 @@ class request_with_proxy:
                 # exit()  #
                 pass
             try:
-                resp = requests.request(url='http://localhost:23333/lot/upsert_lot_detail/',
+                resp = requests.request(url=self.base_url + '/lot/upsert_lot_detail/',
                                         method='post',
                                         data=data,
                                         timeout=self.post_localhost_timeout)
                 return resp.json()
             except:
                 traceback.print_exc()
+
 
 
 if __name__ == '__main__':

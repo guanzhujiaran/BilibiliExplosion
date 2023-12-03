@@ -4,10 +4,8 @@ import datetime
 import json
 import time
 from typing import Generator
-
 import execjs
 import pandas as pd
-
 import Bilibili_methods.all_methods
 from grpc获取动态.src.DynObjectClass import lotDynData
 from grpc获取动态.src.SqlHelper import SQLHelper
@@ -59,7 +57,12 @@ class LotDynSortByDate:
             '键盘',
             '游戏本',
             '御神子',
-            '琉璃子'
+            '琉璃子',
+            '固态',
+            '手机',
+            'GB',
+            'TB',
+            'tb'  # 可能是显存大小，硬盘容量，内存条容量等参数
         ]  # 需要重点查看的关键词列表
         self.manual_reply_judge = execjs.compile("""
                 manual_reply_judge= function (dynamic_content) {

@@ -1,13 +1,9 @@
 # -*- coding: utf-8 -*-
 import time
-
 import threading
-
 import json
-
 import os
-
-from grpc获取动态.grpc.grpc_api import BiliGrpc
+from utl.代理.grpc_api import BiliGrpc
 from utl.pushme.pushme import pushme
 from CONFIG import CONFIG
 from loguru import logger
@@ -18,15 +14,25 @@ class monitor:
         self.dir_path = CONFIG.root_dir + 'grpc获取动态/src/监控up动态/'
         if not os.path.exists(self.dir_path + 'data/'):
             os.makedirs(self.dir_path + 'data/')
-        self.uid_list = [370877395]  # 监控的up的uid
-        self.monitor_uid_list=None
+        self.uid_list = [370877395, 387636363]  # 监控的up的uid
+        self.monitor_uid_list = None
         if os.path.exists(self.dir_path + 'data/monitor_uid_list.json'):
-            with open(self.dir_path + 'data/monitor_uid_list.json', 'r',encoding='utf-8') as f:
+            with open(self.dir_path + 'data/monitor_uid_list.json', 'r', encoding='utf-8') as f:
                 content = f.read()
                 if content.strip():
                     self.monitor_uid_list = json.loads(content)
         if not self.monitor_uid_list:
             self.monitor_uid_list = [{'uid': uid, 'latest_dynamic_id_list': []} for uid in self.uid_list]
+        recorded_uid_list = [x.get('uid') for x in self.monitor_uid_list]
+        for uid in self.uid_list:
+            if uid not in recorded_uid_list:
+                self.monitor_uid_list.append({'uid': uid, 'latest_dynamic_id_list': []})
+        for uid in recorded_uid_list:
+            if uid not in self.uid_list:
+                for info in self.monitor_uid_list:
+                    if info.get('uid') == uid:
+                        self.monitor_uid_list.remove(info)
+                        break
 
         self.grpc_api = BiliGrpc()
         self.sep_time = 3 * 60  # 间隔时间3分钟，一天总共获取20 * 24 = 480次，间隔比较适中
@@ -38,8 +44,8 @@ class monitor:
         return realtime
 
     def save_monitor_uid_list(self):
-        with open(self.dir_path + 'data/monitor_uid_list.json', 'w',encoding='utf-8') as f:
-            f.write(json.dumps(self.monitor_uid_list,indent='\t'))
+        with open(self.dir_path + 'data/monitor_uid_list.json', 'w', encoding='utf-8') as f:
+            f.write(json.dumps(self.monitor_uid_list, indent='\t'))
 
     def push_dyn_notify(self, dynamic_item):
         cardType = dynamic_item.get('cardType')

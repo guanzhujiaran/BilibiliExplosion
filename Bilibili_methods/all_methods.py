@@ -2193,7 +2193,7 @@ class methods:
             re.DOTALL)
         matchobj_114 = re.match('.*抽.{0,5}个|.*抽.{0,5}位|.*抽.{0,5}名', tcontent, re.DOTALL)
         matchobj_113 = re.match('.*抽.{0,5}套|.*关注.{0,20}抽|.*转发.{0,20}抽|.*转发抽', tcontent, re.DOTALL)
-        matchobj_112 = re.match('.*CJ|.*爆装备', tcontent, re.DOTALL)
+        matchobj_112 = re.match('.*CJ|.*爆装备|.*人人有机用', tcontent, re.DOTALL)
         matchobj_111 = re.match('.*关.{0,10}评.{0,10}给', tcontent, re.DOTALL)
         matchobj_110 = re.match('.*评论.*分享.*请', tcontent, re.DOTALL)
         matchobj_109 = re.match('.*参加.*抽|.*参与.*抽|.*抽.*参加|.*抽.*参与', tcontent, re.DOTALL)

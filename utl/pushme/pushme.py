@@ -13,4 +13,4 @@ def pushme(title,content,__type='text'):
         "content": content,
         'type': __type
     }
-    req = requests.post(url=url, data=data)
+    req = requests.post(url=url, data=data,verify=False)

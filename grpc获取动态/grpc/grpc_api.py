@@ -6,6 +6,7 @@ import threading
 import time
 
 import traceback
+from typing import Union
 
 import grpc
 import json
@@ -20,9 +21,10 @@ from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
 from grpc获取动态.grpc.makeMetaData import make_metadata
 from utl.代理.request_with_proxy import request_with_proxy
 from CONFIG import CONFIG
+
 grpc_err_log = loguru.logger.bind(user='grpc_err')
 grpc_err_log.add(
-    CONFIG.root_dir+'grpc获取动态/src/' + "log/grpc_err.log",
+    CONFIG.root_dir + 'grpc获取动态/src/' + "log/grpc_err.log",
     encoding="utf-8",
     enqueue=True,
     rotation="500MB",
@@ -88,6 +90,10 @@ class BiliGrpc:
                 options = []
 
     def grpc_api_get_DynDetails(self, dyn_ids: [int]) -> dict:
+        if type(dyn_ids) is not list:
+            raise TypeError('dyn_ids must be a list!')
+        if len(dyn_ids) == 0:
+            return {}
         dyn_ids = [int(x) for x in dyn_ids]
         # proxy_server_address = sqlhelper.select_rand_proxy()['proxy']['https']
         # intercept_channel = grpc.intercept_channel(
@@ -140,13 +146,17 @@ class BiliGrpc:
                 self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                     score_change=score_change)
 
-    def grpc_get_dynamic_detail_by_type_and_rid(self, rid: int, dynamic_type: int = 2) -> dict:
+    def grpc_get_dynamic_detail_by_type_and_rid(self, rid: Union[int,str], dynamic_type: int = 2) -> dict:
         """
         通过rid和动态类型特定获取一个动态详情
         :param dynamic_type:动态类型
         :param rid:动态rid
         :return:
         """
+        if type(rid) is str and str.isdigit(rid):
+            rid = int(rid)
+        if type(rid) is not int:
+            raise TypeError('rid must be number!')
         while 1:
             proxy = self.proxy
             channel = self.channel
@@ -212,7 +222,7 @@ class BiliGrpc:
                 self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                     score_change=score_change)
 
-    def grpc_get_space_dyn_by_uid(self, uid, history_offset: str = '', page: int = 1):
+    def grpc_get_space_dyn_by_uid(self, uid: Union[str, int], history_offset: str = '', page: int = 1) -> dict:
         """
          获取up空间
         :param uid:
@@ -220,6 +230,11 @@ class BiliGrpc:
         :param page:
         :return:
         """
+        if type(uid) is str and str.isdigit(uid):
+            uid = int(uid)
+        if type(uid) is not int or type(history_offset) is not str:
+            raise TypeError(
+                f'uid must be a number and history_offset must be str! uid:{uid} history_offset:{history_offset}')
         while 1:
             proxy = self.proxy
             channel = self.channel
@@ -292,3 +307,7 @@ def test():
     resp = t.grpc_get_space_dyn_by_uid(
         2)
     print(resp)
+
+
+if __name__ == '__main__':
+    test()

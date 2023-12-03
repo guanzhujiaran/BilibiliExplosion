@@ -49,13 +49,14 @@ class request_with_proxy:
         self.channel = 'bili'
         self.sqlite3_proxy_op = sqlite3_proxy_op.SQLHelper(CONFIG.database.proxy_db,
                                                            'proxy_tab')
+        self.max_get_proxy_sep = 2 * 3600 * 24  # 最大间隔两天获取一次网络上的代理
         self.log = logger.bind(user=__name__)
         # self.log.remove()
         self.log.add(sys.stdout, level='ERROR')
         self.get_proxy_sep_time = 2 * 3600  # 获取代理的间隔
         self.get_proxy_timestamp = 0
         self.check_proxy_time = {
-            'last_checked_ts': 0,
+            'last_checked_ts': 0, # 最后一次检查和刷新代理的时间
             'checked_ts_sep': 2 * 3600
         }
         self.get_proxy_lock = threading.Lock()
@@ -1578,14 +1579,15 @@ class request_with_proxy:
                             self._refresh_412_proxy()
                             self.get_proxy()  # 如果可用代理数量太少就去获取新的代理
                         if latest_add_ts:
-                            if int(time.time() - latest_add_ts) > 2 * 24 * 3600 and latest_add_ts != 0:
+                            if int(time.time() - latest_add_ts) > self.max_get_proxy_sep and latest_add_ts != 0:
                                 self.get_proxy()  # 最后一次获取的时间如果是两天前，就再去获取一次代理
                                 self._refresh_412_proxy()
                         else:
                             self.get_proxy()  # 最后一次获取的时间如果是两天前，就再去获取一次代理
                             self._refresh_412_proxy()
-                    else:
                         self.check_proxy_time['last_checked_ts'] = int(time.time())
+                    # else:
+                    #     self.check_proxy_time['last_checked_ts'] = int(time.time())
                     break
                     # if p_dict['score'] <= 0:
                     #     if time.time() - p_dict['update_ts'] > 12 * 3600:
@@ -1681,4 +1683,34 @@ class request_with_proxy:
     def upsert_grpc_proxy_status(self, *args, **kwargs):
         if args:
             kwargs.update(*args)
+        if int(time.time()) - self.check_proxy_time['last_checked_ts'] >= self.check_proxy_time[
+            'checked_ts_sep']:
+            grpc_412_num = self.sqlite3_proxy_op.get_412_proxy_num()
+            latest_add_ts = self.sqlite3_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
+            proxy_num = self.sqlite3_proxy_op.grpc_get_all_proxy_nums()
+            if grpc_412_num > proxy_num * 0.8:
+                self.log.warning(
+                    f'-412风控代理过多，等待3分钟\t{grpc_412_num, proxy_num}\t{time.strftime("%Y-%m-%d %H:%M:", time.localtime(time.time()))}')
+                time.sleep(0.05 * 3600)
+                self._grpc_refresh_412_proxy()
+                self.get_proxy()  # 如果可用代理数量太少就去获取新的代理
+            if latest_add_ts:
+                if int(time.time() - latest_add_ts) > self.max_get_proxy_sep and latest_add_ts != 0:
+                    self.get_proxy()  # 最后一次获取的时间如果是两天前，就再去获取一次代理
+                    self._grpc_refresh_412_proxy()
+            else:
+                self.get_proxy()  # 最后一次获取的时间如果是两天前，就再去获取一次代理
+                self._grpc_refresh_412_proxy()
+            self.check_proxy_time['last_checked_ts'] = int(time.time())
+        # else:
+        #     self.check_proxy_time['last_checked_ts'] = int(time.time())
+
         self.sqlite3_proxy_op.upsert_grpc_proxy_status(**kwargs)
+
+    def _grpc_refresh_412_proxy(self):
+        '''
+        刷新两个小时前的412代理状态
+        :return:
+        '''
+        with self.fresh_proxy_lock:
+            self.sqlite3_proxy_op.grpc_refresh_412_proxy()

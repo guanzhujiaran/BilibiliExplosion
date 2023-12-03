@@ -116,7 +116,12 @@ class renew:
             '键盘',
             '游戏本',
             '御神子',
-            '琉璃子'
+            '琉璃子',
+            '固态',
+            '手机',
+            'GB',
+            'TB',
+            'tb'# 可能是显存大小，硬盘容量，内存条容量等参数
         ]  # 需要重点查看的关键词列表
         self._获取过动态的b站用户 = dict()  # 格式：{uid:[1,2,3,4,5,6,7,8,9,10]} 最后一次获取的动态
         self._最后一次获取过动态的b站用户 = dict()
@@ -182,7 +187,12 @@ class renew:
                 3493092200024392,
                 41596583,
                 1677356873,
-                2097682198
+                2097682198,
+                4586734,
+                2365817,
+                211553556,
+                1234306704,
+                319857159
             ]  # 需要爬取的uidlist
 
         self.uidlist = list(set(self.uidlist))  # 去个重
@@ -200,10 +210,8 @@ class renew:
             # 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.57',
             # 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
             # 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.67',
-
             'Mozilla/5.0',
             # 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-
         ]
         self.manual_reply_judge = execjs.compile("""
         manual_reply_judge= function (dynamic_content) {
@@ -338,11 +346,12 @@ class renew:
         # self.nlp = Bilibili_methods.paddlenlp.my_paddlenlp()
         os.system(f'cd "{root_dir}github/bili_upload" && git fetch --all && git reset --hard && git pull')
 
-        self.last_order = []  # 上次查询过的记录
-        self.recorded_dynamic_id: [str] = []  # 单轮获取[动态id] 记录的动态id
+        self.last_order: list[str] = []  # 上次查询过的记录
+        self.last_lotid: list[str] = []  # 之前的抽奖动态id
+        self.recorded_dynamic_id: list[str] = []  # 单轮获取[动态id] 记录的动态id
         self.BAPI = Bilibili_methods.all_methods.methods()
         self.lottery_dynamic_ids = []  # [动态链接：https://t.bilibili.com/...]
-        self.lottery_dynamic_detail_list = []
+        self.lottery_dynamic_detail_list = []  # 动态详情
         self.useless_info = []
         self.s = Session()
 
@@ -502,9 +511,9 @@ class renew:
                 # 'From': 'bingbot(at)microsoft.com',
             }
         url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?timezone_offset=-480&id=' + str(
-            dynamic_id) + '&features=itemOpusStyle'
+            dynamic_id) + '&features=itemOpusStyle,opusBigCover'
         if dynamic_type != 2:
-            url = f'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?timezone_offset=-480&rid={dynamic_id}&type={dynamic_type}&features=itemOpusStyle'
+            url = f'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?timezone_offset=-480&rid={dynamic_id}&type={dynamic_type}&features=itemOpusStyle,opusBigCover'
         try:
             dynamic_req = request_proxy.request_with_proxy(method='GET', url=url, headers=headers)
         except Exception as e:
@@ -729,7 +738,7 @@ class renew:
 
     def get_pinglunreq_with_proxy(self, dynamic_id, rid, pn, _type, *mode):
         """
-        3是热评，2是最新，大概
+        3是热评，2是最新的，大概
         :param dynamic_id:
         :param rid:
         :param pn:
@@ -949,6 +958,7 @@ class renew:
                     if self.BAPI.daily_choujiangxinxipanduan(dynamic_content):
                         self.useless_info.append(format_str)
                         return
+                self.last_lotid.append(str(dynamic_id))
                 self.lottery_dynamic_ids.append(ret_url)
                 self.lottery_dynamic_detail_list.append(format_str)
 
@@ -975,7 +985,7 @@ class renew:
                         orig_ret_url += '?tab=2'
                     if orig_ret_url in self.lottery_dynamic_ids or str(
                             orig_dynamic_id) in self.recorded_dynamic_id or str(
-                        orig_dynamic_id) in self.last_order:  # 如果包含了源动态，就不重复加入
+                        orig_dynamic_id) in self.last_lotid:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
                         if orig_ret_url in [x.split('\t')[0] for x in
                                             self.useless_info] and orig_ret_url not in self.lottery_dynamic_ids:
                             logger.debug(f'原动态 {orig_ret_url} 加入抽奖动态')
@@ -996,6 +1006,7 @@ class renew:
                                    str(deadline)
                                    ]
                     format_str = '\t'.join(map(str, format_list))
+                    self.last_lotid.append(str(orig_dynamic_id))
                     self.lottery_dynamic_ids.append(orig_ret_url)
                     self.lottery_dynamic_detail_list.append(format_str)
 
@@ -1206,24 +1217,37 @@ class renew:
         for thread in thread_list:
             thread.join()
 
-    def judgedynamic_without_thread(self, write_in_list):
-        for i in write_in_list:
-            logger.info(f'当前进度：{write_in_list.index(i) + 1}/{len(write_in_list)}')
-            if i in self.last_order:
-                continue
-            else:
-                self.last_order.append(i)
-            self.judge_lottery(i)
+    # def judgedynamic_without_thread(self, write_in_list):
+    #     for i in write_in_list:
+    #         logger.info(f'当前进度：{write_in_list.index(i) + 1}/{len(write_in_list)}')
+    #         if i in self.last_order:
+    #             continue
+    #         else:
+    #             self.last_order.append(i)
+    #         self.judge_lottery(i)
 
     def main(self):
-        with open(root_dir + relative_dir + 'get_dyid.txt', 'r', encoding='utf-8') as f:
-            for i in f.readlines():
-                for _i in i.split(','):
-                    self.last_order.append(_i.strip())
+        get_dyid_path = root_dir + relative_dir + 'get_dyid.txt'
+        if os.path.exists(get_dyid_path):
+            with open(get_dyid_path, 'r', encoding='utf-8') as f:
+                for i in f.readlines():
+                    for _i in i.split(','):
+                        self.last_order.append(_i.strip())
+
         self.last_order = list(set(self.last_order))
         if len(self.last_order) > 10000000:
             self.last_order = self.last_order[-10000000:]  # 总共容纳10000000条记录，占不了多少空间的
             # self.last_order.sort()  # 排序之前裁剪掉，去掉那些没动静的号的动态id
+
+        lot_dyid_path = root_dir + relative_dir + 'lot_dyid.txt'
+        if os.path.exists(lot_dyid_path):
+            with open(lot_dyid_path, 'r', encoding='utf-8') as f:
+                for i in f.readlines():
+                    for _i in i.split(','):
+                        self.last_lotid.append(_i.strip())
+        self.last_lotid = list(set(self.last_lotid))
+        if len(self.last_lotid) > 10000000:
+            self.last_lotid = self.last_lotid[-10000000:]
 
         path = root_dir + "github/bili_upload"
         datanames = os.listdir(path)
@@ -1276,11 +1300,17 @@ class renew:
         with open(root_dir + relative_dir + 'get_dyid.txt', 'w', encoding='utf-8') as f:
             f.writelines(','.join(self.last_order))
 
+        with open(root_dir + relative_dir + 'lot_dyid.txt', 'w', encoding='utf-8') as f:
+            f.writelines(','.join(self.last_lotid))
+
         with open(root_dir + relative_dir + '获取过动态的b站用户.json', 'w') as f:
             json.dump(self._最后一次获取过动态的b站用户, f, indent=4)
 
         with open(root_dir + relative_dir + 'uidlist.json', 'w') as f:
             json.dump({'uidlist': self.uidlist}, f, indent=4)
+
+
+
         logger.info(
             f'任务完成\n获取到共计：\n{len(self.lottery_dynamic_detail_list)}条抽奖动态\n{len(self.useless_info)}条非抽奖动态！',
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(time.time()))))
@@ -1380,7 +1410,7 @@ class GET_OTHERS_LOT_DYN:
         official_lot_desc = lot_det_sep[9]
         if official_lot_desc in ['预约抽奖', '官方抽奖', '充电抽奖']:
             return False
-        if int(time.time() - pub_ts) <=2 * 3600:# 2小时之内的不按照评论转发数量过滤
+        if int(time.time() - pub_ts) <= 2 * 3600:  # 2小时之内的不按照评论转发数量过滤
             return True
         if comment_count_str != 'None':
             if int(comment_count_str) < 20 and int(rep_count_str) < 20:
@@ -1411,7 +1441,7 @@ class GET_OTHERS_LOT_DYN:
                 all_lot_det.append(i.strip())
         filtered_list: list = list(filter(self.is_need_lot, all_lot_det))
         filtered_list.sort(key=lambda x: try_parse_int(x.split("\t")[5]), reverse=True)
-        self.push_lot_csv(f"动态抽奖信息", filtered_list[0:10])# {datetime.datetime.now().strftime('%m月%d日')}
+        self.push_lot_csv(f"动态抽奖信息", filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
         filtered_list.sort(key=lambda x: x.split("\t")[0], reverse=True)  # 按照降序排序
         return [x.split('\t')[0] for x in filtered_list]
     # </editor-fold>
@@ -1420,7 +1450,9 @@ class GET_OTHERS_LOT_DYN:
 if __name__ == '__main__':
     # time.sleep(60 * 60 * 3)
 
-    # a = renew()
+    a = renew()
     # a.main()
-    g = GET_OTHERS_LOT_DYN()
-    print(g.get_new_dyn())
+    # g = GET_OTHERS_LOT_DYN()
+    # print(g.get_new_dyn())
+    resp = a.get_dynamic_detail_with_proxy(865670239294062608)
+    print(resp)
