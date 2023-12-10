@@ -146,7 +146,7 @@ class BiliGrpc:
                 self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                     score_change=score_change)
 
-    def grpc_get_dynamic_detail_by_type_and_rid(self, rid: Union[int,str], dynamic_type: int = 2) -> dict:
+    def grpc_get_dynamic_detail_by_type_and_rid(self, rid: Union[int, str], dynamic_type: int = 2) -> dict:
         """
         通过rid和动态类型特定获取一个动态详情
         :param dynamic_type:动态类型
@@ -189,14 +189,14 @@ class BiliGrpc:
                     if type(v) == bytes:
                         headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
             try:
-                resp = httpx.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail", data=data,
-                                  headers=headers,
-                                  proxies={
-                                      'http://': proxy['proxy']['http'],
-                                      'https://': proxy['proxy']['https']
-                                  },
-                                  verify=False,
-                                  )
+                with httpx.Client(proxies={
+                    'http://': proxy['proxy']['http'],
+                    'https://': proxy['proxy']['https']},
+                        verify=False
+                ) as client:
+                    resp = client.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail", data=data,
+                                       headers=headers,
+                                       )
                 resp.raise_for_status()
                 if type(resp.headers.get('grpc-status')) is not str and type(
                         resp.headers.get('grpc-status')) is not bytes:
@@ -264,14 +264,14 @@ class BiliGrpc:
                     if type(v) == bytes:
                         headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
             try:
-                resp = httpx.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace", data=data,
-                                  headers=headers,
-                                  proxies={
-                                      'http://': proxy['proxy']['http'],
-                                      'https://': proxy['proxy']['https']
-                                  },
-                                  verify=False,
-                                  )
+                with httpx.Client(proxies={
+                    'http://': proxy['proxy']['http'],
+                    'https://': proxy['proxy']['https']
+                },
+                        verify=False, ) as client:
+                    resp = client.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace", data=data,
+                                       headers=headers,
+                                       )
                 resp.raise_for_status()
                 if type(resp.headers.get('grpc-status')) is not str and type(
                         resp.headers.get('grpc-status')) is not bytes:

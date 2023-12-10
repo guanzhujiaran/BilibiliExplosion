@@ -1405,6 +1405,12 @@ class GET_OTHERS_LOT_DYN:
         pubtime_str = lot_det_sep[3]
         comment_count_str = lot_det_sep[5]
         rep_count_str = lot_det_sep[6]
+        lot_type =  lot_det_sep[9]
+        if lot_type=='抽奖动态的源动态':
+            return True
+        dt=datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')
+        if dt.year<2000:
+            return False
         pub_ts = int(datetime.datetime.timestamp(datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')))
         official_verify = lot_det_sep[2]
         official_lot_desc = lot_det_sep[9]

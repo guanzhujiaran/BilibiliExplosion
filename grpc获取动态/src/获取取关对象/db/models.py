@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy import Column, ForeignKey, Integer, String, TIMESTAMP, text
+from sqlalchemy import Column, ForeignKey, Integer, String, TIMESTAMP, Text, text
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.orm.base import Mapped
 
@@ -14,6 +14,8 @@ class UserInfo(Base):
     uid = mapped_column(Integer, unique=True)
     upTimeStamp = mapped_column(TIMESTAMP, server_default=text("'1970-01-01 00:00:00'"))
     isLotUp = mapped_column(Integer, server_default=text('1'))
+    officialVerify = mapped_column(Integer, server_default=text('- 2'))
+    uname = mapped_column(Text, server_default=text('""'))
 
     Space_Dyn: Mapped[List['SpaceDyn']] = relationship('SpaceDyn', uselist=True, back_populates='UserInfo_')
 
@@ -28,6 +30,9 @@ class SpaceDyn(Base):
     dynamic_content = mapped_column(String)
     dynamic_type = mapped_column(String)
     is_lot_dyn = mapped_column(Integer)
-    pubts = mapped_column(Integer, server_default=text("strftime('%s','now')"))
+    pubts = mapped_column(Integer, server_default=text("strftime('%s', 'now')"))
+    like = mapped_column(Integer, server_default=text('0'))
+    reply = mapped_column(Integer, server_default=text('0'))
+    repost = mapped_column(Integer, server_default=text('0'))
 
     UserInfo_: Mapped[Optional['UserInfo']] = relationship('UserInfo', back_populates='Space_Dyn')

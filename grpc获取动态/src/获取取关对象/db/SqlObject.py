@@ -21,6 +21,8 @@ class USER_INFO(Base):
     uid = mapped_column(Integer, unique=True)
     upTimeStamp = mapped_column(TIMESTAMP, server_default="1970-01-01 00:00:00",onupdate=text("CURRENT_TIMESTAMP"))
     isLotUp = mapped_column(Integer, server_default=text('1'))
+    officialVerify = mapped_column(Integer, server_default=text('-2'))
+    uname = mapped_column(String, server_default=text(''))
     Space_Dyn = relationship('Space_Dyn', back_populates='UserInfo', uselist=False)
 
 
@@ -34,7 +36,9 @@ class Space_Dyn(Base):
     dynamic_content = mapped_column(String)
     dynamic_type = mapped_column(String)
     is_lot_dyn = mapped_column(Integer, default=0)
-
+    like = mapped_column(Integer, default=0)
+    reply = mapped_column(Integer, default=0)
+    repost = mapped_column(Integer, default=0)
     USER_INFO = relationship('USER_INFO', back_populates='Space_Dyn')
     pubts = mapped_column(Integer, server_default=text("(strftime('%s','now'))"))
 

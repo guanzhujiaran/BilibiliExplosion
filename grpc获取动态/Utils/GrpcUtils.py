@@ -2,6 +2,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from loguru import logger
+
 
 # region 描述动态数据类
 @dataclass
@@ -90,6 +92,7 @@ class DynTool:
         pubDateTimeStr: str = DynTool.timeshift(pubTs)  # 通过公式获取大致的时间，误差大概20秒左右
         dynStat: DynStat = DynStat()
         origDynItem = dict()
+        dynType = dynamic_item.get('cardType')
         moduels = dynamic_item.get('modules')
         for module_item in moduels:
             if module_item.get('moduleAuthor'):
@@ -98,6 +101,15 @@ class DynTool:
                 uname = module_author.get('author').get('name')
                 officialVerify = module_author.get('author').get('official').get('type') if module_author.get(
                     'author').get('official').get('type') else "0"
+                level = module_author.get('author').get('level')
+            if module_item.get('moduleBlocked'):
+                moduleBlocked=module_item.get('moduleBlocked')
+                subHintMessage=moduleBlocked.get('subHintMessage')
+                hintMessage=module_item.get('hintMessage')
+                if hintMessage:
+                    dynamicContent+=hintMessage
+                if subHintMessage:
+                    dynamicContent+=subHintMessage
             if module_item.get('moduleDispute'):
                 module_dispute = module_item.get('moduleDispute')
                 dynamicContent += module_dispute.get('title', '') + module_dispute.get(
@@ -326,7 +338,7 @@ class DynTool:
                             if content not in dynamicContent:
                                 dynamicContent += content
                 if module_dynamic.get('dynCourBatchUp'):
-                    dynCourBatchUp = module_item.get('dynCourBatchUp')
+                    dynCourBatchUp = module_dynamic.get('dynCourBatchUp')
                     title = dynCourBatchUp.get('title', '')
                     desc = dynCourBatchUp.get('desc', '')
                     cover = dynCourBatchUp.get('cover', '')
@@ -400,7 +412,7 @@ class DynTool:
                     for textNode in title_text.get('nodes'):
                         dynamicContent += textNode.get('rawText', '')
                 summary = moduleOpusSummary.get('summary')
-                summary_text = summary.get('text')
+                summary_text = summary.get('text','')
                 if summary_text:
                     for textNode in summary_text.get('nodes'):
                         dynamicContent += textNode.get('rawText', '')
@@ -430,6 +442,22 @@ class DynTool:
                 reply = int(moduleStatForward.get('reply', '0'))
                 dynStat = DynStat(like=like, repost=repost, reply=reply)
 
+            # 折叠模块
+            if module_item.get('moduleFold'):
+                moduleFold = module_item.get('moduleFold')
+                foldType=moduleFold.get('foldType')
+                text = moduleFold.get('text')
+                foldUsers = moduleFold.get('foldUsers')
+                for user in foldUsers:
+                    uname = user.get('name')
+                    officialVerify = user.get('official').get('type') if user.get('official').get('type') else "0"
+                    level = user.get('level')
+                    uid = user.get('mid')
+                if text:
+                    dynamicContent+=text
+
+        if not dynamicContent:
+            logger.critical(f'动态内容获取为空！检查一下解析响应的函数！\n{dynamic_item}')
         return ObjDynCard(
             uid=uid,
             uname=uname,
