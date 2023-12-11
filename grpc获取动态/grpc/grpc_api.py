@@ -209,7 +209,7 @@ class BiliGrpc:
                 resp_dict = MessageToDict(gresp)
                 if proxy != self.proxy:
                     self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
-                print(f'获取grpc请求成功代理：{proxy["proxy"]}')
+                loguru.logger.debug(f'获取grpc请求成功代理：{proxy["proxy"]}')
                 self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
                 return resp_dict
             except Exception as err:
@@ -284,7 +284,7 @@ class BiliGrpc:
                 resp_dict = MessageToDict(gresp)
                 if proxy != self.proxy:
                     self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
-                print(f'获取grpc请求成功代理：{proxy["proxy"]}')
+                loguru.logger.debug(f'获取grpc请求成功代理：{proxy["proxy"]}')
                 self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
                 return resp_dict
             except Exception as err:

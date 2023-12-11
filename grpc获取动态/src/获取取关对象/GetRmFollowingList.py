@@ -30,7 +30,7 @@ class GetRmFollowingListV1:
         self.Session = sessionmaker(engine, expire_on_commit=False, autoflush=True)  # 每次操作的时候将session实例化一下
         self.check_up_sep_days = 7  # 最多隔7天检查一遍是否发了新动态
         self.BAPI = methods()
-        self.max_separat_time = 86400 * 40  # 标记多少天未发动态的up主
+        self.max_separat_time = 86400 * 60  # 标记多少天未发动态的up主
         self.now_check_up: list = []
 
     # region 空间动态crud
@@ -75,7 +75,7 @@ class GetRmFollowingListV1:
 
     # endregion
 
-    async def is_exist_space_dyn(self, dynamic_id: str) -> bool:
+    def is_exist_space_dyn(self, dynamic_id: str) -> bool:
         """
         如果空间动态存在动态id就返回True
         :param dynamic_id:
@@ -114,10 +114,10 @@ class GetRmFollowingListV1:
         history_offset = ""
         dyn_obj = None
         is_lot_up = False
+        dynamic_flag = False
         is_lot_dyn = 0
         logger.debug(f"Checking uid: {uid}! https://space.bilibili.com/{uid}/dynamic")
         while 1:
-            dynamic_flag = False
             resp = grpcapi.grpc_get_space_dyn_by_uid(uid, history_offset)
             logger.debug(resp)
             space_dyn = DynTool.solve_space_dyn(resp)
@@ -155,13 +155,13 @@ class GetRmFollowingListV1:
 
         if dyn_obj:
             self.update_up_status(uid, dyn_obj.uname, dyn_obj.dynCard.officialVerify)
-        else:
-            self.update_up_status(uid,"",-1)
+        elif not hasMore:
+            self.update_up_status(uid,"") # 空间没动态，或者就是账号注销了的
         logger.debug(
             f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间动态检查完成！{'是抽奖up' if bool(is_lot_up) else '非抽奖up'}")
         self.now_check_up.remove(uid)
 
-    def update_up_status(self, uid: int, uname: str, officialVerify: int, update_ts: int = int(time.time())):
+    def update_up_status(self, uid: int, uname: str, officialVerify: int=-2, update_ts: int = int(time.time())):
         """
         根据数据库中内容更新up状态，只有当遇到终止条件时才能将更新时间设置为当前时间
          ### 核心函数！

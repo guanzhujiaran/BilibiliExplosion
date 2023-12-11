@@ -103,13 +103,13 @@ class DynTool:
                     'author').get('official').get('type') else "0"
                 level = module_author.get('author').get('level')
             if module_item.get('moduleBlocked'):
-                moduleBlocked=module_item.get('moduleBlocked')
-                subHintMessage=moduleBlocked.get('subHintMessage')
-                hintMessage=module_item.get('hintMessage')
+                moduleBlocked = module_item.get('moduleBlocked')
+                subHintMessage = moduleBlocked.get('subHintMessage')
+                hintMessage = module_item.get('hintMessage')
                 if hintMessage:
-                    dynamicContent+=hintMessage
+                    dynamicContent += hintMessage
                 if subHintMessage:
-                    dynamicContent+=subHintMessage
+                    dynamicContent += subHintMessage
             if module_item.get('moduleDispute'):
                 module_dispute = module_item.get('moduleDispute')
                 dynamicContent += module_dispute.get('title', '') + module_dispute.get(
@@ -406,13 +406,13 @@ class DynTool:
                 dynStat = DynStat(like=like, repost=repost, reply=reply)
             if module_item.get('moduleOpusSummary'):
                 moduleOpusSummary = module_item.get('moduleOpusSummary')
-                title = moduleOpusSummary.get('title',{})
+                title = moduleOpusSummary.get('title', {})
                 title_text = title.get('text', {})
                 if title_text:
                     for textNode in title_text.get('nodes'):
                         dynamicContent += textNode.get('rawText', '')
                 summary = moduleOpusSummary.get('summary')
-                summary_text = summary.get('text','')
+                summary_text = summary.get('text', '')
                 if summary_text:
                     for textNode in summary_text.get('nodes'):
                         dynamicContent += textNode.get('rawText', '')
@@ -445,7 +445,7 @@ class DynTool:
             # 折叠模块
             if module_item.get('moduleFold'):
                 moduleFold = module_item.get('moduleFold')
-                foldType=moduleFold.get('foldType')
+                foldType = moduleFold.get('foldType')
                 text = moduleFold.get('text')
                 foldUsers = moduleFold.get('foldUsers')
                 for user in foldUsers:
@@ -454,7 +454,7 @@ class DynTool:
                     level = user.get('level')
                     uid = user.get('mid')
                 if text:
-                    dynamicContent+=text
+                    dynamicContent += text
 
         if not dynamicContent:
             logger.critical(f'动态内容获取为空！检查一下解析响应的函数！\n{dynamic_item}')
