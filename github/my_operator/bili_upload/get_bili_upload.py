@@ -121,7 +121,9 @@ class renew:
             '手机',
             'GB',
             'TB',
-            'tb'# 可能是显存大小，硬盘容量，内存条容量等参数
+            'tb',  # 可能是显存大小，硬盘容量，内存条容量等参数
+            'switch',
+            '冰箱'
         ]  # 需要重点查看的关键词列表
         self._获取过动态的b站用户 = dict()  # 格式：{uid:[1,2,3,4,5,6,7,8,9,10]} 最后一次获取的动态
         self._最后一次获取过动态的b站用户 = dict()
@@ -215,102 +217,331 @@ class renew:
         ]
         self.manual_reply_judge = execjs.compile("""
         manual_reply_judge= function (dynamic_content) {
-                    //判断是否需要人工回复 返回true需要人工判断  返回null不需要人工判断
-                    //64和67用作判断是否能使用关键词回复
-                    let none_lottery_word1 = /.*测试.{0,5}gua/gmi.test(dynamic_content)
-                    if (none_lottery_word1) {
-                        return true
-                    }
-                    dynamic_content = dynamic_content.replaceAll(/〖/gmi, '【')
-                    dynamic_content = dynamic_content.replaceAll(/“/gmi, '"')
-                    dynamic_content = dynamic_content.replaceAll(/”/gmi, '"')
-                    dynamic_content = dynamic_content.replaceAll(/＠/gmi, '@')
-                    dynamic_content = dynamic_content.replaceAll(/@.{0,8} /gmi, '')
-                    dynamic_content = dynamic_content.replaceAll(/好友/gmi, '朋友')
-                    dynamic_content = dynamic_content.replaceAll(/伙伴/gmi, '朋友')
-                    dynamic_content = dynamic_content.replaceAll(/安利/gmi, '分享')
-                    dynamic_content = dynamic_content.replaceAll(/【关注】/gmi, '')
-                    dynamic_content = dynamic_content.replaceAll(/\?/gmi, '？')
-                    let manual_re1 = /.*评论.{0,20}告诉|.*有关的评论|.*告诉.{0,20}留言/gmi.test(dynamic_content)
-                    let manual_re2 = /.*评论.{0,20}理由|.*参与投稿.{0,30}有机会获得/gmi.test(dynamic_content)
-                    let manual_re3 = /.*评论.{0,10}对|.*造.{0,3}句子/gmi.test(dynamic_content)
-                    let manual_re4 = /.*猜赢|.*猜对|.*答对|.*猜到.{0,5}答案/gmi.test(dynamic_content)
-                    let manual_re5 = /.*说.{0,10}说|.*谈.{0,10}谈|.*夸.{0,10}夸|评论.{0,10}写.{0,10}写|.*写下.{0,5}假如.{0,5}是|.*讨论.{0,10}怎么.{0,10}？/gmi.test(dynamic_content)
-                    let manual_re7 = /.*最先猜中|.*带文案|.*许.{0,5}愿望/gmi.test(dynamic_content)
-                    let manual_re8 = /.*新衣回/gmi.test(dynamic_content)
-                    let manual_re9 = /.*留言.{0,10}建议|.*评论.{0,10}答|.*一句话证明|.*留言.{0,10}得分|.*有趣.{0,3}留言|.*有趣.{0,3}评论|.*留言.{0,3}晒出|.*评论.{0,3}晒出/gmi.test(dynamic_content)
-                    let manual_re11 = /.*评论.{0,10}祝福|.*评论.{0,10}意见|.*意见.{0,10}评论|.*留下.{0,10}意见|.*留下.{0,15}印象|.*意见.{0,10}留下/gmi.test(dynamic_content)
-                    let manual_re12 = /.*评论.{0,10}讨论|.*话题.{0,10}讨论|.*参与.{0,5}讨论/gmi.test(dynamic_content)
-                    let manual_re14 = /.*评论.{0,10}说出|,*留言.{0,5}身高/gmi.test(dynamic_content)
-                    let manual_re15 = /.*评论.{0,20}分享|.*评论.{0,20}互动((?!抽奖|,|，|来).)*$|.*评论.{0,20}提问|.*想问.{0,20}评论|.*想说.{0,20}评论|.*想问.{0,20}留言|.*想说.{0,20}留言/gmi.test(dynamic_content)
-                    let manual_re16 = /.*评论.{0,10}聊.{0,10}聊/gmi.test(dynamic_content)
-                    let manual_re17 = /.*评.{0,10}接力/gmi.test(dynamic_content)
-                    let manual_re18 = /.*聊.{0,10}聊/gmi.test(dynamic_content)
-                    let manual_re19 = /.*评论.{0,10}扣|.*评论.{0,5}说.{0,3}下/gmi.test(dynamic_content)
-                    let manual_re20 = /.*转发.{0,10}分享/gmi.test(dynamic_content)
-                    let manual_re21 = /.*评论.{0,10}告诉/gmi.test(dynamic_content)
-                    let manual_re22 = /.*评论.{0,10}唠.{0,10}唠/gmi.test(dynamic_content)
-                    let manual_re23 = /.*今日.{0,5}话题|.*参与.{0,5}话题|.*参与.{0,5}答题/gmi.test(dynamic_content)
-                    let manual_re24 = /.*说.*答案|.*评论.{0,15}答案/gmi.test(dynamic_content)
-                    let manual_re25 = /.*说出/gmi.test(dynamic_content)
-                    let manual_re26 = /.*为.{0,10}加油/gmi.test(dynamic_content)
-                    let manual_re27 = /.*评论.{0,10}话|.*你中意的|.*评.{0,10}你.{0,5}的|.*写上.{0,10}你.{0,5}的|.*写下.{0,10}你.{0,5}的/gmi.test(dynamic_content)
-                    let manual_re28 = /.*评论.{0,15}最想做7的事|.*评.{0,15}最喜欢|.*评.{0,15}最.{0,7}的事|.*最想定制的画面/gmi.test(dynamic_content)
-                    let manual_re29 = /.*分享.{0,20}经历|.*经历.{0,20}分享/gmi.test(dynamic_content)
-                    let manual_re30 = /.*分享.{0,20}心情/gmi.test(dynamic_content)
-                    let manual_re31 = /.*评论.{0,10}句/gmi.test(dynamic_content)
-                    let manual_re32 = /.*转关评下方视频/gmi.test(dynamic_content)
-                    let manual_re33 = /.*分享.{0,10}美好/gmi.test(dynamic_content)
-                    let manual_re34 = /.*视频.{0,10}弹幕/gmi.test(dynamic_content)
-                    let manual_re35 = /.*生日快乐/gmi.test(dynamic_content)
-                    let manual_re36 = /.*一句话形容/gmi.test(dynamic_content)
-                    let manual_re38 = /.*分享.{0,10}喜爱|.*分享.{0,10}最爱|.*推荐.{0,10}最爱|.*推荐.{0,10}喜爱/gmi.test(dynamic_content)
-                    let manual_re39 = /.*分享((?!,|，).){0,10}最|.*评论((?!,|，).){0,10}最/gmi.test(dynamic_content)
-                    let manual_re40 = /.*带话题.{0,15}晒|.*带话题.{0,15}讨论/gmi.test(dynamic_content)
-                    let manual_re41 = /.*分享.{0,15}事|点赞.{0,3}数.{0,3}前/gmi.test(dynamic_content)
-                    let manual_re42 = /.*送出.{0,15}祝福/gmi.test(dynamic_content)
-                    let manual_re43 = /.*评论.{0,30}原因/gmi.test(dynamic_content)
-                    let manual_re47 = /.*答案.{0,10}参与/gmi.test(dynamic_content)
-                    let manual_re48 = /.*唠.{0,5}唠/gmi.test(dynamic_content)
-                    let manual_re49 = /.*分享一下/gmi.test(dynamic_content)
-                    let manual_re50 = /.*评论.{0,30}故事/gmi.test(dynamic_content)
-                    let manual_re51 = /.*告诉.{0,30}什么|.*告诉.{0,30}最/gmi.test(dynamic_content)
-                    let manual_re53 = /.*发布.{0,20}图.{0,5}动态/gmi.test(dynamic_content)
-                    let manual_re54 = /.*视频.{0,20}评论/gmi.test(dynamic_content)
-                    let manual_re55 = /.*复zhi|.*长按/gmi.test(dynamic_content)
-                    let manual_re56 = /.*多少.{0,10}合适/gmi.test(dynamic_content)
-                    let manual_re57 = /.*喜欢.{0,5}哪/gmi.test(dynamic_content)
-                    let manual_re58 = /.*多少.{0,15}？|.*多少.{0,15}\?|.*有没有.{0,15}？|.*有没有.{0,15}\?|.*是什么.{0,15}？|.*是什么.{0,15}\?/gmi.test(dynamic_content)
-                    let manual_re61 = /.*看.{0,10}猜/gmi.test(dynamic_content)
-                    let manual_re63 = /.*评论.{0,10}猜|.*评论.{0,15}预测/gmi.test(dynamic_content)
-                    let manual_re65 = /.*老规矩你们懂的/gmi.test(dynamic_content)
-                    let manual_re67 = /.*[评|带]((?!抽奖|,|，|来).){0,7}“|.*[评|带]((?!抽奖|,|，|来).){0,7}"|.*[评|带]((?!抽奖|,|，|来).){0,7}【|.*[评|带]((?!抽奖|,|，|来).){0,7}:|.*[评|带]((?!抽奖|,|，|来).){0,7}：|.*[评|带]((?!抽奖|,|，|来).){0,7}「|.*带关键词.{0,7}"|.*评论关键词[“”‘’"']|.*留言((?!抽奖|,|，|来).){0,7}“|.*对出.{0,10}下联.{0,5}横批|.*回答.{0,8}问题|.*留下.{0,10}祝福语|.*留下.{0,10}愿望|.*找到.{0,10}不同的.{0,10}留言|.*答案放在评论区|.*几.{0,5}呢？|.*有奖问答|.*想到.{0,19}关于.{0,20}告诉|.*麻烦大伙评论这个|报暗号【.{0,4}】/gmi.test(dynamic_content)
-                    let manual_re76 = /.*留言((?!抽奖|,|，|来).).{0,7}"|.*留下((?!抽奖|,|，|来).){0,5}“|.*留下((?!抽奖|,|，|来).){0,5}【|.*留下((?!抽奖|,|，|来).){0,5}:|.*留下((?!抽奖|,|，|来).){0,5}：|.*留下((?!抽奖|,|，|来).){0,5}「/gmi.test(dynamic_content)
-                    let manual_re77 = /.*留言((?!抽奖|,|，|来).).{0,7}"|.*留言((?!抽奖|,|，|来).).{0,7}“|.*留言((?!抽奖|,|，|来).){0,7}【|.*留言((?!抽奖|,|，|来).){0,7}:|.*留言((?!抽奖|,|，|来).){0,7}：|.*留言((?!抽奖|,|，|来).){0,7}「/gmi.test(dynamic_content)
-                    let manual_re64 = /和.{0,5}分享.{0,5}的|.*分享.{0,10}你的|.*正确回答|.*回答正确|.*评论.{0,10}计划|.*定.{0,10}目标.{0,5}？|.*定.{0,10}目标.{0,5}?|.*评论.{0,7}看的电影|.*如果.{0,20}觉得.{0,10}？|.*如果.{0,20}觉得.{0,10}\?|评论.{0,7}希望.{0,5}|.*竞猜[\s\S]{0,15}[答评]|.*把喜欢的.{0,10}评论|.*评论.{0,5}解.{0,5}密|.*这款.{0,10}怎么.{0,3}？|.*最喜欢.{0,5}的.*为什么？|.*留下.{0,15}的.{0,5}疑问|.*写下.{0,10}的.{0,5}问题/gmi.test(dynamic_content)
-                    let manual_re6 = /.*@TA|.*@.{0,15}朋友|.*艾特|.*@.{0,3}你的|.*标记.{0,10}朋友|.*@{0,15}赞助商|.*发表你的新年愿望\+个人的昵称|.*抽奖规则请仔细看图片|.*带上用户名|.*活动详情请戳图片|.*@个人用户名|评论.{0,5}附带.{0,10}相关内容|回复.{0,5}视频.{0,10}相关内容|.*评论.{0,5}昵称/gmi.test(dynamic_content)
-                    let manual_re62 = /.*评论.{0,10}#.*什么|.*转评.{0,3}#.*(?<=，)/gmi.test(dynamic_content)
-                    let manual_re68 = /.*将.{0,10}内容.{0,10}评|.*打几分？/gmi.test(dynamic_content)
-                    let manual_re70 = /.*会不会.{0,20}？|.*会不会.{0,20}\?|如何.{0,20}？|如何.{0,20}\?/gmi.test(dynamic_content)
-                    let manual_re71 = /.*猜.{0,10}猜|.*猜.{0,10}比分|.*猜中.{0,10}获得|.*猜中.{0,10}送出/gmi.test(dynamic_content)
-                    let manual_re72 = /.*生日|.*新年祝福/gmi.test(dynamic_content)
-                    let manual_re73 = /.*知道.{0,15}什么.{0,15}？|.*知道.{0,15}什么.{0,15}\?|.*用什么|.*评.{0,10}收.{0,5}什么.{0.7}\?|.*评.{0,10}收.{0,5}什么.{0,7}？/gmi.test(dynamic_content)
-                    let manual_re74 = /.*领.{0,10}红包.{0,5}大小|.*领.{0,10}多少.{0,10}红包|.*红包金额/gmi.test(dynamic_content)
-                    let manual_re75 = /.*本周话题|.*互动话题|.*互动留言|.*互动时间|.*征集.{0,10}名字|.*投票.{0,5}选.{0,10}最.{0,5}的|.*一人说一个谐音梗|帮.{0,5}想想.{0,5}怎么/gmi.test(dynamic_content)
+					//判断是否需要人工回复 返回true需要人工判断  返回null不需要人工判断
+					//64和67用作判断是否能使用关键词回复
+					let none_lottery_word1 = /.*测试.{0,5}gua/gim.test(
+						dynamic_content
+					);
+					if (none_lottery_word1) {
+						return true;
+					}
+					dynamic_content = dynamic_content.replaceAll(/「/gim, "【");
+					dynamic_content = dynamic_content.replaceAll(/」/gim, "】");
+					dynamic_content = dynamic_content.replaceAll(/〗/gim, "】");
+					dynamic_content = dynamic_content.replaceAll(/】/gim, "【");
+					dynamic_content = dynamic_content.replaceAll(/“/gim, '"');
+					dynamic_content = dynamic_content.replaceAll(/”/gim, '"');
+					dynamic_content = dynamic_content.replaceAll(/＠/gim, "@");
+					dynamic_content = dynamic_content.replaceAll(
+						/@.{0,8} /gim,
+						""
+					);
+					dynamic_content = dynamic_content.replaceAll(
+						/好友/gim,
+						"朋友"
+					);
+					dynamic_content = dynamic_content.replaceAll(
+						/伙伴/gim,
+						"朋友"
+					);
+					dynamic_content = dynamic_content.replaceAll(
+						/安利/gim,
+						"分享"
+					);
+					dynamic_content = dynamic_content.replaceAll(
+						/【关注】/gim,
+						""
+					);
+					dynamic_content = dynamic_content.replaceAll(
+						/添加话题/gim,
+						"带话题"
+					);
+					dynamic_content = dynamic_content.replaceAll(/\?/gim, "？");
+					dynamic_content = dynamic_content.replaceAll(/:/gim, "：");
+					let manual_re1 =
+						/.*评论.{0,20}告诉|.*有关的评论|.*告诉.{0,20}留言/gim.test(
+							dynamic_content
+						);
+					let manual_re2 =
+						/.*评论.{0,20}理由|.*参与投稿.{0,30}有机会获得/gim.test(
+							dynamic_content
+						);
+					let manual_re3 = /.*评论.{0,10}对|.*造.{0,3}句子/gim.test(
+						dynamic_content
+					);
+					let manual_re4 =
+						/.*猜赢|.*猜对|.*答对|.*猜到.{0,5}答案/gim.test(
+							dynamic_content
+						);
+					let manual_re5 =
+						/.*说.{0,10}说|.*谈.{0,10}谈|.*夸.{0,10}夸|评论.{0,10}写.{0,10}写|.*写下.{0,5}假如.{0,5}是|.*讨论.{0,10}怎么.{0,10}？/gim.test(
+							dynamic_content
+						);
+					let manual_re7 =
+						/.*最先猜中|.*带文案|.*许.{0,5}愿望/gim.test(
+							dynamic_content
+						);
+					let manual_re8 = /.*新衣回/gim.test(dynamic_content);
+					let manual_re9 =
+						/.*留言.{0,10}建议|.*评论.{0,10}答|.*一句话证明|.*留言.{0,10}得分|.*有趣.{0,3}留言|.*有趣.{0,3}评论|.*留言.{0,3}晒出|.*评论.{0,3}晒出/gim.test(
+							dynamic_content
+						);
+					let manual_re11 =
+						/.*评论.{0,10}祝福|.*评论.{0,10}意见|.*意见.{0,10}评论|.*留下.{0,10}意见|.*留下.{0,15}印象|.*意见.{0,10}留下/gim.test(
+							dynamic_content
+						);
+					let manual_re12 =
+						/.*评论.{0,10}讨论|.*话题.{0,10}讨论|.*参与.{0,5}讨论/gim.test(
+							dynamic_content
+						);
+					let manual_re14 =
+						/.*评论.{0,10}说出|,*留言.{0,5}身高/gim.test(
+							dynamic_content
+						);
+					let manual_re15 =
+						/.*评论.{0,20}分享|.*评论.{0,20}互动((?!抽奖|,|，|来).)*$|.*评论.{0,20}提问|.*想问.{0,20}评论|.*想说.{0,20}评论|.*想问.{0,20}留言|.*想说.{0,20}留言/gim.test(
+							dynamic_content
+						);
+					let manual_re16 = /.*评论.{0,10}聊.{0,10}聊/gim.test(
+						dynamic_content
+					);
+					let manual_re17 = /.*评.{0,10}接力/gim.test(
+						dynamic_content
+					);
+					let manual_re18 = /.*聊.{0,10}聊/gim.test(dynamic_content);
+					let manual_re19 =
+						/.*评论.{0,10}扣|.*评论.{0,5}说.{0,3}下/gim.test(
+							dynamic_content
+						);
+					let manual_re20 = /.*转发.{0,10}分享/gim.test(
+						dynamic_content
+					);
+					let manual_re21 = /.*评论.{0,10}告诉/gim.test(
+						dynamic_content
+					);
+					let manual_re22 = /.*评论.{0,10}唠.{0,10}唠/gim.test(
+						dynamic_content
+					);
+					let manual_re23 =
+						/.*今日.{0,5}话题|.*参与.{0,5}话题|.*参与.{0,5}答题/gim.test(
+							dynamic_content
+						);
+					let manual_re24 = /.*说.*答案|.*评论.{0,15}答案/gim.test(
+						dynamic_content
+					);
+					let manual_re25 = /.*说出/gim.test(dynamic_content);
+					let manual_re26 = /.*为.{0,10}加油/gim.test(
+						dynamic_content
+					);
+					let manual_re27 =
+						/.*评论.{0,10}话|.*你中意的|.*评.{0,10}你.{0,5}的|.*写上.{0,10}你.{0,5}的|.*写下.{0,10}你.{0,5}的/gim.test(
+							dynamic_content
+						);
+					let manual_re28 =
+						/.*评论.{0,15}最想做7的事|.*评.{0,15}最喜欢|.*评.{0,15}最.{0,7}的事|.*最想定制的画面|最想.{0,20}\?|最想.{0,20}？/gim.test(
+							dynamic_content
+						);
+					let manual_re29 =
+						/.*分享.{0,20}经历|.*经历.{0,20}分享/gim.test(
+							dynamic_content
+						);
+					let manual_re30 = /.*分享.{0,20}心情/gim.test(
+						dynamic_content
+					);
+					let manual_re31 = /.*评论.{0,10}句|评论.{0,6}包含/gim.test(
+						dynamic_content
+					);
+					let manual_re32 = /.*转关评下方视频/gim.test(
+						dynamic_content
+					);
+					let manual_re33 =
+						/.*分享.{0,10}美好|.*分享.{0,10}期待/gim.test(
+							dynamic_content
+						);
+					let manual_re34 = /.*视频.{0,10}弹幕/gim.test(
+						dynamic_content
+					);
+					let manual_re35 = /.*生日快乐/gim.test(dynamic_content);
+					let manual_re36 = /.*一句话形容/gim.test(dynamic_content);
+					let manual_re38 =
+						/.*分享.{0,10}喜爱|.*分享.{0,10}最爱|.*推荐.{0,10}最爱|.*推荐.{0,10}喜爱/gim.test(
+							dynamic_content
+						);
+					let manual_re39 =
+						/.*分享((?!,|，).){0,10}最|.*评论((?!,|，).){0,10}最/gim.test(
+							dynamic_content
+						);
+					let manual_re40 =
+						/.*带话题.{0,15}晒|.*带话题.{0,15}讨论/gim.test(
+							dynamic_content
+						);
+					let manual_re41 =
+						/.*分享.{0,15}事|点赞.{0,3}数.{0,3}前/gim.test(
+							dynamic_content
+						);
+					let manual_re42 = /.*送出.{0,15}祝福/gim.test(
+						dynamic_content
+					);
+					let manual_re43 = /.*评论.{0,30}原因/gim.test(
+						dynamic_content
+					);
+					let manual_re47 = /.*答案.{0,10}参与/gim.test(
+						dynamic_content
+					);
+					let manual_re48 = /.*唠.{0,5}唠/gim.test(dynamic_content);
+					let manual_re49 = /.*分享一下/gim.test(dynamic_content);
+					let manual_re50 = /.*评论.{0,30}故事/gim.test(
+						dynamic_content
+					);
+					let manual_re51 =
+						/.*告诉.{0,30}什么|.*告诉.{0,30}最|有什么安排呀～/gim.test(
+							dynamic_content
+						);
+					let manual_re53 = /.*发布.{0,20}图.{0,5}动态/gim.test(
+						dynamic_content
+					);
+					let manual_re54 = /.*视频.{0,20}评论/gim.test(
+						dynamic_content
+					);
+					let manual_re55 = /.*复zhi|.*长按/gim.test(dynamic_content);
+					let manual_re56 = /.*多少.{0,10}合适/gim.test(
+						dynamic_content
+					);
+					let manual_re57 = /.*喜欢.{0,5}哪/gim.test(dynamic_content);
+					let manual_re58 =
+						/.*多少.{0,15}？|.*多少.{0,15}\?|.*有没有.{0,15}？|.*有没有.{0,15}\?|.*是什么.{0,15}？|.*是什么.{0,15}\?/gim.test(
+							dynamic_content
+						);
+					let manual_re61 = /.*看.{0,10}猜/gim.test(dynamic_content);
+					let manual_re63 =
+						/.*评论.{0,10}猜|.*评论.{0,15}预测/gim.test(
+							dynamic_content
+						);
+					let manual_re65 = /.*老规矩你们懂的/gim.test(
+						dynamic_content
+					);
+					let manual_re67 =
+						/.*[评|带]((?!抽奖|,|，|来).){0,7}“|.*[评|带]((?!抽奖|,|，|来).){0,7}"|.*[评|带]((?!抽奖|,|，|来).){0,7}【|.*[评|带]((?!抽奖|,|，|来).){0,7}:|.*[评|带]((?!抽奖|,|，|来).){0,7}：|.*[评|带]((?!抽奖|,|，|来).){0,7}「|.*带关键词.{0,7}"|.*评论关键词[“”‘’"']|.*留言((?!抽奖|,|，|来).){0,7}“|.*对出.{0,10}下联.{0,5}横批|.*回答.{0,8}问题|.*留下.{0,10}祝福语|.*留下.{0,10}愿望|.*找到.{0,10}不同的.{0,10}留言|.*答案放在评论区|.*几.{0,5}呢？|.*有奖问答|.*想到.{0,19}关于.{0,20}告诉|.*麻烦大伙评论这个|报暗号【.{0,4}】|评论.{0,3}输入.{0,3}["“”:：]|.*评论.{0,7}暗号/gim.test(
+							dynamic_content
+						);
+					let manual_re76 =
+						/.*留言((?!抽奖|,|，|来).).{0,7}"|.*留下((?!抽奖|,|，|来).){0,5}“|.*留下((?!抽奖|,|，|来).){0,5}【|.*留下((?!抽奖|,|，|来).){0,5}:|.*留下((?!抽奖|,|，|来).){0,5}：|.*留下((?!抽奖|,|，|来).){0,5}「/gim.test(
+							dynamic_content
+						);
+					let manual_re77 =
+						/.*留言((?!抽奖|,|，|来).).{0,7}"|.*留言((?!抽奖|,|，|来).).{0,7}“|.*留言((?!抽奖|,|，|来).){0,7}【|.*留言((?!抽奖|,|，|来).){0,7}:|.*留言((?!抽奖|,|，|来).){0,7}：|.*留言((?!抽奖|,|，|来).){0,7}「/gim.test(
+							dynamic_content
+						);
+					let manual_re64 =
+						/和.{0,5}分享.{0,5}的|.*分享.{0,10}你的|.*正确回答|.*回答正确|.*评论.{0,10}计划|.*定.{0,10}目标.{0,5}？|.*定.{0,10}目标.{0,5}?|.*评论.{0,7}看的电影|.*如果.{0,20}觉得.{0,10}？|.*如果.{0,20}觉得.{0,10}\?|评论.{0,7}希望.{0,5}|.*竞猜[\s\S]{0,15}[答评]|.*把喜欢的.{0,10}评论|.*评论.{0,5}解.{0,5}密|.*这款.{0,10}怎么.{0,3}？|.*最喜欢.{0,5}的.*为什么？|.*留下.{0,15}的.{0,5}疑问|.*写下.{0,10}的.{0,5}问题/gim.test(
+							dynamic_content
+						);
+					let manual_re6 =
+						/.*@TA|.*@.{0,15}朋友|.*艾特|.*@.{0,3}你的|.*标记.{0,10}朋友|.*@{0,15}赞助商|.*发表你的新年愿望\+个人的昵称|.*抽奖规则请仔细看图片|.*带上用户名|.*活动详情请戳图片|.*@个人用户名|评论.{0,5}附带.{0,10}相关内容|回复.{0,5}视频.{0,10}相关内容|.*评论.{0,5}昵称/gim.test(
+							dynamic_content
+						);
+					let manual_re62 =
+						/.*评论.{0,10}#.*什么|.*转评.{0,3}#.*(?<=，)/gim.test(
+							dynamic_content
+						);
+					let manual_re68 =
+						/.*将.{0,10}内容.{0,10}评|.*打几分？/gim.test(
+							dynamic_content
+						);
+					let manual_re70 =
+						/.*会不会.{0,20}？|.*会不会.{0,20}\?|如何.{0,20}？|如何.{0,20}\?/gim.test(
+							dynamic_content
+						);
+					let manual_re71 =
+						/.*猜.{0,10}猜|.*猜.{0,10}比分|.*猜中.{0,10}获得|.*猜中.{0,10}送出/gim.test(
+							dynamic_content
+						);
+					let manual_re72 = /.*生日|.*新年祝福/gim.test(
+						dynamic_content
+					);
+					let manual_re73 =
+						/.*知道.{0,15}什么.{0,15}？|.*知道.{0,15}什么.{0,15}\?|.*用什么|.*评.{0,10}收.{0,5}什么.{0.7}\?|.*评.{0,10}收.{0,5}什么.{0,7}？|.*抽奖口令.{0,3}：/gim.test(
+							dynamic_content
+						);
+					let manual_re74 =
+						/.*领.{0,10}红包.{0,5}大小|.*领.{0,10}多少.{0,10}红包|.*红包金额/gim.test(
+							dynamic_content
+						);
+					let manual_re75 =
+						/.*本周话题|.*互动话题|.*互动留言|.*互动时间|.*征集.{0,10}名字|.*投票.{0,5}选.{0,10}最.{0,5}的|.*一人说一个谐音梗|帮.{0,5}想想.{0,5}怎么|评论.{0,5}想给.{0,7}的/gim.test(
+							dynamic_content
+						);
 
-                    return manual_re1 || manual_re2 || manual_re3 || manual_re4 || manual_re5 || manual_re6 || manual_re7 || manual_re8 || manual_re9 ||
-                        manual_re11 || manual_re12 || manual_re14 || manual_re15 || manual_re16 || manual_re17 || manual_re18 || manual_re19 || manual_re20 || manual_re21 || manual_re22 || manual_re23 || manual_re24 || manual_re25 ||
-                        manual_re26 || manual_re27 || manual_re28 || manual_re29 || manual_re30 ||
-                        manual_re31 || manual_re32 || manual_re33 || manual_re34 || manual_re35 ||
-                        manual_re36 || manual_re38 || manual_re39 || manual_re40 ||
-                        manual_re41 || manual_re42 || manual_re43 || manual_re76 ||
-                        manual_re47 || manual_re48 || manual_re49 || manual_re50 || manual_re51 ||
-                        manual_re53 || manual_re54 || manual_re58 || manual_re55 || manual_re56 ||
-                        manual_re57 || manual_re61 || manual_re62 || manual_re63 || manual_re64 ||
-                        manual_re65 || manual_re67 || manual_re68 || manual_re70 || manual_re71 || manual_re72 || manual_re73 ||
-                        manual_re74 || manual_re75 || manual_re77 || manual_re77
-                }
-
+					return (
+						manual_re1 ||
+						manual_re2 ||
+						manual_re3 ||
+						manual_re4 ||
+						manual_re5 ||
+						manual_re6 ||
+						manual_re7 ||
+						manual_re8 ||
+						manual_re9 ||
+						manual_re11 ||
+						manual_re12 ||
+						manual_re14 ||
+						manual_re15 ||
+						manual_re16 ||
+						manual_re17 ||
+						manual_re18 ||
+						manual_re19 ||
+						manual_re20 ||
+						manual_re21 ||
+						manual_re22 ||
+						manual_re23 ||
+						manual_re24 ||
+						manual_re25 ||
+						manual_re26 ||
+						manual_re27 ||
+						manual_re28 ||
+						manual_re29 ||
+						manual_re30 ||
+						manual_re31 ||
+						manual_re32 ||
+						manual_re33 ||
+						manual_re34 ||
+						manual_re35 ||
+						manual_re36 ||
+						manual_re38 ||
+						manual_re39 ||
+						manual_re40 ||
+						manual_re41 ||
+						manual_re42 ||
+						manual_re43 ||
+						manual_re76 ||
+						manual_re47 ||
+						manual_re48 ||
+						manual_re49 ||
+						manual_re50 ||
+						manual_re51 ||
+						manual_re53 ||
+						manual_re54 ||
+						manual_re58 ||
+						manual_re55 ||
+						manual_re56 ||
+						manual_re57 ||
+						manual_re61 ||
+						manual_re62 ||
+						manual_re63 ||
+						manual_re64 ||
+						manual_re65 ||
+						manual_re67 ||
+						manual_re68 ||
+						manual_re70 ||
+						manual_re71 ||
+						manual_re72 ||
+						manual_re73 ||
+						manual_re74 ||
+						manual_re75 ||
+						manual_re77 ||
+						manual_re77
+					);
+				}
             """)
 
         def login_check(cookie, ua):
@@ -956,8 +1187,11 @@ class renew:
                     dynamic_content = re.findall(r'(.*?)//@', dynamic_content, re.DOTALL)[0]
                 if not is_lot_orig:
                     if self.BAPI.daily_choujiangxinxipanduan(dynamic_content):
-                        self.useless_info.append(format_str)
-                        return
+                        if comment_count > 2000 or forward_count > 1000:  # 评论或转发超多的就算不是抽奖动态也要加进去凑个数
+                            pass
+                        else:
+                            self.useless_info.append(format_str)
+                            return
                 self.last_lotid.append(str(dynamic_id))
                 self.lottery_dynamic_ids.append(ret_url)
                 self.lottery_dynamic_detail_list.append(format_str)
@@ -1309,8 +1543,6 @@ class renew:
         with open(root_dir + relative_dir + 'uidlist.json', 'w') as f:
             json.dump({'uidlist': self.uidlist}, f, indent=4)
 
-
-
         logger.info(
             f'任务完成\n获取到共计：\n{len(self.lottery_dynamic_detail_list)}条抽奖动态\n{len(self.useless_info)}条非抽奖动态！',
             time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(int(time.time()))))
@@ -1405,11 +1637,11 @@ class GET_OTHERS_LOT_DYN:
         pubtime_str = lot_det_sep[3]
         comment_count_str = lot_det_sep[5]
         rep_count_str = lot_det_sep[6]
-        lot_type =  lot_det_sep[9]
-        if lot_type=='抽奖动态的源动态':
+        lot_type = lot_det_sep[9]
+        if lot_type == '抽奖动态的源动态':
             return True
-        dt=datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')
-        if dt.year<2000:
+        dt = datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')
+        if dt.year < 2000:
             return False
         pub_ts = int(datetime.datetime.timestamp(datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')))
         official_verify = lot_det_sep[2]

@@ -2,12 +2,13 @@
 # 自己本地的fastapi封装接口服务 这是一个sqlite3数据库的接口，使用proxy相关操作
 import asyncio
 import json
+import traceback
 from typing import Union
 
 import fastapi
 import redis
 import uvicorn
-from fastapi import Query
+from fastapi import Query, HTTPException
 from loguru import logger
 from pydantic import BaseModel
 
@@ -132,10 +133,14 @@ def v1_post_rm_following_list(data: list[Union[int, str]]):
     :param data: list[int] 关注列表 直接传列表即可
     :return:
     """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)  # 使用新的协程，防止阻塞
-    result = loop.run_until_complete(get_rm_following_list.main(data))
-    return result
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)  # 使用新的协程，防止阻塞
+        result = loop.run_until_complete(get_rm_following_list.main(data))
+        return result
+    except:
+        traceback.print_exc()
+        raise HTTPException(status_code=114514,detail=traceback.format_exc())
 
 
 # endregion

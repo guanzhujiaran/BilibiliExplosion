@@ -116,10 +116,9 @@ class GetRmFollowingListV1:
         is_lot_up = False
         dynamic_flag = False
         is_lot_dyn = 0
-        logger.debug(f"Checking uid: {uid}! https://space.bilibili.com/{uid}/dynamic")
         while 1:
             resp = grpcapi.grpc_get_space_dyn_by_uid(uid, history_offset)
-            logger.debug(resp)
+            logger.debug(f'获取到{uid}空间响应{resp}')
             space_dyn = DynTool.solve_space_dyn(resp)
             history_offset = space_dyn.historyOffset
             hasMore = space_dyn.hasMore
@@ -155,8 +154,10 @@ class GetRmFollowingListV1:
 
         if dyn_obj:
             self.update_up_status(uid, dyn_obj.uname, dyn_obj.dynCard.officialVerify)
-        elif not hasMore:
-            self.update_up_status(uid,"") # 空间没动态，或者就是账号注销了的
+        else:
+            with self.Session() as session:
+                userinfo = session.query(UserInfo).filter(UserInfo.uid==uid).first()
+                self.update_up_status(uid, userinfo.uname, userinfo.officialVerify)
         logger.debug(
             f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间动态检查完成！{'是抽奖up' if bool(is_lot_up) else '非抽奖up'}")
         self.now_check_up.remove(uid)
@@ -177,7 +178,7 @@ class GetRmFollowingListV1:
             :param spdyn:
             :return:
             """
-            if int(time.time()) - spdyn.pubts >= self.max_separat_time:
+            if int(time.time()) - spdyn.pubts >= self.max_separat_time: # 超过最大时间，不判断动态是否是抽奖动态，直接标记为非抽奖动态
                 return False
 
             return bool(spdyn.is_lot_dyn)
@@ -210,6 +211,7 @@ class GetRmFollowingListV1:
                 return False
             else:
                 uid = int(uid)
+        logger.debug(f"Checking uid: {uid}! https://space.bilibili.com/{uid}/dynamic")
         if uid in self.lucky_up_list:
             return True
         with self.Session() as session:
@@ -219,7 +221,7 @@ class GetRmFollowingListV1:
                     return bool(res.isLotUp)
             else:
                 await self.create_user_info(uid)
-
+        logger.debug(f'uid:{uid}数据库中不存在或时间过久')
         # 更新up的空间动态数据库
         await asyncio.gather(  # 将一个阻塞的异步函数修改成thread之后，很奇妙，能够变成并发了
             asyncio.to_thread(self.check_up_space_dyn, uid),

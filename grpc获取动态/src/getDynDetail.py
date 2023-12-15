@@ -528,8 +528,8 @@ class DynDetailScrapy:
         if not latest_rid:
             self.common_log.debug("未获取到最后一个rid，启用默认值！")
             latest_rid = 260977479
-        self.common_log.debug(f'爬虫，启动！最后的rid为：{latest_rid}\t往前回滚50个rid！')
-        latest_rid -= 50
+        self.common_log.debug(f'爬虫，启动！最后的rid为：{latest_rid}\t往前回滚500个rid！')
+        latest_rid -= 500
         thread_num = 50
         turn_times = 0
         while 1:
