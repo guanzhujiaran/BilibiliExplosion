@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # 发生sqlite不能在不同线程运行的时候，将sqlite_utils 里面的check_same_thread改成False
 import ast
+import linecache
 from functools import reduce
 
 import threading
@@ -30,6 +31,18 @@ import sqlite3
 BAPI = Bilibili_methods.all_methods.methods()
 
 
+# 放入缓存防止内存过载
+def get_line_count(filename):
+    count = 0
+    with open(filename, 'r', encoding='utf-8') as f:
+        while True:
+            buffer = f.read(1024 * 1)
+            if not buffer:
+                break
+            count += buffer.count('\n')
+    return count
+
+
 class rid_get_dynamic:
     def __init__(self):
         self.ids_list = []
@@ -38,11 +51,11 @@ class rid_get_dynamic:
         self.quit_Flag = False
         self.proxy_request = request_with_proxy()
         self.proxy_request.mode = 'rand'
-        self.sem = threading.Semaphore(50)  # 最大线程并发数
         # {"proxy":{"http":1.1.1.1},"status":"可用|-412|失效","update_ts":time.time(), }
         self.EndTimeSeconds = 1 * 3600  # 提前多久退出爬动态
-        self.null_time_quit = 3000  # 遇到连续3000条data为None的sid 则退出
+        self.null_time_quit = 100  # 遇到连续100条data为None的sid 则退出
         self.null_timer = 0
+        self.rollback_num = 100  # 回滚数量
         self.null_timer_lock = threading.Lock()
         self.highlight_word_list = ['jd卡', '京东卡', '红包', '主机', '显卡', '电脑', '天猫卡', '猫超卡', '现金',
                                     '见盘', '耳机', '鼠标', '手办', '景品', 'ps5', '内存', '风扇', '散热', '水冷',
@@ -83,25 +96,30 @@ class rid_get_dynamic:
         self.unknown = None  # 文件
         self.last_updated_reserve = None  # 文件
         self.all_reserve_relation = None  # 文件
+
         # 文件
 
         self.list_all_reserve_relation = list()  # 所有的动态内容，自己在后面加上是否是抽奖，官号等信息
         self.list_last_updated_reserve = list()  # 最后一次获取的rid内容
         self.list_getfail = list()
         self.list_unknown = list()
+        self.all_reserve_relation_list = list()
+        self.all_reserve_relation_ids_list = list()
         # 内容
 
     def write_in_file(self):
-        def my_write(path_Name, content_list, write_mode='a+'):
+        def my_write(path_Name, content_list: list, write_mode='a+'):
             with open(path_Name, mode=write_mode, encoding='utf-8') as f:
-                for item in content_list:
-                    f.writelines(f'{item}\n')
+                f.writelines('\n'.join(str(i) for i in content_list))
 
             content_list.clear()
 
         if self.list_all_reserve_relation:
             my_write(self.all_reserve_relation, self.list_all_reserve_relation)
+        if len(self.list_last_updated_reserve) == 0:
+            raise ValueError("获取的新抽奖为空，检查响应！")
         my_write(self.last_updated_reserve, self.list_last_updated_reserve, 'w')
+
         if self.list_getfail:
             my_write(self.getfail, self.list_getfail)
         if self.list_unknown:
@@ -154,21 +172,22 @@ class rid_get_dynamic:
             print(req1_dict)
             print('code获取失败')
         self.code_check(dycode)
-        print('\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
-                                                                                    time.localtime()))
-        print('\t\t\t\trid:{}'.format(rid))
-        print('\n')
         self.times += 1
         dymsg = req1_dict.get('msg')
         dymessage = req1_dict.get('message')
         dydata = req1_dict.get('data')
         if dydata is None:
             if self.null_timer >= self.null_time_quit:
-                self.quit()  # 遇到连续3000条data为None的sid 则退出
+                if int(time.time()) - self.dynamic_timestamp <= 24 * 3600 or self.null_timer>=5000: # 如果超过了最大data
+                    # 为None的数量，检查间隔时间是否满足在一天之内
+                    self.quit()
             else:
                 with self.null_timer_lock:
                     self.null_timer += 1
-                    print(f'当前已经有{self.null_timer}条data为None的sid')
+                    print('\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
+                                                                                                time.localtime()) +
+                          '\t\t\t\trid:{}'.format(rid) + '\n'
+                          + f'当前已经有{self.null_timer}条data为None的sid')
         else:
             with self.null_timer_lock:
                 self.null_timer = 0
@@ -202,14 +221,22 @@ class rid_get_dynamic:
             self.n += 1
             try:
                 self.dynamic_timestamp = dynamic_data_dict.get('data').get('list').get(str(rid)).get('stime')
-                print(f"直播预约获取成功，直播预约创建时间：{BAPI.timeshift(self.dynamic_timestamp)}")
+                print('\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
+                                                                                            time.localtime()) +
+                      '\t\t\t\trid:{}'.format(rid) + '\n'
+                      + f"直播预约[{rid}]获取成功，直播预约创建时间：{BAPI.timeshift(self.dynamic_timestamp)}")
                 if int(time.time()) - self.dynamic_timestamp <= 300:
                     self.quit()
             except:
                 # self.dynamic_timestamp = 0
-                print(f'直播预约失效，被删除:{req1_dict}')
-            self.list_all_reserve_relation.append(dynamic_data_dict)
-            self.list_last_updated_reserve.append(dynamic_data_dict)
+                print('\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
+                                                                                            time.localtime()) +
+                      '\t\t\t\trid:{}'.format(rid) + '\n' +
+                      f'直播预约失效，被删除:{req1_dict}'
+                      )
+            if rid not in self.all_reserve_relation_ids_list:
+                self.list_all_reserve_relation.append(dynamic_data_dict)
+                self.list_last_updated_reserve.append(dynamic_data_dict)
             self.code_check(dycode)
             return
         if dycode == -412:
@@ -291,6 +318,8 @@ class rid_get_dynamic:
 
     def reserve_relation_with_proxy(self, ids, _type=2):
         print(f'reserve_relation_with_proxy\t当前ids:{ids}')
+        if ids in self.all_reserve_relation_ids_list:
+            return next(filter(lambda x: x.get("ids") == ids, self.all_reserve_relation_list))
         url = 'https://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
         ua = random.choice(BAPI.User_Agent_List)
         headers = {
@@ -316,7 +345,8 @@ class rid_get_dynamic:
 
     def get_dynamic_with_thread(self):
         for ids_index in range(len(self.ids_list)):
-            self.ids = self.ids_list[ids_index]
+            with self.ids_change_lock:
+                self.ids = self.ids_list[ids_index]
             self.null_timer = 0
             self.quit_Flag = False
             self.dynamic_timestamp = 0
@@ -335,7 +365,7 @@ class rid_get_dynamic:
                 if self.quit_Flag:
                     self.ids_list[ids_index] = latest_rid - self.null_timer
                     break
-                thread_num = 500
+                thread_num = 100
                 thread_list = []
 
                 for t in range(thread_num):
@@ -354,10 +384,10 @@ class rid_get_dynamic:
                 #     print('\n\n\t\t\t\t写入文件\n')
 
         print(
-            f'已经达到{self.null_time_quit}条data为null信息或者最近预约时间只剩{int(time.time() - self.dynamic_timestamp)}秒，退出！')
-        print(f'当前rid记录回滚{1000}条')
+            f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{int(time.time() - self.dynamic_timestamp)}秒，退出！')
+        print(f'当前rid记录回滚{self.rollback_num}条')
         ridstartfile = open('idsstart.txt', 'w', encoding='utf-8')
-        ridstartfile.write("\n".join(str(e - (1000)) for e in self.ids_list))
+        ridstartfile.write("\n".join(str(e - self.rollback_num) for e in self.ids_list))
         ridstartfile.close()
         self.write_in_file()
         print('\n\n\t\t\t\t写入文件\n')
@@ -392,6 +422,24 @@ class rid_get_dynamic:
 
         self.last_updated_reserve = '最后一次更新的直播预约.csv'
 
+        self.all_reserve_relation_list = []  # [{code:xxx,data:xxx,ids:xxx}]
+        try:
+            linecache.clearcache()
+            line_count = get_line_count(self.all_reserve_relation)
+            print('num: ', line_count)
+            line_count = line_count - (self.rollback_num + 5000)
+            last_line = []
+            for i in range(self.rollback_num + 5000):
+                last_line = linecache.getline(self.all_reserve_relation, line_count)
+                dict_content = ast.literal_eval(last_line.strip())
+                self.all_reserve_relation_list.append(dict_content)
+                if dict_content.get('data'):
+                    self.all_reserve_relation_ids_list.append(dict_content.get('ids'))
+                line_count += 1
+            print(line_count, self.all_reserve_relation_list)
+        except:
+            traceback.print_exc()
+            print(f'读取 {self.all_reserve_relation} 文件失败')
         try:
             ridstartfile = open('idsstart.txt', 'r', encoding='utf-8')
             with self.ids_change_lock:

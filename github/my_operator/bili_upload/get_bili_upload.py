@@ -194,7 +194,10 @@ class renew:
                 2365817,
                 211553556,
                 1234306704,
-                319857159
+                319857159,
+                14134177,
+                1817853136,
+                1741486871
             ]  # 需要爬取的uidlist
 
         self.uidlist = list(set(self.uidlist))  # 去个重
@@ -578,10 +581,10 @@ class renew:
         os.system(f'cd "{root_dir}github/bili_upload" && git fetch --all && git reset --hard && git pull')
 
         self.last_order: list[str] = []  # 上次查询过的记录
-        self.last_lotid: list[str] = []  # 之前的抽奖动态id
+        self.last_lotid: list[str] = []  # 之前的抽奖动态id 直接丢动态id进去
         self.recorded_dynamic_id: list[str] = []  # 单轮获取[动态id] 记录的动态id
         self.BAPI = Bilibili_methods.all_methods.methods()
-        self.lottery_dynamic_ids = []  # [动态链接：https://t.bilibili.com/...]
+        self.lottery_dynamic_ids: list[str] = []  # [动态链接：https://t.bilibili.com/...]
         self.lottery_dynamic_detail_list = []  # 动态详情
         self.useless_info = []
         self.s = Session()
@@ -1084,6 +1087,9 @@ class renew:
 
     def judge_lottery(self, dynamic_id, dynamic_type: int = 2, is_lot_orig=False):
         logger.info(f'当前动态：https://www.bilibili.com/opus/{dynamic_id}')
+        if str(dynamic_id) in self.last_lotid:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
+            logger.warning(f'当前动态 {dynamic_id} 已经有过了，不加入抽奖动态中')
+            return
         try:
             fake_cookie_str = ""
 
@@ -1217,16 +1223,10 @@ class renew:
                     orig_ret_url = f'https://t.bilibili.com/{orig_dynamic_id}'
                     if self.BAPI.zhuanfapanduan(orig_dynamic_content):
                         orig_ret_url += '?tab=2'
-                    if orig_ret_url in self.lottery_dynamic_ids or str(
-                            orig_dynamic_id) in self.recorded_dynamic_id or str(
-                        orig_dynamic_id) in self.last_lotid:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
-                        if orig_ret_url in [x.split('\t')[0] for x in
-                                            self.useless_info] and orig_ret_url not in self.lottery_dynamic_ids:
-                            logger.debug(f'原动态 {orig_ret_url} 加入抽奖动态')
-                        else:
-                            logger.warning(f'原动态 {orig_ret_url} 已经有过了，不加入抽奖动态中')
-                            return
-
+                    if orig_ret_url in self.lottery_dynamic_ids or \
+                            str(orig_dynamic_id) in self.last_lotid:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
+                        logger.warning(f'原动态 {orig_ret_url} 已经有过了，不加入抽奖动态中')
+                        return
                     orig_official_verify = dynamic_detail['orig_official_verify']
                     format_list = [orig_ret_url, orig_name, str(orig_official_verify),
                                    str(time.strftime("%Y年%m月%d日 %H:%M", time.localtime(orig_pub_ts))),
@@ -1461,6 +1461,12 @@ class renew:
     #         self.judge_lottery(i)
 
     def main(self):
+        if os.path.exists(root_dir + relative_dir + 'uidlist.json'):
+            try:
+                with open(root_dir + relative_dir + 'uidlist.json') as f:
+                    self.uidlist = json.load(f).get('uidlist')
+            except:
+                traceback.print_exc()
         get_dyid_path = root_dir + relative_dir + 'get_dyid.txt'
         if os.path.exists(get_dyid_path):
             with open(get_dyid_path, 'r', encoding='utf-8') as f:
@@ -1648,13 +1654,13 @@ class GET_OTHERS_LOT_DYN:
         official_lot_desc = lot_det_sep[9]
         if official_lot_desc in ['预约抽奖', '官方抽奖', '充电抽奖']:
             return False
-        if int(time.time() - pub_ts) <= 2 * 3600:  # 2小时之内的不按照评论转发数量过滤
+        if int(self.get_dyn_ts - pub_ts) <= 2 * 3600:  # 获取时间和发布时间间隔小于2小时的不按照评论转发数量过滤
             return True
         if comment_count_str != 'None':
             if int(comment_count_str) < 20 and int(rep_count_str) < 20:
                 return False
         if official_verify != '1':
-            if int(time.time()) - pub_ts >= 10 * 24 * 3600:
+            if int(time.time()) - pub_ts >= 10 * 24 * 3600: # 超过10天的不抽
                 return False
         else:
             if int(time.time()) - pub_ts >= 15 * 24 * 3600:  # 官方号放宽到15天

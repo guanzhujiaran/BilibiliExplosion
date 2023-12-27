@@ -36,6 +36,7 @@ def main():
 
     log.info('提交专栏完毕')
     log.info('今天这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
+    rid_run=None
 
 
 if __name__ == '__main__':
