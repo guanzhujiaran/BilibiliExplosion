@@ -3,6 +3,8 @@ import time
 import threading
 import json
 import os
+import traceback
+
 from utl.代理.grpc_api import BiliGrpc
 from utl.pushme.pushme import pushme
 from CONFIG import CONFIG
@@ -14,7 +16,7 @@ class monitor:
         self.dir_path = CONFIG.root_dir + 'grpc获取动态/src/监控up动态/'
         if not os.path.exists(self.dir_path + 'data/'):
             os.makedirs(self.dir_path + 'data/')
-        self.uid_list = [370877395, 387636363]  # 监控的up的uid
+        self.uid_list = [370877395]  # 监控的up的uid
         self.monitor_uid_list = None
         if os.path.exists(self.dir_path + 'data/monitor_uid_list.json'):
             with open(self.dir_path + 'data/monitor_uid_list.json', 'r', encoding='utf-8') as f:

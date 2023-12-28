@@ -30,7 +30,7 @@ req = request_with_proxy()
 r = redis.Redis(host='localhost', port=11451, db=0)
 
 
-@app.get('/v1/get/live_lots/')
+@app.get('/v1/get/live_lots/',description='获取redis中的所有直播相关抽奖信息')
 def v1_get_live_lots():
     ret_list = []
     for k in r.keys():
