@@ -2206,7 +2206,7 @@ class methods:
         matchobj_102 = re.match(
             '.*转.{0,10}关.{0,10}参.*|.*关.{0,10}转.{0,10}参.*|.*参.{0,10}关.{0,10}转.*|.*转.{0,10}参.{0,10}关.*',
             tcontent, re.DOTALL)
-        matchobj_101 = re.match('.*安排.*评论.*|.*评论.*安排.*', tcontent, re.DOTALL)
+        matchobj_101 = re.match('.*安排.*评论.*|.*评论.*安排.*|给.{0,10}礼物', tcontent, re.DOTALL)
         matchobj_100 = re.match('.*参与.*礼品|.*礼品.*参与|.*礼品.*', tcontent, re.DOTALL)
         matchobj_98 = re.match('.*评.{0,10}抽', tcontent, re.DOTALL)
         matchobj_97 = re.match('.*参与.{0,10}关.{0,10}赞.*', tcontent, re.DOTALL)

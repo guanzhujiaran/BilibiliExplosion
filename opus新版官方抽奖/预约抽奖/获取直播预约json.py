@@ -57,6 +57,7 @@ class rid_get_dynamic:
         self.null_timer = 0
         self.rollback_num = 100  # 回滚数量
         self.null_timer_lock = threading.Lock()
+        self.dynamic_ts_lock = threading.Lock()
         self.highlight_word_list = ['jd卡', '京东卡', '红包', '主机', '显卡', '电脑', '天猫卡', '猫超卡', '现金',
                                     '见盘', '耳机', '鼠标', '手办', '景品', 'ps5', '内存', '风扇', '散热', '水冷',
                                     '主板', '电源', '机箱', 'fgo'
@@ -178,9 +179,10 @@ class rid_get_dynamic:
         dydata = req1_dict.get('data')
         if dydata is None:
             if self.null_timer >= self.null_time_quit:
-                if int(time.time()) - self.dynamic_timestamp <= 24 * 3600 or self.null_timer>=5000: # 如果超过了最大data
-                    # 为None的数量，检查间隔时间是否满足在一天之内
-                    self.quit()
+                with self.dynamic_ts_lock:
+                    if int(time.time()) - self.dynamic_timestamp <= 24 * 3600 or self.null_timer>=5000: # 如果超过了最大data
+                        # 为None的数量，检查间隔时间是否满足在一天之内
+                        self.quit()
             else:
                 with self.null_timer_lock:
                     self.null_timer += 1
@@ -220,13 +222,15 @@ class rid_get_dynamic:
         if dycode == 0:
             self.n += 1
             try:
-                self.dynamic_timestamp = dynamic_data_dict.get('data').get('list').get(str(rid)).get('stime')
+                with self.dynamic_ts_lock:
+                    self.dynamic_timestamp = dynamic_data_dict.get('data').get('list').get(str(rid)).get('stime')
                 print('\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
                                                                                             time.localtime()) +
                       '\t\t\t\trid:{}'.format(rid) + '\n'
                       + f"直播预约[{rid}]获取成功，直播预约创建时间：{BAPI.timeshift(self.dynamic_timestamp)}")
-                if int(time.time()) - self.dynamic_timestamp <= 300:
-                    self.quit()
+                with self.dynamic_ts_lock:
+                    if int(time.time()) - self.dynamic_timestamp <= self.EndTimeSeconds and int(time.time()) - self.dynamic_timestamp>=0:
+                        self.quit()
             except:
                 # self.dynamic_timestamp = 0
                 print('\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
@@ -274,13 +278,13 @@ class rid_get_dynamic:
             return -412
         elif dycode != 'None' and dycode != 500207 and \
                 dycode != 500205 and dycode != 404 and dycode != -412 and self.dynamic_timestamp != 'None':
-            if int(time.time()) - self.dynamic_timestamp < self.EndTimeSeconds:
-                # if not self.quit_Flag:
-                #     self.quit_Flag = True
-                #     self.quit()
-                # else:
-                #     return
-                pass
+            with self.dynamic_ts_lock:
+                if int(time.time()) - self.dynamic_timestamp <= self.EndTimeSeconds and int(time.time()) - self.dynamic_timestamp >= 0:
+                    if not self.quit_Flag:
+                        self.quit_Flag = True
+                        self.quit()
+                    else:
+                        return 0
 
     def quit(self):
         """
@@ -299,6 +303,7 @@ class rid_get_dynamic:
 
                 # print(f'已获取到最近{self.EndTimeSeconds // 60}分钟为止的动态')
                 with self.ids_change_lock:
+                    print(f'退出抽奖！当前ids：{self.ids}')
                     self.ids = None
 
                 print('共' + str(self.times - 1) + '次获取动态')
@@ -347,9 +352,12 @@ class rid_get_dynamic:
         for ids_index in range(len(self.ids_list)):
             with self.ids_change_lock:
                 self.ids = self.ids_list[ids_index]
-            self.null_timer = 0
-            self.quit_Flag = False
-            self.dynamic_timestamp = 0
+            with self.null_timer_lock:
+                self.null_timer = 0
+            with self.quit_lock:
+                self.quit_Flag = False
+            with self.dynamic_ts_lock:
+                self.dynamic_timestamp = 0
             latest_rid = None
             while 1:
                 self.resolve_dynamic(self.ids)  # 每次开启一轮多线程前先测试是否可用
@@ -370,7 +378,6 @@ class rid_get_dynamic:
 
                 for t in range(thread_num):
                     thread = threading.Thread(target=self.resolve_dynamic, args=(self.ids,))
-                    thread.daemon = True
                     with self.ids_change_lock:
                         self.ids += 1
                     thread_list.append(thread)

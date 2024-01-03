@@ -14,3 +14,6 @@ def pushme(title,content,__type='text'):
         'type': __type
     }
     req = requests.post(url=url, data=data,verify=False)
+
+if __name__ == '__main__':
+    pushme('测试标题', '测试内容')

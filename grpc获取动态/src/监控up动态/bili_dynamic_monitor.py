@@ -71,7 +71,7 @@ class monitor:
         elif dynamic_item.get('extend').get('origDesc'):
             dynamic_content += ''.join([x.get('text') for x in
                                         dynamic_item.get('extend').get('origDesc')])
-
+        logger.debug(f'【Bilibili】你关注的up主 {author_name}有新的动态！\nhttps://www.bilibili.com/opus/{dynIdStr}')
         pushme(f'【Bilibili】你关注的up主 {author_name}有新的动态！',
                f'|信息|内容|\n|---|---|\n|跳转APP|[__点击跳转app__](bilibili://opus/detail/{dynIdStr})|\n|动态类型|{cardType}|\n|up昵称|{author_name}|\n|空间主页|{author_space}|\n|发布时间|{pub_time}|\n|动态内容|{dynamic_content.replace("&#124;", "|")}|',
                'markdown'
