@@ -13,6 +13,7 @@ import json
 import logging
 import httpx
 import loguru
+import requests
 
 from bilibili.app.dynamic.v2.dynamic_pb2 import Config
 from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
@@ -66,6 +67,7 @@ class BiliGrpc:
         self.channel = None
         self.proxy = None
         self.channel_lock = threading.Lock()
+        self.timeout = 10
 
     def __set_available_channel(self, proxy, channel):
         with self.channel_lock:
@@ -118,7 +120,7 @@ class BiliGrpc:
 
                 dyn_all_resp, call = dynamic_client.DynDetails.with_call(dyn_details_req,
                                                                          metadata=md,
-                                                                         timeout=10)
+                                                                         timeout=self.timeout)
                 ret_dict = MessageToDict(dyn_all_resp)
                 if proxy != self.proxy:
                     self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
@@ -126,7 +128,7 @@ class BiliGrpc:
                 return ret_dict
             except grpc.RpcError as e:
                 stat, det = grpc_error(e)
-                logging.warning(f"BiliGRPC error: {stat} - {proxy['proxy']}")
+                grpc_err_log.warning(f"BiliGRPC error: {stat} - {proxy['proxy']}")
                 if proxy == self.proxy:
                     self.__set_available_channel(None, None)
                 score_change = -10
@@ -142,7 +144,8 @@ class BiliGrpc:
                 elif 'OPENSSL_internal:WRONG_VERSION_NUMBER.' in det:
                     pass
                 else:
-                    logging.error(f"BiliGRPC error: {stat} - {det}\n{dyn_details_req}")  # 重大错误！
+                    grpc_err_log.error(
+                        f"{dyn_ids} grpc_api_get_DynDetails BiliGRPC error: {stat} - {det}\n{dyn_details_req}")  # 重大错误！
                 self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                     score_change=score_change)
 
@@ -195,7 +198,7 @@ class BiliGrpc:
                         verify=False
                 ) as client:
                     resp = client.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail", data=data,
-                                       headers=headers,
+                                       headers=headers, timeout=self.timeout
                                        )
                 resp.raise_for_status()
                 if type(resp.headers.get('grpc-status')) is not str and type(
@@ -214,7 +217,8 @@ class BiliGrpc:
                 return resp_dict
             except Exception as err:
                 score_change = -10
-                logging.error(f"BiliGRPC error: {err} - {proxy['proxy']}")
+                grpc_err_log.error(
+                    f"{rid} grpc_get_dynamic_detail_by_type_and_rid BiliGRPC error: {err} - {proxy['proxy']}")
                 if '-352' in str(err):
                     score_change = 0
                 if proxy == self.proxy:
@@ -264,14 +268,13 @@ class BiliGrpc:
                     if type(v) == bytes:
                         headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
             try:
-                with httpx.Client(proxies={
-                    'http://': proxy['proxy']['http'],
-                    'https://': proxy['proxy']['https']
-                },
-                        verify=False, ) as client:
-                    resp = client.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace", data=data,
-                                       headers=headers,
-                                       )
+                resp = requests.request(method="post",
+                                        url="https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace",
+                                        data=data,
+                                        headers=headers, timeout=self.timeout, proxies={
+                        'http://': proxy['proxy']['http'],
+                        'https://': proxy['proxy']['https']
+                    })
                 resp.raise_for_status()
                 if type(resp.headers.get('grpc-status')) is not str and type(
                         resp.headers.get('grpc-status')) is not bytes:
@@ -289,7 +292,84 @@ class BiliGrpc:
                 return resp_dict
             except Exception as err:
                 score_change = -10
-                logging.error(f"BiliGRPC error: {err} - {proxy['proxy']}")
+                grpc_err_log.error(f"{uid} grpc_get_space_dyn_by_uid BiliGRPC error: {err} - {proxy['proxy']}")
+                if '-352' in str(err):
+                    score_change = 0
+                if proxy == self.proxy:
+                    self.__set_available_channel(None, None)
+                self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
+                                                    score_change=score_change)
+
+    async def Async_grpc_get_space_dyn_by_uid(self, uid: Union[str, int], history_offset: str = '',
+                                              page: int = 1) -> dict:
+        """
+         获取up空间
+        :param uid:
+        :param history_offset:
+        :param page:
+        :return:
+        """
+        if type(uid) is str and str.isdigit(uid):
+            uid = int(uid)
+        if type(uid) is not int or type(history_offset) is not str:
+            raise TypeError(
+                f'uid must be a number and history_offset must be str! uid:{uid} history_offset:{history_offset}')
+        while 1:
+            proxy = self.proxy
+            channel = self.channel
+            if not channel:
+                proxy, channel = self.__get_random_channel()
+            data_dict = {
+                'host_uid': int(uid),
+                'history_offset': history_offset,
+                'local_time': 8,
+                'page': page,
+                'from': 'space'
+            }
+            msg = dynamic_pb2.DynSpaceReq(**data_dict)
+            proto = msg.SerializeToString()
+            data = b"\0" + len(proto).to_bytes(4, "big") + proto
+            headers = {
+                # "User-Agent": "Dalvik/2.1.0 (Linux; Android) os/android",
+                "User-Agent": "Mozilla/5.0",
+                "Content-Type": "application/grpc",
+                # "x-bili-device-bin": ""
+            }
+            headers.update(dict(make_metadata("")))
+            for k, v in list(headers.items()):
+                if k == 'user-agent':
+                    headers.pop(k)
+                if k.endswith('-bin'):
+                    if type(v) == bytes:
+                        headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
+            try:
+                async with httpx.AsyncClient(proxies={
+                    'http://': proxy['proxy']['http'],
+                    'https://': proxy['proxy']['https']
+                },
+                        verify=False, ) as client:
+                    resp = await client.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace",
+                                             data=data,
+                                             headers=headers, timeout=self.timeout
+                                             )
+                resp.raise_for_status()
+                if type(resp.headers.get('grpc-status')) is not str and type(
+                        resp.headers.get('grpc-status')) is not bytes:
+                    raise MY_Error(resp.text.replace('\n', ''))
+                if resp.headers.get('bili-status-code') == '-352' or resp.headers.get('grpc-Message') == '-352':
+                    grpc_err_log.error(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{str(data)}')
+                    raise MY_Error(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{proxy}\n{str(data)}')
+                gresp = dynamic_pb2.DynSpaceRsp()
+                gresp.ParseFromString(resp.content[5:])
+                resp_dict = MessageToDict(gresp)
+                if proxy != self.proxy:
+                    self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
+                loguru.logger.debug(f'获取grpc请求成功代理：{proxy["proxy"]}')
+                self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
+                return resp_dict
+            except Exception as err:
+                score_change = -10
+                grpc_err_log.error(f"BiliGRPC error: {err} - {proxy['proxy']}")
                 if '-352' in str(err):
                     score_change = 0
                 if proxy == self.proxy:

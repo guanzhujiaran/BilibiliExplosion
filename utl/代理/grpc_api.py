@@ -1,7 +1,6 @@
 # 最终将请求grpc_api的方法全部放到这里面，里面就是一个class
 import traceback
 import json
-
 import httpx
 import requests
 from loguru import logger
@@ -10,7 +9,7 @@ from loguru import logger
 class BiliGrpc:
     def __init__(self):
         self.post_localhost_timeout = None
-        self.base_url = 'http://localhost:23333'
+        self.base_url = 'http://127.0.0.1:23333'
 
     def grpc_api_get_DynDetails(self, dyn_ids: [int]) -> dict:
         """
@@ -70,6 +69,9 @@ class BiliGrpc:
     def grpc_get_space_dyn_by_uid(self, uid: int, history_offset: str = '', page: int = 1) -> dict:
         """
         获取up空间
+        :param uid:
+        :param page:
+        :param history_offset:
         :param args: uid:int, history_offset: str = '', page: int = 1
         :param kwargs:
         :return:
@@ -89,11 +91,10 @@ class BiliGrpc:
                 # exit()  #
                 pass
             try:
-                with httpx.Client() as client:
-                    resp = client.request(url=self.base_url + '/grpc/grpc_get_space_dyn_by_uid/',
-                                          method='post',
-                                          data=data,
-                                          timeout=self.post_localhost_timeout)
+                resp = requests.request(url=self.base_url + '/grpc/grpc_get_space_dyn_by_uid/',
+                                        method='post',
+                                        data=data,
+                                        timeout=self.post_localhost_timeout)
                 return resp.json()
             except:
                 traceback.print_exc()
@@ -102,6 +103,9 @@ class BiliGrpc:
     async def Async_grpc_get_space_dyn_by_uid(self, uid: int, history_offset: str = '', page: int = 1) -> dict:
         """
         获取up空间
+        :param history_offset:
+        :param uid:
+        :param page:
         :param args: uid:int, history_offset: str = '', page: int = 1
         :param kwargs:
         :return:
@@ -122,7 +126,7 @@ class BiliGrpc:
                 pass
             try:
                 async with httpx.AsyncClient() as client:
-                    resp = await client.post(url=self.base_url + '/grpc/grpc_get_space_dyn_by_uid/',
+                    resp = await client.post(url=self.base_url + '/grpc/Async_grpc_get_space_dyn_by_uid/',
                                              data=data,
                                              timeout=self.post_localhost_timeout)
                 return resp.json()

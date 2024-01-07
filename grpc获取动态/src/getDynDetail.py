@@ -122,15 +122,15 @@ class DynDetailScrapy:
             filter=lambda record: record["extra"].get('user') == "common_error_log"
         )
 
-        self.additional_module_log.add(
-            self.dir_path + "log/additional_module_log.log",
-            encoding="utf-8",
-            enqueue=True,
-            # rotation="500MB",
-            compression="zip",
-            # retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "additional_module_log"
-        )
+        # self.additional_module_log.add(
+        #     self.dir_path + "log/additional_module_log.log",
+        #     encoding="utf-8",
+        #     enqueue=True,
+        #     rotation="500MB",
+        #     compression="zip",
+        #     retention="15 days",
+        #     filter=lambda record: record["extra"].get('user') == "additional_module_log"
+        # )
 
     # region 从api获取信息操作
     def get_dynamic_id_by_doc_id(self, doc_id):

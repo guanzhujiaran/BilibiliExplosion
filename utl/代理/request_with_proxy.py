@@ -30,7 +30,7 @@ class request_with_proxy:
                 pass
             try:
                 async with aiohttp.ClientSession() as session:
-                    async with session.post(self.base_url + '/request_with_proxy', data=data,
+                    async with session.post(self.base_url + '/async_request_with_proxy', data=data,
                                             timeout=self.post_localhost_timeout) as response:
                         return await response.json()
             except:

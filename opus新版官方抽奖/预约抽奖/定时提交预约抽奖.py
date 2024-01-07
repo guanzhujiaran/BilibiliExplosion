@@ -40,7 +40,7 @@ def main():
 
 
 if __name__ == '__main__':
-    schedule_mark = True
+    schedule_mark = False
     if schedule_mark:
         from apscheduler.schedulers.blocking import BlockingScheduler
         from apscheduler.triggers.cron import CronTrigger

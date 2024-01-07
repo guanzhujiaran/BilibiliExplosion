@@ -30,7 +30,7 @@ req = request_with_proxy()
 r = redis.Redis(host='localhost', port=11451, db=0)
 
 
-@app.get('/v1/get/live_lots/',description='获取redis中的所有直播相关抽奖信息')
+@app.get('/v1/get/live_lots/', description='获取redis中的所有直播相关抽奖信息')
 def v1_get_live_lots():
     ret_list = []
     for k in r.keys():
@@ -65,10 +65,25 @@ def semantic(data=Query(default=None)):
 
 # region 代理类方法的请求接口
 @app.post('/request_with_proxy/')
-async def request_with_proxy_api(request: fastapi.Request):
-    request_body = await request.json()
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, req.request_with_proxy, request_body)
+def request_with_proxy_api(  # 改为了并发模式
+        # request: fastapi.Request
+        request: dict
+):
+    # request_body = await request.json()
+    # loop = asyncio.get_event_loop()
+    # result = await loop.run_in_executor(None, req.request_with_proxy, request_body)
+    # return result
+    request_body = request
+    result = req.request_with_proxy(request_body)
+    return result
+
+
+@app.post('/async_request_with_proxy/')
+async def async_request_with_proxy(
+        request: dict
+):
+    request_body = request
+    result = await req.async_request_with_proxy(request_body)
     return result
 
 
@@ -85,10 +100,8 @@ def get_one_rand_grpc_proxy():
 
 
 @app.post('/grpc/upsert_grpc_proxy_status/')
-async def upsert_grpc_proxy_status(request: fastapi.Request):
-    request_body = await request.json()
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, req.upsert_grpc_proxy_status, request_body)
+def upsert_grpc_proxy_status(request_body: dict):
+    result = req.upsert_grpc_proxy_status(request_body)
     return result
 
 
@@ -96,18 +109,14 @@ async def upsert_grpc_proxy_status(request: fastapi.Request):
 
 
 @app.post('/grpc/grpc_api_get_DynDetails/')
-async def grpc_api_get_DynDetails(request: fastapi.Request):
-    request_body = await request.json()
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, grpc_api.grpc_api_get_DynDetails, request_body)
+def grpc_api_get_DynDetails(request_body: dict):
+    result = grpc_api.grpc_api_get_DynDetails(request_body)
     return result
 
 
 @app.post('/grpc/grpc_get_dynamic_detail_by_type_and_rid/')
-async def grpc_get_dynamic_detail_by_type_and_rid(request: fastapi.Request):
-    request_body = await request.json()
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, grpc_api.grpc_get_dynamic_detail_by_type_and_rid, request_body)
+def grpc_get_dynamic_detail_by_type_and_rid(request_body: Union[int, str]):
+    result = grpc_api.grpc_get_dynamic_detail_by_type_and_rid(request_body)
     return result
 
 
@@ -117,9 +126,15 @@ class grpcGetSpaceDynByUid(BaseModel):
     page: int = 1
 
 
-@app.post('/grpc/grpc_get_space_dyn_by_uid/')
+@app.post('/grpc/grpc_get_space_dyn_by_uid/')  # 这个接口没法并发，需要查看（已修复
 def grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
     result = grpc_api.grpc_get_space_dyn_by_uid(request.uid, request.history_offset, request.page)
+    return result
+
+
+@app.post('/grpc/Async_grpc_get_space_dyn_by_uid/')
+async def Async_grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
+    result = await grpc_api.Async_grpc_get_space_dyn_by_uid(request.uid, request.history_offset, request.page)
     return result
 
 
@@ -133,14 +148,8 @@ def v1_post_rm_following_list(data: list[Union[int, str]]):
     :param data: list[int] 关注列表 直接传列表即可
     :return:
     """
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)  # 使用新的协程，防止阻塞
-        result = loop.run_until_complete(get_rm_following_list.main(data))
-        return result
-    except:
-        traceback.print_exc()
-        raise HTTPException(status_code=114514,detail=traceback.format_exc())
+    result = get_rm_following_list.main(data)
+    return result
 
 
 # endregion
@@ -151,10 +160,8 @@ def v1_post_rm_following_list(data: list[Union[int, str]]):
 
 # region 获取抽奖内容接口
 @app.post('/lot/upsert_lot_detail/')
-async def upsert_lot_detail(request: fastapi.Request):
-    request_body = await request.json()
-    loop = asyncio.get_event_loop()
-    result = await loop.run_in_executor(None, grpc_sql_helper.upsert_lot_detail, request_body)
+def upsert_lot_detail(request_body: dict):
+    result = grpc_sql_helper.upsert_lot_detail(request_body)
     return result
 
 

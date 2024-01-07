@@ -10,6 +10,7 @@ from datetime import datetime
 from functools import reduce
 
 import bs4
+import httpx
 import requests
 from loguru import logger
 from requests import session
@@ -240,6 +241,110 @@ class request_with_proxy:
             self._update_to_proxy_dict(p_dict, score_plus_Flag=True)
             return req_dict
 
+    async def async_request_with_proxy(self, *args, **kwargs) -> dict:
+        kwargs.update(*args)
+        args = ()
+        while True:
+            # if kwargs.get('headers').get('user-agent'):
+            #     if kwargs.get('headers').get('user-agent') in self.ban_ua_list:
+            #         if self.User_Agent_List:
+            #             kwargs.get('headers').update({
+            #                 'user-agent': random.choice(self.User_Agent_List)
+            #             })
+            with self.fresh_cookie_lock:
+                if kwargs.get('headers').get('cookie'):
+                    if self.fake_cookie:
+                        kwargs.get('headers').update({'cookie': self.fake_cookie})
+                    else:
+                        self.fake_cookie = self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
+                        kwargs.get('headers').update({'cookie': self.fake_cookie})
+            if self.GetProxy_Flag:
+                self.log.info('获取代理中')
+                time.sleep(30)
+                t = threading.Timer(30, self.set_GetProxy_Flag, (False,))  # 获取结束之后等待30秒，之后设为False，允许开始下一轮获取代理
+                t.start()
+                continue
+            p_dict = self._set_new_proxy()
+            p = p_dict.get('proxy')
+            status = 0
+            if not p:
+                time.sleep(10)
+                self._refresh_412_proxy()
+                continue
+            try:
+                async with httpx.AsyncClient(proxies=p) as client:
+                    req = await client.request(*args, **kwargs, timeout=self.timeout)
+                # req = self.s.request(*args, **kwargs, proxies=p, timeout=self.timeout)
+                if 'code' not in req.text and self.channel == 'bili':  # 如果返回的不是json那么就打印出来看看是什么
+                    self.log.info(req.text)
+                try:
+                    req_dict = req.json()
+                except:
+                    logger.error(f'解析为dict时失败，相应内容为：{req.text}')
+                    raise ValueError
+                if type(req_dict) is list:
+                    p_dict['score'] += 10
+                    p_dict['status'] = status
+                    self._update_to_proxy_dict(p_dict, score_plus_Flag=True)
+                    return req_dict
+                if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
+                    if not self.mode_fixed:
+                        self.mode = 'rand'
+                    self.log.error(
+                        f'{req_dict.get("code")}报错,换个ip\t{p_dict}\t{self._timeshift(time.time())}\t{req_dict}\n{args}\t{kwargs}')
+                    if req_dict.get('code') == 65539:
+                        pass
+                    else:
+                        status = -412
+                    if req_dict.get('code') == -412:
+                        # self._check_ip_by_bili_zone(p, status=status, score=p_dict['score'])  # 如何代理ip检测没问题就追加回去
+                        pass
+                    elif req_dict.get('code') == -352:
+                        with self.fresh_cookie_lock:
+                            self._352_time += 1
+                            if self._352_time >= 10:
+                                self.fake_cookie = self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
+                                self._352_time = 0
+                    p_dict['score'] += 10
+                    p_dict['status'] = status
+                    self._update_to_proxy_dict(p_dict, score_plus_Flag=True, change_score_num=10)
+                    # return self.request_with_proxy(*args, **kwargs)
+
+                    continue
+                if req_dict.get('code') == 0 or req_dict.get('code') == 4101131 or req_dict.get('code') == -9999:
+                    if not self.mode_fixed:
+                        self.mode = 'single'
+                    logger.info(f'获取成功(rid:{kwargs.get("url")})：\n{p_dict}')
+                    p_dict['score'] = 100
+                    p_dict['status'] = 0
+                    self._update_to_proxy_dict(p_dict, score_plus_Flag=True, change_score_num=200)
+
+            except Exception as e:
+                # if p not in self.ban_proxy_pool:
+                #     self.ban_proxy_pool.append(p)
+                # try:
+                #     self._remove_proxy_list(p_dict['proxy'])
+                # except:
+                #     pass
+                if not self.mode_fixed:
+                    self.mode = 'rand'
+                if self.channel != 'zhihu':
+                    p_dict['score'] -= 50
+                    p_dict['status'] = 0
+                    self._update_to_proxy_dict(p_dict, score_minus_Flag=True, change_score_num=50)
+                self._set_new_proxy()
+                logger.warning(
+                    f'{self.mode}使用代理访问失败，代理扣分。{e}\t{kwargs}\n获取请求时使用的代理信息：{p_dict}\t{self._timeshift(time.time())}\t剩余{self.sqlite3_proxy_op.get_available_proxy_nums()}/{self.sqlite3_proxy_op.get_all_proxy_nums()}个代理，当前禁用代理{len(self.ban_proxy_pool)}个：')
+                if len(self.ban_proxy_pool) > 30:
+                    self.ban_proxy_pool.clear()
+                # return self.request_with_proxy(*args, **kwargs)
+                continue
+            p_dict['score'] += 10
+            p_dict['status'] = status
+            self._update_to_proxy_dict(p_dict, score_plus_Flag=True)
+            return req_dict
+
+    
     def set_GetProxy_Flag(self, boolean: bool):
         self.GetProxy_Flag = boolean
 
