@@ -62,7 +62,11 @@ class LotDynSortByDate:
             '手机',
             'GB',
             'TB',
-            'tb'  # 可能是显存大小，硬盘容量，内存条容量等参数
+            'tb',  # 可能是显存大小，硬盘容量，内存条容量等参数
+            'ns',
+            'NS',
+            'switch',
+            'Switch'
         ]  # 需要重点查看的关键词列表
         self.manual_reply_judge = execjs.compile("""
                 manual_reply_judge= function (dynamic_content) {

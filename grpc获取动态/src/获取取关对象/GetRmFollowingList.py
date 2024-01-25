@@ -1,116 +1,110 @@
 import asyncio
 import json
 import os
-import threading
 import time
 from datetime import datetime
-from typing import Type, Union, Optional
-
+from typing import Type, Union
 from loguru import logger
-from sqlalchemy import create_engine
+from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from Bilibili_methods.all_methods import methods
 from CONFIG import CONFIG
-from grpc获取动态.Utils.GrpcUtils import DynTool, ObjDynInfo
+from grpc获取动态.Utils.GrpcDynamicRespUtils import DynTool, ObjDynInfo
 from utl.代理.grpc_api import BiliGrpc
 from grpc获取动态.src.获取取关对象.db.models import UserInfo, SpaceDyn
 
 grpcapi = BiliGrpc()
 
-
-class MyThread(threading.Thread):
-    def __init__(self, func, args=()):
-        super(MyThread, self).__init__()
-        self.func = func
-        self.args = args
-
-    def run(self):
-        self.result = self.func(*self.args)
-
-    def get_result(self):
-        threading.Thread.join(self)  # 等待线程执行完毕
-        try:
-            return self.result
-        except Exception:
-            return None
+from utl.utils import MyThread
 
 
 class GetRmFollowingListV1:
     def __init__(self, ):
-        self.list_lock = threading.Lock()
-        self.db_lock = threading.Lock()
+        self.logger = logger.bind(user=__name__, filter=lambda record: record["extra"].get('user') == __name__)
+        self.list_lock = asyncio.Lock()
+        self.db_lock = asyncio.Lock()
         self.lucky_up_list = []
         self.max_recorded_dyn_num = 100  # 每个uid最多记录多少个动态
-        SQLITE_URI = 'sqlite:///G:/database/Following_Usr.db?check_same_thread=False'
-        engine = create_engine(
+        SQLITE_URI = CONFIG.database.followingup_db_RUI
+        engine = create_async_engine(
             SQLITE_URI,
-            echo=False  # 是否打印sql日志
+            echo=False,  # 是否打印sql日志
+            future=True
         )
-        self.Session = sessionmaker(engine, expire_on_commit=False, autoflush=True)  # 每次操作的时候将session实例化一下
+        self.AsyncSession = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False,
+                                         autoflush=True)  # 每次操作的时候将session实例化一下
         self.check_up_sep_days = 7  # 最多隔7天检查一遍是否发了新动态
         self.BAPI = methods()
         self.max_separat_time = 86400 * 60  # 标记多少天未发动态的up主
         self.now_check_up: list = []
 
     # region 空间动态crud
-    def create_space_dyn(self, dyn_obj: ObjDynInfo) -> int:
+    async def create_space_dyn(self, dyn_obj: ObjDynInfo) -> int:
         """
         添加空间动态
         :param dyn_obj:
         :return: 返回是否是抽奖动态
         """
         is_lot_dyn = self.BAPI.choujiangxinxipanduan(dyn_obj.dynCard.dynamicContent)
-        with self.db_lock:
-            with self.Session() as session:
-                space_dyn = SpaceDyn(
-                    Space_Dyn_uid=dyn_obj.uid,
-                    dynamic_id=dyn_obj.dynamicId,
-                    dynamic_content=dyn_obj.dynCard.dynamicContent,
-                    uname=dyn_obj.uname,
-                    dynamic_type=dyn_obj.dynCard.dynType,
-                    is_lot_dyn=1 if is_lot_dyn is None else 0,
-                    pubts=dyn_obj.dynCard.pubTs,
-                    like=dyn_obj.dynCard.dynStat.like,
-                    reply=dyn_obj.dynCard.dynStat.reply,
-                    repost=dyn_obj.dynCard.dynStat.repost,
-                )
-                session.add(space_dyn)
-                session.commit()
+        async with self.db_lock:
+            async with self.AsyncSession() as session:
+                async with session.begin():
+                    space_dyn = SpaceDyn(
+                        Space_Dyn_uid=dyn_obj.uid,
+                        dynamic_id=dyn_obj.dynamicId,
+                        dynamic_content=dyn_obj.dynCard.dynamicContent,
+                        uname=dyn_obj.uname,
+                        dynamic_type=dyn_obj.dynCard.dynType,
+                        is_lot_dyn=1 if is_lot_dyn is None else 0,
+                        pubts=dyn_obj.dynCard.pubTs,
+                        like=dyn_obj.dynCard.dynStat.like,
+                        reply=dyn_obj.dynCard.dynStat.reply,
+                        repost=dyn_obj.dynCard.dynStat.repost,
+                    )
+                    session.add(space_dyn)
+                    await session.flush()
+                    session.expunge(space_dyn)
         return 1 if is_lot_dyn is None else 0
 
     # endregion
     # region up主信息crud
-    def create_user_info(self, uid):
+    async def create_user_info(self, uid):
         """
         添加新的uid
         :param uid:
         :return:
         """
-        with self.db_lock:
-            with self.Session() as session:
-                session.add(UserInfo(
-                    uid=uid,
-                    upTimeStamp=datetime.fromtimestamp(0)
-                ))
-                session.commit()
+        async with self.db_lock:
+            async with self.AsyncSession() as session:
+                async with session.begin():
+                    data = UserInfo(
+                        uid=uid,
+                        upTimeStamp=datetime.fromtimestamp(0)
+                    )
+                    session.add(data)
+                    await session.flush()
+                    session.expunge(data)
 
     # endregion
 
-    def is_exist_space_dyn(self, dynamic_id: str) -> bool:
+    async def is_exist_space_dyn(self, dynamic_id: str) -> bool:
         """
         如果空间动态存在动态id就返回True
         :param dynamic_id:
         :return:
         """
-        with self.db_lock:
-            with self.Session() as session:
-                resp = session.query(SpaceDyn).filter(dynamic_id == SpaceDyn.dynamic_id).first()
-                if resp:
+        async with self.db_lock:
+            async with self.AsyncSession() as session:
+                sql = select(SpaceDyn).where(dynamic_id == SpaceDyn.dynamic_id)
+                result = await session.execute(sql)
+                data = result.scalars().first()
+                if data:
                     return True
                 else:
                     return False
 
-    def check_up_space_dyn(self, uid: int):
+    async def check_up_space_dyn(self, uid: int):
         """
         更新数据库中的up主空间动态和up信息 （爬取数据并处理部分！
         :param uid:
@@ -119,7 +113,7 @@ class GetRmFollowingListV1:
         try:
             uid = int(uid)
         except:
-            logger.error("Invalid uid: {}".format(uid))
+            self.logger.error("Invalid uid: {}".format(uid))
             return
         checking_mark = False
         while 1:
@@ -127,11 +121,11 @@ class GetRmFollowingListV1:
                 time.sleep(1)
                 checking_mark = True
             else:
-                with self.list_lock:
+                async with self.list_lock:
                     self.now_check_up.append(uid)
                 break
         if checking_mark:
-            with self.list_lock:
+            async with self.list_lock:
                 if uid in self.now_check_up:
                     self.now_check_up.remove(uid)
             return
@@ -140,10 +134,11 @@ class GetRmFollowingListV1:
         is_lot_up = False
         dynamic_flag = False
         is_lot_dyn = 0
-        logger.debug(f"检查up主 {uid} 空间中")
+        self.logger.debug(f"检查up主 {uid} 空间中")
         while 1:
-            resp = grpcapi.grpc_get_space_dyn_by_uid(uid, history_offset)
-            logger.info(f'获取到{uid}空间响应{resp}')
+            resp = await grpcapi.grpc_get_space_dyn_by_uid(uid, history_offset)
+            resp_len = len(resp.get('list', []))
+            self.logger.info(f'获取到{uid}空间响应{resp_len}条！')
             space_dyn = DynTool.solve_space_dyn(resp)
             history_offset = space_dyn.historyOffset
             hasMore = space_dyn.hasMore
@@ -154,11 +149,11 @@ class GetRmFollowingListV1:
                     continue
                 if dyn_obj.dynCard.pubTs <= latest_dynamic_timestamp:
                     latest_dynamic_timestamp = dyn_obj.dynCard.pubTs
-                if self.is_exist_space_dyn(dyn_obj.dynamicId):
+                if await self.is_exist_space_dyn(dyn_obj.dynamicId):
                     dynamic_flag = True
                     break
                 else:
-                    is_lot_dyn = self.create_space_dyn(dyn_obj)
+                    is_lot_dyn = await self.create_space_dyn(dyn_obj)
                     if is_lot_dyn:
                         is_lot_up = True
             # 终止规则 
@@ -178,17 +173,19 @@ class GetRmFollowingListV1:
                 break
 
         if dyn_obj:
-            self.update_up_status(uid, dyn_obj.uname, dyn_obj.dynCard.officialVerify)
+            await self.update_up_status(uid, dyn_obj.uname, dyn_obj.dynCard.officialVerify)
         else:
-            with self.db_lock:
-                with self.Session() as session:
-                    userinfo = session.query(UserInfo).filter(UserInfo.uid == uid).first()
-                    self.update_up_status(uid, userinfo.uname, userinfo.officialVerify)
-        logger.debug(
+            async with self.db_lock:
+                async with self.AsyncSession() as session:
+                    sql = select(UserInfo).where(UserInfo.uid == uid)
+                    result = await session.execute(sql)
+                    userinfo = result.scalars().first()
+                    await self.update_up_status(uid, userinfo.uname, userinfo.officialVerify)
+        self.logger.debug(
             f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间动态检查完成！{'是抽奖up' if bool(is_lot_up) else '非抽奖up'}")
         self.now_check_up.remove(uid)
 
-    def update_up_status(self, uid: int, uname: str, officialVerify: int = -2, update_ts: int = int(time.time())):
+    async def update_up_status(self, uid: int, uname: str, officialVerify: int = -2, update_ts: int = int(time.time())):
         """
         根据数据库中内容更新up状态，只有当遇到终止条件时才能将更新时间设置为当前时间
          ### 核心函数！
@@ -208,24 +205,28 @@ class GetRmFollowingListV1:
                 return False
 
             return bool(spdyn.is_lot_dyn)
-        with self.db_lock:
-            with self.Session() as session:
-                space_dyn_group_by_uid = session.query(SpaceDyn).filter(uid == SpaceDyn.Space_Dyn_uid).order_by(
-                    SpaceDyn.pubts.desc()).all()  # 最新的在最前面
-                isLotUp = 1 if len(list(filter(is_lot_up, space_dyn_group_by_uid))) > 0 else 0
-                if len(space_dyn_group_by_uid) > self.max_recorded_dyn_num:
-                    delete_list = space_dyn_group_by_uid[-(len(space_dyn_group_by_uid) - self.max_recorded_dyn_num):]
-                    for delete_dyn in delete_list:
-                        session.query(SpaceDyn).filter(SpaceDyn.dynamic_id == delete_dyn.dynamic_id).delete()
-                session.query(UserInfo).filter(UserInfo.uid == uid).update({
-                    "isLotUp": isLotUp,
-                    'upTimeStamp': datetime.fromtimestamp(update_ts),
-                    'officialVerify': officialVerify,
-                    'uname': uname,
-                })  # 更新状态！
-                session.commit()
 
-    def check_db_exist_up(self, uid: Union[int, str]) -> bool:
+        async with self.db_lock:
+            async with self.AsyncSession() as session:
+                async with session.begin():
+                    sql = select(SpaceDyn).where(uid == SpaceDyn.Space_Dyn_uid).order_by(SpaceDyn.pubts.desc())
+                    result = await session.execute(sql)
+                    space_dyn_group_by_uid = result.scalars().all()  # 最新的在最前面
+                    isLotUp = 1 if len(list(filter(is_lot_up, space_dyn_group_by_uid))) > 0 else 0
+                    if len(space_dyn_group_by_uid) > self.max_recorded_dyn_num:
+                        delete_list: list[SpaceDyn] = space_dyn_group_by_uid[
+                                                      -(len(space_dyn_group_by_uid) - self.max_recorded_dyn_num):]
+                        for delete_dyn in delete_list:
+                            session.delete(delete_dyn)
+                    sql = update(UserInfo).where(UserInfo.uid == uid).values(
+                        isLotUp=isLotUp,
+                        upTimeStamp=datetime.fromtimestamp(update_ts),
+                        officialVerify=officialVerify,
+                        uname=uname,
+                    )
+                    await session.execute(sql)  # 更新状态！
+
+    async def check_db_exist_up(self, uid: Union[int, str]) -> bool:
         """
         检查数据库中是否存在up，并返回数据库中的up是否为抽奖up
         :param uid:
@@ -233,38 +234,33 @@ class GetRmFollowingListV1:
         """
         if isinstance(uid, str):
             if not str.isdigit(uid):
-                logger.error(f"Invalid uid! uid:{uid}")
+                self.logger.error(f"Invalid uid! uid:{uid}")
                 return False
             else:
                 uid = int(uid)
-        # logger.debug(f"Checking uid: {uid}! https://space.bilibili.com/{uid}/dynamic")
-        with self.list_lock:
+        # self.logger.debug(f"Checking uid: {uid}! https://space.bilibili.com/{uid}/dynamic")
+        async with self.list_lock:
             if uid in self.lucky_up_list:
                 return True
-        with self.db_lock:
-            with self.Session() as session:
-                res = session.query(UserInfo).filter(uid == UserInfo.uid).first()
-                if res:
-                    if (datetime.now() - res.upTimeStamp).days < self.check_up_sep_days:
-                        return bool(res.isLotUp)
-                    else:
-                        logger.debug(f'uid:{uid}数据库中数据太老')
+        async with self.AsyncSession() as session:
+            sql = select(UserInfo).where(uid == UserInfo.uid)
+            session_res = await session.execute(sql)
+            res = session_res.scalars().first()
+            if res:
+                if (datetime.now() - res.upTimeStamp).days < self.check_up_sep_days:
+                    return bool(res.isLotUp)
                 else:
-                    logger.debug(f'uid:{uid}数据库中不存在')
-                    self.create_user_info(uid)
+                    self.logger.debug(f'uid:{uid}数据库中数据太老')
+            else:
+                self.logger.debug(f'uid:{uid}数据库中不存在')
+                await self.create_user_info(uid)
         # 更新up的空间动态数据库
-        thread = MyThread(self.check_up_space_dyn,args=(uid,))
-        thread.start()
-        thread.join()
-        return self.check_db_exist_up(uid)
+        await self.check_up_space_dyn(uid)
+        return await self.check_db_exist_up(uid)
 
-    def check_lot_up(self, following_list: list) -> list:
-        thread_list = []
-        for uid in following_list:
-            t = MyThread(func=self.check_db_exist_up, args=(uid,))
-            thread_list.append(t)
-            t.start()
-        results = [t.get_result() for t in thread_list]
+    async def check_lot_up(self, following_list: list) -> list:
+        self.logger.debug(f'检查关注列表:{following_list}')
+        results = await asyncio.gather(*[self.check_db_exist_up(uid) for uid in following_list])
         ret_list = [following_list[idx] for idx, result in enumerate(results) if not result]
         return ret_list
 
@@ -277,19 +273,19 @@ class GetRmFollowingListV1:
                 f.write(json.dumps({'up_ids': []}, indent=4))
             return []
 
-    def main(self, following_list: list) -> list:
+    async def main(self, following_list: list) -> list:
         if type(following_list) is not list:
             return []
-        with self.list_lock:
+        async with self.list_lock:
             self.lucky_up_list = self.get_lucky_up_list()
-        resp_list = self.check_lot_up(following_list)
+        resp_list = await self.check_lot_up(following_list)
         return resp_list
 
 
 if __name__ == '__main__':
     _____test = GetRmFollowingListV1()
 
-    print(_____test.main(
+    print(asyncio.run(_____test.main(
         [
             194046502,
             1236262203,
@@ -3247,5 +3243,5 @@ if __name__ == '__main__':
             660091334,
             351085345,
             13868436
-        ][-200:]
-    ))
+        ][-15:-8]
+    )))

@@ -21,8 +21,7 @@ import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import numpy
 import requests
-import socket
-
+from asgiref.sync import async_to_sync
 from utl.代理 import request_with_proxy
 
 up_nickname_dict = {
@@ -4129,8 +4128,9 @@ class methods:
             '_': time.time()
         }
         try:
-            pinglunreq = self.requests_with_proxy.request_with_proxy(method="GET", url=pinglunurl, data=pinglundata,
-                                                                     headers=pinglunheader)
+            pinglunreq = async_to_sync(
+                self.requests_with_proxy.request_with_proxy
+            )(method="GET", url=pinglunurl, data=pinglundata,headers=pinglunheader)
         except:
             traceback.print_exc()
             print('获取评论失败')

@@ -1,43 +1,33 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import uuid
 from functools import reduce
-
 import threading
-
-import queue
-
 import traceback
-
 import execjs
 import json
 import random
 import re
 import sys
-from requests import Session
-from selenium import webdriver
-
 # sys.path.append('C:/pythontest/')
 # sys.path.append('/home/aistudio/') #将该目录添加到该文件夹下，把当前目录当成根目录使用
 import datetime
 import os
-
 import js2py
 import requests
 import time
-
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import Bilibili_methods.all_methods
 from utl.代理.request_with_proxy import request_with_proxy
+from utl.代理.SealedRequests import MYASYNCHTTPX
 from loguru import logger
 from CONFIG import CONFIG
 
 # import Bilibili_methods.paddlenlp
-
 root_dir = CONFIG.root_dir
 relative_dir = 'github/my_operator/bili_upload/'  # 执行文件所在的相对路径
 request_proxy = request_with_proxy()
-# request_proxy.log.remove()  # 取消代理信息的打印
 request_proxy.mode = 'single'
 request_proxy.timeout = 10
 request_proxy.check_proxy_flag = False
@@ -49,39 +39,16 @@ class renew:
     获取他人的抽奖
     """
 
-    @staticmethod
-    def Get_Bili_Cookie() -> str:
-        url = 'https://www.bilibili.com/opus/719843403806801936?spm_id_from=444.41.0.0'
-        opt = webdriver.ChromeOptions()
-        # opt.binary_location = "C:/Python39/chromedriver.exe"
-        opt.add_argument('--no-sandbox')
-        opt.add_argument('--disable-dev-shm-usage')
-        opt.add_argument('--headless')
-        opt.add_argument('blink-settings=imagesEnabled=false')
-        opt.add_argument('--disable-gpu')
-        opt.add_argument('--disable-extensions')
-        opt.add_argument('--remote-debugging-port=9222')
-        browser = webdriver.Chrome(options=opt,
-                                   # service=Service("C:/Python39/chromedriver.exe")
-                                   )
-        browser.get(url)
-        time.sleep(3)
-        bili_unlogin_cookie_list = browser.get_cookies()
-        browser.quit()
-        cookie_str = ''
-        for cookie in bili_unlogin_cookie_list:
-            cookie_str += f'{cookie["name"]}={cookie["value"]}; '
-        return cookie_str.strip('; ')
-
     def __init__(self):
+        self.MyAsyncHttpx = MYASYNCHTTPX()
         self.create_dir()
-        self.write_in_file_lock = threading.Lock()
-        self.fake_cookie = renew.Get_Bili_Cookie()
+        self.write_in_file_lock = asyncio.Lock()
+        self.fake_cookie = '1'
         # self.fake_cookie =''
         logger.info(f'fake cookie:{self.fake_cookie}')
-        self.get_dynamic_detail_lock = threading.Lock()
-        self.js_lock = threading.Lock()
-        self.lock = threading.Lock()
+        self.get_dynamic_detail_lock = asyncio.Lock()
+        self.js_lock = asyncio.Lock()
+        self.lock = asyncio.Lock()
         self.highlight_word_list = [
             'jd卡',
             '京东卡',
@@ -189,7 +156,6 @@ class renew:
                 3493092200024392,
                 41596583,
                 1677356873,
-                2097682198,
                 4586734,
                 2365817,
                 211553556,
@@ -197,7 +163,9 @@ class renew:
                 319857159,
                 14134177,
                 1817853136,
-                1741486871
+                1741486871,
+                266223923,
+                646327721
             ]  # 需要爬取的uidlist
 
         self.uidlist = list(set(self.uidlist))  # 去个重
@@ -210,14 +178,6 @@ class renew:
         self.uid3 = gl.get_value('uid3')
         self.username3 = gl.get_value('uname3')
         self.SpareTime = 86400 * 5  # 多少时间以前的就不获取别人的动态了
-        self.User_Agent_List = [
-            # 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43',
-            # 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.57',
-            # 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
-            # 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.67',
-            'Mozilla/5.0',
-            # 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36'
-        ]
         self.manual_reply_judge = execjs.compile("""
         manual_reply_judge= function (dynamic_content) {
 					//判断是否需要人工回复 返回true需要人工判断  返回null不需要人工判断
@@ -587,7 +547,6 @@ class renew:
         self.lottery_dynamic_ids: list[str] = []  # [动态链接：https://t.bilibili.com/...]
         self.lottery_dynamic_detail_list = []  # 动态详情
         self.useless_info = []
-        self.s = Session()
 
     def create_dir(self):
         if not os.path.exists(root_dir + relative_dir + 'log'):
@@ -643,7 +602,7 @@ class renew:
                 for _ in content_list:
                     f.writelines(f'{_}\n')
 
-    def get_dynamic_detail_with_proxy(self, dynamic_id, _cookie='', _useragent='', dynamic_type=2):
+    async def get_dynamic_detail_with_proxy(self, dynamic_id, _cookie='', _useragent='', dynamic_type=2):
         '''
         使用代理获取动态详情
         :param dynamic_type:
@@ -684,59 +643,16 @@ class renew:
             'orig_desc': orig_desc
         }
         '''
-
-        def getBuvidGroupLoadingIns() -> dict:
-            '''
-            获取buvid3和buvid4
-            {"buvid3":xxxx,"buvid4":xxxx}
-            :return:
-            '''
-            try:
-                url = 'https://api.bilibili.com/x/frontend/finger/spi'
-                # headers = {
-                #     'cookie': cookie,
-                #     'user-agent': ua
-                # }
-                req = request_proxy.request_with_proxy(method='get', url=url)
-                return {'buvid3': req.get('data').get('b_3'), 'buvid4': req.get('data').get('b_4')}
-            except:
-                return {}
-
-        # buvid3 = getBuvidGroupLoadingIns().get('buvid3')
-        # if buvid3:
-        #     if 'buvid3' in _cookie:
-        #         _cookie = re.sub("(buvid3=.*?; )", '', _cookie)
-        #     _cookie = 'buvid3=' + buvid3 + '; ' + _cookie
-
         if _cookie == '':
             headers = {
-                "user-agent": random.choice(self.User_Agent_List),
-                'origin': 'https://t.bilibili.com',
-                'referer': 'https://t.bilibili.com/{}?spm_id_from=444.41.0.0'.format(dynamic_id),
-                # 'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': "\"Windows\"",
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-site',
-                'accept': 'application/json, text/plain, */*',
-                'accept-encoding': 'gzip, deflate',
-                'accept-language': 'zh-CN,zh;q=0.9',
+                'Referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
+                'User-Agent': random.choice(CONFIG.UA_LIST),
+                'cookie': '1'
             }
         else:
             headers = {
-                'accept': 'application/json, text/plain, */*',
-                'origin': 'https://t.bilibili.com',
-                'referer': 'https://t.bilibili.com/{}?spm_id_from=444.41.0.0'.format(dynamic_id),
-                'accept-encoding': 'gzip, deflate',
-                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-                'cache-control': 'no-cache',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': "\"Windows\"",
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-site',
-                'user-agent': _useragent,
+                'Referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
+                'User-Agent': random.choice(CONFIG.UA_LIST),
                 'cookie': _cookie
                 # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
                 #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
@@ -744,22 +660,22 @@ class renew:
                 #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
                 # 'From': 'bingbot(at)microsoft.com',
             }
-        url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?timezone_offset=-480&id=' + str(
-            dynamic_id) + '&features=itemOpusStyle,opusBigCover'
+        url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?timezone_offset=-480&platform=web&id=' + str(
+            dynamic_id) + '&features=itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden&web_location=444.42'
         if dynamic_type != 2:
             url = f'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?timezone_offset=-480&rid={dynamic_id}&type={dynamic_type}&features=itemOpusStyle,opusBigCover'
         try:
-            dynamic_req = request_proxy.request_with_proxy(method='GET', url=url, headers=headers)
+            dynamic_req = await request_proxy.request_with_proxy(method='GET', url=url, headers=headers)
         except Exception as e:
-            # time.sleep(eval(input('输入等待时间')))
-            # time.sleep(10)
+            # await asyncio.sleep(eval(input('输入等待时间')))
+            # await asyncio.sleep(10)
             traceback.print_exc()
-            return self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
+            return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
         try:
             if dynamic_req.get('code') == 4101131:
                 logger.info(dynamic_req)
                 return None
-            with self.write_in_file_lock:
+            async with self.write_in_file_lock:
                 self.log_writer('动态响应/resp.csv', [json.dumps(dynamic_req)], 'a+')
             # logger.info(f'获取成功header:{headers}')
             dynamic_dict = dynamic_req
@@ -837,12 +753,12 @@ class renew:
             traceback.print_exc()
             if dynamic_req.get('code') == -412:
                 logger.info('412风控')
-                time.sleep(10 * 60)
-                return self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
+                await asyncio.sleep(10 * 60)
+                return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
             if dynamic_req.get('code') == 4101128:
                 logger.info(dynamic_req.get('message'))
-                # time.sleep(10 * 60)
-            # time.sleep(eval(input('输入等待时间')))
+                # await asyncio.sleep(10 * 60)
+            # await asyncio.sleep(eval(input('输入等待时间')))
             return None
 
         top_dynamic = None
@@ -970,7 +886,7 @@ class renew:
         }
         return structure
 
-    def get_pinglunreq_with_proxy(self, dynamic_id, rid, pn, _type, *mode):
+    async def get_pinglunreq_with_proxy(self, dynamic_id, rid, pn, _type, *mode):
         """
         3是热评，2是最新的，大概
         :param dynamic_id:
@@ -997,9 +913,12 @@ class renew:
             oid = dynamic_id
         else:
             oid = rid
-        fakeuseragent = random.choice(self.User_Agent_List)
         pinglunheader = {
-            'user-agent': fakeuseragent}
+            'Referer': f'https://t.bilibili.com/{rid}?type={_type}',
+            'Connection': 'close',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'cookie': '1'
+        }
         pinglunurl = 'https://api.bilibili.com/x/v2/reply/main?next=' + str(pn) + '&type=' + str(ctype) + '&oid=' + str(
             oid) + '&mode=' + str(mode) + '&plat=1&_=' + str(int(time.time()))
         pinglundata = {
@@ -1012,19 +931,19 @@ class renew:
             '_': time.time()
         }
         try:
-            pinglunreq = request_proxy.request_with_proxy(method="GET", url=pinglunurl, data=pinglundata,
-                                                          headers=pinglunheader)
+            pinglunreq = await request_proxy.request_with_proxy(method="GET", url=pinglunurl, data=pinglundata,
+                                                                headers=pinglunheader)
             logger.info(pinglunurl)
         except:
             traceback.print_exc()
             logger.info('获取评论失败')
-            pinglunreq = self.get_pinglunreq_with_proxy(dynamic_id, rid, pn, _type)
+            pinglunreq = await self.get_pinglunreq_with_proxy(dynamic_id, rid, pn, _type)
             return pinglunreq
         return pinglunreq
 
-    def get_topcomment_with_proxy(self, dynamicid, rid, pn, _type, mid):
+    async def get_topcomment_with_proxy(self, dynamicid, rid, pn, _type, mid):
         iner_replies = ''
-        pinglunreq = self.get_pinglunreq_with_proxy(dynamicid, rid, pn, _type, 3)
+        pinglunreq = await self.get_pinglunreq_with_proxy(dynamicid, rid, pn, _type, 3)
         try:
             pinglun_dict = pinglunreq
             pingluncode = pinglun_dict.get('code')
@@ -1036,7 +955,7 @@ class renew:
                 if message != 'UP主已关闭评论区' and message != '啥都木有' and message != '评论区已关闭':
                     while 1:
                         try:
-                            time.sleep(eval(input('输入等待时间')))
+                            await asyncio.sleep(eval(input('输入等待时间')))
                             break
                         except:
                             continue
@@ -1079,13 +998,13 @@ class renew:
             else:
                 while 1:
                     try:
-                        time.sleep(eval(input('输入等待时间')))
+                        await asyncio.sleep(eval(input('输入等待时间')))
                         break
                     except:
                         continue
         return topmsg
 
-    def judge_lottery(self, dynamic_id, dynamic_type: int = 2, is_lot_orig=False):
+    async def judge_lottery(self, dynamic_id, dynamic_type: int = 2, is_lot_orig=False):
         logger.info(f'当前动态：https://www.bilibili.com/opus/{dynamic_id}')
         if str(dynamic_id) in self.last_lotid:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
             logger.warning(f'当前动态 {dynamic_id} 已经有过了，不加入抽奖动态中')
@@ -1102,13 +1021,13 @@ class renew:
                 }
                 for k, v in fake_cookie.items():
                     fake_cookie_str += f'{k}={v}; '
-            dynamic_detail = self.get_dynamic_detail_with_proxy(dynamic_id, fake_cookie_str,
-                                                                random.choice(self.User_Agent_List),
-                                                                dynamic_type=dynamic_type)  # 需要增加假的cookie
+            dynamic_detail = await self.get_dynamic_detail_with_proxy(dynamic_id, fake_cookie_str,
+                                                                      random.choice(CONFIG.UA_LIST),
+                                                                      dynamic_type=dynamic_type)  # 需要增加假的cookie
         except:
-            # time.sleep(60)
+            # await asyncio.sleep(60)
             traceback.print_exc()
-            return self.judge_lottery(dynamic_id)
+            return await self.judge_lottery(dynamic_id)
 
         suffix = ''
         if dynamic_detail:
@@ -1164,16 +1083,16 @@ class renew:
                 deadline = None
             premsg = self.BAPI.pre_msg_processing(dynamic_content)
             if comment_count > 50 or str(dynamic_detail.get('type')) == '8':
-                dynamic_content += self.get_topcomment_with_proxy(str(dynamic_id), str(rid), str(0), _type,
-                                                                  author_uid)
-            with self.get_dynamic_detail_lock:
+                dynamic_content += await self.get_topcomment_with_proxy(str(dynamic_id), str(rid), str(0), _type,
+                                                                        author_uid)
+            async with self.get_dynamic_detail_lock:
                 if author_uid in self.all_followed_uid:
                     suffix = 'followed_uid'
                 ret_url = f'https://t.bilibili.com/{dynamic_id}'
                 if self.BAPI.zhuanfapanduan(dynamic_content):
                     ret_url += '?tab=2'
                 Manual_judge = ''
-                with self.js_lock:
+                async with self.js_lock:
                     if self.manual_reply_judge.call("manual_reply_judge", dynamic_content):
                         Manual_judge = '人工判断'
                 high_lights_list = []
@@ -1249,17 +1168,20 @@ class renew:
                     if dynamic_detail.get('module_dynamic').get('additional').get('type') == 'ADDITIONAL_TYPE_UGC':
                         ugc = dynamic_detail.get('module_dynamic').get('additional').get('ugc')
                         aid_str = ugc.get('id_str')
-                        self.judge_lottery(dynamic_id=aid_str, dynamic_type=8, is_lot_orig=True)
+                        await self.judge_lottery(dynamic_id=aid_str, dynamic_type=8, is_lot_orig=True)
 
-    def get_space_dynamic_req_with_proxy(self, hostuid, offset):
+    async def get_space_dynamic_req_with_proxy(self, hostuid, offset):
         '''
         获取动态空间的response
         :param hostuid:要访问的uid
         :param offset:
         :return:reqtext
         '''
-        ua = random.choice(self.User_Agent_List)
-        headers = {'user-agent': ua}
+        ua = random.choice(CONFIG.UA_LIST)
+        headers = {
+            'user-agent': ua,
+            'cookie': '1'
+        }
         uid = 0
         dongtaidata = {
             'visitor_uid': uid,
@@ -1271,8 +1193,8 @@ class renew:
         url = 'https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?visitor_uid=' + str(
             uid) + '&host_uid=' + str(hostuid) + '&offset_dynamic_id=' + str(offset) + '&need_top=0'
         try:
-            req = request_proxy.request_with_proxy(method='GET', url=url, headers=headers, data=dongtaidata,
-                                                   verify=False)
+            req = await request_proxy.request_with_proxy(method='GET', url=url, headers=headers, data=dongtaidata,
+                                                         verify=False)
             return req
         except Exception as e:
             return self.get_space_dynamic_req_with_proxy(hostuid, offset)
@@ -1287,7 +1209,7 @@ class renew:
         if req_dict.get('code') == -412:
             logger.info(req_dict)
             logger.info(req_dict.get('message'))
-            # time.sleep(10 * 60)
+            # await asyncio.sleep(10 * 60)
         if not req_dict:
             logger.info(f'ERROR{space_req_dict}')
             return 404
@@ -1329,7 +1251,7 @@ class renew:
         self.recorded_dynamic_id.extend(dynamic_id_list)
 
         # if not dynamic_id_list:
-        #     time.sleep(2)
+        #     await asyncio.sleep(2)
         return 0
 
     def card_detail(self, cards_json):
@@ -1369,6 +1291,12 @@ class renew:
         try:
             for dynamic_card in space_req_dict.get('data').get('cards'):
                 ret_list.append(str(dynamic_card.get('desc').get('dynamic_id_str')))
+            if space_req_dict.get('data').get('inplace_fold'):
+                for i in space_req_dict.get('data').get('inplace_fold'):
+                    if i.get('dynamic_ids'):
+                        for dyn_id in i.get('dynamic_ids'):
+                            ret_list.append(dyn_id)
+                    logger.debug(f'遇到折叠内容！inplace_fold:{i}')
             if space_req_dict.get('data').get('has_more') == 0 and len(ret_list) == 0:
                 return None
             return ret_list
@@ -1377,7 +1305,7 @@ class renew:
             traceback.print_exc()
             return ret_list
 
-    def get_user_space_dynamic_id(self, uid):
+    async def get_user_space_dynamic_id(self, uid):
         '''
         根据时间和获取过的动态来判断是否结束爬取别人的空间主页
         :return:
@@ -1388,7 +1316,7 @@ class renew:
         first_get_dynamic_falg = True
         offset = 0
         while 1:
-            dyreq_dict = self.get_space_dynamic_req_with_proxy(uid, offset)
+            dyreq_dict = await self.get_space_dynamic_req_with_proxy(uid, offset)
             try:
                 if dyreq_dict.get('data').get('has_more') != 1:
                     logger.info(f'当前用户 https://space.bilibili.com/{uid}/dynamic 无更多动态')
@@ -1400,25 +1328,25 @@ class renew:
             if repost_dynamic_id_list is None:
                 logger.info(f'{uid}空间动态为0')
                 break
-            with self.lock:
+            async with self.lock:
                 if first_get_dynamic_falg and repost_dynamic_id_list:
                     self._最后一次获取过动态的b站用户.update({uid: repost_dynamic_id_list})
                     first_get_dynamic_falg = False
-                # time.sleep(sleeptime)
+                # await asyncio.sleep(sleeptime)
                 n += 1
                 if self.get_space_detail(dyreq_dict) != 0:
                     offset = 0
                     continue
                 offset = self.get_offset(dyreq_dict)
                 timelist = self.get_space_dynmaic_time(dyreq_dict)
-                # time.sleep(5)
+                # await asyncio.sleep(5)
                 if len(timelist) == 0:
                     logger.info('timelist is empty')
                     continue
                 if time.time() - timelist[-1] >= self.SpareTime:
                     logger.info(
                         f'超时动态，当前UID：https://space.bilibili.com/{uid}/dynamic\t获取结束\t{self.BAPI.timeshift(time.time())}')
-                    # time.sleep(60)
+                    # await asyncio.sleep(60)
                     break
                 if self._获取过动态的b站用户.get(str(uid)):
                     logger.info(self._获取过动态的b站用户.get(str(uid)))
@@ -1427,29 +1355,28 @@ class renew:
                         logger.info(
                             f'遇到获取过的动态，当前UID：https://space.bilibili.com/{uid}/dynamic\t获取结束\t{self.BAPI.timeshift(time.time())}')
 
-                        # time.sleep(60)
+                        # await asyncio.sleep(60)
                         break
                 # if n % 50 == 0:
                 #     logger.info('获取了50次，休息个10s')
-                #     time.sleep(10)
+                #     await asyncio.sleep(10)
 
         if n <= 4 and time.time() - timelist[-1] >= self.SpareTime:
             # self.uidlist.remove(uid)
             logger.info(f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
 
-    def thread_judgedynamic(self, write_in_list):
+    async def thread_judgedynamic(self, write_in_list):
         logger.info('多线程获取动态')
-        thread_list = []
+        task_list = []
+        loop = asyncio.get_event_loop()
         for i in write_in_list:
             if i in self.last_order:
                 continue
             else:
                 self.last_order.append(i)
-            thread = threading.Thread(target=self.judge_lottery, args=(i,))
-            thread.start()
-            thread_list.append(thread)
-        for thread in thread_list:
-            thread.join()
+            task = loop.create_task(self.judge_lottery(i))
+            task_list.append(task)
+        await asyncio.gather(*task_list)
 
     # def judgedynamic_without_thread(self, write_in_list):
     #     for i in write_in_list:
@@ -1460,7 +1387,7 @@ class renew:
     #             self.last_order.append(i)
     #         self.judge_lottery(i)
 
-    def main(self):
+    async def main(self):
         if os.path.exists(root_dir + relative_dir + 'uidlist.json'):
             try:
                 with open(root_dir + relative_dir + 'uidlist.json') as f:
@@ -1505,16 +1432,14 @@ class renew:
         for i in effective_files_content_list:
             self.file_resolve(i)  # 记录动态id
 
-        thread_list = []
+        task_list = []
+        loop = asyncio.get_event_loop()
         for i in self.uidlist:
-            thread = threading.Thread(target=self.get_user_space_dynamic_id, args=(i,))  # 多线程用代理获取用户空间响应
-            thread.daemon = True
-            thread_list.append(thread)
-            thread.start()
-        for t in thread_list:
-            t.join()
+            task = loop.create_task(self.get_user_space_dynamic_id(i))
+            task_list.append(task)
+        await asyncio.gather(*task_list)
         logger.info('空间动态id获取完毕')
-        thread_list.clear()
+        task_list.clear()
         write_in_list = list(set(self.recorded_dynamic_id))
         write_in_list.sort()
         for i in self.last_order:
@@ -1522,7 +1447,7 @@ class renew:
                 write_in_list.remove(i)
         logger.info(f'共获取到{len(write_in_list)}个动态id')
 
-        self.thread_judgedynamic(write_in_list)
+        await self.thread_judgedynamic(write_in_list)
 
         # format_list = [ret_url, author_name, str(official_verify_type), str(pub_time), repr(dynamic_content),
         #                str(comment_count), str(forward_count), suffix, premsg, Manual_judge, ';'.join(high_lights_list),
@@ -1561,7 +1486,7 @@ class GET_OTHERS_LOT_DYN:
 
     def __init__(self):
         self.is_getting_dyn_flag_lock = threading.Lock()
-        self.save_lock = threading.Lock()
+        self.save_lock = asyncio.Lock()
         if os.path.exists(root_dir + relative_dir + 'get_dyn_ts.txt'):
             with open(root_dir + relative_dir + 'get_dyn_ts.txt', 'r', encoding='utf-8') as f:
                 self.get_dyn_ts: int = int(f.read())
@@ -1571,27 +1496,35 @@ class GET_OTHERS_LOT_DYN:
             self.get_dyn_ts: int = 0
         self.is_getting_dyn_flag = False
 
-    def save_now_get_dyn_ts(self, ts: int):
-        with self.save_lock:
+    async def save_now_get_dyn_ts(self, ts: int):
+        async with self.save_lock:
             with open(root_dir + relative_dir + 'get_dyn_ts.txt', 'w', encoding='utf-8') as f:
                 self.get_dyn_ts = ts
                 f.writelines(f'{ts}')
 
     # <editor-fold desc="主函数">
-    def get_new_dyn(self) -> list[str]:
+    async def get_new_dyn(self) -> list[str]:
         """
         主函数
         :return:
         """
         while self.is_getting_dyn_flag:
-            time.sleep(30)
+            await asyncio.sleep(30)
+        if os.path.exists(root_dir + relative_dir + 'get_dyn_ts.txt'):
+            with open(root_dir + relative_dir + 'get_dyn_ts.txt', 'r', encoding='utf-8') as f:
+                self.get_dyn_ts: int = int(f.read())
+                if not isinstance(self.get_dyn_ts, int):
+                    self.get_dyn_ts: int = 0
+        else:
+            self.get_dyn_ts: int = 0
+        logger.debug(f'上次获取别人B站动态空间抽奖时间：{datetime.datetime.fromtimestamp(self.get_dyn_ts)}')
         if int(time.time()) - self.get_dyn_ts >= 0.8 * 24 * 3600:
             start_ts = int(time.time())
             with self.is_getting_dyn_flag_lock:
                 self.is_getting_dyn_flag = True
             ___ = renew()
-            ___.main()
-            self.save_now_get_dyn_ts(start_ts)
+            await ___.main()
+            await self.save_now_get_dyn_ts(start_ts)
             with self.is_getting_dyn_flag_lock:
                 self.is_getting_dyn_flag = False
 
@@ -1660,7 +1593,7 @@ class GET_OTHERS_LOT_DYN:
             if int(comment_count_str) < 20 and int(rep_count_str) < 20:
                 return False
         if official_verify != '1':
-            if int(time.time()) - pub_ts >= 10 * 24 * 3600: # 超过10天的不抽
+            if int(time.time()) - pub_ts >= 10 * 24 * 3600:  # 超过10天的不抽
                 return False
         else:
             if int(time.time()) - pub_ts >= 15 * 24 * 3600:  # 官方号放宽到15天
@@ -1692,11 +1625,15 @@ class GET_OTHERS_LOT_DYN:
 
 
 if __name__ == '__main__':
-    # time.sleep(60 * 60 * 3)
-
+    # await asyncio.sleep(60 * 60 * 3)
     a = renew()
     # a.main()
     # g = GET_OTHERS_LOT_DYN()
     # print(g.get_new_dyn())
-    resp = a.get_dynamic_detail_with_proxy(865670239294062608)
+    # resp = a.get_dynamic_detail_with_proxy(865670239294062608)
+    # https://api.bilibili.com/x/v2/reply/main?next=0&type=11&oid=303922438&mode=3&plat=1&_=1704895114
+    loop111 = asyncio.get_event_loop()
+    task = loop111.create_task(a.main())
+    loop111.run_until_complete(task)
+    resp = task.result()
     print(resp)

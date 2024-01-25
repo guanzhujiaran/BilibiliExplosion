@@ -5,7 +5,9 @@ from sqlalchemy import Integer, String, ForeignKey, JSON, DateTime, UniqueConstr
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, Mapped, mapped_column
 from sqlalchemy import create_engine
 
-SQLITE_URI = 'sqlite:///G:/database/Following_Usr.db?check_same_thread=False'
+import CONFIG
+
+SQLITE_URI = CONFIG.database.followingup_db_RUI
 
 engine = create_engine(SQLITE_URI, echo=True)
 DbSession = sessionmaker(bind=engine)

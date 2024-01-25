@@ -159,7 +159,7 @@ class exctract_official_lottery:
                     'sec-fetch-site': 'same-site',
                     'user-agent': random.choice(self.proxy_request.User_Agent_List),
                 }
-                req_dict = self.proxy_request.request_with_proxy(method='get', url=url, headers=headers)
+                req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
                 print(url, req_dict)
                 req_dict.update(doc_detail)
                 checked_dict.update({str(rid): req_dict})
@@ -191,7 +191,7 @@ class exctract_official_lottery:
                         'sec-fetch-site': 'same-site',
                         'user-agent': random.choice(self.proxy_request.User_Agent_List),
                     }
-                    req_dict = self.proxy_request.request_with_proxy(method='get', url=url, headers=headers)
+                    req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
                     print(url, req_dict)
                     req_dict.update(doc_detail)
                     checked_dict.update({str(rid): req_dict})

@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import time
 import threading
 import json
 import os
-import traceback
-
+from asgiref.sync import async_to_sync
 from utl.代理.grpc_api import BiliGrpc
 from utl.pushme.pushme import pushme
 from CONFIG import CONFIG
@@ -77,14 +77,14 @@ class monitor:
                'markdown'
                )
 
-    def monitor_main(self, uid):
+    async def monitor_main(self, uid):
         latest_dynamic_id_list = []
         for i in self.monitor_uid_list:
             if i.get('uid') == uid:
                 latest_dynamic_id_list = i.get('latest_dynamic_id_list')
         first_round = False
         while 1:
-            space_hist_resp = self.grpc_api.grpc_get_space_dyn_by_uid(uid)
+            space_hist_resp = await self.grpc_api.grpc_get_space_dyn_by_uid(uid)
             resp_list = space_hist_resp.get('list')
             if resp_list:
                 logger.info(f'获取到了up主 https://space.bilibili.com/{uid} 的{len(resp_list)}条动态')
@@ -98,19 +98,17 @@ class monitor:
                             if len(latest_dynamic_id_list) > 30:
                                 latest_dynamic_id_list.pop(0)
                             self.save_monitor_uid_list()
-            time.sleep(self.sep_time)
+            await asyncio.sleep(self.sep_time)
             first_round = False
 
-    def main(self):
-        th_list = []
+    async def main(self):
+        task_list = []
         for i in self.monitor_uid_list:
-            th = threading.Thread(target=self.monitor_main, args=(i.get('uid'),))
-            th.start()
-            th_list.append(th)
-        for t in th_list:
-            t.join()
+            task=asyncio.create_task(self.monitor_main(i.get('uid')))
+            task_list.append(task)
+        await asyncio.gather(*task_list)
 
 
 if __name__ == '__main__':
     a = monitor()
-    a.main()
+    asyncio.run(a.main())

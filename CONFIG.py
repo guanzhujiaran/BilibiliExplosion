@@ -27,6 +27,7 @@ class zhihu_CONFIG:
 class database:
     dynDetail = "H:/database/dynDetail.db"
     proxy_db = "K:/sqlite_database/proxy_database/proxy_db.db"
+    followingup_db_RUI = 'sqlite+aiosqlite:///G:/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
 
 
 class CONFIG:
@@ -34,3 +35,5 @@ class CONFIG:
     pushnotify = pushnotify()
     zhihu_CONFIG = zhihu_CONFIG()  # 知乎设置
     database = database()
+    UA_LIST = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36', ]  # UA列表

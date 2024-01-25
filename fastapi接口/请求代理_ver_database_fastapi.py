@@ -2,35 +2,41 @@
 # 自己本地的fastapi封装接口服务 这是一个sqlite3数据库的接口，使用proxy相关操作
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
+
+from fastapi.concurrency import run_in_threadpool
+import time
 import traceback
 from typing import Union
-
 import fastapi
 import redis
 import uvicorn
-from fastapi import Query, HTTPException
-from loguru import logger
+from fastapi import Query, Body
+from fastapi.logger import logger
 from pydantic import BaseModel
-
-from utl.代理.请求代理_ver_database import request_with_proxy
-from grpc获取动态.src.SqlHelper import SQLHelper
 from github.my_operator.bili_upload.get_bili_upload import GET_OTHERS_LOT_DYN
-from 获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import lotScrapy
-from utl.机器学习.情感分析.情感分析 import judge_semantic_cls
 from grpc获取动态.grpc.grpc_api import BiliGrpc
+from grpc获取动态.src.SqlHelper import SQLHelper
 from grpc获取动态.src.获取取关对象.GetRmFollowingList import GetRmFollowingListV1
+from utl.代理.请求代理_ver_database import request_with_proxy
+from 获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import lotScrapy
+
+# 创建自定义线程池
 
 get_rm_following_list = GetRmFollowingListV1()
 zhihu_lotScrapy = lotScrapy()
 get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
 grpc_sql_helper = SQLHelper()
 grpc_api = BiliGrpc()
-app = fastapi.FastAPI()
+
 req = request_with_proxy()
-r = redis.Redis(host='localhost', port=11451, db=0)
+r = redis.Redis(host='localhost', port=11451, db=0)  # 直播抽奖数据
+r1 = redis.Redis(host='localhost', port=11451, db=1)  # 情感分析数据
+app = fastapi.FastAPI()
+executor = ThreadPoolExecutor(max_workers=100)  # 创建线程池，可以根据需求调整线程数
 
 
-@app.get('/v1/get/live_lots/', description='获取redis中的所有直播相关抽奖信息')
+@app.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息')
 def v1_get_live_lots():
     ret_list = []
     for k in r.keys():
@@ -41,44 +47,51 @@ def v1_get_live_lots():
 
 
 # region 测试类
-@app.get('/test/')
-def app_avaliable_api():
+
+@app.get('/test')
+async def app_avaliable_api():
+    await asyncio.sleep(1)
     return 'Service is running!'
 
 
 # endregion
 
 # region 魔搭社区的各种ai模型
-@app.get('/damo/semantic/')
+@app.get('/damo/semantic')
 def semantic(data=Query(default=None)):
-    try:
+    timeout = 0
+    while 1:
+        if timeout > 11:
+            return True
         if data:
-            return judge_semantic_cls(data)
+            res = json.loads(r1.get(data)).get(data, None) if r1.get(data) else None
+            if res != None:
+                return res
+            else:
+                r1.setex(data, 180, json.dumps({data: None}))
         else:
             return False
-    except Exception as e:
-        logger.error(e)
-        return True
+        time.sleep(1)
+        timeout += 1
 
 
 # endregion
 
 # region 代理类方法的请求接口
-@app.post('/request_with_proxy/')
-def request_with_proxy_api(  # 改为了并发模式
+@app.post('/request_with_proxy')
+async def request_with_proxy_api(  # 改为了并发模式
         # request: fastapi.Request
         request: dict
 ):
-    # request_body = await request.json()
-    # loop = asyncio.get_event_loop()
-    # result = await loop.run_in_executor(None, req.request_with_proxy, request_body)
-    # return result
-    request_body = request
-    result = req.request_with_proxy(request_body)
-    return result
+    try:
+        result = await req.request_with_proxy(request)
+        return result
+    except Exception as e:
+        logger.error(traceback.format_exc())
+        logger.error(request)
 
 
-@app.post('/async_request_with_proxy/')
+@app.post('/async_request_with_proxy')
 async def async_request_with_proxy(
         request: dict
 ):
@@ -87,36 +100,37 @@ async def async_request_with_proxy(
     return result
 
 
-@app.get('/get_one_rand_proxy/')
+@app.get('/get_one_rand_proxy')
 def get_one_rand_proxy():
     proxy = req.get_one_rand_proxy()
     return proxy
 
 
-@app.get('/grpc/get_one_rand_grpc_proxy/')
-def get_one_rand_grpc_proxy():
-    proxy = req.get_one_rand_grpc_proxy()
+@app.get('/grpc/get_one_rand_grpc_proxy')
+async def get_one_rand_grpc_proxy():
+    proxy = await req.get_one_rand_grpc_proxy()
     return proxy
 
 
-@app.post('/grpc/upsert_grpc_proxy_status/')
-def upsert_grpc_proxy_status(request_body: dict):
-    result = req.upsert_grpc_proxy_status(request_body)
+@app.post('/grpc/upsert_grpc_proxy_status')
+async def upsert_grpc_proxy_status(request_body: dict):
+    result = await req.upsert_grpc_proxy_status(request_body)
     return result
 
 
 # region GRPC_API请求方法
 
 
-@app.post('/grpc/grpc_api_get_DynDetails/')
-def grpc_api_get_DynDetails(request_body: dict):
-    result = grpc_api.grpc_api_get_DynDetails(request_body)
+@app.post('/grpc/grpc_api_get_DynDetails')
+async def grpc_api_get_DynDetails(request_body: list[int]):
+    result = await grpc_api.grpc_api_get_DynDetails(request_body)
     return result
 
 
-@app.post('/grpc/grpc_get_dynamic_detail_by_type_and_rid/')
-def grpc_get_dynamic_detail_by_type_and_rid(request_body: Union[int, str]):
-    result = grpc_api.grpc_get_dynamic_detail_by_type_and_rid(request_body)
+@app.post('/grpc/grpc_get_dynamic_detail_by_type_and_rid')
+async def grpc_get_dynamic_detail_by_type_and_rid(rid: Union[int, str] = Body(..., title='动态rid', embed=True),
+                                                  dynamic_type: int = Body(2, title='动态类型', embed=True), ):
+    result = await grpc_api.grpc_get_dynamic_detail_by_type_and_rid(rid, dynamic_type)
     return result
 
 
@@ -126,13 +140,13 @@ class grpcGetSpaceDynByUid(BaseModel):
     page: int = 1
 
 
-@app.post('/grpc/grpc_get_space_dyn_by_uid/')  # 这个接口没法并发，需要查看（已修复
-def grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
-    result = grpc_api.grpc_get_space_dyn_by_uid(request.uid, request.history_offset, request.page)
+@app.post('/grpc/grpc_get_space_dyn_by_uid')
+async def grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
+    result = await grpc_api.grpc_get_space_dyn_by_uid(request.uid, request.history_offset, request.page)
     return result
 
 
-@app.post('/grpc/Async_grpc_get_space_dyn_by_uid/')
+@app.post('/grpc/Async_grpc_get_space_dyn_by_uid')
 async def Async_grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
     result = await grpc_api.Async_grpc_get_space_dyn_by_uid(request.uid, request.history_offset, request.page)
     return result
@@ -141,14 +155,15 @@ async def Async_grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
 # endregion
 
 # region 基于Grpc api的功能实现
-@app.post('/v1/post/RmFollowingList/')
-def v1_post_rm_following_list(data: list[Union[int, str]]):
+@app.post('/v1/post/RmFollowingList')
+async def v1_post_rm_following_list(data: list[Union[int, str]]):
     """
     取关接口
     :param data: list[int] 关注列表 直接传列表即可
     :return:
     """
-    result = get_rm_following_list.main(data)
+    result = await get_rm_following_list.main(data)
+    logger.debug(f'获取到需要取关的uid列表：{result}')
     return result
 
 
@@ -159,24 +174,32 @@ def v1_post_rm_following_list(data: list[Union[int, str]]):
 
 
 # region 获取抽奖内容接口
-@app.post('/lot/upsert_lot_detail/')
+@app.post('/lot/upsert_lot_detail')
 def upsert_lot_detail(request_body: dict):
     result = grpc_sql_helper.upsert_lot_detail(request_body)
     return result
 
 
-@app.get('/get_others_lot_dyn/')
-def app_avaliable_api():
-    return get_OTHERS_LOT_DYN.get_new_dyn()
+@app.get('/get_others_lot_dyn')
+async def app_avaliable_api():
+    logger.debug('get_others_lot_dyn 开始获取别人的动态抽奖！')
+    result = await get_OTHERS_LOT_DYN.get_new_dyn()
+    return result
 
 
-@app.get('/zhihu/get_others_lot_pins/')
-def zhuhu_avaliable_api():
-    return zhihu_lotScrapy.api_get_all_pins()
+@app.get('/zhihu/get_others_lot_pins')
+async def zhuhu_avaliable_api():
+    resp = await zhihu_lotScrapy.api_get_all_pins()
+    return resp
 
 
 # endregion
 
-
 if __name__ == '__main__':
-    uvicorn.run(app, host="0.0.0.0", port=23333)  # worker就是多进程，没意思，不用
+    uvicorn.run(
+        '请求代理_ver_database_fastapi:app',
+        host="0.0.0.0",
+        port=23333,
+        workers=1,
+        limit_concurrency=None,
+    )

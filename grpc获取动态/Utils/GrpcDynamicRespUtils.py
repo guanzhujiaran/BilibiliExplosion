@@ -105,11 +105,14 @@ class DynTool:
             if module_item.get('moduleBlocked'):
                 moduleBlocked = module_item.get('moduleBlocked')
                 subHintMessage = moduleBlocked.get('subHintMessage')
-                hintMessage = module_item.get('hintMessage')
+                hintMessage = moduleBlocked.get('hintMessage')
+                archiveTitle = moduleBlocked.get('archiveTitle')
                 if hintMessage:
                     dynamicContent += hintMessage
                 if subHintMessage:
                     dynamicContent += subHintMessage
+                if archiveTitle:
+                    dynamicContent += archiveTitle
             if module_item.get('moduleDispute'):
                 module_dispute = module_item.get('moduleDispute')
                 dynamicContent += module_dispute.get('title', '') + module_dispute.get(
@@ -412,7 +415,8 @@ class DynTool:
                     for textNode in title_text.get('nodes'):
                         dynamicContent += textNode.get('rawText', '')
                 summary = moduleOpusSummary.get('summary')
-                summary_text = summary.get('text', '')
+
+                summary_text = summary.get('text', '') if summary else {}
                 if summary_text:
                     for textNode in summary_text.get('nodes'):
                         dynamicContent += textNode.get('rawText', '')
@@ -511,3 +515,9 @@ class DynTool:
             historyOffset=historyOffset,
             hasMore=hasMore
         )
+
+if __name__ == '__main__':
+    a={'cardType': 'av', 'modules': [{'moduleType': 'module_author', 'moduleAuthor': {'mid': '1504133275', 'ptimeLabelText': '3天前 · 投稿了视频', 'author': {'mid': '1504133275', 'name': 'Free人雷霆流限', 'face': 'https://i1.hdslb.com/bfs/face/5c3958bb62f0e54c94ef6ae8bbaff5a1cfe49d9a.jpg', 'official': {'type': -1}, 'vip': {'label': {}}, 'pendant': {}, 'nameplate': {}, 'level': 5, 'avatar': {'containerSize': {'width': 1.35, 'height': 1.35}, 'fallbackLayers': {'layers': [{'visible': True, 'generalSpec': {'posSpec': {'coordinatePos': 2, 'axisX': 0.675, 'axisY': 0.675}, 'sizeSpec': {'width': 1.0, 'height': 1.0}, 'renderSpec': {'opacity': 1.0}}, 'layerConfig': {'tags': {'AVATAR_LAYER': {}}, 'isCritical': True, 'layerMask': {'generalSpec': {'posSpec': {'coordinatePos': 2, 'axisX': 0.675, 'axisY': 0.675}, 'sizeSpec': {'width': 1.0, 'height': 1.0}, 'renderSpec': {'opacity': 1.0}}, 'maskSrc': {'srcType': 3, 'draw': {'drawType': 1, 'fillMode': 1, 'colorConfig': {'day': {'argb': '#FF000000'}}}}}}, 'resource': {'resType': 3, 'resImage': {'imageSrc': {'srcType': 1, 'placeholder': 6, 'remote': {'url': 'https://i1.hdslb.com/bfs/face/5c3958bb62f0e54c94ef6ae8bbaff5a1cfe49d9a.jpg', 'bfsStyle': 'widget-layer-avatar'}}}}}], 'isCriticalGroup': True}, 'mid': '1504133275'}}, 'relation': {'status': 'relation_status_nofollow', 'title': '未关注'}}}, {'moduleType': 'module_blocked', 'moduleBlocked': {'bgImg': {'imgDay': 'http://i0.hdslb.com/bfs/archive/109fb41de24871cca6cca908b72c5a3d694065f9.jpg'}, 'actBtn': {'text': '充电', 'iconHead': 'https://i0.hdslb.com/bfs/garb/item/33e2e72d9a0c855f036b4cb55448f44af67a0635.png', 'jumpUri': 'https://www.bilibili.com/h5/upower/index?mid=1504133275&default_level=20&levels=20&prePage=onlyFansDynMdlBlockedVideo&navhide=1&businessId=889463018322133028'}, 'blockStyle': 'BLOCKED_STYLE_ONLY_FANS_VIDEO', 'videoBottomTextUpper': {'texts': [{'text': '该视频为「', 'priority': '3'}, {'text': '三个蛋', 'priority': '1'}, {'text': '」专属视频', 'priority': '2'}]}, 'videoBottomTextLower': {'texts': [{'text': '开通「', 'priority': '3'}, {'text': '30元档包月充电', 'priority': '1'}, {'text': '」即可观看', 'priority': '2'}]}, 'archiveTitle': '链接获取不容易力'}}, {'moduleType': 'module_stat', 'moduleStat': {'likeInfo': {'animation': {}}, 'noComment': True, 'noCommentText': '这条动态已被封印，当前不可评论╮(๑•́ ₃•̀๑)╭', 'noForwardText': '该专属内容暂不支持转发哦'}}], 'extend': {'dynIdStr': '889463018322133028', 'businessId': '709082905', 'origName': 'Free人雷霆流限', 'origImgUrl': 'http://i0.hdslb.com/bfs/archive/109fb41de24871cca6cca908b72c5a3d694065f9.jpg', 'origDesc': [{'text': '链接获取不容易力', 'type': 'desc_type_text', 'origText': '链接获取不容易力'}], 'shareType': '3', 'shareScene': 'dynamic', 'isFastShare': True, 'dynType': '8', 'uid': '1504133275', 'cardUrl': 'bilibili://video/709082905?aid=709082905', 'origFace': 'https://i1.hdslb.com/bfs/face/5c3958bb62f0e54c94ef6ae8bbaff5a1cfe49d9a.jpg', 'reply': {'uri': 'bilibili://video/709082905?aid=709082905', 'params': [{'key': 'comment_on', 'value': '1'}, {'key': 'comment_state', 'value': '1'}, {'key': 'reply_id', 'value': '-1'}]}, 'onlyFansProperty': {'isOnlyFans': True}, 'featureGate': {'enhancedInteraction': True}}}
+
+    b=DynTool.solve_space_dyn({"list":[a]})
+    print(b)

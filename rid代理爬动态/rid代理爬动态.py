@@ -410,7 +410,7 @@ class rid_get_dynamic:
             #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
             # 'From': 'bingbot(at)microsoft.com',
         }
-        req_dict = self.proxy_request.request_with_proxy(method="GET", url=url, headers=headers)
+        req_dict = self.proxy_request.sync_request_with_proxy(method="GET", url=url, headers=headers)
         return req_dict
 
     def rid_dynamic_by_polymer_with_proxy(self, rid, _type=2):
@@ -444,7 +444,7 @@ class rid_get_dynamic:
             #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
             # 'From': 'bingbot(at)microsoft.com',
         }
-        req_dict = self.proxy_request.request_with_proxy(method='get', url=url, headers=headers)
+        req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
         return req_dict
 
     def rid_dynamic_by_polymer_opus_h5_with_proxy(self, rid):
@@ -480,7 +480,7 @@ class rid_get_dynamic:
             #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
             # 'From': 'bingbot(at)microsoft.com',
         }
-        req_dict = self.proxy_request.request_with_proxy(method='get', url=url, headers=headers)
+        req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
         return req_dict
 
     def get_dynamic_with_thread(self):

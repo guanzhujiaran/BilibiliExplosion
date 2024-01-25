@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 import ast
+import random
+import traceback
+
 import sqlite_utils
 import threading
 import time
@@ -7,7 +10,7 @@ from copy import deepcopy
 from loguru import logger
 from CONFIG import CONFIG
 
-logger.bind(user='sqlite3')
+sql_log=logger.bind(user='sqlite3')
 op_db_lock = threading.Lock()
 
 logger.add(CONFIG.root_dir + "utl/代理/log/sqlite3.log",
@@ -22,8 +25,13 @@ logger.add(CONFIG.root_dir + "utl/代理/log/sqlite3.log",
 def lock_wrapper(func: callable) -> callable:
     def wrapper(*args, **kwargs):
         with op_db_lock:
-            res = func(*args, **kwargs)
-            return res
+            while True:
+                try:
+                    res = func(*args, **kwargs)
+                    return res
+                except Exception as e:
+                    sql_log.error(traceback.format_exc())
+                    time.sleep(random.choice([10,20,30]))
 
     return wrapper
 
@@ -63,7 +71,8 @@ class SQLHelper:
                          self.op_db_table.rows_where(order_by='score desc , update_ts desc', limit=1)]
         return self.__preprocess_ret_list_dict(ret_list_dict[0])
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def select_one_proxy(self, mode='single', channel='bili') -> dict:
         '''
         选择一个可用的代理
@@ -101,6 +110,7 @@ class SQLHelper:
         else:
             return {}
 
+    lock_wrapper
     def select_rand_proxy(self) -> dict:
         ret_list_dict = [row for row in
                          self.op_db_table.rows_where(
@@ -110,7 +120,8 @@ class SQLHelper:
         else:
             return {}
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def is_exist_proxy_by_proxy(self, proxy: dict) -> int:
         '''
         查询是否存在这个代理
@@ -120,7 +131,7 @@ class SQLHelper:
         exist_num = self.op_db_table.count_where(where="proxy=:proxy", where_args={'proxy': (str(proxy))})
         return exist_num
 
-    @logger.catch
+    @sql_log.catch
     @lock_wrapper
     def remove_list_dict_data_by_proxy(self) -> bool:
         '''
@@ -131,7 +142,7 @@ class SQLHelper:
             where=f'proxy_id NOT IN(SELECT MAX(proxy_id) from {self.table_name} GROUP BY proxy)')
         return True
 
-    @logger.catch
+    @sql_log.catch
     @lock_wrapper
     def refresh_412_proxy(self) -> int:
         '''
@@ -171,7 +182,7 @@ class SQLHelper:
         self.op_db.conn.commit()
         return res1
 
-    @logger.catch
+    @sql_log.catch
     @lock_wrapper
     def grpc_refresh_412_proxy(self) -> int:
         '''
@@ -209,7 +220,7 @@ class SQLHelper:
         self.op_db.conn.commit()
         return res1
 
-    @logger.catch
+    @sql_log.catch
     @lock_wrapper
     def update_to_proxy_list(self, proxy_dict: dict, score_plus_Flag=False, score_minus_Flag=False,
                              change_score_num=10) -> bool:
@@ -239,7 +250,7 @@ class SQLHelper:
         self.op_db.conn.commit()
         return True
 
-    @logger.catch
+    @sql_log.catch
     @lock_wrapper
     def add_to_proxy_list(self, proxy_dict: dict) -> bool:
         '''
@@ -252,7 +263,7 @@ class SQLHelper:
         res.db.conn.commit()
         return True
 
-    # @logger.catch
+    # @sql_log.catch
     # def insert_all_proxy(self, info_dict_list: list[dict]) -> bool:
     #     '''
     #     增加
@@ -262,7 +273,7 @@ class SQLHelper:
     #     self.op_db_table.insert_all(self.__preprocess_list_dict(info_dict_list))
     #     return True
 
-    @logger.catch
+    @sql_log.catch
     @lock_wrapper
     def remove_proxy(self, proxy: dict):
         '''
@@ -272,36 +283,43 @@ class SQLHelper:
         '''
         self.op_db_table.delete_where(where='proxy=:proxy', where_args={'proxy': str(proxy)})
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def get_412_proxy_num(self) -> int:
         res = self.op_db_table.count_where(where='status=-412')
         return res
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def grpc_get_412_proxy_num(self) -> int:
         res = self.op_db_grpc_table.count_where(where='status=-412')
         return res
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def get_latest_add_ts(self) -> int:
         res = self.op_db_table.rows_where(order_by='add_ts desc', limit=1)
         max_status_ts = next(res)
         return max_status_ts['add_ts']
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def get_all_proxy_nums(self):
         return self.op_db_table.count
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def grpc_get_all_proxy_nums(self):
         return self.op_db_grpc_table.count
 
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def get_available_proxy_nums(self):
         return self.op_db_table.count_where(where='score>=0 and status!=-412')
 
     # region grpc_proxy
-    @logger.catch
+    @sql_log.catch
+    @lock_wrapper
     def get_one_rand_grpc_proxy(self):
         def fresh_grpc_proxy():
             avaliable_score = 0
@@ -357,7 +375,7 @@ limit 1
         else:
             return {}
 
-    @logger.catch
+    @sql_log.catch
     @lock_wrapper
     def upsert_grpc_proxy_status(self, proxy_id: int, status: int, score_change: int = 0):
         '''

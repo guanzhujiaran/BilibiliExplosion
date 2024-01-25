@@ -40,7 +40,7 @@ class rmfollow:
             'user-agent': 'Mozilla/5.0'
         }
         try:
-            req_dict = self.request_with_proxy.request_with_proxy(method='GET', url=url, headers=headers)
+            req_dict = self.request_with_proxy.sync_request_with_proxy(method='GET', url=url, headers=headers)
         except Exception as e:
             req_dict = json.dumps({'error': '获取关注人数失败'})
             logger.info(
@@ -120,7 +120,7 @@ class rmfollow:
                         'jsonp': 'jsonp',
                         'callback': '__jp{jp}'.format(jp=dylist.index(DICT) + 1)
                     }
-                    statreq = self.request_with_proxy.request_with_proxy(method='GET', url=url1, headers=headers,
+                    statreq = self.request_with_proxy.sync_request_with_proxy(method='GET', url=url1, headers=headers,
                                                                          data=data)
                     time.sleep(0.5)
                     stat_dict = statreq
@@ -161,7 +161,7 @@ class rmfollow:
             url = 'https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?visitor_uid=0&host_uid={mid}' \
                   '&offset_dynamic_id={offset}&need_top=0'.format(mid=mid, offset=offset)
             try:
-                req_dict = self.request_with_proxy.request_with_proxy(method='GET', url=url, headers=headers,
+                req_dict = self.request_with_proxy.sync_request_with_proxy(method='GET', url=url, headers=headers,
                                                                       data=data)
             except:
                 req_dict = {'请求出错': 404, 'data': {}}

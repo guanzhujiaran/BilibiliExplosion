@@ -113,17 +113,18 @@ class SQLHelper:
     @lock_wrapper
     def get_lost_lots(self) -> [dict]:
         """
-        获取最大值和最小值之间不连续的rid，也就是那些可能获取失败了rid
+        获取主表中lot_id存在，但抽奖信息表中不存在数据的lot_id和rid信息
         :return:
         """
         ret_row = []
         for row in self.op_db.query(
                 """
 SELECT b.*
-FROM biliDynDetail AS b
-LEFT JOIN lotData AS l ON b.lot_id = l.lottery_id
+FROM (select * from biliDynDetail limit 300000) AS b
+left JOIN lotData AS l ON b.lot_id = l.lottery_id
 WHERE b.lot_id IS NOT NULL AND TRIM(b.lot_id) != '' AND l.lottery_id IS NULL
-ORDER BY b.rid DESC;
+ORDER BY b.rid DESC
+LIMIT 300000;
     """
         ):
             ret_row.append(row)
@@ -132,19 +133,18 @@ ORDER BY b.rid DESC;
     @lock_wrapper
     def get_discountious_rids(self) -> list:
         """
-        获取最大值和最小值之间不连续的rid，也就是那些可能获取失败了rid
+        获取最大值和最小值之间不连续的rid，也就是那些可能获取失败了rid（rid最近的30万条数据）
         :return:
         """
         ret_row = []
         for row in self.op_db.query(
                 """
    SELECT DISTINCT (t1.rid + 1) AS x
-FROM biliDynDetail t1
-LEFT JOIN biliDynDetail t2 ON t1.rid + 1 = t2.rid
-WHERE t2.rid IS NULL
-AND (t1.rid + 1) NOT IN (SELECT rid FROM biliDynDetail)
+FROM (SELECT * FROM biliDynDetail ORDER BY rid DESC LIMIT 300000) t1
+WHERE NOT EXISTS (
+    SELECT 1 FROM biliDynDetail t2 WHERE t2.rid = t1.rid + 1
+)
 ORDER BY x;
-
     """
         ):
             ret_row.append(row.get('x'))
