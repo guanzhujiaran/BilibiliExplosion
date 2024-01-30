@@ -19,16 +19,16 @@ class MYASYNCHTTPX:
                 'https://': None,
             }
 
-    async def get(self, url, headers=None, verify=False, proxies=None, timeout=30):
+    async def get(self, url, headers=None, verify=False, proxies=None, timeout=10):
         async with httpx.AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                                     verify=verify,limits=Limits(max_connections=None, max_keepalive_connections=None)) as client:
-            resp = await client.get(url=url, headers=headers, timeout=timeout)
+                                     verify=False) as client:
+            resp = await client.get(url=url, headers=headers, timeout=timeout, follow_redirects=True)
             return resp
 
-    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=30):
+    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10):
         async with httpx.AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                                     verify=verify,limits=Limits(max_connections=None, max_keepalive_connections=None)) as client:
-            resp = await client.post(url=url, data=data, headers=headers, timeout=timeout)
+                                     verify=False) as client:
+            resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
             return resp
 
     async def request(self, url,
@@ -37,7 +37,7 @@ class MYASYNCHTTPX:
                       headers: typing.Optional[HeaderTypes] = None,
                       verify=False,
                       proxies=None,
-                      timeout=30,
+                      timeout=10,
                       content: typing.Optional[RequestContent] = None,
                       files: typing.Optional[RequestFiles] = None,
                       json: typing.Optional[typing.Any] = None,
@@ -45,10 +45,10 @@ class MYASYNCHTTPX:
                       cookies: typing.Optional[CookieTypes] = None,
                       extensions: typing.Optional[dict] = None, ):
         async with httpx.AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                                     verify=verify,limits=Limits(max_connections=None, max_keepalive_connections=None)) as client:
+                                     verify=False) as client:
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
                                         content=content, files=files, json=json, params=params, cookies=cookies,
-                                        extensions=extensions)
+                                        extensions=extensions, follow_redirects=True)
             return resp
 
 

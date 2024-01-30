@@ -542,7 +542,7 @@ class exctract_official_lottery:
         :return:
         """
         while 1:
-            url = 'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice'
+            url = 'http://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice'
             params = {
                 'business_type': bussiness_type,
                 'business_id': business_id,
@@ -573,7 +573,7 @@ class exctract_official_lottery:
             newly_lotData = newly_lot_resp['data']
 
             if newly_lotData:
-                self.proxy_request.upsert_lot_detail(newly_lotData)
+                await self.proxy_request.upsert_lot_detail(newly_lotData)
 
             async with data_lock:
                 newly_updated_lot_data.append(newly_lotData)

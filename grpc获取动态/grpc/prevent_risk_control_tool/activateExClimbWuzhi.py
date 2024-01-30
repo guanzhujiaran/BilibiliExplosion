@@ -5,13 +5,11 @@ import string
 from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import quote
-import requests
 from loguru import logger
 from utl.代理.request_with_proxy import request_with_proxy
 from utl.加密 import utils
 import random
 import time
-import hashlib
 from utl.代理.SealedRequests import MYASYNCHTTPX
 
 MYREQ = request_with_proxy()

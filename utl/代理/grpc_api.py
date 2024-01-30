@@ -41,7 +41,6 @@ class BiliGrpc:
                 return resp.json()
             except:
                 self.log.error(traceback.format_exc())
-                await asyncio.sleep(10)
 
     async def grpc_get_dynamic_detail_by_type_and_rid(self, rid: int, dynamic_type: int = 2) -> dict:
         """
@@ -70,7 +69,6 @@ class BiliGrpc:
                 return resp.json()
             except:
                 self.log.error(traceback.format_exc(1))
-                await asyncio.sleep(10)
 
     async def grpc_get_space_dyn_by_uid(self, uid: int, history_offset: str = '', page: int = 1) -> dict:
         """
@@ -104,41 +102,6 @@ class BiliGrpc:
                 return resp.json()
             except:
                 self.log.error(traceback.format_exc())
-                await asyncio.sleep(10)
-
-    # region 异步处理api
-    async def Async_grpc_get_space_dyn_by_uid(self, uid: int, history_offset: str = '', page: int = 1) -> dict:
-        """
-        获取up空间
-        :param history_offset:
-        :param uid:
-        :param page:
-        :param args: uid:int, history_offset: str = '', page: int = 1
-        :param kwargs:
-        :return:
-        """
-
-        da = {
-            'uid': uid,
-            'history_offset': history_offset,
-            'page': page
-        }
-        data = json.dumps(da)
-        ret_time = 0
-        while True:
-            ret_time += 1
-            if ret_time > 3:
-                # assert ret_time > 3, "超出重试次数"
-                # exit()  #
-                pass
-            try:
-                resp = await self.client.post(url=self.base_url + '/grpc/Async_grpc_get_space_dyn_by_uid',
-                                              data=data,
-                                              timeout=self.post_localhost_timeout)
-                return resp.json()
-            except:
-                self.log.error(traceback.format_exc())
-                await asyncio.sleep(10)
 
     # endregion
 

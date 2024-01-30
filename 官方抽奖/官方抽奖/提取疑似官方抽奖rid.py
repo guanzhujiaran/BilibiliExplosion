@@ -145,7 +145,7 @@ class exctract_official_lottery:
                 continue
             doc_detail = self.construct_my_doc_dict(i)
             if str(rid) not in list(checked_dict.keys()):
-                url = f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type=2&business_id={rid}'
+                url = f'http://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type=2&business_id={rid}'
                 headers = {
                     'accept': 'text/html,application/json',
                     'accept-encoding': 'gzip, deflate',
@@ -157,7 +157,7 @@ class exctract_official_lottery:
                     'sec-fetch-dest': 'empty',
                     'sec-fetch-mode': 'cors',
                     'sec-fetch-site': 'same-site',
-                    'user-agent': random.choice(self.proxy_request.User_Agent_List),
+                    'user-agent': random.choice(CONFIG.UA_LIST),
                 }
                 req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
                 print(url, req_dict)
@@ -177,7 +177,7 @@ class exctract_official_lottery:
                 rid = i.get('rid')
                 doc_detail = self.construct_my_doc_dict(i)
                 if str(rid) not in list(checked_dict.keys()):
-                    url = f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type=2&business_id={rid}'
+                    url = f'http://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type=2&business_id={rid}'
                     headers = {
                         'accept': 'text/html,application/json',
                         'accept-encoding': 'gzip, deflate',
@@ -189,7 +189,7 @@ class exctract_official_lottery:
                         'sec-fetch-dest': 'empty',
                         'sec-fetch-mode': 'cors',
                         'sec-fetch-site': 'same-site',
-                        'user-agent': random.choice(self.proxy_request.User_Agent_List),
+                        'user-agent': random.choice(CONFIG.UA_LIST),
                     }
                     req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
                     print(url, req_dict)

@@ -16,7 +16,7 @@ from bilibili.app.dynamic.v2.dynamic_pb2 import Config
 from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
 from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
-from grpc获取动态.grpc.makeMetaData import make_metadata
+from grpc获取动态.grpc.makeMetaData import make_metadata, is_useable_Dalvik
 from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, APIExClimbWuzhi
 from utl.代理.request_with_proxy import request_with_proxy
 from CONFIG import CONFIG
@@ -67,7 +67,7 @@ class BiliGrpc:
         self.grpc_api_log = logger.bind(user=__name__,
                                         filter=lambda record: record["extra"].get('user') == __name__)
         self.s = MYASYNCHTTPX()
-        self.GrpcProxyTools = GrpcProxyTools()
+        self.GrpcProxyTools = GrpcProxyTools()  # 实例化
         self.version_name_build_list = [
             {  # 版本号的build对应的列表
                 'build': 7630200,
@@ -148,18 +148,14 @@ class BiliGrpc:
         self.__req = request_with_proxy()
         self.channel = None
         self.proxy = None
-        self.channel_lock = asyncio.Lock()
-        self.timeout = 10  # 30秒好像太长了时间
-        self.logger_lock = asyncio.Lock()
+        self.timeout = 30  # 30秒好像太长了时间
         self.cookies = None
-        self.cookies_lock = asyncio.Lock()
         self.cookies_ts = 0
 
     async def _prepare_ck_proxy(self):
         proxy = self.proxy
         channel = self.channel
-        async with self.cookies_lock:
-            cookies = await self.__set_available_cookies(self.cookies)
+        cookies = await self.__set_available_cookies(self.cookies)
         if not channel:
             proxy, channel = await self.__get_random_channel()
 
@@ -193,13 +189,17 @@ class BiliGrpc:
             return await self.__get_available_cookies()
 
     async def __set_available_channel(self, proxy, channel):
-        async with self.channel_lock:
-            self.proxy = proxy
-            self.channel = channel
+        self.proxy = proxy
+        self.channel = channel
 
     async def __get_random_channel(self):
-        while 1:
-            proxy = await self.__req.get_one_rand_grpc_proxy()
+        while 1:  # TODO:在这里添加判断是否使用可用的代理
+            avaliable_ip_status = await self.GrpcProxyTools.get_rand_avaliable_ip_status()
+            proxy = {}
+            if avaliable_ip_status:
+                proxy = await self.__req.get_grpc_proxy_by_ip(avaliable_ip_status.ip)
+            if not proxy:
+                proxy = await self.__req.get_one_rand_grpc_proxy()
             if proxy:
                 options = [
                     ("grpc.http_proxy", proxy['proxy']['http']),
@@ -248,13 +248,12 @@ class BiliGrpc:
                 return ret_dict
             except grpc.RpcError as e:
                 stat, det = grpc_error(e)
-                async with self.logger_lock:
-                    self.grpc_api_log.warning(f"BiliGRPC error: {stat} - {proxy['proxy']}")
+                self.grpc_api_log.warning(f"\nBiliGRPC error: {stat} - {proxy['proxy']}")
                 if proxy == self.proxy:
                     await self.__set_available_channel(None, None)
                 score_change = -10
                 if 'HTTP proxy returned response code 400' in det or 'OPENSSL_internal' in det:  # 400状态码表示代理可能是http1.1协议，不支持grpc的http2.0
-                    score_change = -100
+                    score_change = -10
                 # 已知的不重要的错误
                 if det == 'Deadline Exceeded':
                     pass
@@ -265,9 +264,8 @@ class BiliGrpc:
                 elif 'OPENSSL_internal:WRONG_VERSION_NUMBER.' in det:
                     pass
                 else:
-                    async with self.logger_lock:
-                        self.grpc_api_log.warning(
-                            f"{dyn_ids} grpc_api_get_DynDetails BiliGRPC error: {stat} - {det}\n{dyn_details_req}\n{type(e)}")  # 重大错误！
+                    self.grpc_api_log.warning(
+                        f"{dyn_ids} grpc_api_get_DynDetails\n BiliGRPC error: {stat} - {det}\n{dyn_details_req}\n{type(e)}")  # 重大错误！
                 await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                           score_change=score_change)
 
@@ -285,26 +283,25 @@ class BiliGrpc:
             rid = int(rid)
         if type(rid) is not int:
             raise TypeError(f'rid must be number! rid:{rid}')
-        url = "https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail"
+        url = "http://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail"
         # ua=CONFIG.UA_LIST[0]
         # ua = self.ua
         proxy = {'proxy': {'http': '', 'https': ''}}
         while 1:
+            ip_status=None
             if proxy_flag:
                 proxy, channel = await self.__get_random_channel()
                 if cookie_flag:
-                    async with self.cookies_lock:
-                        cookies = await self.__set_available_cookies(self.cookies)
-                if not self.GrpcProxyTools.check_ip_status(proxy['proxy']['http']):
+                    cookies = await self.__set_available_cookies(self.cookies)
+                if not await self.GrpcProxyTools.check_ip_status(proxy['proxy']['http']):
                     await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                               score_change=10)
             else:
                 if cookie_flag:
-                    async with self.cookies_lock:
-                        self.cookies = await ExClimbWuzhi.verifyExClimbWuzhi(useProxy=False, MYCFG=APIExClimbWuzhi(
-                            ua=self.ua
-                        ))
-                        cookies = self.cookies
+                    self.cookies = await ExClimbWuzhi.verifyExClimbWuzhi(useProxy=False, MYCFG=APIExClimbWuzhi(
+                        ua=self.ua
+                    ))
+                    cookies = self.cookies
             data_dict = {
                 'share_id': '3',
                 'dyn_type': dynamic_type,
@@ -329,13 +326,15 @@ class BiliGrpc:
                     "Cookie": cookies
                 })
             if proxy_flag:
-                ip_status = self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+                ip_status = await  self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
                 if ip_status.MetaData:
                     md = ip_status.MetaData
                 else:
                     # Dalvik_brand = random.choice(self.Dalvik_brand_list)
                     brand = random.choice(self.brand_list)
                     Dalvik = random.choice(self.Dalvik_list)
+                    while not is_useable_Dalvik(Dalvik):
+                        Dalvik = random.choice(self.Dalvik_list)
                     version_name_build = random.choice(self.version_name_build_list)
                     version_name = version_name_build['version_name']
                     build = version_name_build['build']
@@ -368,12 +367,6 @@ class BiliGrpc:
                     if type(v) == bytes:
                         headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
             try:
-                # resp = requests.request(method="post",
-                #                         url=url,
-                #                         data=data,
-                #                         headers=headers, timeout=self.timeout, proxies={
-                #         'http': proxy['proxy']['http'],
-                #         'https': proxy['proxy']['https']} if proxy_flag else None, verify=True)
                 resp = await  self.s.request(method="post",
                                              url=url,
                                              data=data,
@@ -384,12 +377,12 @@ class BiliGrpc:
                 if type(resp.headers.get('grpc-status')) is not str and type(
                         resp.headers.get('grpc-status')) is not bytes:
                     raise MY_Error(resp.text.replace('\n', ''))
-                if resp.headers.get('bili-status-code') == '-352' or resp.headers.get('grpc-Message') == '-352':
-                    # async with self.logger_lock:
-                    #     grpc_err_log.warning(
-                    #         f'-352报错-grpc_get_dynamic_detail_by_type_and_rid-{proxy if proxy_flag else None}\n{str(resp.headers)}\n{str(headers)}\n{str(data)}')
-                    raise MY_Error(
-                        f'-352报错-grpc_get_dynamic_detail_by_type_and_rid-{proxy if proxy_flag else None}\n{str(resp.headers)}\n{str(headers)}\n{str(data)}')
+                if '-352' in str(resp.headers.get('bili-status-code')) or \
+                        '-352' in str(resp.headers.get('grpc-Message')) or \
+                        '-412' in str(resp.headers.get('bili-status-code')) or \
+                        '-412' in str(resp.headers.get('grpc-Message')):
+                    self.grpc_api_log.warning(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{str(data)}')
+                    raise MY_Error(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{proxy}\n{str(data)}')
                 gresp = dynamic_pb2.DynDetailReply()
                 gresp.ParseFromString(resp.content[5:])
                 resp_dict = MessageToDict(gresp)
@@ -397,35 +390,35 @@ class BiliGrpc:
                     if proxy != self.proxy:
                         await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
                     await self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
-
+                if ip_status:
+                    ip_status.available=True
                 self.grpc_api_log.info(
-                    f'{rid} 获取grpc动态请求成功代理：{proxy["proxy"] if proxy_flag else None} {rid} grpc_get_dynamic_detail_by_type_and_rid\n{headers}')
+                    f'{rid} 获取grpc动态请求成功代理：{proxy["proxy"] if proxy_flag else None} {rid} grpc_get_dynamic_detail_by_type_and_rid\n{headers}'
+                    f'\n当前可用代理数量：{len([x for x in self.GrpcProxyTools.ip_list if x.available])}')
                 return resp_dict
             except Exception as err:
+                if ip_status:
+                    ip_status.available = False
                 score_change = -10
-                async with self.logger_lock:
-                    self.grpc_api_log.warning(
-                        f"{rid} grpc_get_dynamic_detail_by_type_and_rid BiliGRPC error: {err} - {proxy['proxy'] if proxy_flag else None}\n{type(err)}")
-                if '-352' in str(err):
+                self.grpc_api_log.warning(
+                    f"{rid} grpc_get_dynamic_detail_by_type_and_rid\n BiliGRPC error: {err} - {proxy['proxy'] if proxy_flag else None}\n{type(err)}")
+                if '-352' in str(err) or '-412' in str(err):
                     score_change = 10
-                    ip_status = self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+                    ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
                     self.grpc_api_log.warning(f"{ip_status.ip} ip获取次数到达{ip_status.counter}次，出现-352现象！")
                     if cookie_flag:
                         if ip_status and ip_status.counter > 10:
                             pass
                         else:
-                            async with self.cookies_lock:
-                                if cookies == self.cookies:
-                                    self.cookies = None
-                                    await self.__set_available_cookies(None, useProxy=True)
+                            if cookies == self.cookies:
+                                self.cookies = None
+                                await self.__set_available_cookies(None, useProxy=True)
                     if proxy['proxy']['http']:
-                        self.GrpcProxyTools.set_ip_status(
-                            ipstatus=GrpcProxyStatus(
-                                ip=proxy['proxy']['http'],
-                                counter=200,
-                                max_counter_ts=int(time.time()),
-                                code=-352)
-                        )
+                        if not ip_status:
+                            ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+                        ip_status.max_counter_ts=int(time.time())
+                        ip_status.code=-352
+                        ip_status.available=False
                 if proxy_flag:
                     if proxy == self.proxy:
                         await self.__set_available_channel(None, None)
@@ -448,10 +441,10 @@ class BiliGrpc:
             raise TypeError(
                 f'uid must be a number and history_offset must be str! uid:{uid} history_offset:{history_offset}')
         while 1:
-            proxy = self.proxy
-            channel = self.channel
-            if not channel:
-                proxy, channel = await self.__get_random_channel()
+            proxy, channel = await self.__get_random_channel()
+            if not await self.GrpcProxyTools.check_ip_status(proxy['proxy']['http']):
+                await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
+                                                          score_change=10)
             data_dict = {
                 'host_uid': int(uid),
                 'history_offset': history_offset,
@@ -463,15 +456,34 @@ class BiliGrpc:
             proto = msg.SerializeToString()
             data = b"\0" + len(proto).to_bytes(4, "big") + proto
             headers = {
-                # "User-Agent": "Dalvik/2.1.0 (Linux; Android) os/android",
-                "User-Agent": self.ua,
                 "Content-Type": "application/grpc",
-                # "x-bili-device-bin": ""
+                # 'Connection': 'close',
+                # "User-Agent": ua,
+                # 'User-Agent': random.choice(CONFIG.UA_LIST),
             }
-            headers.update(dict(make_metadata("")))
-            for k, v in list(headers.items()):
-                if k == 'user-agent':
-                    headers.pop(k)
+            ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+            if ip_status.MetaData:
+                md = ip_status.MetaData
+            else:
+                # Dalvik_brand = random.choice(self.Dalvik_brand_list)
+                brand = random.choice(self.brand_list)
+                Dalvik = random.choice(self.Dalvik_list)
+                while not is_useable_Dalvik(Dalvik):
+                    Dalvik = random.choice(self.Dalvik_list)
+                version_name_build = random.choice(self.version_name_build_list)
+                version_name = version_name_build['version_name']
+                build = version_name_build['build']
+                channel = random.choice(self.channel_list)
+                md = make_metadata("",
+                                   brand=brand,
+                                   Dalvik=Dalvik,
+                                   version_name=version_name,
+                                   build=build,
+                                   channel=channel)
+                ip_status.MetaData = md
+            headers.update(dict(md))
+            headers_copy = copy.deepcopy(headers)
+            for k, v in list(headers_copy.items()):
                 if k.endswith('-bin'):
                     if type(v) == bytes:
                         headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
@@ -485,120 +497,50 @@ class BiliGrpc:
                 #     })
                 resp = await self.s.request(
                     method="post",
-                    url="https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace",
+                    url="http://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace",
                     data=data,
-                    headers=headers, timeout=self.timeout, proxies={
-                        'http': proxy['proxy']['http'],
-                        'https': proxy['proxy']['https']
-                    }, verify=False
+                    headers=headers, timeout=self.timeout, proxies=proxy['proxy'], verify=False
                 )
                 resp.raise_for_status()
                 if type(resp.headers.get('grpc-status')) is not str and type(
                         resp.headers.get('grpc-status')) is not bytes:
                     raise MY_Error(resp.text.replace('\n', ''))
-                if resp.headers.get('bili-status-code') == '-352' or resp.headers.get('grpc-Message') == '-352':
-                    async with self.logger_lock:
-                        self.grpc_api_log.warning(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{str(data)}')
+                if '-352' in str(resp.headers.get('bili-status-code')) or \
+                        '-352' in str(resp.headers.get('grpc-Message')) or \
+                        '-412' in str(resp.headers.get('bili-status-code')) or \
+                        '-412' in str(resp.headers.get('grpc-Message')):
+                    self.grpc_api_log.warning(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{str(data)}')
                     raise MY_Error(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{proxy}\n{str(data)}')
                 gresp = dynamic_pb2.DynSpaceRsp()
                 gresp.ParseFromString(resp.content[5:])
                 resp_dict = MessageToDict(gresp)
                 if proxy != self.proxy:
                     await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
-                self.grpc_api_log.info(f'{uid} grpc_get_space_dyn_by_uid 获取grpc请求成功代理：{proxy["proxy"]}')
                 await self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
+                ip_status.available = True
+                self.grpc_api_log.info(
+                    f'{uid} {history_offset} 获取grpc动态请求成功代理：{proxy["proxy"]} grpc_get_space_dyn_by_uid\n{headers}'
+                    f'\n当前可用代理数量：{len([x for x in self.GrpcProxyTools.ip_list if x.available])}')
                 return resp_dict
             except Exception as err:
+                ip_status.available = False
                 score_change = -10
-                async with self.logger_lock:
-
-                    self.grpc_api_log.warning(
-                        f"{uid} grpc_get_space_dyn_by_uid BiliGRPC error: {err} - {proxy['proxy']}\n{type(err)}")
-                if '-352' in str(err):
-                    score_change = 0
+                self.grpc_api_log.warning(
+                    f"{uid} {history_offset} grpc_get_space_dyn_by_uid\n BiliGRPC error: {err} - {proxy['proxy']}\n{type(err)}")
+                if '-352' in str(err) or '-412' in str(err):
+                    score_change = 10
+                    if proxy['proxy']['http']:
+                        self.grpc_api_log.warning(f"{ip_status.ip} ip获取次数到达{ip_status.counter}次，出现-352现象！")
+                        if not ip_status:
+                            ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+                        ip_status.max_counter_ts=int(time.time())
+                        ip_status.code=-352
+                        ip_status.available=False
                 if proxy == self.proxy:
                     await self.__set_available_channel(None, None)
                 await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                           score_change=score_change)
 
-    async def Async_grpc_get_space_dyn_by_uid(self, uid: Union[str, int], history_offset: str = '',
-                                              page: int = 1) -> dict:
-        """
-         获取up空间
-        :param uid:
-        :param history_offset:
-        :param page:
-        :return:
-        """
-        if type(uid) is str and str.isdigit(uid):
-            uid = int(uid)
-        if type(uid) is not int or type(history_offset) is not str:
-            raise TypeError(
-                f'uid must be a number and history_offset must be str! uid:{uid} history_offset:{history_offset}')
-        while 1:
-            proxy = self.proxy
-            channel = self.channel
-            if not channel:
-                proxy, channel = await self.__get_random_channel()
-            data_dict = {
-                'host_uid': int(uid),
-                'history_offset': history_offset,
-                'local_time': 8,
-                'page': page,
-                'from': 'space'
-            }
-            msg = dynamic_pb2.DynSpaceReq(**data_dict)
-            proto = msg.SerializeToString()
-            data = b"\0" + len(proto).to_bytes(4, "big") + proto
-            headers = {
-                # "User-Agent": "Dalvik/2.1.0 (Linux; Android) os/android",
-                "User-Agent": "Mozilla/5.0",
-                "Content-Type": "application/grpc",
-                # "x-bili-device-bin": ""
-            }
-            headers.update(dict(make_metadata("")))
-            for k, v in list(headers.items()):
-                if k == 'user-agent':
-                    headers.pop(k)
-                if k.endswith('-bin'):
-                    if type(v) == bytes:
-                        headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
-            try:
-                async with httpx.AsyncClient(proxies={
-                    'http://': proxy['proxy']['http'],
-                    'https://': proxy['proxy']['https']
-                },
-                        verify=False, ) as client:
-                    resp = await client.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace",
-                                             data=data,
-                                             headers=headers, timeout=self.timeout
-                                             )
-                resp.raise_for_status()
-                if type(resp.headers.get('grpc-status')) is not str and type(
-                        resp.headers.get('grpc-status')) is not bytes:
-                    raise MY_Error(resp.text.replace('\n', ''))
-                if resp.headers.get('bili-status-code') == '-352' or resp.headers.get('grpc-Message') == '-352':
-                    async with self.logger_lock:
-                        self.grpc_api_log.warning(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{str(data)}')
-                    raise MY_Error(f'-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{proxy}\n{str(data)}')
-                gresp = dynamic_pb2.DynSpaceRsp()
-                gresp.ParseFromString(resp.content[5:])
-                resp_dict = MessageToDict(gresp)
-                if proxy != self.proxy:
-                    await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
-                self.grpc_api_log.info(f'获取grpc请求成功代理：{proxy["proxy"]}')
-                await self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
-                return resp_dict
-            except Exception as err:
-                score_change = -10
-                async with self.logger_lock:
-                    self.grpc_api_log.warning(f"BiliGRPC error: {err} - {proxy['proxy']}")
-                if '-352' in str(err):
-                    score_change = 0
-                if proxy == self.proxy:
-                    await self.__set_available_channel(None, None)
-                await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
-                                                          score_change=score_change)
 
 
 class MY_Error(ValueError):

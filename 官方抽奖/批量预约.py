@@ -81,7 +81,7 @@ class reserve_lottery:
             sys.exit('登陆失败,请重新登录')
 
     def get_reserve_total(self, business_id):
-        url = 'https://api.bilibili.com/x/activity/up/reserve/relation/info?ids={}'.format(business_id)
+        url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids={}'.format(business_id)
         # {'code': 0, 'message': '0', 'ttl': 1, 'data': {'list': {'713185': {'sid': 713185, 'name': '直播预约：预约先看评测 618
         # 直播', 'total': 14327, 'stime': 1654945555, 'etime': 1655469300, 'isFollow': 0, 'state': 100, 'oid': '',
         # 'type': 2, 'upmid': 483311105, 'reserveRecordCtime': 0, 'livePlanStartTime': 1655467200, 'upActVisible': 0,

@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+
+
 class pushme:
     _url = "https://push.i-i.me"
     _token = "T1cBRRgooZyhfIJMYPjR"
@@ -24,10 +27,17 @@ class zhihu_CONFIG:
     root_dir = 'K:/zhihu/'
 
 
+@dataclass
+class MYSQL:
+    proxy_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/proxy_db'
+
+
 class database:
     dynDetail = "H:/database/dynDetail.db"
     proxy_db = "K:/sqlite_database/proxy_database/proxy_db.db"
+    proxy_db_URI = 'sqlite+aiosqlite:///K:/sqlite_database/proxy_database/proxy_db.db?check_same_thread=False'
     followingup_db_RUI = 'sqlite+aiosqlite:///G:/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
+    MYSQL = MYSQL()
 
 
 class CONFIG:

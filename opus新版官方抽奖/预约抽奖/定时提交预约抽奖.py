@@ -31,7 +31,7 @@ async def main():
     buvid3 = gl.get_value('buvid3_3')
     if cookie3 and csrf3 and ua3 and buvid3:
         gc = generate_cv(cookie3, ua3, csrf3, buvid3)
-        gc.post_flag=False
+        gc.post_flag = True  # 是否直接发布专栏
         gc.reserve_lottery()
     else:
         print(cookie3, '\n', csrf3, '\n', ua3, '\n', buvid3)
@@ -47,7 +47,7 @@ def sync_main():
 
 
 if __name__ == '__main__':
-    schedule_mark = True
+    schedule_mark = False
     if schedule_mark:
         from apscheduler.schedulers.blocking import BlockingScheduler
         from apscheduler.triggers.cron import CronTrigger

@@ -1,3 +1,5 @@
+import asyncio
+import random
 import threading
 import time
 from dataclasses import dataclass
@@ -11,11 +13,12 @@ class GrpcProxyStatus:
     max_counter_ts: int  # 达到最大的时间戳
     MetaData: tuple = ()  # ip对应的MetaData
     code: int = 0  # 返回响应的代码。0或者-352
+    available: bool = False  # 是否可以直接使用，也就是说是请求成功过的代理，同时也没有-352风控
 
 
 class GrpcProxyTools:
-    _proxy_lock = threading.Lock()
-    ip_list: list[GrpcProxyStatus] = []
+    ip_list: list[GrpcProxyStatus] = []  # 所有的ip列表
+    use_avaliable_proxy_flag: bool = False  # 是否可以使用可用代理列表中的代理
 
     @staticmethod
     def _check_ip_352(ip: str, ip_list: list[GrpcProxyStatus]) -> bool:
@@ -66,18 +69,27 @@ class GrpcProxyTools:
             filter_ip.max_counter_ts = ipstatus.max_counter_ts
             filter_ip.code = ipstatus.code
 
-    def check_ip_status(self, ip: str) -> bool:
-        with self._proxy_lock:
-            return GrpcProxyTools._check_ip_352(ip, self.ip_list)
+    async def check_ip_status(self, ip: str) -> bool:
+        return GrpcProxyTools._check_ip_352(ip, self.ip_list)
 
-    def set_ip_status(self, ipstatus: GrpcProxyStatus):
-        with self._proxy_lock:
-            return GrpcProxyTools._set_ip_status(ipstatus, self.ip_list)
+    async def set_ip_status(self, ipstatus: GrpcProxyStatus):
+        return GrpcProxyTools._set_ip_status(ipstatus, self.ip_list)
 
-    def get_ip_status_by_ip(self, ip: str) -> Union[GrpcProxyStatus, None]:
-        with (self._proxy_lock):
-            resp = list(filter(lambda x: x.ip == ip, self.ip_list))
-            if resp:
-                return resp[0]
+    async def get_ip_status_by_ip(self, ip: str) -> Union[GrpcProxyStatus, None]:
+        resp = list(filter(lambda x: x.ip == ip, self.ip_list))
+        if resp:
+            return resp[0]
+        else:
+            return None
+
+    async def get_rand_avaliable_ip_status(self) -> Union[GrpcProxyStatus, None]:
+        avaliable_ip_status_list = [x for x in self.ip_list if x.available]
+        if len(avaliable_ip_status_list) > 10:
+            self.use_avaliable_proxy_flag = True
+        if len(avaliable_ip_status_list) < 3:
+            self.use_avaliable_proxy_flag = False
+        if self.use_avaliable_proxy_flag:
+            if avaliable_ip_status_list:
+                return random.choice(avaliable_ip_status_list)
             else:
                 return None

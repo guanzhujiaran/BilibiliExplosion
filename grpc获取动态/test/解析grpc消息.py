@@ -10,7 +10,7 @@ from google.protobuf.json_format import MessageToDict
 from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
 from bilibili.metadata.device.device_pb2 import Device
 from bilibili.metadata.metadata_pb2 import Metadata
-
+from bilibili.app.dynamic.v2.dynamic_pb2 import DynSpaceReq
 def b64decode(encoded_str):
     # 计算需要添加的等号个数
     padding = len(encoded_str) % 4
@@ -26,10 +26,10 @@ def b64decode(encoded_str):
     return decoded_bytes
 
 grpc_msg_encoded=\
-"CAEQvL/QAxolWFkyQzJEQjI3QjFBRjFGNDlDOTM1NzFGODc0MkE5RkQ4QjE1RCIHYW5kcm9pZCoHYW5kcm9pZDIFcGhvbmU6BGJpbGlCBlhpYW9taUoJMjIwODEyMTJDUgIxNFpAZmZiZWMyMWNlYjczZTg3OWEyM2MxYTAxOTU3ZjI0NmEyMDI0MDExNDIzNDcwNDYxYmFkNjE1NjhmMDRiZWU1M2JAZmZiZWMyMWNlYjczZTg3OWEyM2MxYTAxOTU3ZjI0NmEyMDI0MDExNDIzNDcwNDYxYmFkNjE1NjhmMDRiZWU1M2oGNy42MS4wckBmZmJlYzIxY2ViNzNlODc5YTIzYzFhMDE5NTdmMjQ2YTIwMjQwMTE0MjM0NzA0NjFiYWQ2MTU2OGYwNGJlZTUzePiDkK0G"
+""
 
-grpc_msg = b64decode(grpc_msg_encoded)
-
-device_msg = Device()
+# grpc_msg = b64decode(grpc_msg_encoded)
+grpc_msg=b'\x11\x08\x94\xe4\xd4\xcc\x06 \x08(\x012\x05space'
+device_msg = DynSpaceReq()
 device_msg.ParseFromString(grpc_msg)
 print(device_msg)

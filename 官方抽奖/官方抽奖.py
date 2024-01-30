@@ -280,7 +280,7 @@ class official_lottery:
 
     def chaxunyuyuerenshu(self, business_id):
         while 1:
-            url = 'https://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(business_id)
+            url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(business_id)
             req = requests.get(url=url, headers={
                 'user-agent': random.choice(self.User_Agent_List)
             })

@@ -107,7 +107,7 @@ def Search_generate_reserve_lottery():
         for i in f.readlines():
             req_dict = eval(i.strip())
             if req_dict.get('data'):
-                if req_dict.get('data').get('list').get(str(req_dict.get('ids'))).get('lotteryType') == 1:
+                if req_dict.get('data').get('list').get(list(req_dict.get('data').get('list').keys())[0]).get('lotteryType') == 1:
                     # and str(req_dict.get('ids')) not in have_got_reserve_sid_List:
                     req_dict.pop('update_time', None)
                     newly_updated_reserve_list.append(mix_dict_resolve(req_dict))

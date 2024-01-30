@@ -239,3 +239,17 @@ def make_metadata(access_key, ua="Dalvik/2.1.0 (Linux; U; Android 13; 22081212C 
         metadata["authorization"] = f"identify_v1 {access_key}"
         metadata["x-bili-aurora-eid"] = gen_aurora_eid(mid)
     return tuple(metadata.items())
+
+
+def is_useable_Dalvik(Dalvik:str):
+    '''
+    检查Dalvik是否可用
+    :param Dalvik:
+    :return:
+    '''
+    device_model = ''.join(re.findall('Android.*?\d+; (.*?) (?:Build|MIUI)', Dalvik))
+    osver = ''.join(re.findall('Android (.*?[\w]);', Dalvik))
+    if device_model and osver:
+        return True
+    else:
+        return False

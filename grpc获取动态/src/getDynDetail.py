@@ -44,7 +44,7 @@ class DynDetailScrapy:
         self.Sqlhelper = SQLHelper()
         self.stop_Flag = False  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = asyncio.Semaphore(30)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
+        self.scrapy_sem = asyncio.Semaphore(150)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
         self.stop_limit_time = 1 * 3600  # 提前多少时间停止
         self.common_log = logger.bind(user='全局日志')
         self.doc_id_2_dynamic_id_log = logger.bind(user='doc_id转dynamic_id日志')
@@ -157,7 +157,7 @@ class DynDetailScrapy:
         }
         signed_params = appsign(pm)
 
-        url = 'https://api.vc.bilibili.com/link_draw/v2/doc/dynamic_id' + '?' + urllib.parse.urlencode(signed_params)
+        url = 'http://api.vc.bilibili.com/link_draw/v2/doc/dynamic_id' + '?' + urllib.parse.urlencode(signed_params)
         new_headers = copy.deepcopy(self.comm_headers)
         new_headers.update({
             'Referer': 'http://www.bilibili.com/',
@@ -201,28 +201,28 @@ class DynDetailScrapy:
                             lot_id = lot_data.get('lottery_id')
                     else:
                         self.unknown_card_log.error(
-                            f'Unknown card type： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                            f'Unknown card type： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 elif moduleAdditional.get('type') == 'additional_type_ugc':
                     self.additional_module_log.info(
-                        f'视频卡片： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                        f'视频卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 elif moduleAdditional.get('type') == 'additional_type_common':
                     self.additional_module_log.info(
-                        f'游戏/装扮卡片： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                        f'游戏/装扮卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 elif moduleAdditional.get('type') == 'additional_type_goods':
                     self.additional_module_log.info(
-                        f'会员购商品卡片： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                        f'会员购商品卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 elif moduleAdditional.get('type') == 'additional_type_vote':
                     self.additional_module_log.info(
-                        f'投票卡片： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                        f'投票卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 elif moduleAdditional.get('type') == 'addition_vote_type_word':
                     self.additional_module_log.info(
-                        f'文字投票卡片： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                        f'文字投票卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 elif moduleAdditional.get('type') == 'addition_vote_type_default':
                     self.additional_module_log.info(
-                        f'默认投票卡片： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                        f'默认投票卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 else:
                     self.unknown_module_log.error(
-                        f'未知module： https://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(module)}')
+                        f'未知module： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(module)}')
             if module.get('moduleDesc'):
                 moduleDesc = module.get('moduleDesc')
                 desc = moduleDesc.get('desc')
@@ -246,7 +246,7 @@ class DynDetailScrapy:
                         lot_id = lot_data.get('lottery_id')
         if lot_data:
             self.common_log.debug(f'抽奖动态！{lot_data}')
-            self.proxy_req.upsert_lot_detail(lot_data)
+            await self.proxy_req.upsert_lot_detail(lot_data)
         return temp_rid, lot_id, dynamic_id, dynamic_created_time
 
     async def get_grpc_dynDetails(self, rid_dyn_ids: [dict]) -> [dict]:
@@ -291,7 +291,7 @@ class DynDetailScrapy:
         :return:
         """
         while 1:
-            url = 'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice'
+            url = 'http://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice'
             params = {
                 'business_type': bussiness_type,
                 'business_id': business_id,
@@ -331,7 +331,7 @@ class DynDetailScrapy:
                     self.stop_Flag = True  # 没有动态id了，停止爬取
             else:
                 self.doc_id_2_dynamic_id_log.error(
-                    f'https://api.vc.bilibili.com/link_draw/v2/doc/dynamic_id?doc_id={rid}\tInvalid Response:{json.dumps(doc_id_2_dynamic_id_resp)}')
+                    f'http://api.vc.bilibili.com/link_draw/v2/doc/dynamic_id?doc_id={rid}\tInvalid Response:{json.dumps(doc_id_2_dynamic_id_resp)}')
         return ret_dynamic_ids
 
     async def get_grpc_single_dynDetail(self, rid: int) -> [dict]:
@@ -340,7 +340,7 @@ class DynDetailScrapy:
         :param rid:
         :return:
         """
-        self.common_log.info(f'当前获取rid：{rid}，跳转连接：https://t.bilibili.com/{rid}?type=2')
+        self.common_log.info(f'当前获取rid：{rid}，跳转连接：http://t.bilibili.com/{rid}?type=2')
         resp_list = await self.BiliGrpc.grpc_get_dynamic_detail_by_type_and_rid(rid)
         ret_dict_list = []
         dynamic_created_time = None
@@ -360,9 +360,9 @@ class DynDetailScrapy:
             ret_dict_list.append({'rid': rid, 'dynamic_id': '-1'})
         if ret_dict_list[0].get('dynamic_id') != '-1':
             self.common_log.debug(
-                f"{rid} 获取单个动态详情成功！https://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
+                f"{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
         else:
-            self.common_log.debug(f"获取单个动态详情成功，但动态被删除了！https://t.bilibili.com/{rid}?type=2")
+            self.common_log.debug(f"获取单个动态详情成功，但动态被删除了！http://t.bilibili.com/{rid}?type=2")
         return ret_dict_list
 
     # endregion
@@ -376,7 +376,7 @@ class DynDetailScrapy:
             try:
                 for rid in rid_list:
                     self.common_log.debug(
-                        f"当前执行【{rid_list.index(rid) + 1}/{len(rid_list)}】：动态rid列表：{rid_list}\n跳转连接：https://t.bilibili.com/{rid}?type=2")
+                        f"当前执行【{rid_list.index(rid) + 1}/{len(rid_list)}】：动态rid列表：{rid_list}\n跳转连接：http://t.bilibili.com/{rid}?type=2")
                     detail = (await self.get_grpc_single_dynDetail(rid))[0]
                     self.Sqlhelper.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
                                                     dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),

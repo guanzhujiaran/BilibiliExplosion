@@ -3607,7 +3607,7 @@ class methods:
         return {'offset': offset, 'data': tempitems, 'has_more': has_more}
 
     def dynamic_lottery_notice(self, dynamic_id):
-        url = f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?dynamic_id={dynamic_id}'
+        url = f'http://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?dynamic_id={dynamic_id}'
         req = self.s.get(url=url)
         try:
             if req.json().get('code') == 0:

@@ -47,7 +47,7 @@ class rid_get_dynamic:
         # {"proxy":{"http":1.1.1.1},"status":"可用|-412|失效","update_ts":time.time(), }
         self.EndTimeSeconds = 7 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
         self.null_time_quit = 150  # 遇到连续100条data为None的sid 则退出
-        self.sem_max_val = 80  # 最大同时运行的线程数
+        self.sem_max_val = 150  # 最大同时运行的线程数
         self.sem = asyncio.Semaphore(self.sem_max_val)
         self.null_timer = 0
         self.null_list: list[dict[int:bool]] = []
@@ -187,7 +187,7 @@ class rid_get_dynamic:
                                     await self.quit()
                             else:
                                 logger.debug(
-                                    f"当前null_timer（{self.null_timer}）没满或最近的预约时间间隔过长{int(time.time()) - self.dynamic_timestamp}")
+                                    f"当前null_timer（{self.null_timer}）没满{self.null_time_quit}或最近的预约时间间隔过长{int(time.time()) - self.dynamic_timestamp}")
                         if self.null_timer > 1000:  # 太多的data为None的数据了
                             await self.quit()
             else:
@@ -315,7 +315,7 @@ class rid_get_dynamic:
         logger.info(f'reserve_relation_with_proxy\t当前ids:{ids}\t当前剩余可启用线程数：{self.sem._value}')
         if ids in self.all_reserve_relation_ids_list:
             return next(filter(lambda x: x.get("ids") == ids, self.all_reserve_relation_list))
-        url = 'https://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
+        url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
         # ua = random.choice(BAPI.User_Agent_List)
         headers = {
             'accept': 'text/html,application/json',
@@ -341,6 +341,7 @@ class rid_get_dynamic:
 
     async def get_dynamic_with_thread(self):
         None_num1 = 0
+        task_list: list[asyncio.Task] = []
         for ids_index in range(len(self.ids_list)):
             None_num1 =await self._get_None_data_number()
             async with self.ids_change_lock:
@@ -353,7 +354,6 @@ class rid_get_dynamic:
             async with self.dynamic_ts_lock:
                 self.dynamic_timestamp = 0
             latest_rid = None
-            task_list: list[asyncio.Task] = []
             while 1:
                 # self.resolve_dynamic(self.ids)  # 每次开启一轮多线程前先测试是否可用
                 async with self.ids_change_lock:
@@ -390,19 +390,13 @@ class rid_get_dynamic:
                 task_list = list(filter(lambda x: not x.done(), task_list))
 
                 logger.debug(f'当前线程存活数量：{len(task_list)}')
-                if len(task_list) > self.sem_max_val:
-                    for Task in task_list:
-                        await Task
-                if await self._get_checking_number() > 5:
-                    for Task in task_list:
-                        await Task
-                async with self.ids_change_lock:
-                    if not self.ids:
-                        logger.info(
-                            f'抽奖判断退出！等待当前剩余{len(list(filter(lambda x: not x.done(), task_list)))}个线程执行完毕后退出！')
-                        for Task in task_list:
-                            await Task
-            logger.debug(f'当前线程存活数量：{self.sem._value}，正在等待剩余线程完成任务')
+                # if len(task_list) > self.sem_max_val:
+                #     for Task in task_list:
+                #         await Task
+                if await self._get_checking_number() > self.sem_max_val+5:
+                    await asyncio.gather(*task_list)
+            task_list = list(filter(lambda x: not x.done(), task_list))
+            logger.debug(f'任务已经完成，当前线程存活数量：{len(task_list)}，正在等待剩余线程完成任务')
             await asyncio.gather(*task_list)
                 # if len(self.list_all_reserve_relation) > 1000:
                 #     self.write_in_file()

@@ -2,7 +2,6 @@
 import ast
 import random
 import traceback
-
 import sqlite_utils
 import threading
 import time
@@ -13,13 +12,13 @@ from CONFIG import CONFIG
 sql_log=logger.bind(user='sqlite3')
 op_db_lock = threading.Lock()
 
-logger.add(CONFIG.root_dir + "utl/代理/log/sqlite3.log",
-           encoding="utf-8",
-           enqueue=True,
-           rotation="500MB",
-           compression="zip",
-           retention="15 days",
-           filter=lambda record: record["extra"].get('user') == "sqlite3")
+# logger.add(CONFIG.root_dir + "utl/代理/log/sqlite3.log",
+#            encoding="utf-8",
+#            enqueue=True,
+#            rotation="500MB",
+#            compression="zip",
+#            retention="15 days",
+#            filter=lambda record: record["extra"].get('user') == "sqlite3")
 
 
 def lock_wrapper(func: callable) -> callable:
@@ -77,7 +76,7 @@ class SQLHelper:
         '''
         选择一个可用的代理
         :param channel:
-        :param mode:
+        :param mode: single 就选择分数最高的未被风控的代理
         :return:[{...}, {...}] proxy_dict
         '''
         where = "(status=:available_status and score>=:available_score) or (" \
@@ -110,7 +109,7 @@ class SQLHelper:
         else:
             return {}
 
-    lock_wrapper
+    @lock_wrapper
     def select_rand_proxy(self) -> dict:
         ret_list_dict = [row for row in
                          self.op_db_table.rows_where(
@@ -222,31 +221,20 @@ class SQLHelper:
 
     @sql_log.catch
     @lock_wrapper
-    def update_to_proxy_list(self, proxy_dict: dict, score_plus_Flag=False, score_minus_Flag=False,
-                             change_score_num=10) -> bool:
+    def update_to_proxy_list(self, proxy_dict: dict, change_score_num=10) -> bool:
         '''
         更新数据 update 最好只用update，upsert会导致主键增长异常
         :param score_plus_Flag:
-        :param change_score_num: 修改的分数
+        :param change_score_num: 修改的分
         :param score_minus_Flag:
         :param proxy_dict:
         :return:
         '''
         proxy_dict = deepcopy(proxy_dict)
-        if score_plus_Flag:
-            self.op_db.execute(
-                f'update {self.table_name} set status=:status,score=score+{change_score_num},success_times'
-                f'=success_times+1,update_ts=:update_ts,add_ts=:add_ts where proxy=:proxy',
-                self.__preprocess_list_dict([proxy_dict])[0])
-        elif score_minus_Flag:
-            self.op_db.execute(
-                f'update {self.table_name} set status=:status,score=score-{change_score_num},success_times'
-                f'=success_times-1,update_ts=:update_ts,add_ts=:add_ts where proxy=:proxy',
-                self.__preprocess_list_dict([proxy_dict])[0])
-        else:
-            self.op_db.execute(
-                f'update {self.table_name} set status=:status,score=:score,update_ts=:update_ts,add_ts=:add_ts where proxy=:proxy',
-                self.__preprocess_list_dict([proxy_dict])[0])
+        self.op_db.execute(
+            f'update {self.table_name} set status=:status,score=score+{change_score_num},success_times'
+            f'=success_times+1,update_ts=:update_ts,add_ts=:add_ts where proxy=:proxy',
+            self.__preprocess_list_dict([proxy_dict])[0])
         self.op_db.conn.commit()
         return True
 
