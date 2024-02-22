@@ -29,7 +29,7 @@ class zhihu_CONFIG:
 
 @dataclass
 class MYSQL:
-    proxy_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/proxy_db'
+    proxy_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/proxy_db?charset=utf8&autocommit=true'
 
 
 class database:

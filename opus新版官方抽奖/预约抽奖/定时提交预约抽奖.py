@@ -47,7 +47,7 @@ def sync_main():
 
 
 if __name__ == '__main__':
-    schedule_mark = False
+    schedule_mark = True
     if schedule_mark:
         from apscheduler.schedulers.blocking import BlockingScheduler
         from apscheduler.triggers.cron import CronTrigger

@@ -547,8 +547,8 @@ class exctract_official_lottery:
                 'business_type': bussiness_type,
                 'business_id': business_id,
             }
-            resp =await self.proxy_request.request_with_proxy(url=url, method='get', params=params,
-                                                         headers={'user-agent':random.choice(CONFIG.UA_LIST)})
+            resp = await self.proxy_request.request_with_proxy(url=url, method='get', params=params,
+                                                               headers={'user-agent': random.choice(CONFIG.UA_LIST)})
             if resp.get('code') != 0:
                 self.error_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
                 time.sleep(10)
@@ -569,7 +569,7 @@ class exctract_official_lottery:
 
             :param lotData:
             """
-            newly_lot_resp =await self.get_lot_notice(lotData['business_type'], lotData['business_id'])
+            newly_lot_resp = await self.get_lot_notice(lotData['business_type'], lotData['business_id'])
             newly_lotData = newly_lot_resp['data']
 
             if newly_lotData:
@@ -638,7 +638,7 @@ class exctract_official_lottery:
                 if descNode.get('type') == 'desc_type_lottery':
                     lot_id = descNode.get('rid')
                     lot_rid = dynData.get('extend').get('businessId')
-                    lot_notice_res =await self.get_lot_notice(2, lot_rid)
+                    lot_notice_res = await self.get_lot_notice(2, lot_rid)
                     lot_data = lot_notice_res.get('data')
                     if lot_data:
                         lot_id = lot_data.get('lottery_id')
@@ -742,7 +742,7 @@ class exctract_official_lottery:
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
         all_official_lots_undrawn = self.sql.get_official_and_charge_lot_not_drawn()
-        all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data =await self.get_lot_dict(
+        all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data = await self.get_lot_dict(
             all_official_lots_undrawn)  # 更新抽奖信息
         official_lot_dynamic_ids = [x['business_id'] for x in all_lot_official_data if x['status'] != 2]
         charge_lot_dynamic_ids = [x['business_id'] for x in all_lot_charge_data if x['status'] != 2]
@@ -769,7 +769,7 @@ class exctract_official_lottery:
         # from grpc获取动态.src.getDynDetail import dynDetailScrapy
         # d = dynDetailScrapy()
         # d.main()# 爬取最新的动态
-        all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail =await self.get_all_lots()  # 获取并更新抽奖信息！
+        all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail = await self.get_all_lots()  # 获取并更新抽奖信息！
 
         ua3 = gl.get_value('ua3')
         csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
@@ -787,4 +787,4 @@ class exctract_official_lottery:
 if __name__ == '__main__':
     m = exctract_official_lottery()
     # m.Get_All_Flag = True  # 为True时重新获取所有的抽奖，为False时将更新的内容附加在所有的后面
-    m.main()
+    asyncio.run(m.main())

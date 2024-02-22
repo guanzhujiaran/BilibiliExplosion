@@ -12,8 +12,8 @@ class BiliGrpc:
     def __init__(self):
         self.post_localhost_timeout = None
         self.base_url = 'http://127.0.0.1:23333'
-        self.client = httpx.AsyncClient(timeout=self.post_localhost_timeout)
         self.log = logger.bind(name="BiliGrpcClient")
+        # 不能设置self.client这种东西，存在一个最大的连接数，超过会报错！
 
     async def grpc_api_get_DynDetails(self, dyn_ids: [int]) -> dict:
         """
@@ -34,7 +34,9 @@ class BiliGrpc:
                 #                         method='post',
                 #                         data=data,
                 #                         timeout=self.post_localhost_timeout)
-                resp = await self.client.request(url=self.base_url + '/grpc/grpc_api_get_DynDetails',
+                async with httpx.AsyncClient() as client:
+
+                    resp = await client.request(url=self.base_url + '/grpc/grpc_api_get_DynDetails',
                                                  method='post',
                                                  data=data, timeout=self.post_localhost_timeout)
                 resp.raise_for_status()
@@ -62,7 +64,9 @@ class BiliGrpc:
                 # exit()  #
                 pass
             try:
-                resp = await self.client.request(url=self.base_url + '/grpc/grpc_get_dynamic_detail_by_type_and_rid',
+                async with httpx.AsyncClient() as client:
+
+                    resp = await client.request(url=self.base_url + '/grpc/grpc_get_dynamic_detail_by_type_and_rid',
                                                  method='post',
                                                  data=data, timeout=self.post_localhost_timeout)
                 resp.raise_for_status()
@@ -95,7 +99,8 @@ class BiliGrpc:
                 # exit()  #
                 pass
             try:
-                resp = await self.client.request(url=self.base_url + '/grpc/grpc_get_space_dyn_by_uid',
+                async with httpx.AsyncClient() as client:
+                    resp = await client.request(url=self.base_url + '/grpc/grpc_get_space_dyn_by_uid',
                                                  method='post',
                                                  data=data, timeout=self.post_localhost_timeout)
                 resp.raise_for_status()

@@ -16,14 +16,14 @@ from grpc获取动态.src.SqlHelper import SQLHelper
 from grpc获取动态.src.获取取关对象.GetRmFollowingList import GetRmFollowingListV1
 from utl.代理.请求代理_ver_database import request_with_proxy
 from 获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import lotScrapy
-
+from src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import ToutiaoSpaceFeedLotService
 # 创建自定义线程池
 get_rm_following_list = GetRmFollowingListV1()
 zhihu_lotScrapy = lotScrapy()
 get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
 grpc_sql_helper = SQLHelper()
 grpc_api = BiliGrpc()
-
+toutiaoSpaceFeedLotService = ToutiaoSpaceFeedLotService()
 req = request_with_proxy()
 r = redis.Redis(host='localhost', port=11451, db=0)  # 直播抽奖数据
 r1 = redis.Redis(host='localhost', port=11451, db=1)  # 情感分析数据
@@ -90,7 +90,6 @@ async def request_with_proxy_api(  # 改为了并发模式
 # region grpc代理数据库的操作方法
 @app.get('/get_one_rand_proxy')
 async def get_one_rand_proxy():
-    start=int(time.time())
     proxy = await req.get_one_rand_proxy()
     return proxy
 
@@ -192,7 +191,9 @@ async def zhuhu_avaliable_api():
     resp = await zhihu_lotScrapy.api_get_all_pins()
     return resp
 
-
+@app.get('toutiao/get_others_lot_ids')
+async def toutiao_get_others_lot_ids():
+    return await toutiaoSpaceFeedLotService.main()
 # endregion
 
 if __name__ == '__main__':
@@ -200,7 +201,5 @@ if __name__ == '__main__':
         '请求代理_ver_database_fastapi:app',
         host="0.0.0.0",
         port=23333,
-        workers=1,
-        limit_concurrency=None,
-        limit_max_requests=None
+        workers=3,
     )

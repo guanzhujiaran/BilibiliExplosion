@@ -37,7 +37,7 @@ class request_with_proxy:
         self.channel = 'bili'
         self.sqlite3_proxy_op = sqlite3_proxy_op.SQLHelper()
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
-        self.log = logger.bind(user=__name__, filter=lambda record: record["extra"].get('user') == __name__)
+        self.log = logger
         # self.log.remove()
         self.log.add(sys.stdout, level='ERROR')
         self.get_proxy_sep_time = 0.5 * 3600  # 获取代理的间隔
@@ -96,13 +96,13 @@ class request_with_proxy:
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
                 'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
-                    if self.fake_cookie:
-                        kwargs.get('headers').update({'cookie': self.fake_cookie})
-                    else:
-                        async with self.cookie_lock:
-                            if not self.fake_cookie:
-                                await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
-                                kwargs.get('headers').update({'cookie': self.fake_cookie})
+                if self.fake_cookie:
+                    kwargs.get('headers').update({'cookie': self.fake_cookie})
+                else:
+                    async with self.cookie_lock:
+                        if not self.fake_cookie:
+                            await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
+                            kwargs.get('headers').update({'cookie': self.fake_cookie})
             if self.GetProxy_Flag:
                 self.log.info('获取代理中')
                 await asyncio.sleep(30)
@@ -144,12 +144,12 @@ class request_with_proxy:
                 await self._refresh_412_proxy()
                 continue
             req_dict = False
-            req_text=''
+            req_text = ''
             try:
                 # self.log.info(f'正在发起请求中！\t{p}\n{args}\n{kwargs}\n')
                 req = await self.s.request(*args, **kwargs, timeout=self.timeout, proxies=p)
-                req_text=req.text
-                self.log.debug(f'获取到请求结果！\t{p}\n{req.text}\n')
+                req_text = req.text
+                self.log.debug(f'获取到请求结果！\t{p}\n{req.text[0:15]}\n')
                 if 'code' not in req.text and 'bili' in req.url.host:  # 如果返回的不是json那么就打印出来看看是什么
                     self.log.info(req.text.replace('\n', ''))
                 try:
@@ -158,14 +158,14 @@ class request_with_proxy:
                     req_text = req.text.replace("\n", "")
                     self.log.warning(f'解析为dict时失败，响应内容为：\n{req_text}\n{args}\n{kwargs}\n')
                 if type(req_dict) is list:
-                    p_dict['score'] += 10
+                    p_dict['score'] += 10   
                     p_dict['status'] = status
                     self.log.debug(f'更新数据库中的代理status:{status}')
                     await self._update_to_proxy_dict(p_dict, 50)
                     return req_dict
                 if type(req_dict) is not dict:
                     self.log.warning(f'请求获取的req_dict类型出错！{req_dict}')
-                if req_dict.get('code') is None and 'bili' in req.url.host:
+                if (req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict=={'code': 5, 'message': 'Not Found'}) and 'bili' in req.url.host:
                     self.log.warning(f'获取bili真实响应失败！\n{req.text}\n{args}\n{kwargs}\n')
                     p_dict['score'] -= 10
                     p_dict['status'] = -412
@@ -1901,18 +1901,10 @@ class request_with_proxy:
             _, Get_proxy_success = result
             proxy_queue.extend(_)
         self.log.info(f'最终共有{len(proxy_queue)}个代理需要检查')
-        for i in range(len(proxy_queue)):
+        for _ in range(len(proxy_queue)):
             await self._check_ip_by_bili_zone(proxy_queue.pop())
-        # threads = []
-        # for i in range(len(proxy_queue)):
-        #     thread = threading.Thread(target=self._check_ip_by_bili_zone, args=(proxy_queue.pop(),))
-        #     threads.append(thread)
-        #     thread.start()
-        # for thread in threads:
-        #     thread.join()
         await self.sqlite3_proxy_op.remove_list_dict_data_by_proxy()
         Get_proxy_success = True
-
         return
 
     async def get_proxy(self):
@@ -1965,13 +1957,14 @@ class request_with_proxy:
     def _proxy_warrper(self, proxy, status=0, score=50):
         return {"proxy": proxy, "status": status, "update_ts": int(time.time()), 'score': score}
 
-    async def _set_new_proxy(self,mode=None):
+    async def _set_new_proxy(self, mode=None):
         if not mode:
-            mode=self.mode
+            mode = self.mode
         while not await self.sqlite3_proxy_op.get_all_proxy_nums():
             await self.get_proxy()  # 如果代理列表用完了就去获取新的代理
             self.log.critical('代理用完了！！！')
             await asyncio.sleep(10)
+        ret_p_dict={}
         while 1:
             try:
                 p_dict = await self.sqlite3_proxy_op.select_one_proxy(mode, channel=self.channel)

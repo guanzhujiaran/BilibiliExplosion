@@ -44,7 +44,7 @@ class DynDetailScrapy:
         self.Sqlhelper = SQLHelper()
         self.stop_Flag = False  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = asyncio.Semaphore(150)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
+        self.scrapy_sem = asyncio.Semaphore(500)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
         self.stop_limit_time = 1 * 3600  # 提前多少时间停止
         self.common_log = logger.bind(user='全局日志')
         self.doc_id_2_dynamic_id_log = logger.bind(user='doc_id转dynamic_id日志')
@@ -74,36 +74,36 @@ class DynDetailScrapy:
         初始化日志，根据不同名称区分日志
         :return:
         '''
-        self.doc_id_2_dynamic_id_log.add(
-            self.dir_path + "log/doc_id转dynamic_id日志.log",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "doc_id转dynamic_id日志"
-        )
+        # self.doc_id_2_dynamic_id_log.add(
+        #     self.dir_path + "log/doc_id转dynamic_id日志.log",
+        #     encoding="utf-8",
+        #     enqueue=True,
+        #     rotation="500MB",
+        #     compression="zip",
+        #     retention="15 days",
+        #     filter=lambda record: record["extra"].get('user') == "doc_id转dynamic_id日志"
+        # )
 
-        self.unknown_module_log.add(
-            self.dir_path + "log/unknown_module.log",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "unknown_module"
+        # self.unknown_module_log.add(
+        #     self.dir_path + "log/unknown_module.log",
+        #     encoding="utf-8",
+        #     enqueue=True,
+        #     rotation="500MB",
+        #     compression="zip",
+        #     retention="15 days",
+        #     filter=lambda record: record["extra"].get('user') == "unknown_module"
+        #
+        # )
 
-        )
-
-        self.unknown_card_log.add(
-            self.dir_path + "log/unknown_card.log",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "unknown_card"
-        )
+        # self.unknown_card_log.add(
+        #     self.dir_path + "log/unknown_card.log",
+        #     encoding="utf-8",
+        #     enqueue=True,
+        #     rotation="500MB",
+        #     compression="zip",
+        #     retention="15 days",
+        #     filter=lambda record: record["extra"].get('user') == "unknown_card"
+        # )
 
         self.common_error_log.add(
             self.dir_path + "log/common_error_log.log",
@@ -112,6 +112,8 @@ class DynDetailScrapy:
             rotation="500MB",
             compression="zip",
             retention="15 days",
+            backtrace=True,
+            diagnose=True,
             filter=lambda record: record["extra"].get('user') == "common_error_log"
         )
 
@@ -220,6 +222,9 @@ class DynDetailScrapy:
                 elif moduleAdditional.get('type') == 'addition_vote_type_default':
                     self.additional_module_log.info(
                         f'默认投票卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
+                elif moduleAdditional.get('type') == 'additional_type_esport':
+                    self.additional_module_log.info(
+                        f'电子竞技赛事卡片： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(moduleAdditional)}')
                 else:
                     self.unknown_module_log.error(
                         f'未知module： http://www.bilibili.com/opus/{dynamic_id}\t{json.dumps(module)}')
@@ -302,7 +307,7 @@ class DynDetailScrapy:
                 self.common_error_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
                 time.sleep(10)
                 if resp.get('code') == -9999:
-                    return resp
+                    return resp # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
                 continue
             return resp
 

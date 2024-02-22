@@ -60,12 +60,16 @@ class SQLHelper:
                                              echo=False,
                                              poolclass=AsyncAdaptedQueuePool,
                                              max_overflow=-1,
-                                             future=True
+                                             future=True,
+                                             pool_pre_ping=True,
+                                             pool_recycle=1800,
+                                             connect_args={
+                                                 "connect_timeout":200,
+                                             }
                                              )
         self.session = sessionmaker(self.async_egn,
                                     class_=AsyncSession,
                                     expire_on_commit=False,
-                                    autoflush=True,
                                     )
 
     def __preprocess_list_dict(self, orig_list_dict: list[dict]) -> list[dict]:
@@ -124,7 +128,7 @@ class SQLHelper:
                     and_(ProxyTab.zhihu_status == available_status, ProxyTab.score >= available_score,
                          ProxyTab.success_times > 0))
             if mode == 'single':
-                sql = sql.order_by(ProxyTab.score.desc(), ProxyTab.update_ts.desc()).limit(1)
+                sql = sql.order_by(ProxyTab.score.desc(), ProxyTab.update_ts.desc()).limit(20).order_by(func.random())
             else:
                 sql = sql.order_by(func.random()).limit(1)
 
@@ -473,6 +477,7 @@ class SQLHelper:
             #                 _412_sep_time=_412_sep_time,
             #                 _underscore_spe_time=_underscore_spe_time,
             #             )
+        async with self.session() as session:
             sql = select(ProxyTab).where(
                 or_(and_(SDGrpcStat.status == available_status, SDGrpcStat.score >= available_score),
                     and_(SDGrpcStat.status == _412_status, SDGrpcStat.score >= available_score,
@@ -564,7 +569,7 @@ class SQLHelper:
     async def test(self):
         # {'http': 'http://188.166.197.129:3128', 'https': 'http://188.166.197.129:3128'}
         #for i in range(1000000):
-        res = await self.upsert_grpc_proxy_status(350818,0
+        res = await self.get_one_rand_grpc_proxy(
         )
         print(res)
 

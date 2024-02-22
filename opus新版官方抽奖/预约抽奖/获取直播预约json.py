@@ -3,6 +3,7 @@
 import ast
 import asyncio
 import linecache
+from dataclasses import dataclass
 from functools import reduce
 import json
 import random
@@ -23,7 +24,13 @@ import atexit
 
 BAPI = Bilibili_methods.all_methods.methods()
 
-
+@dataclass
+class dynamic_timestamp_info:
+    dynamic_timestamp:int=0
+    ids:int=0
+    
+    def get_time_str_until_now(self):
+        return time.strftime("%H小时%M分钟%S秒",time.gmtime(int(time.time())-self.dynamic_timestamp))
 # 放入缓存防止内存过载
 def get_line_count(filename):
     count = 0
@@ -82,7 +89,7 @@ class rid_get_dynamic:
         self.times = 1
         self.btime = 0
         self.n = int()
-        self.dynamic_timestamp = 0
+        self.dynamic_timestamp:dynamic_timestamp_info =dynamic_timestamp_info()
         self.getfail = None  # 文件
         self.unknown = None  # 文件
         self.last_updated_reserve = None  # 文件
@@ -163,8 +170,7 @@ class rid_get_dynamic:
                 dycode = req1_dict.get('code')
             except Exception as e:
                 dycode = 404
-                logger.info(req1_dict)
-                logger.info('code获取失败')
+                logger.info(f'code获取失败{req1_dict}')
             self.code_check(dycode)
             self.times += 1
             dymsg = req1_dict.get('msg')
@@ -177,17 +183,17 @@ class rid_get_dynamic:
                         '\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
                                                                                               time.localtime()) +
                         '\t\t\t\trid:{}'.format(rid) + '\n'
-                        + f'当前已经有{self.null_timer}条data为None的sid')
+                        + f'当前已经有{self.null_timer}条data为None的sid，最近的动态时间距离现在{self.dynamic_timestamp.get_time_str_until_now()}！')
                     list(filter(lambda x: list(x.keys())[0] == rid, self.null_list))[0].update({rid: False})
                 if await self.check_null_timer(self.null_time_quit):
                     async with self.null_timer_lock:
                         async with self.dynamic_ts_lock:
-                            if int(time.time()) - self.dynamic_timestamp <= self.EndTimeSeconds:  # 如果超过了最大data
+                            if int(time.time()) - self.dynamic_timestamp.dynamic_timestamp <= self.EndTimeSeconds:  # 如果超过了最大data
                                 if self.null_timer > 30:
                                     await self.quit()
                             else:
                                 logger.debug(
-                                    f"当前null_timer（{self.null_timer}）没满{self.null_time_quit}或最近的预约时间间隔过长{int(time.time()) - self.dynamic_timestamp}")
+                                    f"当前null_timer（{self.null_timer}）没满{self.null_time_quit}或最近的预约时间间隔过长{self.dynamic_timestamp.get_time_str_until_now()}")
                         if self.null_timer > 1000:  # 太多的data为None的数据了
                             await self.quit()
             else:
@@ -195,7 +201,7 @@ class rid_get_dynamic:
                     self.null_timer = 0
                     list(filter(lambda x: list(x.keys())[0] == rid, self.null_list))[0].update({rid: True})
             if dycode == 404:
-                logger.info(dycode, dymsg, dymessage)
+                logger.info(f'{dycode}\n {dymsg}\n {dymessage}')
                 self.list_getfail.append(dynamic_data_dict)
                 self.code_check(dycode)
                 return
@@ -212,13 +218,14 @@ class rid_get_dynamic:
                 try:
                     dynamic_timestamp = dynamic_data_dict.get('data').get('list').get(str(rid)).get('stime')
                     async with self.dynamic_ts_lock:
-                        if dynamic_timestamp > self.dynamic_timestamp:
-                            self.dynamic_timestamp = dynamic_timestamp
+                        if rid > self.dynamic_timestamp.ids:
+                            self.dynamic_timestamp.dynamic_timestamp = dynamic_timestamp
+                            self.dynamic_timestamp.ids = rid
                     logger.info(
                         '\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
                                                                                               time.localtime()) +
                         '\t\t\t\trid:{}'.format(rid) + '\n'
-                        + f"直播预约[{rid}]获取成功，直播预约创建时间：{BAPI.timeshift(self.dynamic_timestamp)}")
+                        + f"直播预约[{rid}]获取成功，直播预约创建时间：{BAPI.timeshift(self.dynamic_timestamp.dynamic_timestamp)}")
                     # with self.dynamic_ts_lock:
                     #     if int(time.time()) - self.dynamic_timestamp <= self.EndTimeSeconds and int(time.time()) - self.dynamic_timestamp>=0:
                     #         self.quit()
@@ -244,14 +251,10 @@ class rid_get_dynamic:
             return
 
     def code_check(self, dycode):
-        try:
-            if dycode == 404:
-                self.btime += 1
-                return 0
-        except Exception as e:
-            logger.info(dycode)
-            logger.info('未知类型代码')
-            logger.info(e)
+        if dycode == 404:
+            self.btime += 1
+            logger.info(f'未知类型代码{dycode}')
+            return 0
         try:
             if dycode == 500205:
                 self.btime += 1
@@ -266,7 +269,7 @@ class rid_get_dynamic:
             # time.sleep(eval(input('输入等待时间')))
             return -412
         elif dycode != 'None' and dycode != 500207 and \
-                dycode != 500205 and dycode != 404 and dycode != -412 and self.dynamic_timestamp != 'None':
+                dycode != 500205 and dycode != 404 and dycode != -412 and self.dynamic_timestamp.dynamic_timestamp != 'None':
             pass
             # with self.dynamic_ts_lock:
             #     if int(time.time()) - self.dynamic_timestamp <= self.EndTimeSeconds and int(time.time()) - self.dynamic_timestamp >= 0:
@@ -352,7 +355,7 @@ class rid_get_dynamic:
             async with self.quit_lock:
                 self.quit_Flag = False
             async with self.dynamic_ts_lock:
-                self.dynamic_timestamp = 0
+                self.dynamic_timestamp = dynamic_timestamp_info()
             latest_rid = None
             while 1:
                 # self.resolve_dynamic(self.ids)  # 每次开启一轮多线程前先测试是否可用
@@ -404,7 +407,7 @@ class rid_get_dynamic:
 
         None_num2 = await self._get_None_data_number()
         logger.info(
-            f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{int(time.time() - self.dynamic_timestamp)}秒，退出！')
+            f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{self.dynamic_timestamp.get_time_str_until_now()}秒，退出！')
         logger.info(f'当前rid记录分别回滚{self.rollback_num + None_num1}和{self.rollback_num + None_num2}条')
         ridstartfile = open('idsstart.txt', 'w', encoding='utf-8')
         finnal_rid_list = [
@@ -511,6 +514,8 @@ class rid_get_dynamic:
 
 
 if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
     rid_run = rid_get_dynamic()
-    rid_run.init()
-    rid_run.get_dynamic_with_thread()
+    loop.run_until_complete(rid_run.init())
+    loop.run_until_complete(rid_run.get_dynamic_with_thread())
+

@@ -193,7 +193,7 @@ class BiliGrpc:
         self.channel = channel
 
     async def __get_random_channel(self):
-        while 1:  # TODO:在这里添加判断是否使用可用的代理
+        while 1:
             avaliable_ip_status = await self.GrpcProxyTools.get_rand_avaliable_ip_status()
             proxy = {}
             if avaliable_ip_status:
@@ -401,7 +401,7 @@ class BiliGrpc:
                     ip_status.available = False
                 score_change = -10
                 self.grpc_api_log.warning(
-                    f"{rid} grpc_get_dynamic_detail_by_type_and_rid\n BiliGRPC error: {err} - {proxy['proxy'] if proxy_flag else None}\n{type(err)}")
+                    f"{rid} grpc_get_dynamic_detail_by_type_and_rid\n BiliGRPC error: {err} - {proxy['proxy'] if proxy_flag else None}\n{err}\n{type(err)}")
                 if '-352' in str(err) or '-412' in str(err):
                     score_change = 10
                     ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])

@@ -9,6 +9,7 @@ from functools import reduce
 
 import json
 import pandas
+from loguru import logger
 
 
 def file_remove_repeat_contents(filename):
@@ -113,6 +114,7 @@ def Search_generate_reserve_lottery():
                     newly_updated_reserve_list.append(mix_dict_resolve(req_dict))
 
     if len(newly_updated_reserve_list) == 0:
+        logger.error('更新抽奖数量为0，检查代码！')
         exit('更新抽奖数量为0，检查代码！')
     newly_updated_reserve_list = remove_list_dict_duplicate(newly_updated_reserve_list)  # 去重
     newly_updated_reserve_list = sorted(newly_updated_reserve_list, key=lambda x: x['dynamicId'])

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 import time
 from datetime import datetime
 from typing import Type, Union
@@ -67,6 +68,7 @@ class GetRmFollowingListV1:
                         break
             except Exception as e:
                 self.logger.critical(f'Exception while creating space dyn!\n{e}')
+                await asyncio.sleep(random.choice([1,2,3,4,5,6,7,8,9,10]))
         return 1 if is_lot_dyn is None else 0
 
     # endregion
