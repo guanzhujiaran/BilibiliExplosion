@@ -9,9 +9,12 @@ import hashlib
 import json
 import os
 import random
+import threading
 import time
 import traceback
 import urllib.parse
+from typing import Coroutine, Any
+
 from loguru import logger
 from CONFIG import CONFIG
 from grpc获取动态.src.DynObjectClass import *
@@ -44,7 +47,8 @@ class DynDetailScrapy:
         self.Sqlhelper = SQLHelper()
         self.stop_Flag = False  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = asyncio.Semaphore(500)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
+        self.scrapy_sem = asyncio.Semaphore(300)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
+        self.thread_sem = threading.Semaphore(300)
         self.stop_limit_time = 1 * 3600  # 提前多少时间停止
         self.common_log = logger.bind(user='全局日志')
         self.doc_id_2_dynamic_id_log = logger.bind(user='doc_id转dynamic_id日志')
@@ -509,8 +513,15 @@ class DynDetailScrapy:
                                                 dynamic_created_time=detail.get('dynamic_created_time'))
         except:
             self.common_error_log.critical(traceback.format_exc())
-        self.scrapy_sem.release()
+        # self.scrapy_sem.release()
+        self.thread_sem.release()
         return rid
+
+    def run_async_in_thread(self,async_task,*args,**kargs):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(async_task(*args,**kargs))
+        loop.close()
 
     async def main_get_dynamic_detail_by_rid(self):
         latest_rid = int(self.Sqlhelper.get_latest_rid())
@@ -531,13 +542,18 @@ class DynDetailScrapy:
                 f'第{turn_times}轮获取动态（每轮获取{thread_num * self.offset}个动态）当前共获取{thread_num * self.offset * turn_times}条动态')
             task_list = []
             for i in range(thread_num):
-                await self.scrapy_sem.acquire()  # 获得线程，可用线程数减1
-                task = asyncio.create_task(self.get_single_dynDetail_by_rid_start(latest_rid))
+                # await self.scrapy_sem.acquire()  # 获得线程，可用线程数减1
+                self.thread_sem.acquire()
+                # task = asyncio.create_task(self.get_single_dynDetail_by_rid_start(latest_rid))
+                task = threading.Thread(target=self.run_async_in_thread,args=(self.get_single_dynDetail_by_rid_start,latest_rid))
+                task.start()
                 latest_rid += self.offset
                 task_list.append(task)
             print(f'当前可开启线程数剩余：{self.scrapy_sem._value}')
             if self.stop_Flag:
-                await asyncio.gather(*task_list)
+                for t in task_list:
+                    t.join()
+                # await asyncio.gather(*task_list)
 
     async def main(self):
         print('开始重新获取失败的动态！')

@@ -180,18 +180,23 @@ def upsert_lot_detail(request_body: dict):
 
 @app.get('/get_others_lot_dyn')
 async def app_avaliable_api():
-    
     myfastapi_logger.debug('get_others_lot_dyn 开始获取别人的动态抽奖！')
     result = await get_OTHERS_LOT_DYN.get_new_dyn()
     return result
 
+
+@app.get('/get_others_official_lot_dyn')
+def app_avaliable_api():
+    myfastapi_logger.debug('get_others_lot_dyn 开始获取别人的官方动态抽奖！')
+    result = get_OTHERS_LOT_DYN.get_official_lot_dyn()
+    return result
 
 @app.get('/zhihu/get_others_lot_pins')
 async def zhuhu_avaliable_api():
     resp = await zhihu_lotScrapy.api_get_all_pins()
     return resp
 
-@app.get('toutiao/get_others_lot_ids')
+@app.get('/toutiao/get_others_lot_ids')
 async def toutiao_get_others_lot_ids():
     return await toutiaoSpaceFeedLotService.main()
 # endregion
@@ -201,5 +206,5 @@ if __name__ == '__main__':
         '请求代理_ver_database_fastapi:app',
         host="0.0.0.0",
         port=23333,
-        workers=3,
+        workers=10,
     )

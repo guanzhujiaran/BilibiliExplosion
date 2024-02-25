@@ -59,12 +59,14 @@ class SQLHelper:
         self.async_egn = create_async_engine(CONFIG.database.MYSQL.proxy_db_URI,
                                              echo=False,
                                              poolclass=AsyncAdaptedQueuePool,
-                                             max_overflow=-1,
+                                             pool_size=100,
+                                             max_overflow=100,
+                                             pool_recycle=3600,
                                              future=True,
                                              pool_pre_ping=True,
-                                             pool_recycle=1800,
                                              connect_args={
                                                  "connect_timeout":200,
+
                                              }
                                              )
         self.session = sessionmaker(self.async_egn,
@@ -445,11 +447,12 @@ class SQLHelper:
                     )
                     await session.execute(___sql)  # 刷新超过12小时的无效代理，改变status和score
 
-        async with self.session() as session:
-            sql = select(func.count(SDGrpcStat.proxy_id)).where(
-                and_(SDGrpcStat.sd_score >= 0,
-                     SDGrpcStat.sd_status != -412)
-            )
+        async with (self.session() as session):
+            sql =text('SELECT COUNT(proxy_id) FROM sd_grpc_stat WHERE sd_grpc_stat.score>=0 AND sd_grpc_stat.status!=-412')
+            # select(func.count(SDGrpcStat.proxy_id)).where(
+            #     and_(SDGrpcStat.sd_score >= 0,
+            #          SDGrpcStat.sd_status != -412)
+            # )
             result = await session.execute(sql)
             res = result.scalars().first()
             if res == 0:

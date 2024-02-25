@@ -3,10 +3,8 @@ import asyncio
 import uuid
 from dataclasses import dataclass, field
 from functools import reduce
-import threading
 import traceback
 from typing import Dict
-
 import execjs
 import json
 import random
@@ -32,9 +30,9 @@ request_proxy = request_with_proxy()
 
 @dataclass
 class user_space_dyn_detail:
-    '''
+    """
     描述获取的b站用户的动态
-    '''
+    """
     latest_dyid_list: list = field(default_factory=list)
     update_num: int = 0
 
@@ -113,13 +111,14 @@ class renew:
             import pprint
             pprint.pprint(self._获取过动态的b站用户, indent=4)
         except Exception as e:
-            logger.info(e)
-            traceback.print_exc()
-            pass
+            logger.warning(f'获取b站用户的配置失败！使用默认内容！{e}')
 
         if os.path.exists(root_dir + relative_dir + 'uidlist.json'):
-            with open(root_dir + relative_dir + 'uidlist.json') as f:
-                self.uidlist = json.load(f).get('uidlist')
+            try:
+                with open(root_dir + relative_dir + 'uidlist.json') as f:
+                    self.uidlist = json.load(f).get('uidlist')
+            except Exception as e:
+                logger.warning(f'获取抽奖用户uid列表失败，使用默认配置！{e}')
         else:
             self.uidlist = [
                 # 100680137,#你的工具人老公
@@ -555,6 +554,7 @@ class renew:
         self.last_order: list[str] = []  # 上次查询过的记录
         self.last_lotid: list[str] = []  # 之前的抽奖动态id 直接丢动态id进去
         self.recorded_dynamic_id: list[str] = []  # 单轮获取[动态id] 记录的动态id，最后需要判断是否是抽奖的动态！
+        self.queried_dynamic_id_list: list[str] = []  # 所有查询过的动态id
         self.BAPI = Bilibili_methods.all_methods.methods()
         self.lottery_dynamic_ids: list[str] = []  # [动态链接：https://t.bilibili.com/...]
         self.lottery_dynamic_detail_list = []  # 动态详情，最后写入抽奖文件里的内容！
@@ -1024,15 +1024,10 @@ class renew:
     async def judge_lottery(self, dynamic_id, dynamic_type: int = 2, is_lot_orig=False):
         logger.info(f'当前动态：https://t.bilibili.com/{dynamic_id}?type={dynamic_type}')
         async with self.get_dynamic_detail_lock:
-            if str(dynamic_id) in self.last_lotid:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
-                logger.warning(f'当前动态 {dynamic_id} 已经有过了，不加入抽奖动态中')
+            if str(dynamic_id) in self.queried_dynamic_id_list:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
+                logger.warning(f'当前动态 {dynamic_id} 已经查询过了，不重复查询')
                 return
-            self.last_lotid.append(str(dynamic_id))
-            if str(dynamic_id) in self.last_order:
-                logger.warning(f'当前动态 {dynamic_id} 已经查询过了，不继续查询！')
-                return
-            else:
-                self.last_order.append(str(dynamic_id))
+            self.queried_dynamic_id_list.append(str(dynamic_id))
         try:
             fake_cookie_str = ""
 
@@ -1168,7 +1163,8 @@ class renew:
                     orig_ret_url += '?tab=2'
                 async with self.get_dynamic_detail_lock:  # 这个地方一定要加锁保证数据的一致性！！！
                     if orig_ret_url in self.lottery_dynamic_ids or \
-                            str(orig_dynamic_id) in self.last_lotid:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
+                            str(orig_dynamic_id) in self.last_lotid\
+                    or str(orig_dynamic_id) in self.queried_dynamic_id_list:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
                         logger.warning(f'原动态 {orig_ret_url} 已经有过了，不加入抽奖动态中')
                         return
                 orig_official_verify = dynamic_detail['orig_official_verify']
@@ -1198,9 +1194,8 @@ class renew:
                             if not isChecked:
                                 self.aid_list.append(aid_str)
                         if not isChecked:
-                            await self.judge_lottery(dynamic_detail_dynamic_id=aid_str, dynamic_type=8,
+                            await self.judge_lottery(dynamic_id=aid_str, dynamic_type=8,
                                                      is_lot_orig=True)
-                            return
 
     async def get_space_dynamic_req_with_proxy(self, hostuid, offset):
         '''
@@ -1250,7 +1245,7 @@ class renew:
         dynamic_id_list = []
         if cards_json:
             for card_dict in cards_json:
-                dynamic_id = card_dict.get('desc').get('pre_dy_id_str')  # 判断中转动态id是否重复；非最原始动态id 类型为string
+                dynamic_id = str(card_dict.get('desc').get('pre_dy_id_str'))  # 判断中转动态id是否重复；非最原始动态id 类型为string
                 try:
                     dynamic_repost_content = json.loads(card_dict.get('card')).get('item').get('content')
                 except:
@@ -1277,7 +1272,7 @@ class renew:
                 for _ in self.card_detail(card_dict):
                     if _:
                         # logger.info(f'添加进记录：{_}')
-                        dynamic_id_list.append(_)  # 间接和原始的动态id全部记录
+                        dynamic_id_list.append(str(_))  # 间接和原始的动态id全部记录
         else:
             logger.info(space_req_dict)
             logger.info('cards_json为None')
@@ -1455,11 +1450,12 @@ class renew:
             with open(get_dyid_path, 'r', encoding='utf-8') as f:
                 for i in f.readlines():
                     for _i in i.split(','):
-                        self.last_order.append(_i.strip())
+                        self.last_order.append(str(_i.strip()))
+                        self.queried_dynamic_id_list.append(str(_i.strip()))
 
         self.last_order = list(set(self.last_order))
-        if len(self.last_order) > 10000000:
-            self.last_order = self.last_order[-10000000:]  # 总共容纳10000000条记录，占不了多少空间的
+        if len(self.last_order) > 100000:
+            self.last_order = self.last_order[-100000:]  # 总共容纳10000000条记录，占不了多少空间的
             # self.last_order.sort()  # 排序之前裁剪掉，去掉那些没动静的号的动态id
 
         lot_dyid_path = root_dir + relative_dir + 'lot_dyid.txt'
@@ -1469,8 +1465,8 @@ class renew:
                     for _i in i.split(','):
                         self.last_lotid.append(_i.strip())
         self.last_lotid = list(set(self.last_lotid))
-        if len(self.last_lotid) > 10000000:
-            self.last_lotid = self.last_lotid[-10000000:]
+        if len(self.last_lotid) > 100000:
+            self.last_lotid = self.last_lotid[-100000:]
 
         path = root_dir + "github/bili_upload"
         datanames = os.listdir(path)
@@ -1503,8 +1499,10 @@ class renew:
         for i in self.last_order:
             if i in write_in_list:
                 write_in_list.remove(i)
+        self.last_order.extend(write_in_list)
         logger.info(f'共获取到{len(write_in_list)}个动态id')
-
+        with open(root_dir + relative_dir + '最后一轮爬取到的动态id.txt', 'w', encoding='utf-8') as f:
+            f.writelines(','.join(write_in_list))
         await self.thread_judgedynamic(write_in_list)
 
         # format_list = [ret_url, author_name, str(official_verify_type), str(pub_time), repr(dynamic_content),
@@ -1527,9 +1525,10 @@ class renew:
             f.writelines(','.join(self.last_lotid))
 
         with open(root_dir + relative_dir + '获取过动态的b站用户.json', 'w') as f:
-            json_dict=dict()
-            self._最后一次获取过动态的b站用户 = dict(sorted(self._最后一次获取过动态的b站用户.items(),key=lambda x:x[1].update_num))
-            for k,v in self._最后一次获取过动态的b站用户.items():
+            json_dict = dict()
+            self._最后一次获取过动态的b站用户 = dict(
+                sorted(self._最后一次获取过动态的b站用户.items(), key=lambda x: x[1].update_num))
+            for k, v in self._最后一次获取过动态的b站用户.items():
                 json_dict.update({k: v.__dict__})
             json.dump(json_dict, f, indent=4)
 
@@ -1551,7 +1550,11 @@ class GET_OTHERS_LOT_DYN:
         self.save_lock = asyncio.Lock()
         if os.path.exists(root_dir + relative_dir + 'get_dyn_ts.txt'):
             with open(root_dir + relative_dir + 'get_dyn_ts.txt', 'r', encoding='utf-8') as f:
-                self.get_dyn_ts: int = int(f.read())
+                try:
+                    self.get_dyn_ts: int = int(f.read())
+                except Exception as e:
+                    logger.error(f'读取上次获取动态时间戳失败！\n{e}')
+                    self.get_dyn_ts = 0
                 if not isinstance(self.get_dyn_ts, int):
                     self.get_dyn_ts: int = 0
         else:
@@ -1574,8 +1577,11 @@ class GET_OTHERS_LOT_DYN:
             await asyncio.sleep(30)
         if os.path.exists(root_dir + relative_dir + 'get_dyn_ts.txt'):
             with open(root_dir + relative_dir + 'get_dyn_ts.txt', 'r', encoding='utf-8') as f:
-                self.get_dyn_ts: int = int(f.read())
-                if not isinstance(self.get_dyn_ts, int):
+                try:
+                    self.get_dyn_ts: int = int(f.read())
+                    if not isinstance(self.get_dyn_ts, int):
+                        self.get_dyn_ts: int = 0
+                except:
                     self.get_dyn_ts: int = 0
         else:
             self.get_dyn_ts: int = 0
@@ -1591,6 +1597,56 @@ class GET_OTHERS_LOT_DYN:
                 self.is_getting_dyn_flag = False
 
         return self.solve_lot_csv()
+
+    def get_official_lot_dyn(self) -> list[str]:
+        '''
+        返回官方抽奖信息，结尾是tab=1
+        :return:
+        '''
+
+        def try_parse_int(string: str) -> int:
+            if string != 'None':
+                return int(string)
+            else:
+                return 0
+
+        def is_official_lot(lot_det: str):
+            """
+            过滤抽奖函数，同时设置官方抽奖的阈值，只抽抽奖人数多的官方抽奖
+            :param lot_det:
+            :return:
+            """
+            lot_det_sep = lot_det.split('\t')
+            pubtime_str = lot_det_sep[3]
+            comment_count_str = lot_det_sep[5]
+            rep_count_str = lot_det_sep[6]
+            lot_type = lot_det_sep[9]
+            dt = datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')
+            if dt.year < 2000:
+                return False
+            pub_ts = int(datetime.datetime.timestamp(datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')))
+            if int(time.time()) - pub_ts > 1 * 30 * 24 * 3600:  # 超过一个月的不要
+                return False
+            official_verify = lot_det_sep[2]
+            official_lot_desc = lot_det_sep[9]
+            if official_lot_desc == '官方抽奖':
+                if int(rep_count_str) < 200:
+                    if int(self.get_dyn_ts - pub_ts) <= 2 * 3600:  # 获取时间和发布时间间隔小于2小时的不按照评论转发数量过滤
+                        return True
+                    return False
+                return True
+            return False
+
+        all_lot_det = []
+        with open(root_dir + relative_dir + 'log/过滤抽奖信息.csv', 'r', encoding='utf-8') as f:
+            for i in f.readlines():
+                all_lot_det.append(i.strip())
+        filtered_list: list[str] = list(filter(is_official_lot, all_lot_det))
+        filtered_list.sort(key=lambda x: try_parse_int(x.split("\t")[5]), reverse=True)
+        self.push_lot_csv(f"官方抽奖信息", filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
+        filtered_list.sort(key=lambda x: x.split("\t")[0], reverse=True)  # 按照降序排序
+        ret_list = [x.split('\t')[0].replace('?tab=2', '') + '?tab=1' for x in filtered_list]
+        return ret_list
 
     # </editor-fold>
 
@@ -1687,15 +1743,11 @@ class GET_OTHERS_LOT_DYN:
 
 
 if __name__ == '__main__':
-    # await asyncio.sleep(60 * 60 * 3)
-    a = GET_OTHERS_LOT_DYN()
-    # a.main()
-    # g = GET_OTHERS_LOT_DYN()
-    # print(g.get_new_dyn())
-    # resp = a.get_dynamic_detail_with_proxy(865670239294062608)
-    # https://api.bilibili.com/x/v2/reply/main?next=0&type=11&oid=303922438&mode=3&plat=1&_=1704895114
-    loop111 = asyncio.get_event_loop()
-    task = loop111.create_task(a.get_new_dyn())
-    loop111.run_until_complete(task)
-    resp = task.result()
-    print(resp)
+    # 获取官方抽奖
+    # a = GET_OTHERS_LOT_DYN()
+    # resp = a.get_official_lot_dyn()
+    # print(resp)
+
+
+    b= GET_OTHERS_LOT_DYN()
+    asyncio.run(b.get_new_dyn())

@@ -248,7 +248,6 @@ device_id_list = [
 for i in range(1, len(cookie_file_name_list) + 1):
     exec(f"fullcookie{i}=t.read_cookie(cookie_file_name_list[{i - 1}])")
     exec(f"cookie{i} = t.common_cookie_parse(fullcookie{i})")  # 星瞳
-    exec(f"t.write_cookie(cookie{i},cookie_file_name_list[{i - 1}])")
     try:
         ua_list[i-1]
         exec(f"ua{i} = ua_list[{i - 1}]")
