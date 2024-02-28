@@ -66,7 +66,6 @@ class SQLHelper:
                                              pool_pre_ping=True,
                                              connect_args={
                                                  "connect_timeout":200,
-
                                              }
                                              )
         self.session = sessionmaker(self.async_egn,

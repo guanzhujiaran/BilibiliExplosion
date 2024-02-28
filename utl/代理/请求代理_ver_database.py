@@ -149,7 +149,7 @@ class request_with_proxy:
                 # self.log.info(f'正在发起请求中！\t{p}\n{args}\n{kwargs}\n')
                 req = await self.s.request(*args, **kwargs, timeout=self.timeout, proxies=p)
                 req_text = req.text
-                self.log.debug(f'获取到请求结果！\t{p}\n{req.text[0:15]}\n')
+                self.log.debug(f'url:{kwargs.get("url")}) 获取到请求结果！\t{p}\n{req.text[0:200]}\n')
                 if 'code' not in req.text and 'bili' in req.url.host:  # 如果返回的不是json那么就打印出来看看是什么
                     self.log.info(req.text.replace('\n', ''))
                 try:
@@ -197,8 +197,8 @@ class request_with_proxy:
                     await self._update_to_proxy_dict(p_dict, 50)
                     continue
                 if req_dict.get('code') == 0 or req_dict.get('code') == 4101131 or req_dict.get('code') == -9999:
-                    self.log.info(
-                        f'{mode}获取成功(url:{kwargs.get("url")})目前正在使用代理{p_dict}\n目前正在使用代理数量:{len(self.using_p_dict_list)}\n{p_dict}\n{kwargs}')
+                    # self.log.info(
+                    #     f'{mode}获取成功(url:{kwargs.get("url")})目前正在使用代理{p_dict}\n目前正在使用代理数量:{len(self.using_p_dict_list)}\n{p_dict}\n{kwargs}')
                     p_dict['score'] += 100
                     p_dict['status'] = 0
                     self.log.debug(f'更新数据库中的代理status:{status}')

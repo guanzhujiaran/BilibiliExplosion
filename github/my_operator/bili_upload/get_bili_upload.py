@@ -102,7 +102,7 @@ class renew:
             str, user_space_dyn_detail] = dict()  # 格式：{uid:[1,2,3,4,5,6,7,8,9,10]} 最后一次获取的动态
         self._最后一次获取过动态的b站用户: Dict[str, user_space_dyn_detail] = dict()
         try:
-            with open(root_dir + relative_dir + '获取过动态的b站用户.json') as f:
+            with open(root_dir + relative_dir + '获取过动态的b站用户.json','r',encoding='utf-8') as f:
                 for k, v in json.load(f).items():
                     self._获取过动态的b站用户.update({
                         k: user_space_dyn_detail(**v)
@@ -615,11 +615,12 @@ class renew:
                 for _ in content_list:
                     f.writelines(f'{_}\n')
 
+    # region 获取动态基本信息
     async def get_dynamic_detail_with_proxy(self, dynamic_id, _cookie='', _useragent='', dynamic_type=2):
         '''
         使用代理获取动态详情
         :param dynamic_type:
-        :param dynamic_id:
+        :param dynamic_data_dynamic_id:
         :param _cookie:
         :param _useragent:
         :return:
@@ -704,7 +705,10 @@ class renew:
             elif str(comment_type) == '12':
                 dynamic_type = '64'
             card_stype = dynamic_data.get('item').get('type')
-            dynamic_id = dynamic_data.get('item').get('id_str')
+            dynamic_data_dynamic_id = dynamic_data.get('item').get('id_str')
+            if dynamic_type==2 and str(dynamic_data_dynamic_id) !=dynamic_id:
+                logger.critical(f"获取的动态信息与需要的动态不符合！！！{dynamic_data}")
+                return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
             dynamic_rid = dynamic_data.get('item').get('basic').get('comment_id_str')
             relation = dynamic_data.get('item').get('modules').get('module_author').get('following')
             author_uid = dynamic_data.get('item').get('modules').get('module_author').get('mid')
@@ -758,7 +762,7 @@ class renew:
             else:
                 is_liked = 0
             if relation != 1:
-                logger.info(f'未关注的response\nhttps://space.bilibili.com/{author_uid}\n{dynamic_id}')
+                logger.info(f'未关注的response\nhttps://space.bilibili.com/{author_uid}\n{dynamic_data_dynamic_id}')
         except Exception as e:
             logger.critical(f'https://t.bilibili.com/{dynamic_id}\n{dynamic_req}\n{e}')
             traceback.print_exc()
@@ -867,7 +871,7 @@ class renew:
             logger.error(e)
             traceback.print_exc()
         structure = {
-            'dynamic_id': dynamic_id,
+            'dynamic_id': dynamic_data_dynamic_id,
             'desc': desc,
             'type': dynamic_type,
             'rid': dynamic_rid,
@@ -1021,6 +1025,8 @@ class renew:
                         continue
         return topmsg
 
+    # endregion
+
     async def judge_lottery(self, dynamic_id, dynamic_type: int = 2, is_lot_orig=False):
         logger.info(f'当前动态：https://t.bilibili.com/{dynamic_id}?type={dynamic_type}')
         async with self.get_dynamic_detail_lock:
@@ -1028,25 +1034,29 @@ class renew:
                 logger.warning(f'当前动态 {dynamic_id} 已经查询过了，不重复查询')
                 return
             self.queried_dynamic_id_list.append(str(dynamic_id))
-        try:
-            fake_cookie_str = ""
+        dynamic_detail = None
+        while 1:
+            try:
+                fake_cookie_str = ""
 
-            if self.fake_cookie:
-                fake_cookie_str = self.fake_cookie
-            else:
-                fake_cookie = {
-                    "buvid3": "{}{:05d}infoc".format(uuid.uuid4(), random.randint(1, 99999)),
-                    "DedeUserID": "{}".format(random.randint(1, 99999))
-                }
-                for k, v in fake_cookie.items():
-                    fake_cookie_str += f'{k}={v}; '
-            dynamic_detail = await self.get_dynamic_detail_with_proxy(dynamic_id, fake_cookie_str,
-                                                                      random.choice(CONFIG.UA_LIST),
-                                                                      dynamic_type=dynamic_type)  # 需要增加假的cookie
-        except:
-            # await asyncio.sleep(60)
-            traceback.print_exc()
-            return await self.judge_lottery(dynamic_id, dynamic_type, is_lot_orig)
+                if self.fake_cookie:
+                    fake_cookie_str = self.fake_cookie
+                else:
+                    fake_cookie = {
+                        "buvid3": "{}{:05d}infoc".format(uuid.uuid4(), random.randint(1, 99999)),
+                        "DedeUserID": "{}".format(random.randint(1, 99999))
+                    }
+                    for k, v in fake_cookie.items():
+                        fake_cookie_str += f'{k}={v}; '
+                dynamic_detail = await self.get_dynamic_detail_with_proxy(dynamic_id, fake_cookie_str,
+                                                                          random.choice(CONFIG.UA_LIST),
+                                                                          dynamic_type=dynamic_type)  # 需要增加假的cookie
+                break
+            except:
+                # await asyncio.sleep(60)
+                traceback.print_exc()
+                continue
+                # return await self.judge_lottery(dynamic_id, dynamic_type, is_lot_orig)
 
         suffix = ''
         if dynamic_detail:
@@ -1129,6 +1139,7 @@ class renew:
             format_str = '\t'.join(map(str, format_list))
             if re.match(r'.*//@.*', str(dynamic_content), re.DOTALL) != None:
                 dynamic_content = re.findall(r'(.*?)//@', dynamic_content, re.DOTALL)[0]
+            is_lot=True
             if str(dynamic_detail_dynamic_id) not in self.gitee_dyn_id_list:  # 如果不在gitee里面的动态id需要判断是否是抽奖
                 if not is_lot_orig:
                     if self.BAPI.daily_choujiangxinxipanduan(dynamic_content):
@@ -1136,10 +1147,11 @@ class renew:
                             pass
                         else:
                             self.useless_info.append(format_str)
-                            return
+                            is_lot=False
             async with self.get_dynamic_detail_lock:  # 这个地方一定要加锁保证数据的一致性！！！
                 self.lottery_dynamic_ids.append(ret_url)
                 self.lottery_dynamic_detail_list.append(format_str)
+                self.last_lotid.append(str(dynamic_detail_dynamic_id))
             if dynamic_detail['orig_dynamic_id']:
                 # 'orig_dynamic_id': orig_dynamic_id,
                 # 'orig_mid': orig_mid,
@@ -1161,12 +1173,6 @@ class renew:
                 orig_ret_url = f'https://t.bilibili.com/{orig_dynamic_id}'
                 if self.BAPI.zhuanfapanduan(orig_dynamic_content):
                     orig_ret_url += '?tab=2'
-                async with self.get_dynamic_detail_lock:  # 这个地方一定要加锁保证数据的一致性！！！
-                    if orig_ret_url in self.lottery_dynamic_ids or \
-                            str(orig_dynamic_id) in self.last_lotid\
-                    or str(orig_dynamic_id) in self.queried_dynamic_id_list:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
-                        logger.warning(f'原动态 {orig_ret_url} 已经有过了，不加入抽奖动态中')
-                        return
                 orig_official_verify = dynamic_detail['orig_official_verify']
                 format_list = [orig_ret_url, orig_name, str(orig_official_verify),
                                str(time.strftime("%Y年%m月%d日 %H:%M", time.localtime(orig_pub_ts))),
@@ -1181,9 +1187,15 @@ class renew:
                                ]
                 format_str = '\t'.join(map(str, format_list))
                 async with self.get_dynamic_detail_lock:  # 这个地方一定要加锁保证数据的一致性！！！
-                    self.lottery_dynamic_ids.append(orig_ret_url)
-                    self.lottery_dynamic_detail_list.append(format_str)
-
+                    if str(orig_dynamic_id) in self.queried_dynamic_id_list:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
+                        logger.warning(f'原动态 {orig_ret_url} 已经有过了，不加入抽奖动态中')
+                    elif is_lot:
+                        self.lottery_dynamic_ids.append(orig_ret_url)
+                        self.lottery_dynamic_detail_list.append(format_str)
+                        self.last_lotid.append(str(orig_dynamic_id))
+                    else:
+                        self.useless_info.append(format_str)
+                        self.last_lotid.append(str(orig_dynamic_id))
             if dynamic_detail.get('module_dynamic'):
                 if dynamic_detail.get('module_dynamic').get('additional'):
                     if dynamic_detail.get('module_dynamic').get('additional').get('type') == 'ADDITIONAL_TYPE_UGC':
@@ -1197,6 +1209,7 @@ class renew:
                             await self.judge_lottery(dynamic_id=aid_str, dynamic_type=8,
                                                      is_lot_orig=True)
 
+    # region 获取用户空间信息
     async def get_space_dynamic_req_with_proxy(self, hostuid, offset):
         '''
         获取动态空间的response
@@ -1411,6 +1424,8 @@ class renew:
         if n <= 4 and time.time() - timelist[-1] >= self.SpareTime:
             # self.uidlist.remove(uid)
             logger.info(f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
+
+    # endregion
 
     async def thread_judgedynamic(self, write_in_list):
         logger.info('多线程获取动态')
@@ -1748,6 +1763,5 @@ if __name__ == '__main__':
     # resp = a.get_official_lot_dyn()
     # print(resp)
 
-
-    b= GET_OTHERS_LOT_DYN()
+    b = GET_OTHERS_LOT_DYN()
     asyncio.run(b.get_new_dyn())

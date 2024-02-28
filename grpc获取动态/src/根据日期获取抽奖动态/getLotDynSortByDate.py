@@ -192,6 +192,8 @@ class LotDynSortByDate:
                 continue
             # dynamic_content = ''.join([x.get('text') for x in dynData.get('extend').get('origDesc')])
             dynamic_content = ''
+            if dynData.get('extend').get('onlyFansProperty').get('isOnlyFans'):
+                continue
             if dynData.get('extend').get('opusSummary').get('title'):
                 dynamic_content += ''.join([x.get('rawText') for x in
                                             dynData.get('extend').get('opusSummary').get('title').get('text').get(
@@ -314,4 +316,4 @@ class LotDynSortByDate:
 
 if __name__ == '__main__':
     a = LotDynSortByDate()
-    a.main([int(time.time()) - 3600 * 24, int(time.time())])
+    a.main([int(time.time()) - 15*3600 * 24, int(time.time())-7*3600*24])

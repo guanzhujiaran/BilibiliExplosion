@@ -1,8 +1,6 @@
 import asyncio
 import typing
-
-import httpx
-from httpx import Limits
+from httpx import AsyncClient
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
 
 
@@ -20,13 +18,13 @@ class MYASYNCHTTPX:
             }
 
     async def get(self, url, headers=None, verify=False, proxies=None, timeout=10):
-        async with httpx.AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+        async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
                                      verify=False) as client:
             resp = await client.get(url=url, headers=headers, timeout=timeout, follow_redirects=True)
             return resp
 
     async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10):
-        async with httpx.AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+        async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
                                      verify=False) as client:
             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
             return resp
@@ -44,7 +42,7 @@ class MYASYNCHTTPX:
                       params: typing.Optional[QueryParamTypes] = None,
                       cookies: typing.Optional[CookieTypes] = None,
                       extensions: typing.Optional[dict] = None, ):
-        async with httpx.AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+        async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
                                      verify=False) as client:
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
                                         content=content, files=files, json=json, params=params, cookies=cookies,

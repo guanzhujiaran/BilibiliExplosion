@@ -559,7 +559,8 @@ class ExClimbWuzhi:
                                  useProxy=False) -> str:
         if type(MYCFG) != APIExClimbWuzhi:
             raise Exception(f"MYCFG type is not an APIExClimbWuzi!\n{MYCFG}")
-
+        if not MYCFG.ua:
+            MYCFG=APIExClimbWuzhi()
         MYCFG.renderer_id = renderer_id = f"#X{''.join([random.choice(string.ascii_letters + '123456789') for x in range(9)])}" if not MYCFG.renderer_id else MYCFG.renderer_id
         MYCFG.renderer = renderer = f"ANGLE (NVIDIA, NVIDIA GeForce RTX {random.choice('34')}0{random.choice('56789')}0 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11) {renderer_id}" if not MYCFG.renderer else MYCFG.renderer
         cookie = await ExClimbWuzhi._get_b3_b4_Cookie(MYCFG, useProxy=useProxy)

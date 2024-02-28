@@ -288,7 +288,7 @@ class BiliGrpc:
         # ua = self.ua
         proxy = {'proxy': {'http': '', 'https': ''}}
         while 1:
-            ip_status=None
+            ip_status = None
             if proxy_flag:
                 proxy, channel = await self.__get_random_channel()
                 if cookie_flag:
@@ -367,7 +367,7 @@ class BiliGrpc:
                     if type(v) == bytes:
                         headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
             try:
-                resp = await  self.s.request(method="post",
+                resp = await self.s.request(method="post",
                                              url=url,
                                              data=data,
                                              headers=headers, timeout=self.timeout, proxies={
@@ -391,7 +391,7 @@ class BiliGrpc:
                         await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
                     await self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
                 if ip_status:
-                    ip_status.available=True
+                    ip_status.available = True
                 self.grpc_api_log.info(
                     f'{rid} 获取grpc动态请求成功代理：{proxy["proxy"] if proxy_flag else None} {rid} grpc_get_dynamic_detail_by_type_and_rid\n{headers}'
                     f'\n当前可用代理数量：{len([x for x in self.GrpcProxyTools.ip_list if x.available])}')
@@ -416,9 +416,9 @@ class BiliGrpc:
                     if proxy['proxy']['http']:
                         if not ip_status:
                             ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
-                        ip_status.max_counter_ts=int(time.time())
-                        ip_status.code=-352
-                        ip_status.available=False
+                        ip_status.max_counter_ts = int(time.time())
+                        ip_status.code = -352
+                        ip_status.available = False
                 if proxy_flag:
                     if proxy == self.proxy:
                         await self.__set_available_channel(None, None)
@@ -533,14 +533,13 @@ class BiliGrpc:
                         self.grpc_api_log.warning(f"{ip_status.ip} ip获取次数到达{ip_status.counter}次，出现-352现象！")
                         if not ip_status:
                             ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
-                        ip_status.max_counter_ts=int(time.time())
-                        ip_status.code=-352
-                        ip_status.available=False
+                        ip_status.max_counter_ts = int(time.time())
+                        ip_status.code = -352
+                        ip_status.available = False
                 if proxy == self.proxy:
                     await self.__set_available_channel(None, None)
                 await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
                                                           score_change=score_change)
-
 
 
 class MY_Error(ValueError):

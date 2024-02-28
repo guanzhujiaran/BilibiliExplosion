@@ -48,7 +48,7 @@ class DynDetailScrapy:
         self.stop_Flag = False  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
         self.scrapy_sem = asyncio.Semaphore(300)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
-        self.thread_sem = threading.Semaphore(300)
+        self.thread_sem = threading.Semaphore(100)
         self.stop_limit_time = 1 * 3600  # 提前多少时间停止
         self.common_log = logger.bind(user='全局日志')
         self.doc_id_2_dynamic_id_log = logger.bind(user='doc_id转dynamic_id日志')

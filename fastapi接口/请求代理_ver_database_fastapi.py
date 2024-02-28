@@ -206,5 +206,5 @@ if __name__ == '__main__':
         '请求代理_ver_database_fastapi:app',
         host="0.0.0.0",
         port=23333,
-        workers=10,
+        workers=6,
     )

@@ -30,13 +30,19 @@ class zhihu_CONFIG:
 @dataclass
 class MYSQL:
     proxy_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/proxy_db?charset=utf8&autocommit=true'
+@dataclass
+class DBINFO:
+    DB_path:str
+    DB_URI:str
 
 
 class database:
+
     dynDetail = "H:/database/dynDetail.db"
     proxy_db = "K:/sqlite_database/proxy_database/proxy_db.db"
     proxy_db_URI = 'sqlite+aiosqlite:///K:/sqlite_database/proxy_database/proxy_db.db?check_same_thread=False'
     followingup_db_RUI = 'sqlite+aiosqlite:///G:/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
+    get_other_lotDb = DBINFO('H:/GetOthersLotDB/LotInfoDB.db','sqlite+aiosqlite:///H:/GetOthersLotDB/LotInfoDB.db')
     MYSQL = MYSQL()
 
 

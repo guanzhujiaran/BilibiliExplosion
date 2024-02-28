@@ -23,7 +23,6 @@ sql_log = logger.bind(user='sql_log')
 #     filter=lambda record: record["extra"].get('user') == "sql_log"
 # )  # 添加之后，遇到报错会全部写进log文件里面，之后自己进去一个个查就是了
 
-
 @sql_log.catch
 def lock_wrapper(func: callable) -> callable:
     def wrapper(*args, **kwargs):
@@ -36,7 +35,6 @@ def lock_wrapper(func: callable) -> callable:
                     sql_log.error(traceback.format_exc())
                     sql_log.error(kwargs)
                     time.sleep(10)
-
     return wrapper
 
 
