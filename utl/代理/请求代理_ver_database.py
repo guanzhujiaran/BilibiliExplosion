@@ -1960,10 +1960,6 @@ class request_with_proxy:
     async def _set_new_proxy(self, mode=None):
         if not mode:
             mode = self.mode
-        while not await self.sqlite3_proxy_op.get_all_proxy_nums():
-            await self.get_proxy()  # 如果代理列表用完了就去获取新的代理
-            self.log.critical('代理用完了！！！')
-            await asyncio.sleep(10)
         ret_p_dict={}
         while 1:
             try:

@@ -54,7 +54,7 @@ class rid_get_dynamic:
         # {"proxy":{"http":1.1.1.1},"status":"可用|-412|失效","update_ts":time.time(), }
         self.EndTimeSeconds = 7 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
         self.null_time_quit = 150  # 遇到连续100条data为None的sid 则退出
-        self.sem_max_val = 150  # 最大同时运行的线程数
+        self.sem_max_val = 50  # 最大同时运行的线程数
         self.sem = asyncio.Semaphore(self.sem_max_val)
         self.null_timer = 0
         self.null_list: list[dict[int:bool]] = []
@@ -315,32 +315,39 @@ class rid_get_dynamic:
         return reduce(run_function, [[], ] + list_dict_data)
 
     async def reserve_relation_with_proxy(self, ids, _type=2):
-        logger.info(f'reserve_relation_with_proxy\t当前ids:{ids}\t当前剩余可启用线程数：{self.sem._value}')
-        if ids in self.all_reserve_relation_ids_list:
-            return next(filter(lambda x: x.get("ids") == ids, self.all_reserve_relation_list))
-        url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
-        # ua = random.choice(BAPI.User_Agent_List)
-        headers = {
-            'accept': 'text/html,application/json',
-            'accept-encoding': 'gzip, deflate',
-            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-            'cache-control': 'no-cache',
-            'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': "\"Windows\"",
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site',
-            'user-agent': random.choice(CONFIG.CONFIG.UA_LIST),
-            'cookie': '1'
-            # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
-            #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
-            # 'X-Real-IP': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
-            #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
-            # 'From': 'bingbot(at)microsoft.com',
-        }
-        req_dict = await self.proxy_request.request_with_proxy(method="GET", url=url, headers=headers)
-        return req_dict
+        while 1:
+            try:
+                logger.info(f'reserve_relation_with_proxy\t当前ids:{ids}\t当前剩余可启用线程数：{self.sem._value}')
+                if ids in self.all_reserve_relation_ids_list:
+                    return next(filter(lambda x: x.get("ids") == ids, self.all_reserve_relation_list))
+                url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
+                # ua = random.choice(BAPI.User_Agent_List)
+                headers = {
+                    'accept': 'text/html,application/json',
+                    'accept-encoding': 'gzip, deflate',
+                    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                    'cache-control': 'no-cache',
+                    'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': "\"Windows\"",
+                    'sec-fetch-dest': 'empty',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-site': 'same-site',
+                    'user-agent': random.choice(CONFIG.CONFIG.UA_LIST),
+                    'cookie': '1'
+                    # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
+                    #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
+                    # 'X-Real-IP': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
+                    #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
+                    # 'From': 'bingbot(at)microsoft.com',
+                }
+                req_dict = await self.proxy_request.request_with_proxy(method="GET", url=url, headers=headers)
+                if req_dict is None:
+                    raise Exception(f"{url}\treq_dict is None:{req_dict}")
+                return req_dict
+            except Exception as e:
+                logger.critical(e)
+                await asyncio.sleep(10)
 
     async def get_dynamic_with_thread(self):
         None_num1 = 0

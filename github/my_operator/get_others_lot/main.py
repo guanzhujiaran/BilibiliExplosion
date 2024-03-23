@@ -120,6 +120,8 @@ class FileMap(str, Enum):
     获取过动态的b站用户 = root_dir + relative_dir + '获取过动态的b站用户.json'
     get_dyn_ts = root_dir + relative_dir + 'get_dyn_ts.txt'
 
+    loguru日志 = _log_path + 'loguru日志.log'
+
 
 class OfficialLotType(str, Enum):
     预约抽奖 = '预约抽奖'
@@ -140,17 +142,18 @@ def writeIntoFile(write_in_list: list[Any], filePath, write_mode='w', sep=','):
         logger.critical(f'写入文件失败！\n{e}')
 
 
-logger.add(
-    sink=FileMap._log_path + 'loguru日志.log',
-    enqueue=True,
-    rotation="300 MB",
-    format="{time} | {level} | {message}",
-    serialize=True,
-    encoding="utf-8",
-    backtrace=True,
-    diagnose=True,
-    compression="zip",
-)
+# logger.add(
+#     sink=FileMap.loguru日志.value,
+#     level="INFO",
+#     filter=lambda x: 'ERROR' in str(x['level']).upper() or 'CRITICAL' in str(x['level']),
+#     enqueue=True,
+#     rotation="300 MB",
+#     format="{time} | {level} | {message}",
+#     encoding="utf-8",
+#     backtrace=True,
+#     diagnose=True,
+#     compression="zip",
+# )
 
 
 class GetOthersLotDyn:
@@ -3236,7 +3239,7 @@ class GetOthersLotDyn:
         else:
             LotUserInfo = TLotUserInfo(uid=uid)
         if secondRound:
-            origin_offset=0
+            origin_offset = 0
         offset = origin_offset
         uname = ''
         timelist = [0]
@@ -3384,7 +3387,7 @@ class GetOthersLotDyn:
             await asyncio.sleep(5)
 
         get_dyn_resp_result = await asyncio.gather(*task_list, return_exceptions=False)
-        logger.info(f'获取动态结果：{get_dyn_resp_result}')
+        logger.info(f'获取动态报错结果：{get_dyn_resp_result}')
 
     async def get_dynamic_detail_with_proxy(self, dynamic_id, _cookie='', _useragent='', dynamic_type=2) -> dict:
         '''
@@ -3495,8 +3498,10 @@ class GetOthersLotDyn:
             try:
                 official_verify_type = dynamic_item.get('modules').get('module_author').get(
                     'official_verify').get('type')
+                if type(official_verify_type) is str:
+                    official_verify_type = 1
             except:
-                official_verify_type = None
+                official_verify_type = -1
             comment_count = dynamic_item.get('modules').get('module_stat').get('comment').get('count')
             forward_count = dynamic_item.get('modules').get('module_stat').get('forward').get('count')
             like_count = dynamic_item.get('modules').get('module_stat').get('like').get('count')
@@ -3816,11 +3821,11 @@ class GetOthersLotDyn:
         :param is_lot_orig:
         :return:
         """
-        logger.info(f'当前动态：https://t.bilibili.com/{dynamic_id}\ttype={dynamic_type}')
         dynamic_detail = None
         async with self.lock:
             if str(dynamic_id) in self.queried_dynamic_id_list or \
-                    str(dynamic_id) in self.queriedData.dyidList:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
+                    str(dynamic_id) in self.queriedData.dyidList or \
+                    str(dynamic_id) in self.queryingData.dyidList:
                 logger.warning(f'当前动态 {dynamic_id} 已经查询过了，不重复查询')
                 return
             self.queried_dynamic_id_list.append(str(dynamic_id))
@@ -3854,235 +3859,249 @@ class GetOthersLotDyn:
         self.sem.release()
         suffix = ''
         isLot = True
-
-        if dynamic_detail and dynamic_detail.get('dynamic_id'):
-            dynamic_detail_dynamic_id = dynamic_detail['dynamic_id']  # 获取正确的动态id，不然可能会是rid或者aid
-            dynamic_content = dynamic_detail['dynamic_content']
-            author_name = dynamic_detail['author_name']
-            pub_time = dynamic_detail['pub_time']
-            pub_ts = dynamic_detail['pub_ts']
-            comment_count = dynamic_detail['comment_count']
-            forward_count = dynamic_detail['forward_count']
-            official_verify_type = dynamic_detail['official_verify_type']
-            author_uid = dynamic_detail['author_uid']
-            rid = dynamic_detail['rid']
-            _type = dynamic_detail['type']
-            module_dynamic: dict = dynamic_detail['module_dynamic']
-            rawJSON = dynamic_detail['rawJSON']
-            is_official_lot = False
-            is_charge_lot = False
-            is_reserve_lot = False
-            lot_rid = ''
-            for k, v in module_dynamic.items():
-                if k == 'additional':
-                    if v:
-                        if v.get('upower_lottery'):
-                            lot_rid = str(v.get('upower_lottery').get('rid'))
-                            is_charge_lot = True
-                            break
-                        if v.get('reserve'):
-                            if v.get('reserve').get('desc3'):
-                                lot_rid = str(v.get('reserve').get('rid'))
-                                is_reserve_lot = True
+        logger.info(f'当前动态：https://t.bilibili.com/{dynamic_id}\ttype={dynamic_type}\n{dynamic_detail}')
+        try:
+            if dynamic_detail and dynamic_detail.get('dynamic_id'):
+                dynamic_detail_dynamic_id = dynamic_detail['dynamic_id']  # 获取正确的动态id，不然可能会是rid或者aid
+                dynamic_content = dynamic_detail['dynamic_content']
+                author_name = dynamic_detail['author_name']
+                pub_time = dynamic_detail['pub_time']
+                pub_ts = dynamic_detail['pub_ts']
+                comment_count = dynamic_detail['comment_count']
+                forward_count = dynamic_detail['forward_count']
+                official_verify_type = dynamic_detail['official_verify_type']
+                author_uid = dynamic_detail['author_uid']
+                rid = dynamic_detail['rid']
+                _type = dynamic_detail['type']
+                module_dynamic: dict = dynamic_detail['module_dynamic']
+                rawJSON = dynamic_detail['rawJSON']
+                is_official_lot = False
+                is_charge_lot = False
+                is_reserve_lot = False
+                lot_rid = ''
+                for k, v in module_dynamic.items():
+                    if k == 'additional':
+                        if v:
+                            if v.get('upower_lottery'):
+                                lot_rid = str(v.get('upower_lottery').get('rid'))
+                                is_charge_lot = True
                                 break
-                if k == 'major':
-                    if v:
-                        if v.get('type') == 'MAJOR_TYPE_OPUS':
-                            for nodes in v.get('opus').get('summary').get('rich_text_nodes'):
-                                if nodes['type'] == 'RICH_TEXT_NODE_TYPE_LOTTERY':
-                                    is_official_lot = True
-                                    lot_rid = str(nodes['rid'])
+                            if v.get('reserve'):
+                                if v.get('reserve').get('desc3'):
+                                    lot_rid = str(v.get('reserve').get('rid'))
+                                    is_reserve_lot = True
                                     break
-                if k == 'desc':
-                    if v:
-                        if v.get('rich_text_nodes'):
-                            for nodes in v.get('rich_text_nodes'):
-                                if nodes['type'] == 'RICH_TEXT_NODE_TYPE_LOTTERY':
-                                    is_official_lot = True
-                                    lot_rid = str(nodes['rid'])
-                                    break
-            if dynamic_content != '':
-                # deadline = self.nlp.information_extraction(dynamic_content, ['开奖日期'])['开奖日期']
-                deadline = None
-            else:
-                logger.info(f'https://t.bilibili.com/{dynamic_detail_dynamic_id}?type={dynamic_type}')
-                logger.info('动态内容为空')
-                deadline = None
-            premsg = self.BAPI.pre_msg_processing(dynamic_content)
-            if comment_count > 300:
-                dynamic_content += await self.get_topcomment_with_proxy(str(dynamic_detail_dynamic_id), str(rid),
-                                                                        str(0), _type,
-                                                                        author_uid)
-            elif str(dynamic_detail.get('type')) == '8':
-                if comment_count > 100:
+                    if k == 'major':
+                        if v:
+                            if v.get('type') == 'MAJOR_TYPE_OPUS':
+                                for nodes in v.get('opus').get('summary').get('rich_text_nodes'):
+                                    if nodes['type'] == 'RICH_TEXT_NODE_TYPE_LOTTERY':
+                                        is_official_lot = True
+                                        lot_rid = str(nodes['rid'])
+                                        break
+                    if k == 'desc':
+                        if v:
+                            if v.get('rich_text_nodes'):
+                                for nodes in v.get('rich_text_nodes'):
+                                    if nodes['type'] == 'RICH_TEXT_NODE_TYPE_LOTTERY':
+                                        is_official_lot = True
+                                        lot_rid = str(nodes['rid'])
+                                        break
+                if dynamic_content != '':
+                    # deadline = self.nlp.information_extraction(dynamic_content, ['开奖日期'])['开奖日期']
+                    deadline = None
+                else:
+                    logger.info(f'https://t.bilibili.com/{dynamic_detail_dynamic_id}?type={dynamic_type}')
+                    logger.info('动态内容为空')
+                    deadline = None
+                premsg = self.BAPI.pre_msg_processing(dynamic_content)
+                if comment_count > 300:
                     dynamic_content += await self.get_topcomment_with_proxy(str(dynamic_detail_dynamic_id), str(rid),
                                                                             str(0), _type,
                                                                             author_uid)
-            if author_uid in self.all_followed_uid:
-                suffix = 'followed_uid'
-            ret_url = f'https://t.bilibili.com/{dynamic_detail_dynamic_id}'
-            if self.BAPI.zhuanfapanduan(dynamic_content):
-                ret_url += '?tab=2'
-            Manual_judge = ''
-            if self.manual_reply_judge.call("manual_reply_judge", dynamic_content):
-                Manual_judge = '人工判断'
-            high_lights_list = []
-            for i in self.highlight_word_list:
-                if i in dynamic_content:
-                    high_lights_list.append(i)
-            format_list = [ret_url, author_name, str(official_verify_type), str(pub_time), repr(dynamic_content),
-                           str(comment_count), str(forward_count), Manual_judge,
-                           ';'.join(high_lights_list),
-                           OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else '',
-                           lot_rid, suffix,
-                           premsg,
-                           str(deadline)
-                           ]
-            format_str = '\t'.join(map(str, format_list))
-            if re.match(r'.*//@.*', str(dynamic_content), re.DOTALL) != None:
-                dynamic_content = re.findall(r'(.*?)//@', dynamic_content, re.DOTALL)[0]
-            if not is_lot_orig:
-                if self.BAPI.daily_choujiangxinxipanduan(dynamic_content):
-                    if comment_count > 2000 or forward_count > 1000:  # 评论或转发超多的就算不是抽奖动态也要加进去凑个数
-                        pass
-                    else:
-                        isLot = False
-            async with self.lock:  # 这个地方一定要加锁保证数据的一致性！！！
-                if isLot:
-                    self.lottery_dynamic_detail_list.append(format_str)
-                    self.queryingData.lotidList.append(str(dynamic_detail_dynamic_id))
-                else:
-                    self.useless_info.append(format_str)
-            self.queryingData.dyidList.append(str(dynamic_detail_dynamic_id))
-            await self.sqlHlper.addDynInfo(
-                TLotDynInfo(
-                    dynId=str(dynamic_detail_dynamic_id),
-                    dynamicUrl=ret_url,
-                    authorName=author_name,
-                    up_uid=author_uid,
-                    pubTime=datetime.datetime.fromtimestamp(pub_ts),
-                    dynContent=dynamic_content,
-                    commentCount=comment_count,
-                    repostCount=forward_count,
-                    highlightWords=';'.join(high_lights_list),
-                    officialLotType=OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else '',
-                    officialLotId=str(lot_rid),
-                    isOfficialAccount=int(official_verify_type if official_verify_type else 0),
-                    isManualReply=Manual_judge,
-                    isFollowed=int(bool(suffix)),
-                    isLot=int(isLot),
-                    hashTag=premsg if premsg else '',
-                    dynLotRound=self.nowRound.lotRound,
-                    rawJsonStr=json.dumps(rawJSON)
-                )
-            )
-            if dynamic_detail['orig_dynamic_id']:
-                # 'orig_dynamic_id': orig_dynamic_id,
-                # 'orig_mid': orig_mid,
-                # 'orig_name': orig_name,
-                # 'orig_pub_ts': orig_pub_ts,
-                # 'orig_official_verify': orig_official_verify,
-                # 'orig_comment_count': orig_comment_count,
-                # 'orig_forward_count': orig_forward_count,
-                # 'orig_like_count': orig_like_count,
-                # 'orig_dynamic_content': orig_dynamic_content,
-                # 'orig_relation': orig_relation,
-                # 'orig_desc': orig_desc
-                orig_dynamic_id = dynamic_detail['orig_dynamic_id']
-                orig_name = dynamic_detail['orig_name']
-                orig_pub_ts = dynamic_detail['orig_pub_ts']
-                orig_dynamic_content = dynamic_detail['orig_dynamic_content']
-                orig_comment_count = dynamic_detail['orig_comment_count']
-                orig_forward_count = dynamic_detail['orig_forward_count']
-                orig_official_verify = dynamic_detail['orig_official_verify']
-                dynamic_orig = dynamic_detail['dynamic_orig']
-                orig_ret_url = f'https://t.bilibili.com/{orig_dynamic_id}'
-                if self.BAPI.zhuanfapanduan(orig_dynamic_content):
-                    orig_ret_url += '?tab=2'
-                format_list = [orig_ret_url, orig_name, str(orig_official_verify),
-                               str(time.strftime("%Y年%m月%d日 %H:%M", time.localtime(orig_pub_ts))),
-                               repr(orig_dynamic_content),
-                               str(orig_comment_count), str(orig_forward_count), Manual_judge,
+                elif str(dynamic_detail.get('type')) == '8':
+                    if comment_count > 100:
+                        dynamic_content += await self.get_topcomment_with_proxy(str(dynamic_detail_dynamic_id),
+                                                                                str(rid),
+                                                                                str(0), _type,
+                                                                                author_uid)
+                if author_uid in self.all_followed_uid:
+                    suffix = 'followed_uid'
+                ret_url = f'https://t.bilibili.com/{dynamic_detail_dynamic_id}'
+                if self.BAPI.zhuanfapanduan(dynamic_content):
+                    ret_url += '?tab=2'
+                Manual_judge = ''
+                if self.manual_reply_judge.call("manual_reply_judge", dynamic_content):
+                    Manual_judge = '人工判断'
+                high_lights_list = []
+                for i in self.highlight_word_list:
+                    if i in dynamic_content:
+                        high_lights_list.append(i)
+                format_list = [ret_url, author_name, str(official_verify_type), str(pub_time), repr(dynamic_content),
+                               str(comment_count), str(forward_count), Manual_judge,
                                ';'.join(high_lights_list),
-                               OfficialLotType.抽奖动态的源动态.value,
-                               lot_rid,
-                               suffix,
+                               OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else '',
+                               lot_rid, suffix,
                                premsg,
                                str(deadline)
                                ]
                 format_str = '\t'.join(map(str, format_list))
-
+                if re.match(r'.*//@.*', str(dynamic_content), re.DOTALL) is not None:
+                    dynamic_content = re.findall(r'(.*?)//@', dynamic_content, re.DOTALL)[0]
+                if not is_lot_orig:
+                    if self.BAPI.daily_choujiangxinxipanduan(dynamic_content):
+                        if comment_count > 2000 or forward_count > 1000:  # 评论或转发超多的就算不是抽奖动态也要加进去凑个数
+                            pass
+                        else:
+                            isLot = False
                 async with self.lock:  # 这个地方一定要加锁保证数据的一致性！！！
-                    if str(orig_dynamic_id) in self.queriedData.lotidList or \
-                            str(orig_dynamic_id) in self.queryingData.lotidList:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
-                        logger.warning(f'原动态 {orig_ret_url} 已经有抽奖过了，不加入抽奖动态中')
-                    else:
-                        self.queryingData.dyidList.append(str(orig_dynamic_id))
-                        self.queried_dynamic_id_list.append(str(orig_dynamic_id))
                     if isLot:
                         self.lottery_dynamic_detail_list.append(format_str)
+                        self.queryingData.lotidList.append(str(dynamic_detail_dynamic_id))
                     else:
                         self.useless_info.append(format_str)
-
+                self.queryingData.dyidList.append(str(dynamic_detail_dynamic_id))
                 await self.sqlHlper.addDynInfo(
                     TLotDynInfo(
-                        dynId=str(orig_dynamic_id),
-                        dynamicUrl=orig_ret_url,
-                        authorName=orig_name,
+                        dynId=str(dynamic_detail_dynamic_id),
+                        dynamicUrl=ret_url,
+                        authorName=author_name,
                         up_uid=author_uid,
-                        pubTime=datetime.datetime.fromtimestamp(orig_pub_ts),
-                        dynContent=orig_dynamic_content,
-                        commentCount=orig_comment_count,
-                        repostCount=orig_forward_count,
+                        pubTime=datetime.datetime.fromtimestamp(pub_ts),
+                        dynContent=dynamic_content,
+                        commentCount=comment_count,
+                        repostCount=forward_count,
                         highlightWords=';'.join(high_lights_list),
-                        officialLotType=OfficialLotType.抽奖动态的源动态.value,
-                        officialLotId=str(None),
-                        isOfficialAccount=int(orig_official_verify if orig_official_verify else 0),
+                        officialLotType=OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else '',
+                        officialLotId=str(lot_rid),
+                        isOfficialAccount=int(official_verify_type if official_verify_type else 0),
                         isManualReply=Manual_judge,
                         isFollowed=int(bool(suffix)),
                         isLot=int(isLot),
                         hashTag=premsg if premsg else '',
                         dynLotRound=self.nowRound.lotRound,
-                        rawJsonStr=json.dumps(dynamic_orig)
+                        rawJsonStr=json.dumps(rawJSON)
                     )
                 )
-            if isLot:
-                if dynamic_detail.get('module_dynamic'):
-                    if dynamic_detail.get('module_dynamic').get('additional'):
-                        if dynamic_detail.get('module_dynamic').get('additional').get('type') == 'ADDITIONAL_TYPE_UGC':
-                            ugc = dynamic_detail.get('module_dynamic').get('additional').get('ugc')
-                            aid_str = ugc.get('id_str')
-                            async with self.lock:  # 这个地方一定要加锁保证数据的一致性！！！
-                                isChecked = aid_str in self.aid_list
+                if dynamic_detail['orig_dynamic_id']:
+                    # 'orig_dynamic_id': orig_dynamic_id,
+                    # 'orig_mid': orig_mid,
+                    # 'orig_name': orig_name,
+                    # 'orig_pub_ts': orig_pub_ts,
+                    # 'orig_official_verify': orig_official_verify,
+                    # 'orig_comment_count': orig_comment_count,
+                    # 'orig_forward_count': orig_forward_count,
+                    # 'orig_like_count': orig_like_count,
+                    # 'orig_dynamic_content': orig_dynamic_content,
+                    # 'orig_relation': orig_relation,
+                    # 'orig_desc': orig_desc
+                    isRecorded = False
+                    orig_dynamic_id = dynamic_detail['orig_dynamic_id']
+                    orig_name = dynamic_detail['orig_name']
+                    orig_pub_ts = dynamic_detail['orig_pub_ts']
+                    orig_dynamic_content = dynamic_detail['orig_dynamic_content']
+                    orig_comment_count = dynamic_detail['orig_comment_count']
+                    orig_forward_count = dynamic_detail['orig_forward_count']
+                    orig_official_verify = dynamic_detail['orig_official_verify']
+                    dynamic_orig = dynamic_detail['dynamic_orig']
+                    orig_ret_url = f'https://t.bilibili.com/{orig_dynamic_id}'
+                    if 'tab=2' in ret_url:
+                        orig_ret_url += '?tab=2'
+                    elif self.BAPI.zhuanfapanduan(orig_dynamic_content):
+                        orig_ret_url += '?tab=2'
+                    format_list = [orig_ret_url, orig_name, str(orig_official_verify),
+                                   str(time.strftime("%Y年%m月%d日 %H:%M", time.localtime(orig_pub_ts))),
+                                   repr(orig_dynamic_content),
+                                   str(orig_comment_count), str(orig_forward_count), Manual_judge,
+                                   ';'.join(high_lights_list),
+                                   OfficialLotType.抽奖动态的源动态.value,
+                                   lot_rid,
+                                   suffix,
+                                   premsg,
+                                   str(deadline)
+                                   ]
+                    format_str = '\t'.join(map(str, format_list))
+
+                    async with self.lock:  # 这个地方一定要加锁保证数据的一致性！！！
+                        if str(orig_dynamic_id) in self.queriedData.lotidList or \
+                                str(orig_dynamic_id) in self.queryingData.lotidList or \
+                                str(orig_dynamic_id) in self.queriedData.dyidList or \
+                                str(orig_dynamic_id) in self.queryingData.dyidList or \
+                                str(orig_dynamic_id) in self.queried_dynamic_id_list:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
+                            logger.warning(f'原动态 {orig_ret_url} 已经有抽奖过了，不加入抽奖动态中')
+                            isRecorded = True
+                        else:
+                            # self.queryingData.dyidList.append(str(orig_dynamic_id))
+                            # self.queriedData.dyidList.append(str(orig_dynamic_id))
+                            # self.queried_dynamic_id_list.append(str(orig_dynamic_id))
+                            if isLot:
+                                self.lottery_dynamic_detail_list.append(format_str)
+                            else:
+                                self.useless_info.append(format_str)
+                    if not isRecorded:
+                        await self.sqlHlper.addDynInfo(
+                            TLotDynInfo(
+                                dynId=str(orig_dynamic_id),
+                                dynamicUrl=orig_ret_url,
+                                authorName=orig_name,
+                                up_uid=author_uid,
+                                pubTime=datetime.datetime.fromtimestamp(orig_pub_ts),
+                                dynContent=orig_dynamic_content,
+                                commentCount=orig_comment_count,
+                                repostCount=orig_forward_count,
+                                highlightWords=';'.join(high_lights_list),
+                                officialLotType=OfficialLotType.抽奖动态的源动态.value,
+                                officialLotId=str(None),
+                                isOfficialAccount=int(
+                                    orig_official_verify if type(orig_official_verify) is not int else 0),
+                                isManualReply=Manual_judge,
+                                isFollowed=int(bool(suffix)),
+                                isLot=int(isLot),
+                                hashTag=premsg if premsg else '',
+                                dynLotRound=self.nowRound.lotRound,
+                                rawJsonStr=json.dumps(dynamic_orig)
+                            )
+                        )
+                if isLot:
+                    if dynamic_detail.get('module_dynamic'):
+                        if dynamic_detail.get('module_dynamic').get('additional'):
+                            if dynamic_detail.get('module_dynamic').get('additional').get(
+                                    'type') == 'ADDITIONAL_TYPE_UGC':
+                                ugc = dynamic_detail.get('module_dynamic').get('additional').get('ugc')
+                                aid_str = ugc.get('id_str')
+                                async with self.lock:  # 这个地方一定要加锁保证数据的一致性！！！
+                                    isChecked = aid_str in self.aid_list
+                                    if not isChecked:
+                                        self.aid_list.append(aid_str)
                                 if not isChecked:
-                                    self.aid_list.append(aid_str)
-                            if not isChecked:
-                                await self.judge_lottery(dynamic_id=aid_str, dynamic_type=8,
-                                                         is_lot_orig=True)
-        else:
-            logger.warning(f'失效动态：https://t.bilibili.com/{dynamic_id}')
-            await self.sqlHlper.addDynInfo(
-                TLotDynInfo(
-                    dynId=str(dynamic_id),
-                    dynamicUrl=f'https://t.bilibili.com/{dynamic_id}',
-                    authorName='',
-                    up_uid=-1,
-                    pubTime=datetime.datetime.fromtimestamp(0),
-                    dynContent='',
-                    commentCount=-1,
-                    repostCount=-1,
-                    highlightWords='',
-                    officialLotType='',
-                    officialLotId='',
-                    isOfficialAccount=-1,
-                    isManualReply='',
-                    isFollowed=-1,
-                    isLot=-1,
-                    hashTag='',
-                    dynLotRound=self.nowRound.lotRound,
-                    rawJsonStr=json.dumps(dynamic_detail.get('rawJSON', '{}'))
+                                    await self.judge_lottery(dynamic_id=aid_str, dynamic_type=8,
+                                                             is_lot_orig=True)
+            else:
+                logger.warning(f'失效动态：https://t.bilibili.com/{dynamic_id}')
+                await self.sqlHlper.addDynInfo(
+                    TLotDynInfo(
+                        dynId=str(dynamic_id),
+                        dynamicUrl=f'https://t.bilibili.com/{dynamic_id}',
+                        authorName='',
+                        up_uid=-1,
+                        pubTime=datetime.datetime.fromtimestamp(0),
+                        dynContent='',
+                        commentCount=-1,
+                        repostCount=-1,
+                        highlightWords='',
+                        officialLotType='',
+                        officialLotId='',
+                        isOfficialAccount=-1,
+                        isManualReply='',
+                        isFollowed=-1,
+                        isLot=-1,
+                        hashTag='',
+                        dynLotRound=self.nowRound.lotRound,
+                        rawJsonStr=json.dumps(dynamic_detail.get('rawJSON', '{}'))
+                    )
                 )
-            )
+        except Exception as e:
+            logger.error(f'解析动态失败！！！\n{dynamic_detail}')
 
     # endregion
 
@@ -4115,11 +4134,13 @@ class GetOthersLotDyn:
         a = []
         a.extend(self.queriedData.dyidList)
         a.extend(self.queryingData.dyidList)
+        a = list(set(a))[-10000:]
         writeIntoFile(a, FileMap.get_dyid, 'w', ',')
 
         a = []
         a.extend(self.queriedData.lotidList)
         a.extend(self.queryingData.lotidList)
+        a = list(set(a))[-10000:]
         writeIntoFile(a, FileMap.lot_dyid, 'w', ',')
 
         json_dict = dict()
@@ -4196,6 +4217,8 @@ class GET_OTHERS_LOT_DYN:
     """
 
     def __init__(self):
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         self.is_getting_dyn_flag_lock = asyncio.Lock()
         self.save_lock = asyncio.Lock()
         if os.path.exists(FileMap.get_dyn_ts):
@@ -4248,11 +4271,12 @@ class GET_OTHERS_LOT_DYN:
 
         return self.solve_lot_csv()
 
-    def get_official_lot_dyn(self) -> list[str]:
-        '''
+    def get_official_lot_dyn(self, limit=7) -> list[str]:
+        """
         返回官方抽奖信息，结尾是tab=1
+        :param limit 限制转发数量最高的7个
         :return:
-        '''
+        """
 
         def try_parse_int(string: str) -> int:
             if string != 'None':
@@ -4294,9 +4318,9 @@ class GET_OTHERS_LOT_DYN:
         filtered_list: list[str] = list(filter(is_official_lot, all_lot_det))
         filtered_list.sort(key=lambda x: try_parse_int(x.split("\t")[5]), reverse=True)
         self.push_lot_csv(f"官方抽奖信息", filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
-        filtered_list.sort(key=lambda x: x.split("\t")[0], reverse=True)  # 按照降序排序
+        filtered_list.sort(key=lambda x: x.split("\t")[6], reverse=True)  # 按照转发数量降序排序
         ret_list = [x.split('\t')[0].replace('?tab=2', '') + '?tab=1' for x in filtered_list]
-        return ret_list
+        return ret_list[:limit]
 
     # endregion
 
@@ -4329,9 +4353,12 @@ class GET_OTHERS_LOT_DYN:
             "content": content,
             'type': 'markdata'
         }
-        req = requests.post(url=url, data=data)
-        logger.debug(data)
-        logger.debug(req.text)
+        try:
+            req = requests.post(url=url, data=data)
+            logger.debug(data)
+            logger.debug(req.text)
+        except Exception as e:
+            logger.error(f'推送至pushme失败！\n{e}')
 
     # region 获取抽奖csv里的数据
     def is_need_lot(self, lot_det: str):
@@ -4389,13 +4416,13 @@ class GET_OTHERS_LOT_DYN:
         filtered_list.sort(key=lambda x: try_parse_int(x.split("\t")[5]), reverse=True)
         self.push_lot_csv(f"动态抽奖信息", filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
         filtered_list.sort(key=lambda x: x.split("\t")[0], reverse=True)  # 按照降序排序
-        ret_list= [x.split('\t')[0] for x in filtered_list]
+        ret_list = [x.split('\t')[0] for x in filtered_list]
         return list(set(ret_list))
     # endregion
 
 
 if __name__ == '__main__':
     b = GET_OTHERS_LOT_DYN()
-    # loop = asyncio.get_event_loop()
-    # loop.run_until_complete(b.get_new_dyn())
-    print(b.solve_lot_csv())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(b.get_new_dyn())
+    # print(b.solve_lot_csv())

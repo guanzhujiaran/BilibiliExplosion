@@ -7,11 +7,9 @@ import json
 from CONFIG import CONFIG
 import pandas
 import random
-
 import datetime
 import urllib.parse
 import sys
-from concurrent import futures
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import os
@@ -20,7 +18,6 @@ import requests
 import threading
 import time
 from loguru import logger
-
 from utl.代理 import grpc_api
 from grpc获取动态.src.DynObjectClass import dynAllDetail
 from grpc获取动态.src.SqlHelper import SQLHelper, sql_log
@@ -480,8 +477,13 @@ class exctract_official_lottery:
 
         self.sql = LOTSqlHelper()
         self.proxy_request = request_with_proxy()
-        self.error_log = logger.bind(user='error_log')
-        self.error_log.add(
+        self.common_log = logger.bind(user=__name__+"common_log")
+        self.common_log_handle = logger.add(sys.stderr, level="INFO",
+                                                filter=lambda record: record["extra"].get('user') == __name__+ "common_log")
+        self.error_log = logger.bind(user=__name__ + "error_log")
+        self.error_log_handler1 = logger.add(sys.stderr, level="INFO",
+                                                filter=lambda record: record["extra"].get('user') == __name__ + "error_log")
+        self.error_log_handler2 =logger.add(
             "log/error_log.log",
             encoding="utf-8",
             enqueue=True,
@@ -578,7 +580,7 @@ class exctract_official_lottery:
             async with data_lock:
                 newly_updated_lot_data.append(newly_lotData)
 
-        logger.info(f'开始更新抽奖，共计{len(original_lot_notice)}条抽奖需要更新')
+        self.common_log.info(f'开始更新抽奖，共计{len(original_lot_notice)}条抽奖需要更新')
         data_lock = asyncio.Lock()
         newly_updated_lot_data = []
         thread_num = 50
@@ -605,7 +607,7 @@ class exctract_official_lottery:
 
         freshed_all_lot_datas = await self.update_lot_notice(all_lots)  # 更新抽奖
 
-        logger.info(f'更新完成，当前抽奖剩余{len(freshed_all_lot_datas)}条')
+        self.common_log.info(f'更新完成，当前抽奖剩余{len(freshed_all_lot_datas)}条')
         all_lot_official_data = [x for x in freshed_all_lot_datas if
                                  x['status'] != 2 and x['status'] != -1 and x['business_type'] == 1]
         latest_updated_official_lot_data = [x for x in all_lot_official_data if
@@ -661,7 +663,7 @@ class exctract_official_lottery:
     def construct_lot_detail(self, lot_data_list: [dict], get_repost_count_flag: bool) -> list[lot_detail]:
         ret_list = []
         for lot_data in lot_data_list:
-            logger.info(f'Constructing:{lot_data}')
+            self.common_log.info(f'Constructing:{lot_data}')
             lottery_id = lot_data['lottery_id']
             dynamic_id = lot_data.get('dynamic_id') or lot_data.get('business_id')
             lottery_time = lot_data['lottery_time']

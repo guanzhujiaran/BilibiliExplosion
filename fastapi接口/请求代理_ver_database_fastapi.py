@@ -10,7 +10,7 @@ import uvicorn
 from fastapi import Query, Body, FastAPI
 from loguru import logger
 from pydantic import BaseModel
-from github.my_operator.bili_upload.get_bili_upload import GET_OTHERS_LOT_DYN
+from github.my_operator.get_others_lot.main import GET_OTHERS_LOT_DYN
 from grpc获取动态.grpc.grpc_api import BiliGrpc
 from grpc获取动态.src.SqlHelper import SQLHelper
 from grpc获取动态.src.获取取关对象.GetRmFollowingList import GetRmFollowingListV1
@@ -20,7 +20,6 @@ from src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import ToutiaoSp
 # 创建自定义线程池
 get_rm_following_list = GetRmFollowingListV1()
 zhihu_lotScrapy = lotScrapy()
-get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
 grpc_sql_helper = SQLHelper()
 grpc_api = BiliGrpc()
 toutiaoSpaceFeedLotService = ToutiaoSpaceFeedLotService()
@@ -105,7 +104,6 @@ async def get_one_rand_grpc_proxy():
 
 @app.post('/grpc/upsert_grpc_proxy_status')
 async def upsert_grpc_proxy_status(request_body: dict):
-    start=int(time.time())
     await req.upsert_grpc_proxy_status(request_body)
     return True
 
@@ -181,6 +179,7 @@ def upsert_lot_detail(request_body: dict):
 @app.get('/get_others_lot_dyn')
 async def app_avaliable_api():
     myfastapi_logger.debug('get_others_lot_dyn 开始获取别人的动态抽奖！')
+    get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
     result = await get_OTHERS_LOT_DYN.get_new_dyn()
     return result
 
@@ -188,6 +187,7 @@ async def app_avaliable_api():
 @app.get('/get_others_official_lot_dyn')
 def app_avaliable_api():
     myfastapi_logger.debug('get_others_lot_dyn 开始获取别人的官方动态抽奖！')
+    get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
     result = get_OTHERS_LOT_DYN.get_official_lot_dyn()
     return result
 
@@ -203,8 +203,8 @@ async def toutiao_get_others_lot_ids():
 
 if __name__ == '__main__':
     uvicorn.run(
-        '请求代理_ver_database_fastapi:app',
+        #'请求代理_ver_database_fastapi:app',
+        app,
         host="0.0.0.0",
         port=23333,
-        workers=6,
     )

@@ -1,41 +1,60 @@
 # -*- coding: utf-8 -*-
 # 最终将请求api的方法全部放到这里面，里面就是一个class
 # 相当于一个客户端，所以设置为永不超时，无限次重试
+import sys
+
 import asyncio
-import time
-import traceback
 import json
+import traceback
+from typing import Coroutine, Any, Union
+
 import httpx
-import requests
-from httpx import Limits
 from loguru import logger
-from utl.代理.SealedRequests import MYASYNCHTTPX
+from utl.代理.ProxyTool.ProxyObj import TypePDict
+from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy as redis_request_with_proxy
 
 
 class request_with_proxy:
+    """
+    提供调用接口的功能
+    """
+
     def __init__(self):
         self.post_localhost_timeout = None
         self.post_localhost_timeout = None
         self.base_url = 'http://localhost:23333'
         self.base_url1 = 'http://localhost:23333'
-        self.log=logger.bind(user=__name__)
-    async def request_with_proxy(self, *args, **kwargs) -> dict or list[dict]:
-        if args:
-            kwargs.update(*args)
-        data = json.dumps(kwargs)
-        ret_time = 0
-        while True:
-            ret_time += 1
-            if ret_time > 3:
-                # assert ret_time > 3, "超出重试次数"
-                # exit()  #
-                pass
+        self.log = logger.bind(user=__name__ + "request_with_proxy")
+        self.log.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == __name__ + "request_with_proxy")
+        self.redis_request_with_proxy = redis_request_with_proxy()
+
+    #
+    # async def request_with_proxy(self, *args, **kwargs) -> dict or list[dict]:
+    #     if args:
+    #         kwargs.update(*args)
+    #     data = json.dumps(kwargs)
+    #     ret_time = 0
+    #     while True:
+    #         ret_time += 1
+    #         if ret_time > 3:
+    #             # assert ret_time > 3, "超出重试次数"
+    #             # exit()  #
+    #             pass
+    #         try:
+    #             async with httpx.AsyncClient() as client:
+    #                 resp = await client.request(url=self.base_url1 + '/request_with_proxy', method='post', data=data,
+    #                                             timeout=self.post_localhost_timeout)
+    #             resp.raise_for_status()
+    #             return resp.json()
+    #         except:
+    #             traceback.print_exc()
+    #             await asyncio.sleep(10)
+    async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
+        while 1:
             try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.request(url=self.base_url1 + '/request_with_proxy', method='post', data=data,timeout=self.post_localhost_timeout)
-                resp.raise_for_status()
-                return resp.json()
-            except:
+                resp = await self.redis_request_with_proxy.request_with_proxy(*args, **kwargs)
+                return resp
+            except Exception as e:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
@@ -66,24 +85,65 @@ class request_with_proxy:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
-    async def get_one_rand_grpc_proxy(self):
+    # async def get_one_rand_grpc_proxy(self):
+    #     while True:
+    #         try:
+    #             async with httpx.AsyncClient() as client:
+    #                 resp = await client.request(url=self.base_url + '/grpc/get_one_rand_grpc_proxy', method='get',
+    #                                             timeout=self.post_localhost_timeout)
+    #             resp.raise_for_status()
+    #             try:
+    #                 resp.json()
+    #             except:
+    #                 self.log.error(f"获取json格式数据失败！{resp.text}")
+    #             if resp.json():
+    #                 return resp.json()
+    #             else:
+    #                 await asyncio.sleep(10)
+    #         except:
+    #             traceback.print_exc()
+    #             await asyncio.sleep(10)
+
+    async def get_one_rand_grpc_proxy(self)-> Union[TypePDict, None]:
         while True:
             try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.request(url=self.base_url + '/grpc/get_one_rand_grpc_proxy', method='get',timeout=self.post_localhost_timeout)
-                resp.raise_for_status()
-                try:
-                    resp.json()
-                except:
-                    self.log.error(f"获取json格式数据失败！{resp.text}")
-                if resp.json():
-                    return resp.json()
-                else:
-                    await asyncio.sleep(10)
+                resp =await self.redis_request_with_proxy.get_one_rand_grpc_proxy()
+                return resp
             except:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
+    # async def upsert_grpc_proxy_status(self, *args, **kwargs):
+    #     """
+    #
+    #     :param args:
+    #     :param kwargs: proxy_id: int, status: int, score_change: int = 0
+    #     :return:
+    #     """
+    #     if args:
+    #         kwargs.update(*args)
+    #     data = json.dumps(kwargs)
+    #     ret_time = 0
+    #     while True:
+    #         ret_time += 1
+    #         if ret_time > 3:
+    #             # assert ret_time > 3, "超出重试次数"
+    #             # exit()  #
+    #             pass
+    #         try:
+    #             async with httpx.AsyncClient() as client:
+    #                 resp = await client.request(url=self.base_url + '/grpc/upsert_grpc_proxy_status',
+    #                                             method='post',
+    #                                             data=data, timeout=self.post_localhost_timeout)
+    #             try:
+    #                 resp.json()
+    #             except:
+    #                 self.log.error(f'获取json格式数据失败！{resp.text}')
+    #             return resp.json()
+    #         except:
+    #             traceback.print_exc()
+    #             await asyncio.sleep(10)
+    #
     async def upsert_grpc_proxy_status(self, *args, **kwargs):
         """
 
@@ -102,20 +162,37 @@ class request_with_proxy:
                 # exit()  #
                 pass
             try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.request(url=self.base_url + '/grpc/upsert_grpc_proxy_status',
-                                                 method='post',
-                                                 data=data,timeout=self.post_localhost_timeout)
-                try:
-                    resp.json()
-                except:
-                    self.log.error(f'获取json格式数据失败！{resp.text}')
-                return resp.json()
+                resp = await self.redis_request_with_proxy.upsert_grpc_proxy_status(*args, **kwargs)
+                return resp
             except:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
-    async def get_grpc_proxy_by_ip(self, ip:str):
+    # async def get_grpc_proxy_by_ip(self, ip: str):
+    #     ret_time = 0
+    #     while True:
+    #         ret_time += 1
+    #         if ret_time > 3:
+    #             # assert ret_time > 3, "超出重试次数"
+    #             # exit()  #
+    #             pass
+    #         try:
+    #             async with httpx.AsyncClient() as client:
+    #                 resp = await client.request(url=self.base_url + '/grpc/get_grpc_proxy_by_ip',
+    #                                             method='get',
+    #                                             params={
+    #                                                 'ip': ip,
+    #                                             }, timeout=self.post_localhost_timeout)
+    #             try:
+    #                 resp.json()
+    #             except:
+    #                 self.log.error(f'获取json格式数据失败！{resp.text}')
+    #             return resp.json()
+    #         except:
+    #             traceback.print_exc()
+    #             await asyncio.sleep(10)
+
+    async def get_grpc_proxy_by_ip(self, ip: str):
         ret_time = 0
         while True:
             ret_time += 1
@@ -124,21 +201,11 @@ class request_with_proxy:
                 # exit()  #
                 pass
             try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.request(url=self.base_url + '/grpc/get_grpc_proxy_by_ip',
-                                                 method='get',
-                                                 params={
-                                                     'ip':ip,
-                                                 }, timeout=self.post_localhost_timeout)
-                try:
-                    resp.json()
-                except:
-                    self.log.error(f'获取json格式数据失败！{resp.text}')
-                return resp.json()
+                resp = await self.redis_request_with_proxy.get_grpc_proxy_by_ip(ip)
+                return resp
             except:
                 traceback.print_exc()
                 await asyncio.sleep(10)
-
 
     async def upsert_lot_detail(self, *args, **kwargs):
         if args:
@@ -154,13 +221,12 @@ class request_with_proxy:
             try:
                 async with httpx.AsyncClient() as client:
                     resp = await client.request(url=self.base_url + '/lot/upsert_lot_detail',
-                                        method='post',
-                                        data=data,timeout=self.post_localhost_timeout)
+                                                method='post',
+                                                data=data, timeout=self.post_localhost_timeout)
                 return resp.json()
             except:
                 traceback.print_exc()
                 await asyncio.sleep(10)
-
 
 
 

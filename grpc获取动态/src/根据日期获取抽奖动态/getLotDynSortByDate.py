@@ -284,7 +284,7 @@ class LotDynSortByDate:
 
         return lot_data
 
-    def main(self, between_ts=[int(time.time()) - 7 * 24 * 3600, int(time.time())]):
+    def main(self, between_ts=[int(time.time()) - 7 * 24 * 3600, int(time.time())],GenWordCloud=False):
         print('开始获取所有动态的抽奖信息')
         if between_ts[1] > int(time.time()):  # 确保最大时间到当前时间截止
             between_ts[1] = int(time.time())
@@ -312,8 +312,9 @@ class LotDynSortByDate:
             df.to_csv(
                 self.path + f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv',
                 index=False, sep='\t', encoding='utf-8')
+            print(f'{datetime.date.fromtimestamp(ts[0])}的动态处理完成，总计{len(df)}条！')
 
 
 if __name__ == '__main__':
     a = LotDynSortByDate()
-    a.main([int(time.time()) - 15*3600 * 24, int(time.time())-7*3600*24])
+    a.main([int(time.time()) - 74 * 3600 * 24, int(time.time())])

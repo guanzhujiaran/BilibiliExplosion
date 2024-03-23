@@ -2,6 +2,8 @@
 """
     通过grpc获取所有的图片动态
 """
+import sys
+
 import asyncio
 import copy
 import datetime
@@ -13,8 +15,6 @@ import threading
 import time
 import traceback
 import urllib.parse
-from typing import Coroutine, Any
-
 from loguru import logger
 from CONFIG import CONFIG
 from grpc获取动态.src.DynObjectClass import *
@@ -32,6 +32,7 @@ class DynDetailScrapy:
         self.__rootPath = CONFIG.root_dir + 'grpc获取动态'
         self.proxy_req = request_with_proxy()
         self.BiliGrpc = BiliGrpc()
+        self.succ_times=0
         self.comm_headers = {
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
             "content-type": "application/json;charset=UTF-8",
@@ -48,14 +49,20 @@ class DynDetailScrapy:
         self.stop_Flag = False  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
         self.scrapy_sem = asyncio.Semaphore(300)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
-        self.thread_sem = threading.Semaphore(100)
+        # self.thread_sem = threading.Semaphore(50)
         self.stop_limit_time = 1 * 3600  # 提前多少时间停止
         self.common_log = logger.bind(user='全局日志')
-        self.doc_id_2_dynamic_id_log = logger.bind(user='doc_id转dynamic_id日志')
-        self.unknown_module_log = logger.bind(user='unknown_module')
-        self.unknown_card_log = logger.bind(user='unknown_card')
-        self.common_error_log = logger.bind(user='common_error_log')
+        self.common_log_handler = logger.add(sys.stderr, level="DEBUG",filter=lambda record: record["extra"].get('user')=="全局日志")
+        self.doc_id_2_dynamic_id_log=logger.bind(user='doc_id转dynamic_id日志')
+        self.doc_id_2_dynamic_id_log_handler = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="doc_id转dynamic_id日志")
+        self.unknown_module_log=logger.bind(user='unknown_module')
+        self.unknown_module_log_handler = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="unknown_module")
+        self.unknown_card_log=logger.bind(user='unknown_card')
+        self.unknown_card_log_handler  = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="unknown_card")
+        self.common_error_log=logger.bind(user='common_error_log')
+        self.common_error_log_handler  =logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="common_error_log")
         self.additional_module_log = logger.bind(user='additional_module_log')
+        self.additional_module_log_handler = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="common_error_log")
         self.log_init()
 
     def _timeshift(self, timestamp: int) -> str:
@@ -367,11 +374,12 @@ class DynDetailScrapy:
             ret_dict_list.append(tempdetail_dict.__dict__)
         else:
             ret_dict_list.append({'rid': rid, 'dynamic_id': '-1'})
+        self.succ_times+=1
         if ret_dict_list[0].get('dynamic_id') != '-1':
             self.common_log.debug(
-                f"{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
+                f"总共成功获取{self.succ_times}次\t{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
         else:
-            self.common_log.debug(f"获取单个动态详情成功，但动态被删除了！http://t.bilibili.com/{rid}?type=2")
+            self.common_log.debug(f"总共成功获取{self.succ_times}次\t获取单个动态详情成功，但动态被删除了！http://t.bilibili.com/{rid}?type=2")
         return ret_dict_list
 
     # endregion
@@ -513,8 +521,8 @@ class DynDetailScrapy:
                                                 dynamic_created_time=detail.get('dynamic_created_time'))
         except:
             self.common_error_log.critical(traceback.format_exc())
-        # self.scrapy_sem.release()
-        self.thread_sem.release()
+        self.scrapy_sem.release()
+        # self.thread_sem.release()
         return rid
 
     def run_async_in_thread(self,async_task,*args,**kargs):
@@ -532,6 +540,7 @@ class DynDetailScrapy:
         latest_rid -= 500
         thread_num = 50
         turn_times = 0
+        task_list = []
         while 1:
             async with self.stop_Flag_lock:
                 if self.stop_Flag:
@@ -540,24 +549,26 @@ class DynDetailScrapy:
             turn_times += 1
             self.common_log.info(
                 f'第{turn_times}轮获取动态（每轮获取{thread_num * self.offset}个动态）当前共获取{thread_num * self.offset * turn_times}条动态')
-            task_list = []
             for i in range(thread_num):
-                # await self.scrapy_sem.acquire()  # 获得线程，可用线程数减1
-                self.thread_sem.acquire()
-                # task = asyncio.create_task(self.get_single_dynDetail_by_rid_start(latest_rid))
-                task = threading.Thread(target=self.run_async_in_thread,args=(self.get_single_dynDetail_by_rid_start,latest_rid))
-                task.start()
+                await self.scrapy_sem.acquire()
+                # self.thread_sem.acquire() # 获得线程，可用线程数减1
+                task = asyncio.create_task(self.get_single_dynDetail_by_rid_start(latest_rid))
+                # task = threading.Thread(target=self.run_async_in_thread,args=(self.get_single_dynDetail_by_rid_start,latest_rid))
+                # task.start()
                 latest_rid += self.offset
                 task_list.append(task)
             print(f'当前可开启线程数剩余：{self.scrapy_sem._value}')
+            # task_list = list(filter(lambda _t: not _t.is_alive(), task_list))
+            task_list=list(filter(lambda _t: not _t.done(), task_list))
             if self.stop_Flag:
-                for t in task_list:
-                    t.join()
-                # await asyncio.gather(*task_list)
+                # for t in task_list:
+                #     t.join()
+                await asyncio.gather(*task_list)
 
     async def main(self):
         print('开始重新获取失败的动态！')
         task1 = asyncio.create_task(self.get_discontious_dynamics_by_single_detail())
+        await asyncio.sleep(30)
         print('重新获取有lot_id，但是lotdata没存进去的抽奖！')
         task2 = asyncio.create_task(self.get_lost_lottery_notice())
         print('开始执行获取动态详情')

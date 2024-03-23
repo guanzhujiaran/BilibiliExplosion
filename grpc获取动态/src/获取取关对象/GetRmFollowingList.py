@@ -22,6 +22,7 @@ from utl.utils import MyThread
 
 class GetRmFollowingListV1:
     def __init__(self, ):
+        self.sqliteLock=None
         self.logger = logger.bind(user=__name__, filter=lambda record: record["extra"].get('user') == __name__)
         self.lucky_up_list = []
         self.max_recorded_dyn_num = 300  # 每个uid最多记录多少个动态
@@ -48,27 +49,28 @@ class GetRmFollowingListV1:
         is_lot_dyn = self.BAPI.choujiangxinxipanduan(dyn_obj.dynCard.dynamicContent)
         while 1:
             try:
-                async with self.AsyncSession() as session:
-                    async with session.begin():
-                        space_dyn = SpaceDyn(
-                            Space_Dyn_uid=dyn_obj.uid,
-                            dynamic_id=dyn_obj.dynamicId,
-                            dynamic_content=dyn_obj.dynCard.dynamicContent,
-                            uname=dyn_obj.uname,
-                            dynamic_type=dyn_obj.dynCard.dynType,
-                            is_lot_dyn=1 if is_lot_dyn is None else 0,
-                            pubts=dyn_obj.dynCard.pubTs,
-                            like=dyn_obj.dynCard.dynStat.like,
-                            reply=dyn_obj.dynCard.dynStat.reply,
-                            repost=dyn_obj.dynCard.dynStat.repost,
-                        )
-                        session.add(space_dyn)
-                        await session.flush()
-                        session.expunge(space_dyn)
-                        break
+                async with self.sqliteLock:
+                    async with self.AsyncSession() as session:
+                        async with session.begin():
+                            space_dyn = SpaceDyn(
+                                Space_Dyn_uid=dyn_obj.uid,
+                                dynamic_id=dyn_obj.dynamicId,
+                                dynamic_content=dyn_obj.dynCard.dynamicContent,
+                                uname=dyn_obj.uname,
+                                dynamic_type=dyn_obj.dynCard.dynType,
+                                is_lot_dyn=1 if is_lot_dyn is None else 0,
+                                pubts=dyn_obj.dynCard.pubTs,
+                                like=dyn_obj.dynCard.dynStat.like,
+                                reply=dyn_obj.dynCard.dynStat.reply,
+                                repost=dyn_obj.dynCard.dynStat.repost,
+                            )
+                            session.add(space_dyn)
+                            await session.flush()
+                            session.expunge(space_dyn)
+                            break
             except Exception as e:
                 self.logger.critical(f'Exception while creating space dyn!\n{e}')
-                await asyncio.sleep(random.choice([1,2,3,4,5,6,7,8,9,10]))
+                await asyncio.sleep(random.choice([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
         return 1 if is_lot_dyn is None else 0
 
     # endregion
@@ -81,16 +83,17 @@ class GetRmFollowingListV1:
         """
         while 1:
             try:
-                async with self.AsyncSession() as session:
-                    async with session.begin():
-                        data = UserInfo(
-                            uid=uid,
-                            upTimeStamp=datetime.fromtimestamp(0)
-                        )
-                        session.add(data)
-                        await session.flush()
-                        session.expunge(data)
-                        break
+                async with self.sqliteLock:
+                    async with self.AsyncSession() as session:
+                        async with session.begin():
+                            data = UserInfo(
+                                uid=uid,
+                                upTimeStamp=datetime.fromtimestamp(0)
+                            )
+                            session.add(data)
+                            await session.flush()
+                            session.expunge(data)
+                            break
             except Exception as e:
                 self.logger.critical(f'Exception while create user info!{uid}\n{e}')
 
@@ -104,14 +107,15 @@ class GetRmFollowingListV1:
         """
         while 1:
             try:
-                async with self.AsyncSession() as session:
-                    sql = select(SpaceDyn).where(dynamic_id == SpaceDyn.dynamic_id)
-                    result = await session.execute(sql)
-                    data = result.scalars().first()
-                    if data:
-                        return True
-                    else:
-                        return False
+                async with self.sqliteLock:
+                    async with self.AsyncSession() as session:
+                        sql = select(SpaceDyn).where(dynamic_id == SpaceDyn.dynamic_id)
+                        result = await session.execute(sql)
+                        data = result.scalars().first()
+                        if data:
+                            return True
+                        else:
+                            return False
             except Exception as e:
                 self.logger.critical(f'Exception while check is exist spece dyn! {dynamic_id}\n{e}')
 
@@ -193,11 +197,12 @@ class GetRmFollowingListV1:
                 f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间没有动态")
             while 1:
                 try:
-                    async with self.AsyncSession() as session:
-                        sql = select(UserInfo).where(UserInfo.uid == uid)
-                        result = await session.execute(sql)
-                        userinfo = result.scalars().first()
-                        break
+                    async with self.sqliteLock:
+                        async with self.AsyncSession() as session:
+                            sql = select(UserInfo).where(UserInfo.uid == uid)
+                            result = await session.execute(sql)
+                            userinfo = result.scalars().first()
+                            break
                 except Exception as e:
                     self.logger.critical(f'Exception while query userinfo by uid!{uid}\n{e}')
             await self.update_up_status(uid, userinfo.uname, userinfo.officialVerify)
@@ -225,29 +230,32 @@ class GetRmFollowingListV1:
                 return False
 
             return bool(spdyn.is_lot_dyn)
+
         while 1:
             try:
-                async with self.AsyncSession() as session:
-                    async with session.begin():
-                        sql = select(SpaceDyn).where(uid == SpaceDyn.Space_Dyn_uid).order_by(SpaceDyn.pubts.desc())
-                        result = await session.execute(sql)
-                        space_dyn_group_by_uid = result.scalars().all()  # 最新的在最前面
-                        isLotUp = 1 if len(list(filter(is_lot_up, space_dyn_group_by_uid))) > 0 else 0
-                        if len(space_dyn_group_by_uid) > self.max_recorded_dyn_num:
-                            delete_list: list[SpaceDyn] = space_dyn_group_by_uid[
-                                                          -(len(space_dyn_group_by_uid) - self.max_recorded_dyn_num):]
-                            for delete_dyn in delete_list:
-                                await session.delete(delete_dyn)
-                        sql = update(UserInfo).where(UserInfo.uid == uid).values(
-                            isLotUp=isLotUp,
-                            upTimeStamp=datetime.fromtimestamp(update_ts),
-                            officialVerify=officialVerify,
-                            uname=uname,
-                        )
-                        await session.execute(sql)  # 更新状态！
-                        break
+                async with self.sqliteLock:
+                    async with self.AsyncSession() as session:
+                        async with session.begin():
+                            sql = select(SpaceDyn).where(uid == SpaceDyn.Space_Dyn_uid).order_by(SpaceDyn.pubts.desc())
+                            result = await session.execute(sql)
+                            space_dyn_group_by_uid = result.scalars().all()  # 最新的在最前面
+                            isLotUp = 1 if len(list(filter(is_lot_up, space_dyn_group_by_uid))) > 0 else 0
+                            if len(space_dyn_group_by_uid) > self.max_recorded_dyn_num:
+                                delete_list: list[SpaceDyn] = space_dyn_group_by_uid[
+                                                              -(len(space_dyn_group_by_uid) - self.max_recorded_dyn_num):]
+                                for delete_dyn in delete_list:
+                                    await session.delete(delete_dyn)
+                            sql = update(UserInfo).where(UserInfo.uid == uid).values(
+                                isLotUp=isLotUp,
+                                upTimeStamp=datetime.fromtimestamp(update_ts),
+                                officialVerify=officialVerify,
+                                uname=uname,
+                            )
+                            await session.execute(sql)  # 更新状态！
+                            break
             except Exception as e:
                 self.logger.critical(f'Exception while check is lot up!{uid}\n{e}')
+
     async def check_db_exist_up(self, uid: Union[int, str]) -> bool:
         """
         检查数据库中是否存在up，并返回数据库中的up是否为抽奖up
@@ -267,16 +275,18 @@ class GetRmFollowingListV1:
                     return True
                 async with self.AsyncSession() as session:
                     sql = select(UserInfo).where(uid == UserInfo.uid)
-                    session_res = await session.execute(sql)
+                    async with self.sqliteLock:
+                        session_res = await session.execute(sql)
                     res = session_res.scalars().first()
-                    if res:
-                        if (datetime.now() - res.upTimeStamp).days < self.check_up_sep_days:
-                            return bool(res.isLotUp)
-                        else:
-                            self.logger.debug(f'uid:{uid}数据库中数据太老\t数据库中最后时间{res.upTimeStamp.strftime("%Y-%m-%d %H:%M:%S")}')
+                if res:
+                    if (datetime.now() - res.upTimeStamp).days < self.check_up_sep_days:
+                        return bool(res.isLotUp)
                     else:
-                        self.logger.debug(f'uid:{uid}数据库中不存在')
-                        await self.create_user_info(uid)
+                        self.logger.debug(
+                            f'uid:{uid}数据库中数据太老\t数据库中最后时间{res.upTimeStamp.strftime("%Y-%m-%d %H:%M:%S")}')
+                else:
+                    self.logger.debug(f'uid:{uid}数据库中不存在')
+                    await self.create_user_info(uid)
                 # 更新up的空间动态数据库
                 await self.check_up_space_dyn(uid)
                 return await self.check_db_exist_up(uid)
@@ -302,6 +312,7 @@ class GetRmFollowingListV1:
     async def main(self, following_list: list) -> list:
         if type(following_list) is not list:
             return []
+        self.sqliteLock=asyncio.Lock()
         self.lucky_up_list = self.get_lucky_up_list()
         resp_list = await self.check_lot_up(following_list)
         return resp_list
@@ -309,7 +320,7 @@ class GetRmFollowingListV1:
 
 async def _run(*args, **kwargs):
     _____test = GetRmFollowingListV1()
-    result= await _____test.main(
+    result = await _____test.main(
         [783075, 14238585, 4689610, 477007052, 32741563, 7349, 360234219, 480761641, 479122299, 171844704, 141664434,
          7987912, 5762882, 1815364, 13829896, 59097656, 29329085, 436197297, 14626386, 26989008, 295396262, 319084300,
          3493144272309101, 451115073, 587067607, 330113, 521548831, 494611210, 3493258283977582, 108866409, 1060170678,
@@ -610,6 +621,7 @@ async def _run(*args, **kwargs):
     )
     print(result)
     return result
+
 
 if __name__ == '__main__':
     _____test = GetRmFollowingListV1()
