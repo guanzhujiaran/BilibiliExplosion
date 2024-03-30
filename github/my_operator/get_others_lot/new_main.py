@@ -6,26 +6,28 @@ import os
 import pandas
 import random
 import re
+import urllib.parse
 import time
 import traceback
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any
+from typing import Dict, Any, Union
 import execjs
 from loguru import logger
 from CONFIG import CONFIG
-from github.my_operator.get_others_lot.Tool.SqlHelper.models import TLotMainInfo, TLotUserInfo, TLotDynInfo, \
-    TLotUserSpaceResp
+from github.my_operator.get_others_lot.Tool.newSqlHelper.models import TLotuserspaceresp, TLotdyninfo, TLotuserinfo, \
+    TLotmaininfo
 from opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from utl.pushme.pushme import pushme
 from utl.代理.request_with_proxy import request_with_proxy
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import Bilibili_methods.all_methods
-from github.my_operator.get_others_lot.Tool.SqlHelper.SqlHelper import SqlHelper
+from github.my_operator.get_others_lot.Tool.newSqlHelper.SqlHelper import SqlHelper
 from github.my_operator.get_others_lot.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from github.my_operator.get_others_lot.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
+from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
 
 root_dir = CONFIG.root_dir
 relative_dir = 'github/my_operator/get_others_lot/'  # 执行文件所在的相对路径
@@ -39,6 +41,26 @@ class user_space_dyn_detail:
     """
     latest_dyid_list: list = field(default_factory=list)
     update_num: int = 0
+
+
+@dataclass
+class pub_lot_user_info:
+    """
+    描述发布动态的用户信息
+    """
+    uid: str = ''
+    dynContent_list: list[str] = field(default_factory=list)
+
+    def find_dyn_content(self, dyncontent: str) -> bool:
+        """
+        判断动态内容是否在动态列表中
+        :param dyncontent:
+        :return:
+        """
+        for i in self.dynContent_list:
+            if dyncontent[:10] in i:
+                return True
+        return False
 
 
 @dataclass
@@ -161,10 +183,15 @@ def writeIntoFile(write_in_list: list[Any], filePath, write_mode='w', sep=','):
 
 
 class GetOthersLotDyn:
+    """
+    获取其他人的抽奖动态
+    """
+
     def __init__(self):
-        self.isPreviousRoundFinished = False  # 上一轮抽奖是否结束
+        # 上一轮抽奖是否结束
+        self.isPreviousRoundFinished = False
         self.sem = asyncio.Semaphore(300)
-        self.nowRound: TLotMainInfo = TLotMainInfo()
+        self.nowRound: TLotmaininfo = TLotmaininfo()
         self.aid_list = []
         self.fake_cookie = True
         self.sqlHlper = SqlHelper()
@@ -561,6 +588,11 @@ class GetOthersLotDyn:
         self.queriedData = scrapyData()
         self.create_dir()
         self.lock = asyncio.Lock()
+
+        self.pub_lot_user_info_list: list[pub_lot_user_info] = []  # 获取发布抽奖动态的用户信息
+
+    def calculate_pub_ts_by_dynamic_id(self, dynamic_id: str) -> int:
+        return int((int(dynamic_id) + 6437415932101782528) / 4294939971.297)
 
     def create_dir(self):
         if not os.path.exists(FileMap._log_path):
@@ -3068,13 +3100,13 @@ class GetOthersLotDyn:
         for i in path_dir_name:
             with open(root_dir + 'github/bili_upload/' + i + '/dyid.txt', 'r', encoding='utf-8') as f:
                 effective_files_content_list.append(''.join(f.readlines()))
-        logger.info(f'共获取{len(path_dir_name)}个文件')
         for i in effective_files_content_list:
             self.queriedData.gitee_dyn_id_list = self.solveGiteeFileContent(i, self.queriedData.dyidList)  # 记录动态id
+        logger.info(f'共获取{len(path_dir_name)}个文件，新增{len(self.queriedData.gitee_dyn_id_list)}条抽奖！')
         return self.queriedData.gitee_dyn_id_list
 
     # region 获取uidlist中的空间动态
-    async def get_space_dynamic_req_with_proxy(self, hostuid, offset):
+    async def get_space_dynamic_req_with_proxy(self, hostuid: Union[int, str], offset: str):
         '''
         获取动态空间的response
         :param hostuid:要访问的uid
@@ -3086,22 +3118,44 @@ class GetOthersLotDyn:
             'user-agent': ua,
             'cookie': '1'
         }
-        uid = 0
         dongtaidata = {
-            'visitor_uid': uid,
-            'host_uid': hostuid,
-            'offset_dynamic_id': offset,
-            'need_top': '0',
-            'platform': 'web'
+            'offset': offset,
+            'host_mid': hostuid,
+            'timezone_offset': -480,
+            'platform': 'web',
+            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote',
+            'web_location': "333.999",
         }
-        url = 'http://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history?visitor_uid=' + str(
-            uid) + '&host_uid=' + str(hostuid) + '&offset_dynamic_id=' + str(offset) + '&need_top=0'
+        dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
+        dongtaidata.update({
+            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
+            "x-bili-web-req-json": json.dumps({"spm_id": "333.999"}, separators=(',', ':'))
+        })
+        wbi_sign = await get_wbi_params(dongtaidata)
+        dongtaidata.update({
+            'w_rid': wbi_sign['w_rid']
+        })
+        dongtaidata.update({
+            "wts": wbi_sign['wts']
+        })
+
+        url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
+        headers.update({'referer': f"https://space.bilibili.com/{hostuid}/dynamic"
+                        }
+                       )
+        url_params = url + '?' + urllib.parse.urlencode(dongtaidata, safe='[],:')
+
         try:
-            req = await request_proxy.request_with_proxy(method='GET', url=url, headers=headers, data=dongtaidata,
-                                                         verify=False, mode='single')
+            req = await request_proxy.request_with_proxy(method='GET',
+                                                         url=url_params,
+                                                         headers=headers,
+                                                         # data=dongtaidata,
+                                                         verify=False,
+                                                         mode='single'
+                                                         )
             return req
         except Exception as e:
-            logger.critical(f'Exception while getting space history dynamic {uid} {hostuid} {offset}!\n{e}')
+            logger.critical(f'Exception while getting space history dynamic {hostuid} {offset}!\n{e}')
             return await self.get_space_dynamic_req_with_proxy(hostuid, offset)
 
     def solveSpaceDetailResp(self, space_req_dict: dict):  # 直接处理
@@ -3117,19 +3171,13 @@ class GetOthersLotDyn:
             :param cards_json:
             :return:
             """
-            card_json = json.loads(cards_json.get('card'))
             # logger.info(card_json)  # 测试点
             try:
-                pre_dy_id = str(card_json.get('item').get('pre_dy_id'))
-            except:
-                pre_dy_id = None
-            try:
-                orig_dy_id = str(card_json.get('item').get('orig_dy_id'))
+                orig_dy_id = str(cards_json.get('orig').get('id_str'))
             except:
                 orig_dy_id = None
-            if pre_dy_id == orig_dy_id:
-                pre_dy_id = None
-            return [orig_dy_id, pre_dy_id]
+
+            return [orig_dy_id]
 
         req_dict = space_req_dict
         if req_dict.get('code') == -412:
@@ -3139,17 +3187,17 @@ class GetOthersLotDyn:
         if not req_dict:
             logger.info(f'ERROR{space_req_dict}')
             return 404
-        cards_json = req_dict.get('data').get('cards')
+        card_item = req_dict.get('data').get('items')
         dynamic_id_list = []
-        if cards_json:
-            for card_dict in cards_json:
-                dynamic_id = str(card_dict.get('desc').get('pre_dy_id_str'))  # 判断中转动态id是否重复；非最原始动态id 类型为string
+        if card_item:
+            for card_dict in card_item:
+                dynamic_id = str(card_dict.get('orig', {}).get('id_str', "0"))  # 判断中转动态id是否重复；非最原始动态id 类型为string
                 try:
-                    dynamic_repost_content = json.loads(card_dict.get('card')).get('item').get('content')
+                    dynamic_repost_content = card_dict.get('modules').get('module_dynamic').get('desc').get('text')
                 except:
                     dynamic_repost_content = None
                 logger.info(
-                    f"当前动态： https://t.bilibili.com/{card_dict.get('desc').get('dynamic_id')}\t{time.asctime()}\n转发|评论|发布内容：{dynamic_repost_content}")
+                    f"当前动态： https://t.bilibili.com/{card_dict.get('id_str')}\t{time.asctime()}\n转发|评论|发布内容：{dynamic_repost_content}")
                 if dynamic_repost_content in self.nonLotteryWords:
                     # logger.info('转发评论内容为非抽奖词，跳过')
                     continue
@@ -3160,7 +3208,7 @@ class GetOthersLotDyn:
                     # logger.info('遇到重复动态id')
                     # logger.info('https://t.bilibili.com/{}'.format(dynamic_id))
                     continue
-                dynamic_time = card_dict.get('desc').get('timestamp')  # 判断是否超时，超时直接退出
+                dynamic_time = card_dict.get('modules').get('module_author').get('pub_ts')  # 判断是否超时，超时直接退出
                 if time.time() - dynamic_time >= self.SpareTime:
                     # logger.info('遇到超时动态')
                     return 0
@@ -3169,15 +3217,16 @@ class GetOthersLotDyn:
                         # logger.info(f'添加进记录：{_}')
                         dynamic_id_list.append(str(_))  # 间接和原始的动态id全部记录
         else:
-            logger.info(space_req_dict)
-            logger.info('cards_json为None')
-        self.spaceRecordedDynamicIdList.extend(dynamic_id_list)
+            logger.error(space_req_dict)
+            logger.error('cards_json为None')
+        if dynamic_id_list:
+            self.spaceRecordedDynamicIdList.extend(dynamic_id_list)
 
         # if not dynamic_id_list:
         #     await asyncio.sleep(2)
         return 0
 
-    async def get_user_space_dynamic_id(self, uid: int, secondRound=False) -> None:
+    async def get_user_space_dynamic_id(self, uid: int, secondRound=False, isPubLotUser=False) -> None:
         """
         支持了断点续爬
         根据时间和获取过的动态来判断是否结束爬取别人的空间主页
@@ -3186,105 +3235,159 @@ class GetOthersLotDyn:
 
         async def addSpaceCardToDb(spaceResp: dict):
             try:
-                if spaceResp.get('data') and spaceResp.get('data').get('cards'):
-                    for i in spaceResp.get('data').get('cards'):
-                        spaceRespCardDynamicId = i.get('desc').get('dynamic_id')
-                        await self.sqlHlper.addSpaceResp(LotUserSpaceResp=TLotUserSpaceResp(
+                spaceResp['data']['items'] = [i for i in spaceResp.get('data').get('items') if
+                                              i.get('modules', {}).get('module_tag', {}).get('text') != '置顶']
+                if spaceResp.get('data') and spaceResp.get('data').get('items'):
+                    for i in spaceResp.get('data').get('items'):
+                        spaceRespCardDynamicId = i.get('id_str')
+                        await self.sqlHlper.addSpaceResp(LotUserSpaceResp=TLotuserspaceresp(
                             spaceUid=uid,
                             spaceOffset=spaceRespCardDynamicId,
-                            spaceRespJson=json.dumps(i)
+                            spaceRespJson=i,
                         ))
-            except Exception as e:
-                logger.critical(f'添加空间动态响应至数据库失败！{spaceResp}\n{e}')
+                return spaceResp
+            except Exception as _e:
+                logger.critical(f'添加空间动态响应至数据库失败！{spaceResp}\n{_e}')
+                logger.exception(_e)
 
-        def get_space_dynamic_id_list(space_req_dict: dict) -> list[str] or bool:
+        async def solve_space_dynamic(space_req_dict: dict) -> Union[list[str], None]:
+            """
+            解析动态列表，获取动态id
+            :param space_req_dict:
+            :return:
+            """
             ret_list = []
             try:
-                for dynamic_card in space_req_dict.get('data').get('cards'):
-                    ret_list.append(str(dynamic_card.get('desc').get('dynamic_id_str')))
+                for dynamic_item in space_req_dict.get('data').get('items'):
+                    dynamic_id_str = str(dynamic_item.get('id_str'))
+                    ret_list.append(dynamic_id_str)
+                    if isPubLotUser:  # 只有是发布抽奖动态的up才会将他的动态信息加入抽奖动态列表里面
+                        single_dynamic_resp = {
+                            'code': 0,
+                            'data':
+                                {
+                                    "item": dynamic_item
+                                }
+                        }
+                        dynamic_detail = await self.solve_dynamic_item_detail(dynamic_id_str, single_dynamic_resp)
+                        await self.judge_lottery_by_dynamic_resp_dict(dynamic_id_str,
+                                                                      dynamic_detail=dynamic_detail)
+                    else:
+                        if dynamic_item.get('type') == 'DYNAMIC_TYPE_FORWARD':
+                            module_dynamic = dynamic_item.get('modules').get('module_dynamic')
+                            rich_text_nodes = module_dynamic.get('desc').get('rich_text_nodes')
+                            dynamic_text = module_dynamic.get('desc').get('text')
+                            at_users_nodes = list(
+                                filter(lambda x: x.get('type') == 'RICH_TEXT_NODE_TYPE_AT', rich_text_nodes))
+                            need_at_usernames = re.findall('//@(.{0,20}):', dynamic_text)
+                            subbed_text = re.sub('.*//@(.{0,20}):', '', dynamic_text)
+                            for need_at_username in need_at_usernames:
+                                for i in at_users_nodes:
+                                    if need_at_username in i.get('text'):
+                                        need_uid = i.get('rid')
+                                        pub_lot_user_infos = list(
+                                            filter(lambda x: x.uid == need_uid, self.pub_lot_user_info_list))
+                                        if pub_lot_user_infos:
+                                            for _ in pub_lot_user_infos:
+                                                if not _.find_dyn_content(subbed_text):
+                                                    _.dynContent_list.append(subbed_text)
+                                        else:
+                                            self.pub_lot_user_info_list.append(
+                                                pub_lot_user_info(
+                                                    uid=need_uid,
+                                                    dynContent_list=[subbed_text]
+                                                )
+                                            )
+
                 if space_req_dict.get('data').get('inplace_fold'):
                     for i in space_req_dict.get('data').get('inplace_fold'):
                         if i.get('dynamic_ids'):
                             for dyn_id in i.get('dynamic_ids'):
                                 ret_list.append(dyn_id)
                         logger.debug(f'遇到折叠内容！inplace_fold:{i}')
-                if space_req_dict.get('data').get('has_more') == 0 and len(ret_list) == 0:
+                if not space_req_dict.get('data').get('has_more') and len(ret_list) == 0:
                     return None
                 return ret_list
-            except Exception as e:
-                logger.error(space_req_dict)
-                traceback.print_exc()
-                raise e
+            except Exception as _e:
+                logger.exception(_e)
+                raise _e
 
-        def get_space_dynmaic_time(space_req_dict: dict):  # 返回list
-            cards_json = space_req_dict.get('data').get('cards')
+        def get_space_dynmaic_time(space_req_dict: dict) -> list[int]:  # 返回list
+            cards_json = space_req_dict.get('data').get('items')
             dynamic_time_list = []
             if cards_json:
                 for card_dict in cards_json:
-                    dynamic_time = card_dict.get('desc').get('timestamp')
+                    dynamic_time = card_dict.get('modules').get('module_author').get('pub_ts')
                     dynamic_time_list.append(dynamic_time)
             return dynamic_time_list
 
         n = 0
         first_get_dynamic_falg = True
-
         origin_offset = 0
-        LotUserInfo = await self.sqlHlper.getLotUserInfoByUid(uid)
+        LotUserInfo: TLotuserinfo = await self.sqlHlper.getLotUserInfoByUid(uid)
 
+        if secondRound:
+            newest_space_offset = await self.sqlHlper.getNewestSpaceDynInfoByUid(uid)
+            if newest_space_offset:
+                dynamic_calculated_ts = self.calculate_pub_ts_by_dynamic_id(newest_space_offset)
+                updatetime = await self.sqlHlper.get_lot_user_info_updatetime_by_uid(uid)
+                updatetime_ts = updatetime.timestamp() if updatetime else 0
+                if int(time.time() - dynamic_calculated_ts) < 2 * 3600 or int(time.time() - updatetime_ts) < 2 * 3600:
+                    logger.info(f'{uid} 距离上次获取抽奖不足2小时，跳过')
+                    return
         if LotUserInfo:
             if not self.isPreviousRoundFinished:  # 如果上一轮抽奖没有完成
-                if self.queriedData.queryUserInfo.get(str(uid)):
-                    origin_offset = int(self.queriedData.queryUserInfo.get(str(uid)).latest_dyid_list[
-                                            -1]) if self.queriedData.queryUserInfo.get(str(uid)).latest_dyid_list else 0
-                elif LotUserInfo.isUserSpaceFinished:  # 如果没记录就结束了就把这个用户在数据库里的全部动态都拿出来，让offset=最老的动态id
-                    origin_offset = await self.sqlHlper.getOldestSpaceDynInfoByUid(uid)
-                else:
-                    origin_offset = LotUserInfo.offset
+                origin_offset = LotUserInfo.latestFinishedOffset
         else:
-            LotUserInfo = TLotUserInfo(uid=uid)
+            LotUserInfo = TLotuserinfo(
+                uid=uid,
+                isPubLotUser=isPubLotUser
+            )
+            await self.sqlHlper.addLotUserInfo(LotUserInfo)
+        if uid not in self.queryingData.uidlist:
+            self.queryingData.uidlist.append(uid)
+        if uid not in self.queriedData.uidlist:
+            self.queriedData.uidlist.append(uid)
         if secondRound:
-            origin_offset = 0
+            origin_offset = ""
+        origin_offset = origin_offset if origin_offset else ""
         offset = origin_offset
         uname = ''
         timelist = [0]
         logger.info(
             f'当前UID：https://space.bilibili.com/{uid}/dynamic\t进度：【{self.queryingData.uidlist.index(uid) + 1}/{len(self.queryingData.uidlist)}】\t初始offseet:{origin_offset}\t是否为第二轮获取动态：{secondRound}')
         while 1:
-            if origin_offset != 0 and first_get_dynamic_falg:
-                cards = await self.sqlHlper.getSpaceRespTillOffset(uid, origin_offset)
+            if origin_offset != "" and first_get_dynamic_falg:
+                items = await self.sqlHlper.getSpaceRespTillOffset(uid, origin_offset)
                 dyreq_dict = {
                     'code': 0,
                     'data': {
-                        'has_more': 1,
-                        'cards': cards,
-                        'next_offset': origin_offset,
-                        '_gt_': 0
+                        'has_more': True,
+                        'items': items,
+                        'offset': origin_offset,
+                        "update_baseline": "",
+                        'update_num': 0
                     },
-                    'message': '',
-                    'msg': ''
+                    'message': '0',
+                    'ttl': 1
                 }
             else:
                 dyreq_dict = await self.get_space_dynamic_req_with_proxy(uid, offset)
-                await addSpaceCardToDb(dyreq_dict)
+                dyreq_dict = await addSpaceCardToDb(dyreq_dict)
             try:
-                if dyreq_dict.get('data').get('cards'):
-                    uname = dyreq_dict.get('data').get('cards')[0].get('desc').get('user_profile').get('info').get(
-                        'uname')
-            except:
-                logger.error(f'获取空间动态用户名失败！{dyreq_dict}')
-            try:
-                if not dyreq_dict.get('data').get('has_more'):
-                    logger.info(f'当前用户 https://space.bilibili.com/{uid}/dynamic 无更多动态')
-                    break
+                if dyreq_dict.get('data').get('items'):
+                    uname = dyreq_dict.get('data').get('items')[0].get('modules').get('module_author').get('name')
             except Exception as e:
-                logger.critical(f'Error: has_more获取失败\n{dyreq_dict}\n{e}')
+                logger.error(f'获取空间动态用户名失败！{dyreq_dict}')
+                logger.exception(e)
             try:
-                repost_dynamic_id_list = get_space_dynamic_id_list(dyreq_dict)  # 脚本们转发生成的动态id
+                repost_dynamic_id_list = await solve_space_dynamic(dyreq_dict)  # 脚本们转发生成的动态id 同时将需要获取的抽奖发布者的uid记录下来
             except Exception as e:
                 logger.critical(f'解析空间动态失败！\n{e}\n{uid} {offset}')
+                logger.exception(e)
                 continue
             if repost_dynamic_id_list is None:
-                logger.info(f'{uid}空间动态为0')
+                logger.info(f'{uid}空间动态数量为0')
                 break
             async with self.lock:
                 if repost_dynamic_id_list:
@@ -3306,60 +3409,75 @@ class GetOthersLotDyn:
                         else:
                             update_num = len(repost_dynamic_id_list)
                         self.queryingData.queryUserInfo.get(str(uid)).update_num += update_num
-                # await asyncio.sleep(sleeptime)
+
                 n += 1
-                if self.solveSpaceDetailResp(dyreq_dict) != 0:
-                    offset = 0
+                if self.solveSpaceDetailResp(dyreq_dict) != 0:  # 解析空间动态的json，不过滤重复遇到过的内容
+                    offset = ""
                     continue
-                offset = dyreq_dict.get('data').get('next_offset')
+                offset = dyreq_dict.get('data').get('offset')
                 timelist = get_space_dynmaic_time(dyreq_dict)
                 # await asyncio.sleep(5)
+
+                await self.sqlHlper.addLotUserInfo(
+                    TLotuserinfo(uid=uid, uname=uname,
+                                 updateNum=self.queryingData.queryUserInfo.get(str(uid)).update_num,
+                                 updatetime=LotUserInfo.updatetime,
+                                 isUserSpaceFinished=0,
+                                 offset=offset,
+                                 latestFinishedOffset=LotUserInfo.latestFinishedOffset,
+                                 isPubLotUser=isPubLotUser
+                                 ))
                 if len(timelist) == 0:
-                    logger.info('timelist is empty')
-                    continue
+                    logger.error('timelist is empty')
+                    break
                 if time.time() - timelist[-1] >= self.SpareTime:
                     logger.info(
                         f'超时动态，当前UID：https://space.bilibili.com/{uid}/dynamic\t获取结束\t{self.BAPI.timeshift(time.time())}')
                     # await asyncio.sleep(60)
                     break
                 if self.queriedData.queryUserInfo.get(str(uid)):
-                    logger.info(self.queriedData.queryUserInfo.get(str(uid)))
-                    logger.info(repost_dynamic_id_list)
+                    # logger.info(self.queriedData.queryUserInfo.get(str(uid)))
+                    # logger.info(repost_dynamic_id_list)
                     if set(self.queriedData.queryUserInfo.get(str(uid)).latest_dyid_list) & set(repost_dynamic_id_list):
                         logger.info(
                             f'遇到获取过的动态，当前UID：https://space.bilibili.com/{uid}/dynamic\t获取结束\t{self.BAPI.timeshift(time.time())}')
                         # await asyncio.sleep(60)
                         break
-                await self.sqlHlper.addLotUserInfo(
-                    TLotUserInfo(uid=uid, uname=uname,
-                                 updateNum=self.queryingData.queryUserInfo.get(str(uid)).update_num,
-                                 updatetime=datetime.datetime.now(),
-                                 isUserSpaceFinished=0, offset=offset,
-                                 latestFinishedOffset=LotUserInfo.latestFinishedOffset
-                                 ))
 
-        await self.sqlHlper.addLotUserInfo(TLotUserInfo(
+            try:
+                if not dyreq_dict.get('data').get('has_more'):
+                    logger.info(f'当前用户 https://space.bilibili.com/{uid}/dynamic 无更多动态')
+                    break
+            except Exception as e:
+                logger.critical(f'Error: has_more获取失败\n{dyreq_dict}\n{e}')
+                logger.exception(e)
+        await self.sqlHlper.addLotUserInfo(TLotuserinfo(
             uid=uid,
             uname=uname,
-            updateNum=self.queryingData.queryUserInfo.get(str(uid)).update_num if self.queryingData.queryUserInfo.get(str(uid)) else 0,
-            updatetime=datetime.datetime.now(),
+            updateNum=self.queryingData.queryUserInfo.get(str(uid)).update_num if self.queryingData.queryUserInfo.get(
+                str(uid)) else 0,
+            updatetime=datetime.datetime.now() if origin_offset == "" else LotUserInfo.updatetime,
             isUserSpaceFinished=1,
             offset=offset,
-            latestFinishedOffset=offset
+            latestFinishedOffset=offset if not secondRound else LotUserInfo.latestFinishedOffset,
+            isPubLotUser=isPubLotUser
         ))
         # if 1==1:
         #     return
-        if origin_offset != 0 and not secondRound:
+        if origin_offset != "" and not secondRound:
             self.queriedData.queryUserInfo.update({
                 str(uid): self.queryingData.queryUserInfo.get(str(uid))
             })
-            await self.get_user_space_dynamic_id(uid, secondRound=True)
-        if n <= 4 and time.time() - timelist[-1] >= self.SpareTime:
+            await self.get_user_space_dynamic_id(uid, secondRound=True, isPubLotUser=isPubLotUser)
+        if n <= 4 and time.time() - timelist[-1] >= self.SpareTime and secondRound == False:
             # self.uidlist.remove(uid)
             logger.info(f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
 
-    async def getAllSpaceDynId(self) -> list[str]:
-        tasks = [asyncio.create_task(self.get_user_space_dynamic_id(i)) for i in self.queryingData.uidlist]
+    async def getAllSpaceDynId(self, uidlist=None, isPubLotUser=False) -> list[str]:
+        if uidlist is None:
+            uidlist = self.queryingData.uidlist
+        uidlist = list(set(uidlist))
+        tasks = [asyncio.create_task(self.get_user_space_dynamic_id(i, isPubLotUser=isPubLotUser)) for i in uidlist]
         await asyncio.gather(*tasks)
         while True:
             task_doing = [i for i in tasks if not i.done()]
@@ -3375,11 +3493,16 @@ class GetOthersLotDyn:
     # region 判断单个动态是否是抽奖动态
 
     async def thread_judgedynamic(self, write_in_list):
+        async def judge_single_dynamic(dynamic_id):
+            new_resp = await self.get_dyn_detail_resp(dynamic_id)
+            dynamic_detail = await self.solve_dynamic_item_detail(dynamic_id, new_resp)
+            await self.judge_lottery_by_dynamic_resp_dict(dynamic_id, dynamic_detail)
+
         logger.info('多线程获取动态')
         task_list = []
         for i in write_in_list:
             await self.sem.acquire()
-            tk = asyncio.create_task(self.judge_lottery(i))
+            tk = asyncio.create_task(judge_single_dynamic(i))
             task_list.append(tk)
 
         while True:
@@ -3393,65 +3516,54 @@ class GetOthersLotDyn:
         get_dyn_resp_result = await asyncio.gather(*task_list, return_exceptions=False)
         logger.info(f'获取动态报错结果：{get_dyn_resp_result}')
 
-    async def get_dynamic_detail_with_proxy(self, dynamic_id, _cookie='', _useragent='', dynamic_type=2) -> dict:
-        '''
-        使用代理获取动态详情
+    async def get_dyn_detail_resp(self, dynamic_id, _cookie="", _useragent="", dynamic_type=2) -> dict:
+        """
+        返回{
+                        'code':0,
+                        'data':{
+                            "item":dynamic_req
+                        }
+                    }这样的dict
         :param dynamic_id:
-        :param dynamic_type:
         :param _cookie:
         :param _useragent:
+        :param dynamic_type:
         :return:
-        structure = {
-            'dynamic_id': dynamic_id,
-            'desc': desc,
-            'type': dynamic_type,
-            'rid': dynamic_rid,
-            'relation': relation,
-            'is_liked': is_liked,
-            'author_uid': author_uid,
-            'author_name': author_name,
-            'comment_count': comment_count,
-            'forward_count': forward_count,  # 转发数
-            'like_count': like_count,
-            'dynamic_content': dynamic_content,
-            'pub_time': pub_time,
-            'pub_ts': pub_ts,
-            'official_verify_type': official_verify_type,
-
-            'card_stype': card_stype,
-            'top_dynamic': top_dynamic,
-
-            'orig_dynamic_id': orig_dynamic_id,
-            'orig_mid': orig_mid,
-            'orig_name': orig_name,
-            'orig_pub_ts': orig_pub_ts,
-            'orig_official_verify': orig_official_verify,
-            'orig_comment_count': orig_comment_count,
-            'orig_forward_count': orig_forward_count,
-            'orig_like_count': orig_like_count,
-            'orig_dynamic_content': orig_dynamic_content,
-            'orig_relation': orig_relation,
-            'orig_desc': orig_desc
-        }
-        '''
+        """
         dynamic_req = None
         isDynExist = await self.sqlHlper.isExistDynInfoByDynId(dynamic_id)
         if isDynExist:
             # logger.critical(f'存在过的动态！！！{isDynExist.__dict__}')
             if isDynExist.officialLotType != OfficialLotType.抽奖动态的源动态.value:
-                dynamic_req = json.loads(isDynExist.rawJsonStr)
-                if type(dynamic_req) is str:
-                    dynamic_req = json.loads(dynamic_req)
+                dynamic_req = isDynExist.rawJsonStr
+                if type(dynamic_req) is not None:
+                    dynamic_req = {
+                        'code':0,
+                        'data':{
+                            "item":dynamic_req
+                        }
+                    }
+        isSpaceExist = await self.sqlHlper.isExistSpaceInfoByDynId(dynamic_id)
+        if isSpaceExist:
+            # logger.critical(f'存在过的动态！！！{isDynExist.__dict__}')
+            dynamic_req = isSpaceExist.spaceRespJson
+            if type(dynamic_req) is not None:
+                dynamic_req = {
+                    'code':0,
+                    'data':{
+                        "item":dynamic_req
+                    }
+                }
         if _cookie == '':
             headers = {
-                'Referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
-                'User-Agent': random.choice(CONFIG.UA_LIST),
+                'referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
+                'user-agent': random.choice(CONFIG.UA_LIST),
                 'cookie': '1'
             }
         else:
             headers = {
-                'Referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
-                'User-Agent': random.choice(CONFIG.UA_LIST),
+                'referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
+                'user-agent': random.choice(CONFIG.UA_LIST),
                 'cookie': _cookie
                 # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
                 #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
@@ -3469,11 +3581,51 @@ class GetOthersLotDyn:
                                                                      mode='single')
         except Exception as e:
             traceback.print_exc()
-            return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
+            return await self.get_dyn_detail_resp(dynamic_id, _cookie, _useragent)
+        return dynamic_req
+
+    async def solve_dynamic_item_detail(self, dynamic_id, dynamic_req: dict) -> dict:
+        """
+        使用代理获取动态详情，传入空间的动态响应前，需要先构建成单个动态的响应！！！
+        :param dynamic_req: {code:4101131,data:{item:...} }
+        :param dynamic_id:
+        :return:
+        structure = {
+            'dynamic_id': dynamic_id,
+            'desc': desc,
+            'type': dynamic_type,
+            'rid': dynamic_rid,
+            'relation': relation,
+            'is_liked': is_liked,
+            'author_uid': author_uid,
+            'author_name': author_name,
+            'comment_count': comment_count,
+            'forward_count': forward_count,  # 转发数
+            'like_count': like_count,
+            'dynamic_content': dynamic_content,
+            'pub_time': pub_time,
+            'pub_ts': pub_ts,
+            'official_verify_type': official_verify_type,
+            'card_stype': card_stype,
+            'top_dynamic': top_dynamic,
+            'orig_dynamic_id': orig_dynamic_id,
+            'orig_mid': orig_mid,
+            'orig_name': orig_name,
+            'orig_pub_ts': orig_pub_ts,
+            'orig_official_verify': orig_official_verify,
+            'orig_comment_count': orig_comment_count,
+            'orig_forward_count': orig_forward_count,
+            'orig_like_count': orig_like_count,
+            'orig_dynamic_content': orig_dynamic_content,
+            'orig_relation': orig_relation,
+            'orig_desc': orig_desc
+        }
+        """
+
         try:
             if dynamic_req.get('code') == 4101131:
-                logger.info(f'{url}\t{dynamic_req}')
-                return {'rawJSON': dynamic_req}
+                logger.info(f'动态内容不存在！{dynamic_id}\t{dynamic_req}')
+                return {'rawJSON': None}
             # logger.info(f'获取成功header:{headers}')
             dynamic_dict = dynamic_req
             dynamic_data = dynamic_dict.get('data')
@@ -3492,12 +3644,14 @@ class GetOthersLotDyn:
             dynamic_data_dynamic_id = dynamic_item.get('id_str')
             if dynamic_type == '2' and str(dynamic_data_dynamic_id) != dynamic_id:
                 logger.critical(f"获取的动态信息与需要的动态不符合！！！{dynamic_data}")
-                return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent, int(dynamic_type))
+                new_req = await self.get_dyn_detail_resp(dynamic_id)
+                return await self.solve_dynamic_item_detail(dynamic_id, new_req)
             dynamic_rid = dynamic_item.get('basic').get('comment_id_str')
             relation = dynamic_item.get('modules').get('module_author').get('following')
             author_uid = dynamic_item.get('modules').get('module_author').get('mid')
             author_name = dynamic_item.get('modules').get('module_author').get('name')
-            pub_time = dynamic_item.get('modules').get('module_author').get('pub_time')
+            # pub_time = dynamic_item.get('modules').get('module_author').get('pub_time')
+            pub_time = datetime.datetime.fromtimestamp(self.calculate_pub_ts_by_dynamic_id(dynamic_data_dynamic_id)).strftime('%Y年%m月%d日 %H:%M')
             pub_ts = dynamic_item.get('modules').get('module_author').get('pub_ts')
             try:
                 official_verify_type = dynamic_item.get('modules').get('module_author').get(
@@ -3555,15 +3709,18 @@ class GetOthersLotDyn:
             if dynamic_req.get('code') == -412:
                 logger.info('412风控')
                 await asyncio.sleep(10)
-                return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
+                new_req = await self.get_dyn_detail_resp(dynamic_id)
+                return await self.solve_dynamic_item_detail(dynamic_id, new_req)
             if dynamic_req.get('code') == 4101128:
                 logger.info(dynamic_req.get('message'))
             if dynamic_req.get('code') is None:
-                return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
+                new_req = await self.get_dyn_detail_resp(dynamic_id)
+                return await self.solve_dynamic_item_detail(dynamic_id, new_req)
             if dynamic_req.get('code') == 401:
                 logger.critical(dynamic_req)
                 await asyncio.sleep(10)
-                return await self.get_dynamic_detail_with_proxy(dynamic_id, _cookie, _useragent)
+                new_req = await self.get_dyn_detail_resp(dynamic_id)
+                return await self.solve_dynamic_item_detail(dynamic_id, new_req)
             return {}
 
         top_dynamic = None
@@ -3658,7 +3815,7 @@ class GetOthersLotDyn:
             logger.error(e)
             traceback.print_exc()
         structure = {
-            'rawJSON': json.dumps(dynamic_req),  # 原始json数据
+            'rawJSON': dynamic_item,  # 原始的item数据
             'dynamic_id': dynamic_data_dynamic_id,
             'dynamic_item': dynamic_item,
             'desc': desc,
@@ -3817,22 +3974,8 @@ class GetOthersLotDyn:
 
     # endregion
 
-    async def judge_lottery(self, dynamic_id, dynamic_type: int = 2, is_lot_orig=False):
-        """
-        判断是否是抽奖
-        :param dynamic_id:
-        :param dynamic_type:
-        :param is_lot_orig:
-        :return:
-        """
+    async def judge_single_dynamic_id(self, dynamic_id: str, dynamic_type: int = 2, is_lot_orig=False):
         dynamic_detail = None
-        async with self.lock:
-            if str(dynamic_id) in self.queried_dynamic_id_list or \
-                    str(dynamic_id) in self.queriedData.dyidList or \
-                    str(dynamic_id) in self.queryingData.dyidList:
-                logger.warning(f'当前动态 {dynamic_id} 已经查询过了，不重复查询')
-                return
-            self.queried_dynamic_id_list.append(str(dynamic_id))
         while 1:
             try:
                 fake_cookie_str = ""
@@ -3846,9 +3989,10 @@ class GetOthersLotDyn:
                     }
                     for k, v in fake_cookie.items():
                         fake_cookie_str += f'{k}={v}; '
-                dynamic_detail = await self.get_dynamic_detail_with_proxy(dynamic_id, fake_cookie_str,
-                                                                          random.choice(CONFIG.UA_LIST),
-                                                                          dynamic_type=dynamic_type)  # 需要增加假的cookie
+                dynamic_resp = await self.get_dyn_detail_resp(dynamic_id, fake_cookie_str,
+                                                              random.choice(CONFIG.UA_LIST),
+                                                              dynamic_type=dynamic_type)  # 需要增加假的cookie
+                dynamic_detail = await self.solve_dynamic_item_detail(dynamic_id, dynamic_resp)
                 if dynamic_type == 2:
                     if dynamic_detail.get('dynamic_id') and dynamic_detail.get('dynamic_id') != str(dynamic_id):
                         logger.error(
@@ -3860,10 +4004,29 @@ class GetOthersLotDyn:
                 logger.critical(f'获取动态响应失败！！！\n{traceback.format_exc()}')
                 continue
                 # return await self.judge_lottery(dynamic_id, dynamic_type, is_lot_orig)
-        self.sem.release()
+
+        return await self.judge_lottery_by_dynamic_resp_dict(dynamic_id, dynamic_detail, dynamic_type, is_lot_orig)
+
+    async def judge_lottery_by_dynamic_resp_dict(self, dynamic_id: str, dynamic_detail: dict, dynamic_type: int = 2,
+                                                 is_lot_orig=False):
+        """
+        判断是否是抽奖 通过已经获取好了的动态id
+        :param dynamic_detail: 经过 await self.solve_dynamic_item_detail(dynamic_id_str, single_dynamic_resp) 之后的内容
+        :param dynamic_id:
+        :param dynamic_type:
+        :param is_lot_orig:
+        :return:
+        """
+        async with self.lock:
+            if str(dynamic_id) in self.queried_dynamic_id_list or \
+                    str(dynamic_id) in self.queriedData.dyidList or \
+                    str(dynamic_id) in self.queryingData.dyidList:
+                logger.warning(f'当前动态 {dynamic_id} 已经查询过了，不重复查询')
+                return
+            self.queried_dynamic_id_list.append(str(dynamic_id))
         suffix = ''
         isLot = True
-        logger.info(f'当前动态：https://t.bilibili.com/{dynamic_id}\ttype={dynamic_type}\n{dynamic_detail}')
+        logger.info(f'当前动态：https://t.bilibili.com/{dynamic_id}\ttype={dynamic_type}\n{str(dynamic_detail)[30:180]}')
         try:
             if dynamic_detail and dynamic_detail.get('dynamic_id'):
                 dynamic_detail_dynamic_id = dynamic_detail['dynamic_id']  # 获取正确的动态id，不然可能会是rid或者aid
@@ -3891,7 +4054,7 @@ class GetOthersLotDyn:
                                 is_charge_lot = True
                                 break
                             if v.get('reserve'):
-                                if v.get('reserve').get('desc3'):
+                                if v.get('reserve').get('desc'):
                                     lot_rid = str(v.get('reserve').get('rid'))
                                     is_reserve_lot = True
                                     break
@@ -3966,7 +4129,7 @@ class GetOthersLotDyn:
                         self.useless_info.append(format_str)
                 self.queryingData.dyidList.append(str(dynamic_detail_dynamic_id))
                 await self.sqlHlper.addDynInfo(
-                    TLotDynInfo(
+                    TLotdyninfo(
                         dynId=str(dynamic_detail_dynamic_id),
                         dynamicUrl=ret_url,
                         authorName=author_name,
@@ -3983,8 +4146,8 @@ class GetOthersLotDyn:
                         isFollowed=int(bool(suffix)),
                         isLot=int(isLot),
                         hashTag=premsg if premsg else '',
-                        dynLotRound=self.nowRound.lotRound,
-                        rawJsonStr=json.dumps(rawJSON)
+                        dynLotRound_id=self.nowRound.lotRound_id,
+                        rawJsonStr=rawJSON
                     )
                 )
                 if dynamic_detail['orig_dynamic_id']:
@@ -4044,7 +4207,7 @@ class GetOthersLotDyn:
                                 self.useless_info.append(format_str)
                     if not isRecorded:
                         await self.sqlHlper.addDynInfo(
-                            TLotDynInfo(
+                            TLotdyninfo(
                                 dynId=str(orig_dynamic_id),
                                 dynamicUrl=orig_ret_url,
                                 authorName=orig_name,
@@ -4062,8 +4225,8 @@ class GetOthersLotDyn:
                                 isFollowed=int(bool(suffix)),
                                 isLot=int(isLot),
                                 hashTag=premsg if premsg else '',
-                                dynLotRound=self.nowRound.lotRound,
-                                rawJsonStr=json.dumps(dynamic_orig)
+                                dynLotRound_id=self.nowRound.lotRound_id,
+                                rawJsonStr=dynamic_orig
                             )
                         )
                 if isLot:
@@ -4078,12 +4241,21 @@ class GetOthersLotDyn:
                                     if not isChecked:
                                         self.aid_list.append(aid_str)
                                 if not isChecked:
-                                    await self.judge_lottery(dynamic_id=aid_str, dynamic_type=8,
-                                                             is_lot_orig=True)
+                                    new_dyn_resp = await self.get_dyn_detail_resp(dynamic_id=aid_str,
+                                                                                  dynamic_type=8,
+                                                                                  )
+                                    new_dyn_detail = await self.solve_dynamic_item_detail(dynamic_id=aid_str,
+                                                                                          dynamic_req=new_dyn_resp
+                                                                                          )
+                                    await self.judge_lottery_by_dynamic_resp_dict(dynamic_id=aid_str,
+                                                                                  dynamic_detail=new_dyn_detail,
+                                                                                  dynamic_type=8,
+                                                                                  is_lot_orig=True
+                                                                                  )
             else:
                 logger.warning(f'失效动态：https://t.bilibili.com/{dynamic_id}')
                 await self.sqlHlper.addDynInfo(
-                    TLotDynInfo(
+                    TLotdyninfo(
                         dynId=str(dynamic_id),
                         dynamicUrl=f'https://t.bilibili.com/{dynamic_id}',
                         authorName='',
@@ -4100,17 +4272,18 @@ class GetOthersLotDyn:
                         isFollowed=-1,
                         isLot=-1,
                         hashTag='',
-                        dynLotRound=self.nowRound.lotRound,
-                        rawJsonStr=json.dumps(dynamic_detail.get('rawJSON', '{}'))
+                        dynLotRound_id=self.nowRound.lotRound_id,
+                        rawJsonStr=dynamic_detail.get('rawJSON')
                     )
                 )
         except Exception as e:
             logger.error(f'解析动态失败！！！\n{dynamic_detail}')
+            logger.exception(e)
 
     # endregion
 
     async def checkDBDyn(self):
-        allDyn = await self.sqlHlper.getAllDynByLotRound(self.nowRound.lotRound)
+        allDyn = await self.sqlHlper.getAllDynByLotRound(self.nowRound.lotRound_id)
         useless_dynurl_list = [x.split('\t')[0] for x in self.useless_info]
         lottery_dynamicurl_list = [x.split('\t')[0] for x in self.lottery_dynamic_detail_list]
         for i in allDyn:
@@ -4170,21 +4343,21 @@ class GetOthersLotDyn:
     async def main(self):
         latest_round = await self.sqlHlper.getLatestRound()
         if not latest_round:
-            latest_round = TLotMainInfo(
-                lotRound=1,
+            latest_round = TLotmaininfo(
+                lotRound_id=1,
                 allNum=0,
                 lotNum=0,
                 uselessNum=0,
-                isRoundFinished=0,
+                isRoundFinished=False,
             )
             self.isPreviousRoundFinished = True
         elif latest_round.isRoundFinished:
-            latest_round = TLotMainInfo(
-                lotRound=latest_round.lotRound + 1,
+            latest_round = TLotmaininfo(
+                lotRound_id=latest_round.lotRound + 1,
                 allNum=0,
                 lotNum=0,
                 uselessNum=0,
-                isRoundFinished=0,
+                isRoundFinished=False,
             )
             self.isPreviousRoundFinished = True
         self.nowRound = latest_round
@@ -4197,7 +4370,14 @@ class GetOthersLotDyn:
         await self.getLastestScrapyInfo()
 
         GOTO_check_lot_dyn_id_list: list[str] = self.getGiteeLotdyid()  # 添加gitee动态id
-        GOTO_check_lot_dyn_id_list.extend(await self.getAllSpaceDynId())  # 添加用户空间动态id
+
+        GOTO_check_lot_dyn_id_list.extend(await self.getAllSpaceDynId(self.queryingData.uidlist, False))  # 添加用户空间动态id
+        pub_lot_uid_list = [x.uid for x in self.pub_lot_user_info_list]
+        pub_lot_uid_list = list(set(pub_lot_uid_list))  # 去个重先
+
+        print(f'总共要获取{len(pub_lot_uid_list)}个发起抽奖用户的空间！')
+        GOTO_check_lot_dyn_id_list.extend(await self.getAllSpaceDynId(pub_lot_uid_list, True))  # FIXME 真跑的时候把数量切片去掉！！！
+
         GOTO_check_lot_dyn_id_list = list(set(GOTO_check_lot_dyn_id_list))  # 去个重先
         print(f'过滤前{len(GOTO_check_lot_dyn_id_list)}条待检查动态')
         GOTO_check_lot_dyn_id_list = [x for x in GOTO_check_lot_dyn_id_list if x not in self.queriedData.dyidList]
@@ -4205,7 +4385,7 @@ class GetOthersLotDyn:
         writeIntoFile(GOTO_check_lot_dyn_id_list, FileMap.本轮检查的动态id, 'w', ',')
 
         await self.thread_judgedynamic(GOTO_check_lot_dyn_id_list)
-        await self.checkDBDyn()
+        await self.checkDBDyn()  # 从数据库里面吧本轮的抽奖动态重新检查一遍
 
         self.nowRound.allNum = len(GOTO_check_lot_dyn_id_list)
         self.nowRound.lotNum = len(self.lottery_dynamic_detail_list)
@@ -4365,8 +4545,9 @@ class GET_OTHERS_LOT_DYN:
         from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper as sq
         mysq = sq()
         all_lots = await mysq.get_all_available_reserve_lotterys()
-        recent_lots:list[TUpReserveRelationInfo] = [x for x in all_lots if x.etime and x.etime - int(time.time()) < 2 * 3600 * 24]
-        reserve_infos:list[str] = [x.text for x in recent_lots]
+        recent_lots: list[TUpReserveRelationInfo] = [x for x in all_lots if
+                                                     x.etime and x.etime - int(time.time()) < 2 * 3600 * 24]
+        reserve_infos: list[str] = [x.text for x in recent_lots]
         is_lot_list = big_reserve_predict(reserve_infos)
         ret_list = []
         ret_info_list = []
@@ -4377,7 +4558,7 @@ class GET_OTHERS_LOT_DYN:
                 ret_list.append(recent_lots[i])
         if ret_info_list:
             pushme(f"必抽的预约抽奖", '\n'.join(ret_info_list[0:10]),
-                   'text')  # {datetime.datetime.now().strftime('%m月%d日')}
+                   'text')
         return ret_list
 
     # endregion

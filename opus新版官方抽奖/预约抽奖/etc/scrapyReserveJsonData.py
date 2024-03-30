@@ -3,6 +3,7 @@
 import ast
 import asyncio
 import linecache
+import pandas
 from dataclasses import dataclass
 from functools import reduce
 import json
@@ -10,9 +11,9 @@ import random
 import sys
 from loguru import logger
 import CONFIG
+from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from utl.代理.request_with_proxy import request_with_proxy
 
-sys.path.append('C:/pythontest/')
 import time
 import traceback
 import b站cookie.b站cookie_
@@ -21,8 +22,10 @@ import requests
 import os
 import Bilibili_methods.all_methods
 import atexit
+from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper
 
 BAPI = Bilibili_methods.all_methods.methods()
+log = logger.bind(user="预约抽奖")
 
 
 @dataclass
@@ -34,20 +37,12 @@ class dynamic_timestamp_info:
         return time.strftime("%H小时%M分钟%S秒", time.gmtime(int(time.time()) - self.dynamic_timestamp))
 
 
-# 放入缓存防止内存过载
-def get_line_count(filename):
-    count = 0
-    with open(filename, 'r', encoding='utf-8') as f:
-        while True:
-            buffer = f.read(1024 * 1)
-            if not buffer:
-                break
-            count += buffer.count('\n')
-    return count
-
-
 class rid_get_dynamic:
     def __init__(self):
+        self.sqlHlper = SqlHelper()
+        self.root_dir = CONFIG.CONFIG.root_dir
+        self.now_round_id = 0
+        self.relative_dir = 'opus新版官方抽奖/预约抽奖/etc/'
         self.ids_list = []
         self.ids_change_lock = asyncio.Lock()
         self.quit_lock = asyncio.Lock()
@@ -81,10 +76,10 @@ class rid_get_dynamic:
             if res['data']['isLogin'] == True:
                 name = res['data']['uname']
                 self.username = name
-                logger.info('登录成功,当前账号用户名为%s' % name)
+                log.info('登录成功,当前账号用户名为%s' % name)
                 return 1
             else:
-                logger.info('登陆失败,请重新登录')
+                log.info('登陆失败,请重新登录')
                 exit('登陆失败,请重新登录')
 
         self.list_type_wrong = list()  # 出错动态内容
@@ -96,17 +91,12 @@ class rid_get_dynamic:
         self.dynamic_timestamp: dynamic_timestamp_info = dynamic_timestamp_info()
         self.getfail = None  # 文件
         self.unknown = None  # 文件
-        self.last_updated_reserve = None  # 文件
-        self.all_reserve_relation = None  # 文件
 
         # 文件
 
-        self.list_all_reserve_relation = list()  # 所有的动态内容，自己在后面加上是否是抽奖，官号等信息
-        self.list_last_updated_reserve = list()  # 最后一次获取的rid内容
         self.list_getfail = list()
         self.list_unknown = list()
-        self.all_reserve_relation_list = list()
-        self.all_reserve_relation_ids_list = list()
+
         # 内容
         self.file_list_lock = asyncio.Lock()
 
@@ -117,42 +107,10 @@ class rid_get_dynamic:
 
             content_list.clear()
 
-        if self.list_all_reserve_relation:
-            my_write(self.all_reserve_relation, self.list_all_reserve_relation)
-        if len(self.list_last_updated_reserve) == 0:
-            raise ValueError("获取的新抽奖为空，检查响应！")
-        my_write(self.last_updated_reserve, self.list_last_updated_reserve, 'w')
-
         if self.list_getfail:
             my_write(self.getfail, self.list_getfail)
         if self.list_unknown:
             my_write(self.unknown, self.list_unknown)
-
-    def mix_dict_resolve(self, my_dict: dict, parent_key=None) -> dict:
-        '''
-        多层dict解码，键名用.分割不同的key下内容
-        :param my_dict:
-        :param parent_key:
-        :return:
-        '''
-        if parent_key is None:
-            parent_key = []
-        ret_dict = dict()
-        for k, v in my_dict.items():
-            if isinstance(v, str):
-                try:
-                    v = json.loads(v)
-                except:
-                    pass
-            if isinstance(v, dict):
-                parent_key.append(k)
-                ret_dict.update(self.mix_dict_resolve(v, parent_key))
-                continue
-            key_prename = ''
-            if parent_key:
-                key_prename = '.'.join(parent_key) + '.'
-            ret_dict.update({key_prename + k: str(v)})
-        return ret_dict
 
     async def resolve_dynamic_with_sem(self, rid: int):
         await self.resolve_dynamic(rid)
@@ -164,17 +122,21 @@ class rid_get_dynamic:
         :param rid:
         :return:
         '''
-        req1_dict = await self.reserve_relation_with_proxy(rid)
+        has_reserve_relation_ids = await self.sqlHlper.get_reserve_by_ids(rid)
+        if has_reserve_relation_ids and has_reserve_relation_ids.code == 0:
+            req1_dict = has_reserve_relation_ids.raw_JSON
+        else:
+            req1_dict = await self.reserve_relation_with_proxy(rid)
+            req1_dict.update({'ids': rid})
+            await self.sqlHlper.add_reserve_info_by_resp_dict(req1_dict, self.now_round_id)  # 添加预约json到数据库
+
         async with self.file_list_lock:
-            # dynamic_data_dict = self.mix_dict_resolve(req1_dict)
             dynamic_data_dict = req1_dict
-            # dynamic_data_dict.update({'update_time': BAPI.timeshift(time.time())})
-            dynamic_data_dict.update({'ids': rid})
             try:
                 dycode = req1_dict.get('code')
             except Exception as e:
                 dycode = 404
-                logger.info(f'code获取失败{req1_dict}')
+                log.info(f'code获取失败{req1_dict}')
             self.code_check(dycode)
             self.times += 1
             dymsg = req1_dict.get('msg')
@@ -183,7 +145,7 @@ class rid_get_dynamic:
             if dydata is None:
                 async with self.null_timer_lock:
                     self.null_timer += 1
-                    logger.info(
+                    log.info(
                         '\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
                                                                                               time.localtime()) +
                         '\t\t\t\trid:{}'.format(rid) + '\n'
@@ -196,7 +158,7 @@ class rid_get_dynamic:
                                 if self.null_timer > 30:
                                     await self.quit()
                             else:
-                                logger.debug(
+                                log.debug(
                                     f"当前null_timer（{self.null_timer}）没满{self.null_time_quit}或最近的预约时间间隔过长{self.dynamic_timestamp.get_time_str_until_now()}")
                         if self.null_timer > 1000:  # 太多的data为None的数据了
                             await self.quit()
@@ -205,7 +167,7 @@ class rid_get_dynamic:
                     self.null_timer = 0
                     list(filter(lambda x: list(x.keys())[0] == rid, self.null_list))[0].update({rid: True})
             if dycode == 404:
-                logger.info(f'{dycode}\n {dymsg}\n {dymessage}')
+                log.info(f'{dycode}\n {dymsg}\n {dymessage}')
                 self.list_getfail.append(dynamic_data_dict)
                 self.code_check(dycode)
                 return
@@ -225,7 +187,7 @@ class rid_get_dynamic:
                         if rid > self.dynamic_timestamp.ids:
                             self.dynamic_timestamp.dynamic_timestamp = dynamic_timestamp
                             self.dynamic_timestamp.ids = rid
-                    logger.info(
+                    log.info(
                         '\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
                                                                                               time.localtime()) +
                         '\t\t\t\trid:{}'.format(rid) + '\n'
@@ -235,19 +197,16 @@ class rid_get_dynamic:
                     #         self.quit()
                 except:
                     # self.dynamic_timestamp = 0
-                    logger.info(f'\n\t\t\t\t第{self.times}次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
+                    log.info(f'\n\t\t\t\t第{self.times}次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
                                                                                             time.localtime()) +
                                 '\t\t\t\trid:{}'.format(rid) + '\n' +
                                 f'直播预约失效，被删除:{req1_dict}\n当前已经有{self.null_timer}条data为None的sid'
                                 )
-                if rid not in self.all_reserve_relation_ids_list:
-                    self.list_all_reserve_relation.append(dynamic_data_dict)
-                    self.list_last_updated_reserve.append(dynamic_data_dict)
                 self.code_check(dycode)
                 return
             if dycode == -412:
                 self.code_check(dycode)
-                logger.info(req1_dict)
+                log.info(req1_dict)
                 self.list_getfail.append(dynamic_data_dict)
                 return
             if dycode != 0:
@@ -257,7 +216,7 @@ class rid_get_dynamic:
     def code_check(self, dycode):
         if dycode == 404:
             self.btime += 1
-            logger.info(f'未知类型代码{dycode}')
+            log.info(f'未知类型代码{dycode}')
             return 0
         try:
             if dycode == 500205:
@@ -266,9 +225,9 @@ class rid_get_dynamic:
             else:
                 self.btime = 0
         except Exception as e:
-            logger.info(dycode)
-            logger.info('未知类型代码')
-            logger.info(e)
+            log.info(dycode)
+            log.info('未知类型代码')
+            log.info(e)
         if dycode == -412:
             # time.sleep(eval(input('输入等待时间')))
             return -412
@@ -293,18 +252,14 @@ class rid_get_dynamic:
                     self.file_remove_repeat_contents(self.unknown)
                 if os.path.exists(self.getfail):
                     self.file_remove_repeat_contents(self.getfail)
-                if os.path.exists(self.last_updated_reserve):
-                    self.file_remove_repeat_contents(self.last_updated_reserve)
-                if os.path.exists(self.all_reserve_relation):
-                    self.file_remove_repeat_contents(self.all_reserve_relation)
 
-                # logger.info(f'已获取到最近{self.EndTimeSeconds // 60}分钟为止的动态')
+                # log.info(f'已获取到最近{self.EndTimeSeconds // 60}分钟为止的动态')
                 async with self.ids_change_lock:
-                    logger.info(f'退出抽奖！当前ids：{self.ids}')
+                    log.info(f'退出抽奖！当前ids：{self.ids}')
                     self.ids = None
 
-                logger.info('共' + str(self.times - 1) + '次获取动态')
-                logger.info('其中' + str(self.n) + '个有效动态')
+                log.info('共' + str(self.times - 1) + '次获取动态')
+                log.info('其中' + str(self.n) + '个有效动态')
             else:
                 return
         # os.system('shutdown /s /t 3600')
@@ -321,9 +276,7 @@ class rid_get_dynamic:
     async def reserve_relation_with_proxy(self, ids, _type=2):
         while 1:
             try:
-                logger.info(f'reserve_relation_with_proxy\t当前ids:{ids}\t当前剩余可启用线程数：{self.sem._value}')
-                if ids in self.all_reserve_relation_ids_list:
-                    return next(filter(lambda x: x.get("ids") == ids, self.all_reserve_relation_list))
+                log.info(f'reserve_relation_with_proxy\t当前ids:{ids}\t当前剩余可启用线程数：{self.sem._value}')
                 url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
                 # ua = random.choice(BAPI.User_Agent_List)
                 headers = {
@@ -350,10 +303,13 @@ class rid_get_dynamic:
                     raise Exception(f"{url}\treq_dict is None:{req_dict}")
                 return req_dict
             except Exception as e:
-                logger.critical(e)
+                log.critical(e)
                 await asyncio.sleep(10)
 
     async def get_dynamic_with_thread(self):
+        now_round: TReserveRoundInfo = await self.sqlHlper.get_latest_reserve_round()
+        round_start_ts = int(time.time()) if now_round.is_finished else now_round.round_start_ts
+        self.now_round_id = now_round.round_id + 1 if now_round.is_finished else now_round.round_id
         None_num1 = 0
         task_list: list[asyncio.Task] = []
         for ids_index in range(len(self.ids_list)):
@@ -403,23 +359,22 @@ class rid_get_dynamic:
 
                 task_list = list(filter(lambda x: not x.done(), task_list))
 
-                logger.debug(f'当前线程存活数量：{len(task_list)}')
+                log.debug(f'当前线程存活数量：{len(task_list)}')
                 # if len(task_list) > self.sem_max_val:
                 #     for Task in task_list:
                 #         await Task
                 if await self._get_checking_number() > self.sem_max_val + 5:
                     await asyncio.gather(*task_list)
             task_list = list(filter(lambda x: not x.done(), task_list))
-            logger.debug(f'任务已经完成，当前线程存活数量：{len(task_list)}，正在等待剩余线程完成任务')
+            log.debug(f'任务已经完成，当前线程存活数量：{len(task_list)}，正在等待剩余线程完成任务')
             await asyncio.gather(*task_list)
             # if len(self.list_all_reserve_relation) > 1000:
             #     self.write_in_file()
-            #     logger.info('\n\n\t\t\t\t写入文件\n')
-
+            #     log.info('\n\n\t\t\t\t写入文件\n')
         None_num2 = await self._get_None_data_number()
-        logger.info(
+        log.info(
             f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{self.dynamic_timestamp.get_time_str_until_now()}秒，退出！')
-        logger.info(f'当前rid记录分别回滚{self.rollback_num + None_num1}和{self.rollback_num + None_num2}条')
+        log.info(f'当前rid记录分别回滚{self.rollback_num + None_num1}和{self.rollback_num + None_num2}条')
         ridstartfile = open('idsstart.txt', 'w', encoding='utf-8')
         finnal_rid_list = [
             str(self.ids_list[0] - self.rollback_num - None_num1),
@@ -428,8 +383,43 @@ class rid_get_dynamic:
         ridstartfile.write("\n".join(
             finnal_rid_list))
         ridstartfile.close()
+
         self.write_in_file()
-        logger.info('\n\n\t\t\t\t写入文件\n')
+        log.info('\n\n\t\t\t\t写入文件\n')
+        latest_reserve_lots = await self.generate_update_reserve_lotterys_by_round_id(self.now_round_id)
+        new_round_info = TReserveRoundInfo(
+            round_id=self.now_round_id,
+            is_finished=True,
+            round_start_ts=round_start_ts,
+            round_add_num=self.times - 1 - None_num1 - None_num2,
+            round_lot_num=len(latest_reserve_lots),
+        )
+        await self.sqlHlper.add_reserve_round_info(new_round_info)
+
+
+    async def generate_update_reserve_lotterys_by_round_id(self,round_id)->list[TUpReserveRelationInfo]:
+        """
+        获取特定round更新的预约抽奖并写入文件，如果本次round更新的抽奖数量为0,则报错退出！
+        :return:
+        """
+        exclude_attrs = ['new_field', 'reserve_round', 'reserve_round_id',
+                         'raw_JSON']
+        latest_reserve_lottery = await self.sqlHlper.get_reserve_lotterys_by_round_id(round_id)
+        newly_updated_reserve_list = self.sqlHlper.SqlAlchemyObjList2DictList(
+            latest_reserve_lottery,
+            TUpReserveRelationInfo,
+            exclude_attrs
+        )
+        if not os.path.exists(self.root_dir + self.relative_dir + 'result'):
+            os.mkdir(self.root_dir + self.relative_dir +'result')
+        newly_updated_reserve_file_name = self.root_dir + self.relative_dir + 'result/' + '最后一次更新的直播预约抽奖.csv'
+        if len(newly_updated_reserve_list) == 0:
+            log.error('更新抽奖数量为0，检查代码！')
+            exit('更新抽奖数量为0，检查代码！')
+        df = pandas.DataFrame(newly_updated_reserve_list)
+        open(newly_updated_reserve_file_name, 'w').close()
+        df.to_csv(newly_updated_reserve_file_name, header=True, encoding='utf-8', index=False, sep='\t')
+        return newly_updated_reserve_list
 
     def file_remove_repeat_contents(self, filename: str):
         s = set()
@@ -450,47 +440,25 @@ class rid_get_dynamic:
         初始化信息
         :return:
         '''
-        if not os.path.exists('log'):
-            os.mkdir('log')
+        if not os.path.exists(self.root_dir + self.relative_dir + 'log'):
+            os.mkdir(self.root_dir + self.relative_dir + 'log')
 
-        self.unknown = 'log/未知类型.csv'
+        self.unknown = self.root_dir + self.relative_dir + 'log/未知类型.csv'
 
-        self.getfail = 'log/获取失败.csv'
+        self.getfail = self.root_dir + self.relative_dir + 'log/获取失败.csv'
 
-        self.all_reserve_relation = '所有直播预约.csv'
-
-        self.last_updated_reserve = '最后一次更新的直播预约.csv'
-
-        self.all_reserve_relation_list = []  # [{code:xxx,data:xxx,ids:xxx}]
         try:
-            linecache.clearcache()
-            line_count = get_line_count(self.all_reserve_relation)
-            logger.info('num: ', line_count)
-            line_count = line_count - (self.rollback_num + 5000)
-            last_line = []
-            for i in range(self.rollback_num + 5000):
-                last_line = linecache.getline(self.all_reserve_relation, line_count)
-                dict_content = ast.literal_eval(last_line.strip())
-                self.all_reserve_relation_list.append(dict_content)
-                if dict_content.get('data'):
-                    self.all_reserve_relation_ids_list.append(dict_content.get('ids'))
-                line_count += 1
-            # logger.info(line_count, self.all_reserve_relation_list)
-        except:
-            traceback.print_exc()
-            logger.info(f'读取 {self.all_reserve_relation} 文件失败')
-        try:
-            ridstartfile = open('idsstart.txt', 'r', encoding='utf-8')
+            ridstartfile = open(self.root_dir + self.relative_dir + 'idsstart.txt', 'r', encoding='utf-8')
             async with self.ids_change_lock:
                 self.ids_list.extend([int(x) for x in ridstartfile.readlines()])
                 self.ids = self.ids_list[0]
             ridstartfile.close()
-            logger.info('获取rid开始文件成功\nids开始值：{}'.format(self.ids))
+            log.info('获取rid开始文件成功\nids开始值：{}'.format(self.ids))
             if self.ids <= 0:
-                logger.info('获取rid开始文件失败')
+                log.info('获取rid开始文件失败')
                 sys.exit('获取rid开始文件失败')
         except:
-            logger.info('获取rid开始文件失败')
+            log.info('获取rid开始文件失败')
             sys.exit('获取rid开始文件失败')
 
     async def check_null_timer(self, null_quit_time):

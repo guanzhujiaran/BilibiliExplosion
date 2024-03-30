@@ -20,7 +20,7 @@ from CONFIG import CONFIG
 from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, APIExClimbWuzhi
 from utl.代理.ProxyTool.ProxyObj import MyProxyData, MyProxyDataTools, TypePDict
 from utl.代理.SealedRequests import MYASYNCHTTPX
-from utl.代理.redisProxyRequest.RedisManager import RedisManagerBase
+from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.数据库操作 import async_proxy_op_alchemy_mysql_ver as sqlite3_proxy_op
 
 
@@ -305,7 +305,7 @@ class request_with_proxy:
                     elif req_dict.get('code') == -352:
                         self._352_time = await self.redis.get__352_time()
                         self._352_time += 1
-                        if self._352_time >= 20:
+                        if self._352_time >= 10:
                             await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
                             self._352_time = 0
                         await self.redis.set__352_time(self._352_time)

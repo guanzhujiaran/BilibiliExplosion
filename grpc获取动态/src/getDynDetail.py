@@ -11,7 +11,6 @@ import hashlib
 import json
 import os
 import random
-import threading
 import time
 import traceback
 import urllib.parse
@@ -32,7 +31,7 @@ class DynDetailScrapy:
         self.__rootPath = CONFIG.root_dir + 'grpc获取动态'
         self.proxy_req = request_with_proxy()
         self.BiliGrpc = BiliGrpc()
-        self.succ_times=0
+        self.succ_times = 0
         self.comm_headers = {
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
             "content-type": "application/json;charset=UTF-8",
@@ -52,17 +51,26 @@ class DynDetailScrapy:
         # self.thread_sem = threading.Semaphore(50)
         self.stop_limit_time = 1 * 3600  # 提前多少时间停止
         self.common_log = logger.bind(user='全局日志')
-        self.common_log_handler = logger.add(sys.stderr, level="DEBUG",filter=lambda record: record["extra"].get('user')=="全局日志")
-        self.doc_id_2_dynamic_id_log=logger.bind(user='doc_id转dynamic_id日志')
-        self.doc_id_2_dynamic_id_log_handler = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="doc_id转dynamic_id日志")
-        self.unknown_module_log=logger.bind(user='unknown_module')
-        self.unknown_module_log_handler = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="unknown_module")
-        self.unknown_card_log=logger.bind(user='unknown_card')
-        self.unknown_card_log_handler  = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="unknown_card")
-        self.common_error_log=logger.bind(user='common_error_log')
-        self.common_error_log_handler  =logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="common_error_log")
+        self.common_log_handler = logger.add(sys.stderr, level="DEBUG",
+                                             filter=lambda record: record["extra"].get('user') == "全局日志")
+        self.doc_id_2_dynamic_id_log = logger.bind(user='doc_id转dynamic_id日志')
+        self.doc_id_2_dynamic_id_log_handler = logger.add(sys.stderr, level="INFO",
+                                                          filter=lambda record: record["extra"].get(
+                                                              'user') == "doc_id转dynamic_id日志")
+        self.unknown_module_log = logger.bind(user='unknown_module')
+        self.unknown_module_log_handler = logger.add(sys.stderr, level="INFO",
+                                                     filter=lambda record: record["extra"].get(
+                                                         'user') == "unknown_module")
+        self.unknown_card_log = logger.bind(user='unknown_card')
+        self.unknown_card_log_handler = logger.add(sys.stderr, level="INFO",
+                                                   filter=lambda record: record["extra"].get('user') == "unknown_card")
+        self.common_error_log = logger.bind(user='common_error_log')
+        self.common_error_log_handler = logger.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get(
+            'user') == "common_error_log")
         self.additional_module_log = logger.bind(user='additional_module_log')
-        self.additional_module_log_handler = logger.add(sys.stderr, level="INFO",filter=lambda record: record["extra"].get('user')=="common_error_log")
+        self.additional_module_log_handler = logger.add(sys.stderr, level="INFO",
+                                                        filter=lambda record: record["extra"].get(
+                                                            'user') == "additional_module_log")
         self.log_init()
 
     def _timeshift(self, timestamp: int) -> str:
@@ -318,7 +326,7 @@ class DynDetailScrapy:
                 self.common_error_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
                 time.sleep(10)
                 if resp.get('code') == -9999:
-                    return resp # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
+                    return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
                 continue
             return resp
 
@@ -374,12 +382,13 @@ class DynDetailScrapy:
             ret_dict_list.append(tempdetail_dict.__dict__)
         else:
             ret_dict_list.append({'rid': rid, 'dynamic_id': '-1'})
-        self.succ_times+=1
+        self.succ_times += 1
         if ret_dict_list[0].get('dynamic_id') != '-1':
             self.common_log.debug(
                 f"总共成功获取{self.succ_times}次\t{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
         else:
-            self.common_log.debug(f"总共成功获取{self.succ_times}次\t获取单个动态详情成功，但动态被删除了！http://t.bilibili.com/{rid}?type=2")
+            self.common_log.debug(
+                f"总共成功获取{self.succ_times}次\t获取单个动态详情成功，但动态被删除了！http://t.bilibili.com/{rid}?type=2")
         return ret_dict_list
 
     # endregion
@@ -525,10 +534,10 @@ class DynDetailScrapy:
         # self.thread_sem.release()
         return rid
 
-    def run_async_in_thread(self,async_task,*args,**kargs):
+    def run_async_in_thread(self, async_task, *args, **kargs):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(async_task(*args,**kargs))
+        loop.run_until_complete(async_task(*args, **kargs))
         loop.close()
 
     async def main_get_dynamic_detail_by_rid(self):
@@ -559,7 +568,7 @@ class DynDetailScrapy:
                 task_list.append(task)
             print(f'当前可开启线程数剩余：{self.scrapy_sem._value}')
             # task_list = list(filter(lambda _t: not _t.is_alive(), task_list))
-            task_list=list(filter(lambda _t: not _t.done(), task_list))
+            task_list = list(filter(lambda _t: not _t.done(), task_list))
             if self.stop_Flag:
                 # for t in task_list:
                 #     t.join()

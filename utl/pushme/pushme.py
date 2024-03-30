@@ -4,11 +4,12 @@ import json
 import traceback
 
 import requests
+from requests import Response
 
 from CONFIG import CONFIG
 
 
-def pushme(title: str, content: str, __type='text'):
+def pushme(title: str, content: str, __type='text')->Response:
     try:
         url = CONFIG.pushnotify.pushme.url
         token = CONFIG.pushnotify.pushme.token
@@ -18,11 +19,11 @@ def pushme(title: str, content: str, __type='text'):
             "content": content,
             'type': __type
         }
-        req = requests.post(url=url, data=data, verify=False)
+        return requests.post(url=url, data=data, verify=False)
     except:
         print(f'推送失败！\n{traceback.format_exc()}')
         print(f'开始尝试微信pushpush推送！')
-        _pushpush(title, content, __type)
+        return _pushpush(title, content, __type)
 
 
 def _pushpush(title: str, content: str, __type='txt'):
@@ -64,6 +65,7 @@ def _pushpush(title: str, content: str, __type='txt'):
         })
         if req.json().get('code') != 200:
             raise SyntaxError(f'推送请求失败！{req.text}')
+        return req
     except:
         print(f'推送失败！\n{traceback.format_exc()}')
 

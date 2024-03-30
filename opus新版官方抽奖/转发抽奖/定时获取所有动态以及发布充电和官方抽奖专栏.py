@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import sys
-
 import asyncio
 import time
 from datetime import datetime
@@ -34,7 +33,7 @@ def run(*args, **kwargs):
 
 
 if __name__ == "__main__":
-    schedule_mark = True
+    schedule_mark = False
     if schedule_mark:
         from apscheduler.schedulers.blocking import BlockingScheduler
         from apscheduler.triggers.cron import CronTrigger

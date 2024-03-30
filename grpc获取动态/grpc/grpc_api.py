@@ -569,7 +569,7 @@ class MY_Error(ValueError):
 
 async def test():
     t = BiliGrpc()
-    resp = await t.grpc_get_dynamic_detail_by_type_and_rid(303765580, proxy_flag=False)
+    resp = await t.grpc_get_space_dyn_by_uid(279262754, '')
     print(resp)
 
 

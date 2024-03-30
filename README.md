@@ -5,7 +5,7 @@
 [__监控up主空间动态__](grpc获取动态/src/监控up动态/bili_dynamic_monitor.py)\
 [__定时获取转发抽奖__](opus新版官方抽奖/转发抽奖/定时获取所有动态以及发布充电和官方抽奖专栏.py)\
 [__定时获取预约抽奖__](opus新版官方抽奖/预约抽奖/定时提交预约抽奖.py)\
-[__监控ipv6变化__](K:/python测试专用/光猫测试/一键修改squidconfig.py)\
+[__监控ipv6变化__](K:\python测试专用\光猫测试\监控本地ip地址变化.py)\
 > \
 [__天选抽奖监控__](K:\Bili_live_monitor\src\monitor.py) （需要安装redis，抽奖数据上传至redis中）\
 [__手动推送抽奖__](K:\Bili_live_monitor\src\手动推送抽奖.py)\

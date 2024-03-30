@@ -514,20 +514,26 @@ class ExClimbWuzhi:
         获取带有b3和b4的cookie
         :return:
         '''
-        cookie = ['innersign=0',
-                  'i-wanna-go-back=-1',
-                  'b_ut=7',
-                  'enable_web_push=DISABLE',
-                  'header_theme_version=undefined',
-                  'home_feed_column=4',
-                  f'browser_resolution={apiExClimbWuzhi.browser_resolution.avail_h}-{apiExClimbWuzhi.browser_resolution.avail_w}',
-                  f'buvid_fp={BuvidFp.gen(apiExClimbWuzhi)}'
+        fingerprint = BuvidFp.gen(apiExClimbWuzhi)
+        cookie = [
+                  #'innersign=0',
+                  #'i-wanna-go-back=-1',
+                  #'b_ut=7',
+                  #'enable_web_push=DISABLE',
+                  #'header_theme_version=undefined',
+                  #'home_feed_column=4',
+                  # f'browser_resolution={apiExClimbWuzhi.browser_resolution.avail_h}-{apiExClimbWuzhi.browser_resolution.avail_w}',
+                  f'buvid_fp={fingerprint}',
+                  f'fingerprint={fingerprint}'
+                  'buvid_fp_plain=undefined',
+                  'hit-dyn-v2=1',
+                  'PVID=2'
                   ]
 
         cookie.append("=".join(['b_lsid', utils.lsid()]))
         apiExClimbWuzhi._uuid = UuidInfoc.gen()
         cookie.append("=".join(['_uuid', apiExClimbWuzhi._uuid]))
-        cookie.append("=".join(['b_nut', str(int(time.time() * 1000))]))
+        cookie.append("=".join(['b_nut', str(int(time.time()))]))
         if useProxy:
             # response = await MYREQ.request_with_proxy(method="get", url=apiExClimbWuzhi.spi, headers={
             #     "Referer": 'https://www.bilibili.com/',
@@ -560,6 +566,7 @@ class ExClimbWuzhi:
                                                  )).json()
         cookie.append("=".join(['buvid3', quote(response['data']['b_3'], safe='')]))
         cookie.append("=".join(['buvid4', quote(response['data']['b_4'], safe='')]))
+
         return "; ".join(cookie)
 
     @staticmethod
@@ -855,7 +862,7 @@ class ExClimbWuzhi:
                                              }
                                              )).json()
         else:
-            resp = (await MyAsyncReq.request(url=MYCFG.giaGateWayExClimbWuzhi,
+            resp_json = await MyAsyncReq.request(url=MYCFG.giaGateWayExClimbWuzhi,
                                              method='post',
                                              data=json.dumps({"payload": json.dumps(payload)}),
                                              headers=headers,
@@ -863,7 +870,8 @@ class ExClimbWuzhi:
                                                  'https': 'http://127.0.0.1:23998',
                                                  'http': 'http://127.0.0.1:23998',
                                              }
-                                             )).json()
+                                             )
+            resp=resp_json.json()
         logger.debug(f'ExClimbWuzhi提交响应：{resp}')
         if resp.get('code') != 0:
             logger.error(f'ExClimbWuzhi提交失败！参数：\n{payload}')

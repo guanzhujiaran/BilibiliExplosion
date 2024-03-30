@@ -17,7 +17,6 @@ from grpc获取动态.src.获取取关对象.db.models import UserInfo, SpaceDyn
 
 grpcapi = BiliGrpc()
 
-from utl.utils import MyThread
 
 
 class GetRmFollowingListV1:

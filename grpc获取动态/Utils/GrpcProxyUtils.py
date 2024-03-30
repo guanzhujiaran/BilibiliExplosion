@@ -3,13 +3,11 @@ import ast
 import traceback
 from enum import Enum
 import pickle
-import asyncio
 import random
-import threading
 import time
 from dataclasses import dataclass
 from typing import Union
-from utl.代理.redisProxyRequest.RedisManager import RedisManagerBase
+from utl.redisTool.RedisManager import RedisManagerBase
 
 
 @dataclass

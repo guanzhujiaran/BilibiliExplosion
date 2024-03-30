@@ -22,10 +22,13 @@ class RedisManagerBase:
     class RedisMap(str, Enum):
         pass
 
-    def __init__(self):
-        self.host = CONFIG.database.proxyRedis.host
-        self.port = CONFIG.database.proxyRedis.port
-        self.db = CONFIG.database.proxyRedis.db
+    def __init__(self,host= CONFIG.database.proxyRedis.host,
+                 port= CONFIG.database.proxyRedis.port,
+                 db= CONFIG.database.proxyRedis.db
+                 ):
+        self.host =host
+        self.port =port
+        self.db =db
         self.pool = redis.ConnectionPool.from_url(
             url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True')
 

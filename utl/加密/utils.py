@@ -57,7 +57,7 @@ def hexsign(e):
     return o
 
 
-def addWbiVerifyInfo(params,wbiVerifyString):
+def addWbiVerifyInfo(params,wbiVerifyString)->str:
     parsed_params = parse_qs(params)
     sorted_params = sorted([(key, value[0]) for key, value in parsed_params.items()])
     sorted_query_string = urlencode(sorted_params, doseq=True)

@@ -16,7 +16,7 @@ class pushme:
         return self._token
 
     def set_url(self, url):
-        self._url= url
+        self._url = url
 
     def set_token(self, token):
         self._token = token
@@ -26,8 +26,8 @@ class pushnotify:
     def __init__(self):
         push_template = pushme()
         self._pushme = copy.deepcopy(push_template)
-        push_template.set_url( 'http://www.pushplus.plus/send')
-        push_template.set_token(  '044b3325295b47228409452e0e7aeef7')
+        push_template.set_url('http://www.pushplus.plus/send')
+        push_template.set_token('044b3325295b47228409452e0e7aeef7')
         self._pushplus = copy.deepcopy(push_template)
 
     @property
@@ -46,7 +46,9 @@ class zhihu_CONFIG:
 @dataclass
 class MYSQL:
     proxy_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/proxy_db?charset=utf8mb4&autocommit=true'
-
+    bili_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/bilidb?charset=utf8mb4&autocommit=true'
+    bili_reserve_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/bili_reserve?charset=utf8mb4&autocommit=true'
+    get_other_lot_URI:str = 'mysql+aiomysql://root:114514@localhost:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
 
 @dataclass
 class DBINFO:
@@ -73,8 +75,9 @@ class database:
 
 class CONFIG:
     root_dir = 'K:/python test/'  # b站代码的根目录
-    pushnotify = pushnotify() # 推送设置
+    pushnotify = pushnotify()  # 推送设置
     zhihu_CONFIG = zhihu_CONFIG()  # 知乎设置
     database = database()
     UA_LIST = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36', ]  # UA列表
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+    ]  # UA列表
