@@ -1,3 +1,7 @@
+import hashlib
+
+import hmac
+
 import base64
 import io
 import json
@@ -51,6 +55,7 @@ class resolution:
 class APIExClimbWuzhi:
     _spi: str = "https://api.bilibili.com/x/frontend/finger/spi"
     _giaGateWayExClimbWuzhi: str = "https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi"
+    _GenWebTicket = "https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket"
     browser_resolution: resolution = resolution()
     ua: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
     deviceMemory: int = 8
@@ -61,6 +66,10 @@ class APIExClimbWuzhi:
     timezoneOffset: int = -480
     renderer_id: str = ''
     renderer: str = ''
+
+    @property
+    def GenWebTicket(self):
+        return self._GenWebTicket
 
     @property
     def giaGateWayExClimbWuzhi(self):
@@ -506,6 +515,29 @@ def murmur3_x64_128(source: io.IOBase, seed: int) -> Optional[int]:
             h1 ^= k1
 
 
+def hmac_sha256(key, message):
+    """
+    使用HMAC-SHA256算法对给定的消息进行加密
+    :param key: 密钥
+    :param message: 要加密的消息
+    :return: 加密后的哈希值
+    """
+    # 将密钥和消息转换为字节串
+    key = key.encode('utf-8')
+    message = message.encode('utf-8')
+
+    # 创建HMAC对象，使用SHA256哈希算法
+    hmac_obj = hmac.new(key, message, hashlib.sha256)
+
+    # 计算哈希值
+    hash_value = hmac_obj.digest()
+
+    # 将哈希值转换为十六进制字符串
+    hash_hex = hash_value.hex()
+
+    return hash_hex
+
+
 class ExClimbWuzhi:
 
     @staticmethod
@@ -516,58 +548,96 @@ class ExClimbWuzhi:
         '''
         fingerprint = BuvidFp.gen(apiExClimbWuzhi)
         cookie = [
-                  #'innersign=0',
-                  #'i-wanna-go-back=-1',
-                  #'b_ut=7',
-                  #'enable_web_push=DISABLE',
-                  #'header_theme_version=undefined',
-                  #'home_feed_column=4',
-                  # f'browser_resolution={apiExClimbWuzhi.browser_resolution.avail_h}-{apiExClimbWuzhi.browser_resolution.avail_w}',
-                  f'buvid_fp={fingerprint}',
-                  f'fingerprint={fingerprint}'
-                  'buvid_fp_plain=undefined',
-                  'hit-dyn-v2=1',
-                  'PVID=2'
-                  ]
+            # 'innersign=0',
+            # 'i-wanna-go-back=-1',
+            # 'b_ut=7',
+            # 'enable_web_push=DISABLE',
+            # 'header_theme_version=undefined',
+            # 'home_feed_column=4',
+            # f'browser_resolution={apiExClimbWuzhi.browser_resolution.avail_h}-{apiExClimbWuzhi.browser_resolution.avail_w}',
+            f'buvid_fp={fingerprint}',
+            f'fingerprint={fingerprint}'
+            'buvid_fp_plain=undefined',
+            'hit-dyn-v2=1',
+            # 'PVID=2',
+            # 'bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI0NzIxNzgsImlhdCI6MTcxMjIxMjkxOCwicGx0IjotMX0.iFVNtJggzuTyDJoXs0MFfdrerUJV32Bfsy7zUFgpzOk'
+            # 'bili_ticket_expires=1712472118'
+        ]
 
         cookie.append("=".join(['b_lsid', utils.lsid()]))
         apiExClimbWuzhi._uuid = UuidInfoc.gen()
         cookie.append("=".join(['_uuid', apiExClimbWuzhi._uuid]))
         cookie.append("=".join(['b_nut', str(int(time.time()))]))
-        if useProxy:
-            # response = await MYREQ.request_with_proxy(method="get", url=apiExClimbWuzhi.spi, headers={
-            #     "Referer": 'https://www.bilibili.com/',
-            #     "User-Agent": apiExClimbWuzhi.ua,
-            #     "Cookie": "; ".join(cookie)
-            # }
-            #                                           )
-            response = (await MyAsyncReq.request(method="get",
-                                                 url=apiExClimbWuzhi.spi,
-                                                 headers={
-                                                     "Referer": 'https://www.bilibili.com/',
-                                                     "User-Agent": apiExClimbWuzhi.ua,
-                                                     "Cookie": "; ".join(cookie),
-                                                 }, proxies={
-                    'https': 'http://127.0.0.1:23998',
-                    'http': 'http://127.0.0.1:23998',
-                }
-                                                 )).json()
-        else:
-            response = (await MyAsyncReq.request(method="get",
-                                                 url=apiExClimbWuzhi.spi,
-                                                 headers={
-                                                     "Referer": 'https://www.bilibili.com/',
-                                                     "User-Agent": apiExClimbWuzhi.ua,
-                                                     "Cookie": "; ".join(cookie),
-                                                 }, proxies={
-                    'https': 'http://127.0.0.1:23998',
-                    'http': 'http://127.0.0.1:23998',
-                }
-                                                 )).json()
-        cookie.append("=".join(['buvid3', quote(response['data']['b_3'], safe='')]))
-        cookie.append("=".join(['buvid4', quote(response['data']['b_4'], safe='')]))
+        try:
+            if useProxy:
+                # response = await MYREQ.request_with_proxy(method="get", url=apiExClimbWuzhi.spi, headers={
+                #     "Referer": 'https://www.bilibili.com/',
+                #     "User-Agent": apiExClimbWuzhi.ua,
+                #     "Cookie": "; ".join(cookie)
+                # }
+                #                                           )
+                response = (await MyAsyncReq.request(method="get",
+                                                     url=apiExClimbWuzhi.spi,
+                                                     headers={
+                                                         "Referer": 'https://www.bilibili.com/',
+                                                         "User-Agent": apiExClimbWuzhi.ua,
+                                                         "Cookie": "; ".join(cookie),
+                                                     }, proxies={
+                        'https': 'http://127.0.0.1:23998',
+                        'http': 'http://127.0.0.1:23998',
+                    }
+                                                     )).json()
+            else:
+                response = (await MyAsyncReq.request(method="get",
+                                                     url=apiExClimbWuzhi.spi,
+                                                     headers={
+                                                         "Referer": 'https://www.bilibili.com/',
+                                                         "User-Agent": apiExClimbWuzhi.ua,
+                                                         "Cookie": "; ".join(cookie),
+                                                     }, proxies={
+                        'https': 'http://127.0.0.1:23998',
+                        'http': 'http://127.0.0.1:23998',
+                    }
+                                                     )).json()
+            cookie.append("=".join(['buvid3', quote(response['data']['b_3'], safe='')]))
+            cookie.append("=".join(['buvid4', quote(response['data']['b_4'], safe='')]))
+        except Exception as e:
+            logger.exception("获取buvid3和buvid4失败: %s", e)
+        try:
+            bili_ticket = await ExClimbWuzhi._get_bili_ticket(apiExClimbWuzhi)
+            for k,v in bili_ticket.items():
+                cookie.append("=".join([k,str(v)]))
+        except Exception as e:
+            logger.exception("获取bili_ticket失败: %s", e)
 
         return "; ".join(cookie)
+
+    @staticmethod
+    async def _get_bili_ticket(apiExClimbWuzhi: APIExClimbWuzhi = APIExClimbWuzhi()):
+        o = hmac_sha256("XgwSnGZ1p", f"ts{int(time.time())}")
+        params = {
+            "key_id": "ec02",
+            "hexsign": o,
+            "context[ts]": f"{int(time.time())}",
+            "csrf": ''
+        }
+        headers = {
+            'user-agent': apiExClimbWuzhi.ua
+        }
+        resp = await MyAsyncReq.request(url=apiExClimbWuzhi.GenWebTicket,
+                                        method='post',
+                                        params=params,
+                                        headers=headers,
+                                        proxies={
+                                            'https': 'http://127.0.0.1:23998',
+                                            'http': 'http://127.0.0.1:23998',
+                                        }
+                                        )
+        resp_json = resp.json()
+        return {
+            "bili_ticket": resp_json['data']['ticket'],
+            'bili_ticket_expires': resp_json['data']['created_at']
+        }
 
     @staticmethod
     async def verifyExClimbWuzhi(url: str = "https://www.bilibili.com/",
@@ -580,6 +650,7 @@ class ExClimbWuzhi:
         MYCFG.renderer_id = renderer_id = f"#X{''.join([random.choice(string.ascii_letters + '123456789') for x in range(9)])}" if not MYCFG.renderer_id else MYCFG.renderer_id
         MYCFG.renderer = renderer = f"ANGLE (NVIDIA, NVIDIA GeForce RTX {random.choice('34')}0{random.choice('56789')}0 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11) {renderer_id}" if not MYCFG.renderer else MYCFG.renderer
         cookie = await ExClimbWuzhi._get_b3_b4_Cookie(MYCFG, useProxy=useProxy)
+
         payload = {
             "3064": 1,  # ptype, mobile => 2, others => 1
             "5062": str(int(time.time() * 1000)),  # timestamp
@@ -863,15 +934,15 @@ class ExClimbWuzhi:
                                              )).json()
         else:
             resp_json = await MyAsyncReq.request(url=MYCFG.giaGateWayExClimbWuzhi,
-                                             method='post',
-                                             data=json.dumps({"payload": json.dumps(payload)}),
-                                             headers=headers,
-                                             proxies={
-                                                 'https': 'http://127.0.0.1:23998',
-                                                 'http': 'http://127.0.0.1:23998',
-                                             }
-                                             )
-            resp=resp_json.json()
+                                                 method='post',
+                                                 data=json.dumps({"payload": json.dumps(payload)}),
+                                                 headers=headers,
+                                                 proxies={
+                                                     'https': 'http://127.0.0.1:23998',
+                                                     'http': 'http://127.0.0.1:23998',
+                                                 }
+                                                 )
+            resp = resp_json.json()
         logger.debug(f'ExClimbWuzhi提交响应：{resp}')
         if resp.get('code') != 0:
             logger.error(f'ExClimbWuzhi提交失败！参数：\n{payload}')

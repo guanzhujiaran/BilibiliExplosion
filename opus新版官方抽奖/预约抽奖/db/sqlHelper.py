@@ -17,8 +17,7 @@ def lock_wrapper(func: Callable) -> Callable:
     async def wrapper(*args, **kwargs):
         while 1:
             try:
-                async with lock:
-                    return await func(*args, **kwargs)
+                return await func(*args, **kwargs)
             except Exception as e:
                 log.exception(e)
                 await asyncio.sleep(3)
@@ -181,6 +180,7 @@ class SqlHelper:
     async def get_all_available_reserve_lotterys(self) -> list[TUpReserveRelationInfo]:
         """
         获取所有有效的预约抽奖 （按照etime升序排列
+        只抽两天之内的
         :return:
         """
         async with self._session() as session:
@@ -229,7 +229,8 @@ async def test_get_all_available_reserve_lotterys():
     a = SqlHelper()
 
     rest = await a.get_all_available_reserve_lotterys()
-    print(rest)
+    for i in rest:
+        print(i.__dict__)
 
 
 # endregion

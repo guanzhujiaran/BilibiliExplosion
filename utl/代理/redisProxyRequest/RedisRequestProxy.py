@@ -136,9 +136,7 @@ class request_with_proxy:
         self.channel = 'bili'
         self.sqlite3_proxy_op = sqlite3_proxy_op.SQLHelper()
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
-        self.log = logger.bind(user=__name__+"REQ")
-        # self.log.remove()
-        self.log.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') == __name__ + "REQ")
+        self.log = logger.bind(user="MYREQ")
         self.get_proxy_sep_time = 0.5 * 3600  # 获取代理的间隔
         self.get_proxy_timestamp = 0
         self.check_proxy_time: CheckProxyTime = CheckProxyTime()

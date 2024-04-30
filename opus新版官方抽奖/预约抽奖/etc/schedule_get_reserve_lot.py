@@ -8,17 +8,18 @@ from opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import  submit
 
 
 
-logger.remove()
+# logger.remove()
 log = logger.bind(user="预约抽奖")
-log.add(sys.stderr, level="DEBUG", filter=lambda record: record["extra"].get('user') == __name__ + "预约抽奖")
-
+# log.add(sys.stderr, level="DEBUG", filter=lambda record: record["extra"].get('user') == "预约抽奖")
+# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
+#
 
 async def main():
     rid_run = rid_get_dynamic()
     await rid_run.init()
     await rid_run.get_dynamic_with_thread()
 
-    await submit_reserve__lot_main(False)
+    await submit_reserve__lot_main(is_post=True)
 
     log.info('提交专栏完毕')
     log.info('今天这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')

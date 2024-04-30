@@ -2,6 +2,7 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
+from bilibili.app.click.v1 import heartbeat_pb2 as bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2
 
 
 class ClickStub(object):
@@ -13,14 +14,31 @@ class ClickStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.HeartBeat = channel.unary_unary(
+                '/bilibili.app.click.v1.Click/HeartBeat',
+                request_serializer=bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2.HeartBeatReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2.HeartBeatReply.FromString,
+                )
 
 
 class ClickServicer(object):
     """Missing associated documentation comment in .proto file."""
 
+    def HeartBeat(self, request, context):
+        """客户端心跳上传
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ClickServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'HeartBeat': grpc.unary_unary_rpc_method_handler(
+                    servicer.HeartBeat,
+                    request_deserializer=bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2.HeartBeatReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2.HeartBeatReply.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'bilibili.app.click.v1.Click', rpc_method_handlers)
@@ -30,3 +48,20 @@ def add_ClickServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class Click(object):
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def HeartBeat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.click.v1.Click/HeartBeat',
+            bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2.HeartBeatReq.SerializeToString,
+            bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2.HeartBeatReply.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

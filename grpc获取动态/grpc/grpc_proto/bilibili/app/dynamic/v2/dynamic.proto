@@ -1915,6 +1915,8 @@ enum DynModuleType {
     module_blocked = 33;
     module_text_notice = 34;
     module_opus_collection = 35;
+    module_onetime_notice=36;
+    module_sneaking_ad=37;
 }
 
 // 推荐页-响应
@@ -2312,6 +2314,9 @@ message EmoteSize {
 enum EspaceStyle {
     moba = 0; // moba类
 }
+message RepostExtraInfo{
+    string adcm_id=1;
+}
 
 // 扩展字段，用于动态部分操作使用
 message Extend {
@@ -2363,6 +2368,14 @@ message Extend {
     bool is_in_audit = 23;
     // 
     map<string, string> history_report = 24;
+    //
+    string report_metric_data=25;
+    //
+    TextParagraph desc_text_opus=26;
+    //
+    bool is_preview_only=27;
+    //
+    RepostExtraInfo repost_extra_info=28;
 }
 
 // 评论扩展
@@ -2855,7 +2868,7 @@ message LineParagraph {
 // 
 message LinkNode {
     // 
-    bytes show_text = 1;
+    string show_text = 1;
     // 
     string link = 2;
     // 
@@ -3541,12 +3554,20 @@ message MixUpListLiveItem {
     // 跳转地址
     string uri = 3;
 }
-
+message ModuleOnetimeNotice{
+    int64 uuid=1;
+    int64 text_notice=2;
+    int64 jump_uri=3;
+}
+message Module_Sneaking_Ad{
+    int64 client_action_type=1;
+}
 // 动态模块
 message Module {
     // 类型
     DynModuleType module_type = 1;
     oneof module_item {
+
         // 用户模块 1
         ModuleAuthor module_author = 2;
         // 争议黄条模块 2
@@ -3615,6 +3636,11 @@ message Module {
         ModuleTextNotice module_text_notice = 34;
         // 
         ModuleOpusCollection module_opus_collection = 35;
+        //
+        ModuleOnetimeNotice module_onetime_notice = 36;
+        //
+        Module_Sneaking_Ad module_sneaking_ad = 37;
+
     }
 }
 

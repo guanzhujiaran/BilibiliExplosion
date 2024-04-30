@@ -25,7 +25,7 @@ class request_with_proxy:
         self.base_url = 'http://localhost:23333'
         self.base_url1 = 'http://localhost:23333'
         self.log = logger.bind(user=__name__ + "request_with_proxy")
-        self.log.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == __name__ + "request_with_proxy")
+        # self.log.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == __name__ + "request_with_proxy")
         self.redis_request_with_proxy = redis_request_with_proxy()
 
     #

@@ -62,9 +62,10 @@ class SQLHelper:
         self.async_egn = create_async_engine(CONFIG.database.MYSQL.proxy_db_URI,
                                              echo=False,
                                              poolclass=AsyncAdaptedQueuePool,
-                                             pool_size=100,
-                                             max_overflow=100,
+                                             pool_size=10000,
+                                             max_overflow=20000,
                                              pool_recycle=3600,
+                                             pool_timeout=60,
                                              future=True,
                                              pool_pre_ping=True,
                                              connect_args={

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*- #
+# 旧版本 已废弃
 import ast
 # ------------------------------------------------------------------
 # Description:      Search_generate_reserve_lottery:从所有的直播预约中筛选出有抽奖的内容

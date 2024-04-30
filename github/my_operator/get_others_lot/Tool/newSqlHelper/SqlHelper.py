@@ -62,7 +62,18 @@ class SqlHelper:
         async with self.op_db_lock:
             async with self._session() as session:
                 async with session.begin():
-                    await session.merge(LotMainInfo)
+                    sql = select(TLotmaininfo).filter(TLotmaininfo.lotRound_id == LotMainInfo.lotRound_id).limit(1)
+                    res = await session.execute(sql)
+                    ret: TLotmaininfo = res.scalars().first()
+                    if ret:
+                        ret.lotNum=LotMainInfo.lotNum
+                        ret.allNum=LotMainInfo.allNum
+                        ret.uselessNum=LotMainInfo.uselessNum
+                        ret.isRoundFinished=LotMainInfo.isRoundFinished
+                        await session.flush()
+                    else:
+                        session.add(LotMainInfo)
+                        await session.flush()
 
     # endregion
 

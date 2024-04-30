@@ -16,70 +16,145 @@ class FeedStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.CreateInitCheck = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/CreateInitCheck',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateInitCheckReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateCheckResp.FromString,
-                )
-        self.SubmitCheck = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/SubmitCheck',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckRsp.FromString,
-                )
-        self.CreateDyn = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/CreateDyn',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateDynReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.FromString,
-                )
-        self.GetUidByName = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/GetUidByName',
-                request_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameRsp.FromString,
+        self.AddDynamicReport = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/AddDynamicReport',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AddDynamicReportReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AddDynamicReportRsp.FromString,
                 )
         self.AtList = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/AtList',
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/AtList',
                 request_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtListReq.SerializeToString,
                 response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtListRsp.FromString,
                 )
         self.AtSearch = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/AtSearch',
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/AtSearch',
                 request_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtSearchReq.SerializeToString,
                 response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtListRsp.FromString,
                 )
-        self.ReserveButtonClick = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/ReserveButtonClick',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickResp.FromString,
+        self.AttachCardButton = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/AttachCardButton',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AttachCardButtonReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AttachCardButtonRsp.FromString,
                 )
-        self.CreatePlusButtonClick = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/CreatePlusButtonClick',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickRsp.FromString,
+        self.Config = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/Config',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ConfigReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ConfigRsp.FromString,
                 )
-        self.HotSearch = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/HotSearch',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchRsp.FromString,
+        self.CreateDyn = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/CreateDyn',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateDynReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.FromString,
                 )
-        self.Suggest = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/Suggest',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestRsp.FromString,
+        self.CreateInitCheck = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/CreateInitCheck',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateInitCheckReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateCheckResp.FromString,
                 )
-        self.DynamicButtonClick = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/DynamicButtonClick',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickRsp.FromString,
+        self.CreatePageInfos = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/CreatePageInfos',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosRsp.FromString,
                 )
         self.CreatePermissionButtonClick = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/CreatePermissionButtonClick',
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/CreatePermissionButtonClick',
                 request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickReq.SerializeToString,
                 response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickRsp.FromString,
                 )
-        self.CreatePageInfos = channel.unary_unary(
-                '/bilibili.main.dynamic.feed.v1.Feed/CreatePageInfos',
-                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosReq.SerializeToString,
-                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosRsp.FromString,
+        self.CreatePlusButtonClick = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/CreatePlusButtonClick',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickRsp.FromString,
+                )
+        self.DynamicButtonClick = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/DynamicButtonClick',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickRsp.FromString,
+                )
+        self.DynamicRepost = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/DynamicRepost',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicRepostReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.FromString,
+                )
+        self.DynamicThumb = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/DynamicThumb',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicThumbReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicThumbRsp.FromString,
+                )
+        self.EditDyn = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/EditDyn',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.EditDynReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.EditDynRsp.FromString,
+                )
+        self.GetEditDynInfo = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/GetEditDynInfo',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GetEditDynInfoReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GetEditDynInfoRsp.FromString,
+                )
+        self.GetUidByName = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/GetUidByName',
+                request_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameRsp.FromString,
+                )
+        self.GoodsAttachCardPreview = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/GoodsAttachCardPreview',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GoodsAttachCardPreviewReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GoodsAttachCardPreviewRsp.FromString,
+                )
+        self.HomeBubbleReport = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/HomeBubbleReport',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HomeBubbleReportReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HomeBubbleReportRsp.FromString,
+                )
+        self.HotSearch = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/HotSearch',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchRsp.FromString,
+                )
+        self.ICreateGoodsReplySync = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/ICreateGoodsReplySync',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ICreateGoodsReplySyncReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ICreateResp.FromString,
+                )
+        self.NearbyPoiList = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/NearbyPoiList',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.NearbyPoiListReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.NearbyPoiListRsp.FromString,
+                )
+        self.ReserveButtonClick = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/ReserveButtonClick',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickResp.FromString,
+                )
+        self.RmDyn = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/RmDyn',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmDynReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmDynRsp.FromString,
+                )
+        self.RmSpaceTop = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/RmSpaceTop',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmSpaceTopReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmSpaceTopRsp.FromString,
+                )
+        self.SearchPoiList = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/SearchPoiList',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SearchPoiListReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SearchPoiListRsp.FromString,
+                )
+        self.SetSpaceTop = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/SetSpaceTop',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SetSpaceTopReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SetSpaceTopRsp.FromString,
+                )
+        self.SubmitCheck = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/SubmitCheck',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckRsp.FromString,
+                )
+        self.Suggest = channel.unary_unary(
+                '/bilibili.dynamic.interfaces.feed.v1.Feed/Suggest',
+                request_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestReq.SerializeToString,
+                response_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestRsp.FromString,
                 )
 
 
@@ -87,29 +162,8 @@ class FeedServicer(object):
     """
     """
 
-    def CreateInitCheck(self, request, context):
-        """发布页预校验
+    def AddDynamicReport(self, request, context):
         """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def SubmitCheck(self, request, context):
-        """
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def CreateDyn(self, request, context):
-        """创建动态
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetUidByName(self, request, context):
-        """根据name取uid
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -129,35 +183,35 @@ class FeedServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def ReserveButtonClick(self, request, context):
+    def AttachCardButton(self, request, context):
         """
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def CreatePlusButtonClick(self, request, context):
+    def Config(self, request, context):
         """
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def HotSearch(self, request, context):
-        """
-        """
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Suggest(self, request, context):
-        """
+    def CreateDyn(self, request, context):
+        """创建动态
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def DynamicButtonClick(self, request, context):
+    def CreateInitCheck(self, request, context):
+        """发布页预校验
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreatePageInfos(self, request, context):
         """
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -171,7 +225,133 @@ class FeedServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def CreatePageInfos(self, request, context):
+    def CreatePlusButtonClick(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DynamicButtonClick(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DynamicRepost(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DynamicThumb(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def EditDyn(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetEditDynInfo(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetUidByName(self, request, context):
+        """根据name取uid
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GoodsAttachCardPreview(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HomeBubbleReport(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HotSearch(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ICreateGoodsReplySync(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def NearbyPoiList(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReserveButtonClick(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RmDyn(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RmSpaceTop(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SearchPoiList(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetSpaceTop(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SubmitCheck(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Suggest(self, request, context):
         """
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -181,25 +361,10 @@ class FeedServicer(object):
 
 def add_FeedServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'CreateInitCheck': grpc.unary_unary_rpc_method_handler(
-                    servicer.CreateInitCheck,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateInitCheckReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateCheckResp.SerializeToString,
-            ),
-            'SubmitCheck': grpc.unary_unary_rpc_method_handler(
-                    servicer.SubmitCheck,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckRsp.SerializeToString,
-            ),
-            'CreateDyn': grpc.unary_unary_rpc_method_handler(
-                    servicer.CreateDyn,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateDynReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.SerializeToString,
-            ),
-            'GetUidByName': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetUidByName,
-                    request_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameRsp.SerializeToString,
+            'AddDynamicReport': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddDynamicReport,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AddDynamicReportReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AddDynamicReportRsp.SerializeToString,
             ),
             'AtList': grpc.unary_unary_rpc_method_handler(
                     servicer.AtList,
@@ -211,44 +376,134 @@ def add_FeedServicer_to_server(servicer, server):
                     request_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtSearchReq.FromString,
                     response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtListRsp.SerializeToString,
             ),
-            'ReserveButtonClick': grpc.unary_unary_rpc_method_handler(
-                    servicer.ReserveButtonClick,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickResp.SerializeToString,
+            'AttachCardButton': grpc.unary_unary_rpc_method_handler(
+                    servicer.AttachCardButton,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AttachCardButtonReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AttachCardButtonRsp.SerializeToString,
             ),
-            'CreatePlusButtonClick': grpc.unary_unary_rpc_method_handler(
-                    servicer.CreatePlusButtonClick,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickRsp.SerializeToString,
+            'Config': grpc.unary_unary_rpc_method_handler(
+                    servicer.Config,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ConfigReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ConfigRsp.SerializeToString,
             ),
-            'HotSearch': grpc.unary_unary_rpc_method_handler(
-                    servicer.HotSearch,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchRsp.SerializeToString,
+            'CreateDyn': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateDyn,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateDynReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.SerializeToString,
             ),
-            'Suggest': grpc.unary_unary_rpc_method_handler(
-                    servicer.Suggest,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestRsp.SerializeToString,
-            ),
-            'DynamicButtonClick': grpc.unary_unary_rpc_method_handler(
-                    servicer.DynamicButtonClick,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickRsp.SerializeToString,
-            ),
-            'CreatePermissionButtonClick': grpc.unary_unary_rpc_method_handler(
-                    servicer.CreatePermissionButtonClick,
-                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickReq.FromString,
-                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickRsp.SerializeToString,
+            'CreateInitCheck': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateInitCheck,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateInitCheckReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateCheckResp.SerializeToString,
             ),
             'CreatePageInfos': grpc.unary_unary_rpc_method_handler(
                     servicer.CreatePageInfos,
                     request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosReq.FromString,
                     response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosRsp.SerializeToString,
             ),
+            'CreatePermissionButtonClick': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreatePermissionButtonClick,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickRsp.SerializeToString,
+            ),
+            'CreatePlusButtonClick': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreatePlusButtonClick,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickRsp.SerializeToString,
+            ),
+            'DynamicButtonClick': grpc.unary_unary_rpc_method_handler(
+                    servicer.DynamicButtonClick,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickRsp.SerializeToString,
+            ),
+            'DynamicRepost': grpc.unary_unary_rpc_method_handler(
+                    servicer.DynamicRepost,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicRepostReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.SerializeToString,
+            ),
+            'DynamicThumb': grpc.unary_unary_rpc_method_handler(
+                    servicer.DynamicThumb,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicThumbReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicThumbRsp.SerializeToString,
+            ),
+            'EditDyn': grpc.unary_unary_rpc_method_handler(
+                    servicer.EditDyn,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.EditDynReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.EditDynRsp.SerializeToString,
+            ),
+            'GetEditDynInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetEditDynInfo,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GetEditDynInfoReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GetEditDynInfoRsp.SerializeToString,
+            ),
+            'GetUidByName': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetUidByName,
+                    request_deserializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameRsp.SerializeToString,
+            ),
+            'GoodsAttachCardPreview': grpc.unary_unary_rpc_method_handler(
+                    servicer.GoodsAttachCardPreview,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GoodsAttachCardPreviewReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GoodsAttachCardPreviewRsp.SerializeToString,
+            ),
+            'HomeBubbleReport': grpc.unary_unary_rpc_method_handler(
+                    servicer.HomeBubbleReport,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HomeBubbleReportReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HomeBubbleReportRsp.SerializeToString,
+            ),
+            'HotSearch': grpc.unary_unary_rpc_method_handler(
+                    servicer.HotSearch,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchRsp.SerializeToString,
+            ),
+            'ICreateGoodsReplySync': grpc.unary_unary_rpc_method_handler(
+                    servicer.ICreateGoodsReplySync,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ICreateGoodsReplySyncReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ICreateResp.SerializeToString,
+            ),
+            'NearbyPoiList': grpc.unary_unary_rpc_method_handler(
+                    servicer.NearbyPoiList,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.NearbyPoiListReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.NearbyPoiListRsp.SerializeToString,
+            ),
+            'ReserveButtonClick': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReserveButtonClick,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickResp.SerializeToString,
+            ),
+            'RmDyn': grpc.unary_unary_rpc_method_handler(
+                    servicer.RmDyn,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmDynReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmDynRsp.SerializeToString,
+            ),
+            'RmSpaceTop': grpc.unary_unary_rpc_method_handler(
+                    servicer.RmSpaceTop,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmSpaceTopReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmSpaceTopRsp.SerializeToString,
+            ),
+            'SearchPoiList': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchPoiList,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SearchPoiListReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SearchPoiListRsp.SerializeToString,
+            ),
+            'SetSpaceTop': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetSpaceTop,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SetSpaceTopReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SetSpaceTopRsp.SerializeToString,
+            ),
+            'SubmitCheck': grpc.unary_unary_rpc_method_handler(
+                    servicer.SubmitCheck,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckRsp.SerializeToString,
+            ),
+            'Suggest': grpc.unary_unary_rpc_method_handler(
+                    servicer.Suggest,
+                    request_deserializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestReq.FromString,
+                    response_serializer=bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestRsp.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'bilibili.main.dynamic.feed.v1.Feed', rpc_method_handlers)
+            'bilibili.dynamic.interfaces.feed.v1.Feed', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
 
 
@@ -258,7 +513,7 @@ class Feed(object):
     """
 
     @staticmethod
-    def CreateInitCheck(request,
+    def AddDynamicReport(request,
             target,
             options=(),
             channel_credentials=None,
@@ -268,60 +523,9 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/CreateInitCheck',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateInitCheckReq.SerializeToString,
-            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateCheckResp.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def SubmitCheck(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/SubmitCheck',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckReq.SerializeToString,
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckRsp.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def CreateDyn(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/CreateDyn',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateDynReq.SerializeToString,
-            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def GetUidByName(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/GetUidByName',
-            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameReq.SerializeToString,
-            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameRsp.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/AddDynamicReport',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AddDynamicReportReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AddDynamicReportRsp.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -336,7 +540,7 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/AtList',
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/AtList',
             bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtListReq.SerializeToString,
             bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtListRsp.FromString,
             options, channel_credentials,
@@ -353,14 +557,14 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/AtSearch',
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/AtSearch',
             bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtSearchReq.SerializeToString,
             bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.AtListRsp.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def ReserveButtonClick(request,
+    def AttachCardButton(request,
             target,
             options=(),
             channel_credentials=None,
@@ -370,14 +574,14 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/ReserveButtonClick',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickReq.SerializeToString,
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickResp.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/AttachCardButton',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AttachCardButtonReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.AttachCardButtonRsp.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def CreatePlusButtonClick(request,
+    def Config(request,
             target,
             options=(),
             channel_credentials=None,
@@ -387,14 +591,14 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/CreatePlusButtonClick',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickReq.SerializeToString,
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickRsp.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/Config',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ConfigReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ConfigRsp.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def HotSearch(request,
+    def CreateDyn(request,
             target,
             options=(),
             channel_credentials=None,
@@ -404,14 +608,14 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/HotSearch',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchReq.SerializeToString,
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchRsp.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/CreateDyn',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateDynReq.SerializeToString,
+            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def Suggest(request,
+    def CreateInitCheck(request,
             target,
             options=(),
             channel_credentials=None,
@@ -421,43 +625,9 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/Suggest',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestReq.SerializeToString,
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestRsp.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def DynamicButtonClick(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/DynamicButtonClick',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickReq.SerializeToString,
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickRsp.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def CreatePermissionButtonClick(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/CreatePermissionButtonClick',
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickReq.SerializeToString,
-            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickRsp.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/CreateInitCheck',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreateInitCheckReq.SerializeToString,
+            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateCheckResp.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -472,8 +642,348 @@ class Feed(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.main.dynamic.feed.v1.Feed/CreatePageInfos',
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/CreatePageInfos',
             bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosReq.SerializeToString,
             bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePageInfosRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def CreatePermissionButtonClick(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/CreatePermissionButtonClick',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePermissionButtonClickRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def CreatePlusButtonClick(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/CreatePlusButtonClick',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.CreatePlusButtonClickRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def DynamicButtonClick(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/DynamicButtonClick',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicButtonClickRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def DynamicRepost(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/DynamicRepost',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicRepostReq.SerializeToString,
+            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.CreateResp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def DynamicThumb(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/DynamicThumb',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicThumbReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.DynamicThumbRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def EditDyn(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/EditDyn',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.EditDynReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.EditDynRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetEditDynInfo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/GetEditDynInfo',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GetEditDynInfoReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GetEditDynInfoRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetUidByName(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/GetUidByName',
+            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameReq.SerializeToString,
+            bilibili_dot_dynamic_dot_common_dot_dynamic__pb2.GetUidByNameRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GoodsAttachCardPreview(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/GoodsAttachCardPreview',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GoodsAttachCardPreviewReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.GoodsAttachCardPreviewRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def HomeBubbleReport(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/HomeBubbleReport',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HomeBubbleReportReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HomeBubbleReportRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def HotSearch(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/HotSearch',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.HotSearchRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def ICreateGoodsReplySync(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/ICreateGoodsReplySync',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ICreateGoodsReplySyncReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ICreateResp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def NearbyPoiList(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/NearbyPoiList',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.NearbyPoiListReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.NearbyPoiListRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def ReserveButtonClick(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/ReserveButtonClick',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.ReserveButtonClickResp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def RmDyn(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/RmDyn',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmDynReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmDynRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def RmSpaceTop(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/RmSpaceTop',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmSpaceTopReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.RmSpaceTopRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def SearchPoiList(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/SearchPoiList',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SearchPoiListReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SearchPoiListRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def SetSpaceTop(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/SetSpaceTop',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SetSpaceTopReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SetSpaceTopRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def SubmitCheck(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/SubmitCheck',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SubmitCheckRsp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def Suggest(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.dynamic.interfaces.feed.v1.Feed/Suggest',
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestReq.SerializeToString,
+            bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2.SuggestRsp.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

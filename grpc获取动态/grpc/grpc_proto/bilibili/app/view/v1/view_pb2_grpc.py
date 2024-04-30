@@ -114,6 +114,11 @@ class ViewStub(object):
                 request_serializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetArcsPlayerReq.SerializeToString,
                 response_deserializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetArcsPlayerReply.FromString,
                 )
+        self.GetUser = channel.unary_unary(
+                '/bilibili.app.view.v1.View/GetUser',
+                request_serializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetUserReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetUserReply.FromString,
+                )
 
 
 class ViewServicer(object):
@@ -259,6 +264,13 @@ class ViewServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetUser(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_ViewServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -361,6 +373,11 @@ def add_ViewServicer_to_server(servicer, server):
                     servicer.GetArcsPlayer,
                     request_deserializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetArcsPlayerReq.FromString,
                     response_serializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetArcsPlayerReply.SerializeToString,
+            ),
+            'GetUser': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetUser,
+                    request_deserializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetUserReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetUserReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -709,5 +726,22 @@ class View(object):
         return grpc.experimental.unary_unary(request, target, '/bilibili.app.view.v1.View/GetArcsPlayer',
             bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetArcsPlayerReq.SerializeToString,
             bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetArcsPlayerReply.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GetUser(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.view.v1.View/GetUser',
+            bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetUserReq.SerializeToString,
+            bilibili_dot_app_dot_view_dot_v1_dot_view__pb2.GetUserReply.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

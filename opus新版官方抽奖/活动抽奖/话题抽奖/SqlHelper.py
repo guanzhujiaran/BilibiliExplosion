@@ -62,17 +62,24 @@ class sqlHelper:
     @lock_wrapper
     async def get_max_topic_id(self) -> int:
         async with self._session() as session:
-            sql = select(TTopic.topic_id).order_by(TTopic.topic_id.desc()).limit(1)
+            sql = select(TTopic.topic_id).filter(TTopic.topic_detail_id != None).order_by(TTopic.topic_id.desc()).limit(1)
             result = await session.execute(sql)
             data = result.scalars().first()
             if not data:
                 return 1000
             return data
 
+    @lock_wrapper
+    async def get_recent_failed_topic_id(self,limit=1000)->list[int]:
+        async with self._session() as session:
+            sql = select(TTopic.topic_id).filter(TTopic.topic_detail_id == None).order_by(TTopic.topic_id.desc()).limit(limit)
+            result = await session.execute(sql)
+            data = result.scalars().all()
+            return data
 
 async def test():
     a = sqlHelper()
-    b = await a.get_max_topic_id()
+    b = await a.get_recent_failed_topic_id()
     print(b)
 
 

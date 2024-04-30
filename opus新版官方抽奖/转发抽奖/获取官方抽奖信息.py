@@ -456,7 +456,6 @@ class LOTSqlHelper(SQLHelper):
                          )]
         return ret_list_dict
 
-
 class exctract_official_lottery:
     def __init__(self):
         self.BiliGrpc = grpc_api.BiliGrpc()
@@ -478,20 +477,20 @@ class exctract_official_lottery:
         self.sql = LOTSqlHelper()
         self.proxy_request = request_with_proxy()
         self.common_log = logger.bind(user=__name__+"common_log")
-        self.common_log_handle = logger.add(sys.stderr, level="INFO",
-                                                filter=lambda record: record["extra"].get('user') == __name__+ "common_log")
-        self.error_log = logger.bind(user=__name__ + "error_log")
-        self.error_log_handler1 = logger.add(sys.stderr, level="INFO",
-                                                filter=lambda record: record["extra"].get('user') == __name__ + "error_log")
-        self.error_log_handler2 =logger.add(
-            "log/error_log.log",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "error_log"
-        )
+        # self.common_log_handle = logger.add(sys.stderr, level="INFO",
+        #                                         filter=lambda record: record["extra"].get('user') == __name__+ "common_log")
+        self.error_log = logger.bind(user="error_log")
+        # self.error_log_handler1 = logger.add(sys.stderr, level="INFO",
+        #                                         filter=lambda record: record["extra"].get('user') == __name__ + "error_log")
+        # self.error_log_handler2 =logger.add(
+        #     "log/error_log.log",
+        #     encoding="utf-8",
+        #     enqueue=True,
+        #     rotation="500MB",
+        #     compression="zip",
+        #     retention="15 days",
+        #     filter=lambda record: record["extra"].get('user') == "error_log"
+        # )
         self.__no_lot_timer = 0
         self.__no_lot_timer_lock = threading.Lock()
         self.limit_no_lot_times = 3000  # 3000个rid没有得到抽奖信息就退出
@@ -600,7 +599,7 @@ class exctract_official_lottery:
         :param all_lots:数据库的抽奖信息
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
-        update_lots_lot_ids = [int(x['lottery_id']) for x in all_lots if (int(time.time()) - int(x['ts'])) <= 8 * 3600]
+        update_lots_lot_ids = [int(x['lottery_id']) for x in all_lots if (int(time.time()) - int(x['ts'])) <= 20 * 3600] # 24小时之内更新进去的都算？
         # 获取到的更新抽奖的lot_id
         if len(update_lots_lot_ids) == len(all_lots):
             update_lots_lot_ids = []
@@ -764,6 +763,7 @@ class exctract_official_lottery:
 
         return all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail
 
+
     async def main(self):
         """
         函数入口
@@ -771,6 +771,7 @@ class exctract_official_lottery:
         # from grpc获取动态.src.getDynDetail import dynDetailScrapy
         # d = dynDetailScrapy()
         # d.main()# 爬取最新的动态
+
         all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail = await self.get_all_lots()  # 获取并更新抽奖信息！
 
         ua3 = gl.get_value('ua3')

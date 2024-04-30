@@ -1,8 +1,16 @@
 # -*- coding: utf-8 -*-
 # 自己本地的fastapi封装接口服务 这是一个sqlite3数据库的接口，使用proxy相关操作
-import pydantic.main
+from loguru import logger
+# logger.remove()
 import sys
 
+myfastapi_logger = logger.bind(user=__name__ + 'fastapi')
+# myfastapi_logger.add(sys.stderr, level="INFO",
+#                      filter=lambda record: record["extra"].get('user') == __name__ + "fastapi")
+# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
+
+
+import pydantic.main
 import asyncio
 import json
 import time
@@ -11,7 +19,6 @@ from typing import Union
 import redis
 import uvicorn
 from fastapi import Query, Body, FastAPI
-from loguru import logger
 from pydantic import BaseModel
 from github.my_operator.get_others_lot.new_main import GET_OTHERS_LOT_DYN
 from grpc获取动态.grpc.grpc_api import BiliGrpc
@@ -31,12 +38,6 @@ req = request_with_proxy()
 r = redis.Redis(host='localhost', port=11451, db=0)  # 直播抽奖数据
 r1 = redis.Redis(host='localhost', port=11451, db=1)  # 情感分析数据
 app = FastAPI()
-# logger.remove()
-
-myfastapi_logger = logger.bind(user=__name__ + 'fastapi')
-myfastapi_logger.add(sys.stderr, level="INFO",
-                     filter=lambda record: record["extra"].get('user') == __name__ + "fastapi")
-
 
 @app.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息')
 def v1_get_live_lots():
@@ -149,13 +150,14 @@ async def grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
     return result
 
 
+
 # endregion
 
 # region 基于Grpc api的功能实现
 @app.post('/v1/post/RmFollowingList')
 async def v1_post_rm_following_list(data: list[Union[int, str]]):
     """
-    取关接口
+    取关接口 调用的是b站appp端的grpc协议接口，没那么容易被风控
     :param data: list[int] 关注列表 直接传列表即可
     :return:
     """

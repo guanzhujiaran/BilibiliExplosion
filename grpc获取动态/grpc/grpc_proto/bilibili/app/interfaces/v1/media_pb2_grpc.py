@@ -15,30 +15,35 @@ class MediaStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.MediaTab = channel.unary_unary(
-                '/bilibili.app.interface.v1.Media/MediaTab',
-                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReq.SerializeToString,
-                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReply.FromString,
+        self.MediaComment = channel.unary_unary(
+                '/bilibili.app.interface.v1.Media/MediaComment',
+                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaCommentReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaCommentReply.FromString,
                 )
         self.MediaDetail = channel.unary_unary(
                 '/bilibili.app.interface.v1.Media/MediaDetail',
                 request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaDetailReq.SerializeToString,
                 response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaDetailReply.FromString,
                 )
-        self.MediaVideo = channel.unary_unary(
-                '/bilibili.app.interface.v1.Media/MediaVideo',
-                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReq.SerializeToString,
-                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReply.FromString,
+        self.MediaFollow = channel.unary_unary(
+                '/bilibili.app.interface.v1.Media/MediaFollow',
+                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReply.FromString,
                 )
         self.MediaRelation = channel.unary_unary(
                 '/bilibili.app.interface.v1.Media/MediaRelation',
                 request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaRelationReq.SerializeToString,
                 response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaRelationReply.FromString,
                 )
-        self.MediaFollow = channel.unary_unary(
-                '/bilibili.app.interface.v1.Media/MediaFollow',
-                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReq.SerializeToString,
-                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReply.FromString,
+        self.MediaTab = channel.unary_unary(
+                '/bilibili.app.interface.v1.Media/MediaTab',
+                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReply.FromString,
+                )
+        self.MediaVideo = channel.unary_unary(
+                '/bilibili.app.interface.v1.Media/MediaVideo',
+                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReply.FromString,
                 )
 
 
@@ -46,7 +51,7 @@ class MediaServicer(object):
     """
     """
 
-    def MediaTab(self, request, context):
+    def MediaComment(self, request, context):
         """
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -60,7 +65,7 @@ class MediaServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def MediaVideo(self, request, context):
+    def MediaFollow(self, request, context):
         """
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -74,7 +79,14 @@ class MediaServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def MediaFollow(self, request, context):
+    def MediaTab(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def MediaVideo(self, request, context):
         """
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -84,30 +96,35 @@ class MediaServicer(object):
 
 def add_MediaServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'MediaTab': grpc.unary_unary_rpc_method_handler(
-                    servicer.MediaTab,
-                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReq.FromString,
-                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReply.SerializeToString,
+            'MediaComment': grpc.unary_unary_rpc_method_handler(
+                    servicer.MediaComment,
+                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaCommentReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaCommentReply.SerializeToString,
             ),
             'MediaDetail': grpc.unary_unary_rpc_method_handler(
                     servicer.MediaDetail,
                     request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaDetailReq.FromString,
                     response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaDetailReply.SerializeToString,
             ),
-            'MediaVideo': grpc.unary_unary_rpc_method_handler(
-                    servicer.MediaVideo,
-                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReq.FromString,
-                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReply.SerializeToString,
+            'MediaFollow': grpc.unary_unary_rpc_method_handler(
+                    servicer.MediaFollow,
+                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReply.SerializeToString,
             ),
             'MediaRelation': grpc.unary_unary_rpc_method_handler(
                     servicer.MediaRelation,
                     request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaRelationReq.FromString,
                     response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaRelationReply.SerializeToString,
             ),
-            'MediaFollow': grpc.unary_unary_rpc_method_handler(
-                    servicer.MediaFollow,
-                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReq.FromString,
-                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReply.SerializeToString,
+            'MediaTab': grpc.unary_unary_rpc_method_handler(
+                    servicer.MediaTab,
+                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReply.SerializeToString,
+            ),
+            'MediaVideo': grpc.unary_unary_rpc_method_handler(
+                    servicer.MediaVideo,
+                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -121,7 +138,7 @@ class Media(object):
     """
 
     @staticmethod
-    def MediaTab(request,
+    def MediaComment(request,
             target,
             options=(),
             channel_credentials=None,
@@ -131,9 +148,9 @@ class Media(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.Media/MediaTab',
-            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReq.SerializeToString,
-            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReply.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.Media/MediaComment',
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaCommentReq.SerializeToString,
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaCommentReply.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -155,7 +172,7 @@ class Media(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def MediaVideo(request,
+    def MediaFollow(request,
             target,
             options=(),
             channel_credentials=None,
@@ -165,9 +182,9 @@ class Media(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.Media/MediaVideo',
-            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReq.SerializeToString,
-            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReply.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.Media/MediaFollow',
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReq.SerializeToString,
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReply.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
@@ -189,7 +206,7 @@ class Media(object):
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
-    def MediaFollow(request,
+    def MediaTab(request,
             target,
             options=(),
             channel_credentials=None,
@@ -199,8 +216,25 @@ class Media(object):
             wait_for_ready=None,
             timeout=None,
             metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.Media/MediaFollow',
-            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReq.SerializeToString,
-            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaFollowReply.FromString,
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.Media/MediaTab',
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReq.SerializeToString,
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaTabReply.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def MediaVideo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.Media/MediaVideo',
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReq.SerializeToString,
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_media__pb2.MediaVideoReply.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

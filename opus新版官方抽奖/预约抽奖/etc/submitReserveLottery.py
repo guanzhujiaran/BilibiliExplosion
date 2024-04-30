@@ -354,6 +354,11 @@ class generate_cv:
 
 
 async def submit_reserve__lot_main(is_post=True):
+    """
+    提交专栏
+    :param is_post:是否直接发布
+    :return:
+    """
     ua3 = gl.get_value('ua3')
     csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
     cookie3 = gl.get_value('cookie3')

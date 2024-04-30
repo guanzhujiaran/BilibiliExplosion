@@ -3,7 +3,6 @@
     通过grpc获取所有的图片动态
 """
 import sys
-
 import asyncio
 import copy
 import datetime
@@ -20,6 +19,24 @@ from grpc获取动态.src.DynObjectClass import *
 from grpc获取动态.src.SqlHelper import SQLHelper
 from utl.代理.grpc_api import BiliGrpc
 from utl.代理.request_with_proxy import request_with_proxy
+
+
+class SuccCounter:
+    start_ts = int(time.time())
+    succ_count = 0
+
+    def show_pace(self) -> float:
+        """
+        获取一个动态需要花多少秒
+        :return:
+        """
+        now_ts = int(time.time())
+        spend_ts = now_ts - self.start_ts
+        if spend_ts > 0:
+            pace_per_sec = spend_ts / self.succ_count
+            return pace_per_sec
+        else:
+            return 0.0
 
 
 class DynDetailScrapy:
@@ -47,31 +64,32 @@ class DynDetailScrapy:
         self.Sqlhelper = SQLHelper()
         self.stop_Flag = False  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = asyncio.Semaphore(300)  # 单个请求的超时时间是10秒，也就是平均10秒钟内的并发数，除以10应该就是每秒的并发了吧，大概
+        self.scrapy_sem = asyncio.Semaphore(100)  # 同时运行的协程数量
         # self.thread_sem = threading.Semaphore(50)
         self.stop_limit_time = 1 * 3600  # 提前多少时间停止
         self.common_log = logger.bind(user='全局日志')
-        self.common_log_handler = logger.add(sys.stderr, level="DEBUG",
-                                             filter=lambda record: record["extra"].get('user') == "全局日志")
+        # self.common_log_handler = logger.add(sys.stderr, level="DEBUG",
+        #                                      filter=lambda record: record["extra"].get('user') == "全局日志")
         self.doc_id_2_dynamic_id_log = logger.bind(user='doc_id转dynamic_id日志')
-        self.doc_id_2_dynamic_id_log_handler = logger.add(sys.stderr, level="INFO",
-                                                          filter=lambda record: record["extra"].get(
-                                                              'user') == "doc_id转dynamic_id日志")
+        # self.doc_id_2_dynamic_id_log_handler = logger.add(sys.stderr, level="INFO",
+        #                                                   filter=lambda record: record["extra"].get(
+        #                                                       'user') == "doc_id转dynamic_id日志")
         self.unknown_module_log = logger.bind(user='unknown_module')
-        self.unknown_module_log_handler = logger.add(sys.stderr, level="INFO",
-                                                     filter=lambda record: record["extra"].get(
-                                                         'user') == "unknown_module")
+        # self.unknown_module_log_handler = logger.add(sys.stderr, level="INFO",
+        #                                              filter=lambda record: record["extra"].get(
+        #                                                  'user') == "unknown_module")
         self.unknown_card_log = logger.bind(user='unknown_card')
-        self.unknown_card_log_handler = logger.add(sys.stderr, level="INFO",
-                                                   filter=lambda record: record["extra"].get('user') == "unknown_card")
+        # self.unknown_card_log_handler = logger.add(sys.stderr, level="INFO",
+        #                                            filter=lambda record: record["extra"].get('user') == "unknown_card")
         self.common_error_log = logger.bind(user='common_error_log')
-        self.common_error_log_handler = logger.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get(
-            'user') == "common_error_log")
+        # self.common_error_log_handler = logger.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get(
+        #     'user') == "common_error_log")
         self.additional_module_log = logger.bind(user='additional_module_log')
-        self.additional_module_log_handler = logger.add(sys.stderr, level="INFO",
-                                                        filter=lambda record: record["extra"].get(
-                                                            'user') == "additional_module_log")
+        # self.additional_module_log_handler = logger.add(sys.stderr, level="INFO",
+        #                                                 filter=lambda record: record["extra"].get(
+        #                                                     'user') == "additional_module_log")
         self.log_init()
+        self.succ_counter = SuccCounter()
 
     def _timeshift(self, timestamp: int) -> str:
         '''
@@ -384,11 +402,13 @@ class DynDetailScrapy:
             ret_dict_list.append({'rid': rid, 'dynamic_id': '-1'})
         self.succ_times += 1
         if ret_dict_list[0].get('dynamic_id') != '-1':
+            self.succ_counter.succ_count += 1
             self.common_log.debug(
-                f"总共成功获取{self.succ_times}次\t{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
+                f"平均获取速度：{self.succ_counter.show_pace()} s/个动态\n总共成功获取{self.succ_times}次\t{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
         else:
+            self.succ_counter.succ_count += 1
             self.common_log.debug(
-                f"总共成功获取{self.succ_times}次\t获取单个动态详情成功，但动态被删除了！http://t.bilibili.com/{rid}?type=2")
+                f"平均获取速度：{self.succ_counter.show_pace()} s/个动态\n总共成功获取{self.succ_times}次\t获取单个动态详情成功，但动态被删除了！\t{resp_list}\thttp://t.bilibili.com/{rid}?type=2")
         return ret_dict_list
 
     # endregion

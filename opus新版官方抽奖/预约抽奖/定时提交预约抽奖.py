@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# 旧版本 已废弃
 import asyncio
 import sys
 from loguru import logger
@@ -14,11 +15,15 @@ from 查找并生成预约抽奖信息 import *
 
 from 提交预约抽奖专栏 import generate_cv
 logger.remove()
-log = logger.bind(user=__name__ +"预约抽奖")
-log.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == __name__ + "预约抽奖")
+log = logger.bind(user="预约抽奖")
+log.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == "预约抽奖")
 
 
 async def main():
+    logger.remove()
+    log = logger.bind(user="预约抽奖")
+    log.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == "预约抽奖")
+
     rid_run = rid_get_dynamic()
     await rid_run.init()
     await rid_run.get_dynamic_with_thread()

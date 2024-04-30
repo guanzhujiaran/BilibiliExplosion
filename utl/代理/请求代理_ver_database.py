@@ -39,7 +39,7 @@ class request_with_proxy:
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
         self.log = logger
         # self.log.remove()
-        self.log.add(sys.stdout, level='ERROR')
+        # self.log.add(sys.stdout, level='ERROR')
         self.get_proxy_sep_time = 0.5 * 3600  # 获取代理的间隔
         self.get_proxy_timestamp = 0
         self.check_proxy_time = {

@@ -18,9 +18,10 @@ from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAre
 from utl.代理.request_with_proxy import request_with_proxy
 from loguru import logger
 
-logger.remove()
+#logger.remove()
 log = logger.bind(user='topic_lottery')
-log.add(sys.stderr, level="DEBUG", filter=lambda record: record["extra"].get('user') == 'topic_lottery')
+#log.add(sys.stderr, level="DEBUG", filter=lambda record: record["extra"].get('user') == 'topic_lottery')
+#logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
 
 
 class TopicRobot:
@@ -30,7 +31,8 @@ class TopicRobot:
         self.req = request_with_proxy()
         self.stop_flag = False
         self.sql = sqlHelper()
-        self.sem = asyncio.Semaphore(40)
+        self.sem_limit= 40
+        self.sem = asyncio.Semaphore(self.sem_limit)
         self._stop_counter = 0
         self._max_stop_count = 1000
         self._latest_topic_id = 0
@@ -113,7 +115,7 @@ class TopicRobot:
 
     async def pipeline(self, topic_id):
         resp_dict = await self.scrapy_topic_dict(topic_id)
-        log.debug(f'topic_id{topic_id}:{resp_dict}')
+        log.debug(f'topic_id 【{topic_id}】 {resp_dict}')
         if self._stop_counter >= self._max_stop_count:
             self.stop_flag = True
             log.info('到达最大无效值，退出！')
@@ -121,16 +123,28 @@ class TopicRobot:
         self.sem.release()
 
     async def main(self):
+        get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(self._max_stop_count)
+        task_list =  set()
+        for i in get_failed_topic_ids:
+            await self.sem.acquire()
+            task = asyncio.create_task(self.pipeline(i))
+            task_list.add(task)
+            task.add_done_callback(task_list.discard)
         self.start_topic_id = await self.sql.get_max_topic_id()
         log.info(f'开始从{self.start_topic_id + 1}开始获取话题！')
-        task_list=[]
+        task_list =  set()
         while not self.stop_flag:
             self.start_topic_id += 1
             await self.sem.acquire()
             task = asyncio.create_task(self.pipeline(self.start_topic_id))
-            task_list.append(task)
-            task_list = [i for i in task_list if not i.done()]
+            task.set_name(str(self.start_topic_id))
+            task_list.add(task)
+            task.add_done_callback(task_list.discard)
+            last_sem_list = [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]
+            await asyncio.gather(*last_sem_list)
         await asyncio.gather(*task_list)
+
+
 async def test():
     a = TopicRobot()
     resp1 = """{

@@ -20,6 +20,11 @@ class HistoryStub(object):
                 request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReq.SerializeToString,
                 response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReply.FromString,
                 )
+        self.HistoryTabV2 = channel.unary_unary(
+                '/bilibili.app.interface.v1.History/HistoryTabV2',
+                request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReply.FromString,
+                )
         self.Cursor = channel.unary_unary(
                 '/bilibili.app.interface.v1.History/Cursor',
                 request_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.CursorReq.SerializeToString,
@@ -57,6 +62,13 @@ class HistoryServicer(object):
     """
 
     def HistoryTab(self, request, context):
+        """获取历史记录tab(旧版)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HistoryTabV2(self, request, context):
         """获取历史记录tab
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -113,6 +125,11 @@ def add_HistoryServicer_to_server(servicer, server):
                     request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReq.FromString,
                     response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReply.SerializeToString,
             ),
+            'HistoryTabV2': grpc.unary_unary_rpc_method_handler(
+                    servicer.HistoryTabV2,
+                    request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReply.SerializeToString,
+            ),
             'Cursor': grpc.unary_unary_rpc_method_handler(
                     servicer.Cursor,
                     request_deserializer=bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.CursorReq.FromString,
@@ -166,6 +183,23 @@ class History(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.History/HistoryTab',
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReq.SerializeToString,
+            bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReply.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def HistoryTabV2(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.interface.v1.History/HistoryTabV2',
             bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReq.SerializeToString,
             bilibili_dot_app_dot_interfaces_dot_v1_dot_history__pb2.HistoryTabReply.FromString,
             options, channel_credentials,

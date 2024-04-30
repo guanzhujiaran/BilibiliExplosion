@@ -19,6 +19,11 @@ class TicketStub(object):
                 request_serializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GetTicketRequest.SerializeToString,
                 response_deserializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GetTicketResponse.FromString,
                 )
+        self.GenWebTicket = channel.unary_unary(
+                '/bilibili.api.ticket.v1.Ticket/GenWebTicket',
+                request_serializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GenWebTicketRequest.SerializeToString,
+                response_deserializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GenWebTicketResponse.FromString,
+                )
 
 
 class TicketServicer(object):
@@ -31,6 +36,13 @@ class TicketServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GenWebTicket(self, request, context):
+        """获取 Webview 页面使用的 Ticket
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_TicketServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -38,6 +50,11 @@ def add_TicketServicer_to_server(servicer, server):
                     servicer.GetTicket,
                     request_deserializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GetTicketRequest.FromString,
                     response_serializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GetTicketResponse.SerializeToString,
+            ),
+            'GenWebTicket': grpc.unary_unary_rpc_method_handler(
+                    servicer.GenWebTicket,
+                    request_deserializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GenWebTicketRequest.FromString,
+                    response_serializer=bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GenWebTicketResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -63,5 +80,22 @@ class Ticket(object):
         return grpc.experimental.unary_unary(request, target, '/bilibili.api.ticket.v1.Ticket/GetTicket',
             bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GetTicketRequest.SerializeToString,
             bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GetTicketResponse.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def GenWebTicket(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.api.ticket.v1.Ticket/GenWebTicket',
+            bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GenWebTicketRequest.SerializeToString,
+            bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2.GenWebTicketResponse.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

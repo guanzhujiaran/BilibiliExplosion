@@ -14,6 +14,11 @@ class OpusStub(object):
         Args:
             channel: A grpc.Channel.
         """
+        self.ListFav = channel.unary_unary(
+                '/bilibili.app.dynamic.v2.Opus/ListFav',
+                request_serializer=bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.ListFavReq.SerializeToString,
+                response_deserializer=bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.ListFavResp.FromString,
+                )
         self.OpusDetail = channel.unary_unary(
                 '/bilibili.app.dynamic.v2.Opus/OpusDetail',
                 request_serializer=bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.OpusDetailReq.SerializeToString,
@@ -23,6 +28,13 @@ class OpusStub(object):
 
 class OpusServicer(object):
     """Missing associated documentation comment in .proto file."""
+
+    def ListFav(self, request, context):
+        """
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def OpusDetail(self, request, context):
         """
@@ -34,6 +46,11 @@ class OpusServicer(object):
 
 def add_OpusServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'ListFav': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListFav,
+                    request_deserializer=bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.ListFavReq.FromString,
+                    response_serializer=bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.ListFavResp.SerializeToString,
+            ),
             'OpusDetail': grpc.unary_unary_rpc_method_handler(
                     servicer.OpusDetail,
                     request_deserializer=bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.OpusDetailReq.FromString,
@@ -48,6 +65,23 @@ def add_OpusServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class Opus(object):
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def ListFav(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/bilibili.app.dynamic.v2.Opus/ListFav',
+            bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.ListFavReq.SerializeToString,
+            bilibili_dot_app_dot_dynamic_dot_v2_dot_opus__pb2.ListFavResp.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
     def OpusDetail(request,

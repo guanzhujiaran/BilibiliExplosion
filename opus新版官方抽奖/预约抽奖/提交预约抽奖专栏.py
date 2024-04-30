@@ -5,7 +5,7 @@ import numpy
 import pandas
 import re
 import sys
-
+# 旧版本 已废弃
 sys.path.append('C:/pythontest/')
 
 import json
@@ -330,7 +330,7 @@ class generate_cv:
                           data=data,
                           headers=headers
                           )
-        print(req.text)
+        print(f'获取专栏aid：{req.text}')
         if req.json().get('code') == 0:
             return req.json().get('data').get('aid')
         else:
@@ -395,7 +395,7 @@ class generate_cv:
                               )
 
             if req.json().get('code') == 0:
-                print(req.text)
+                print(f'提交专栏：{req.text}')
                 return True
             else:
                 print(req.text, 'submit_cv')
