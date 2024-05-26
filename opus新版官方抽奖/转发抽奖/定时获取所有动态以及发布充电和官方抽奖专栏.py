@@ -15,16 +15,18 @@ from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate imp
 from opus新版官方抽奖.转发抽奖.获取官方抽奖信息 import exctract_official_lottery
 from grpc获取动态.src.getDynDetail import DynDetailScrapy
 
-# logger.remove()
+logger.remove()
 log = logger.bind(user=__name__ + "官方抽奖")
-# logger.add(sys.stderr, level="DEBUG",filter=lambda record: record["extra"].get('user') in [
+logger.add(sys.stderr, level="INFO",
+#            filter=lambda record: record["extra"].get('user') in [
 #     '全局日志',
 #     'doc_id转dynamic_id日志',
 #     'unknown_module',
 #     'unknown_card',
 #     'common_error_log',
 #     'additional_module_log'
-# ])
+# ]
+           )
 # logger.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == __name__ + "官方抽奖")
 # logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
 logger.add(

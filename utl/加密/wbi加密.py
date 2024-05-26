@@ -216,9 +216,10 @@ def gen_dm_args(params: dict):
         _dm_cover_img_str = base64_encode(sss)
         return _dm_cover_img_str
 
+    dm_rand = 'ABCDEFGHIJK'
     dm_img_list = json.dumps([], separators=(',', ':'))
-    dm_img_str = 'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ'
-    dm_cover_img_str = "QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyA2MzAgKDB4MDAwMDU5MUIpIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEpR29vZ2xlIEluYy4gKEludGVsKQ"
+    dm_img_str = ''.join(random.sample(dm_rand, 2))#'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ'
+    dm_cover_img_str =''.join(random.sample(dm_rand, 2)) #"QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyA2MzAgKDB4MDAwMDU5MUIpIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEpR29vZ2xlIEluYy4gKEludGVsKQ"
     dm_img_inter = '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}'
 
     params.update(
@@ -227,6 +228,7 @@ def gen_dm_args(params: dict):
             "dm_img_str": dm_img_str,
             "dm_cover_img_str": dm_cover_img_str,
             "dm_img_inter": dm_img_inter,
+            'order_avoided': True
         }
     )
 

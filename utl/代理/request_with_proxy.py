@@ -104,10 +104,10 @@ class request_with_proxy:
     #             traceback.print_exc()
     #             await asyncio.sleep(10)
 
-    async def get_one_rand_grpc_proxy(self)-> Union[TypePDict, None]:
+    async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, None]:
         while True:
             try:
-                resp =await self.redis_request_with_proxy.get_one_rand_grpc_proxy()
+                resp = await self.redis_request_with_proxy.get_one_rand_grpc_proxy()
                 return resp
             except:
                 traceback.print_exc()
@@ -227,7 +227,6 @@ class request_with_proxy:
             except:
                 traceback.print_exc()
                 await asyncio.sleep(10)
-
 
 
 if __name__ == '__main__':

@@ -5,21 +5,18 @@
 import ast
 import asyncio
 import random
-import sqlite3
-import threading
-import traceback
 import time
+import traceback
 from copy import deepcopy
-from typing import Union
-import sqlalchemy
 from loguru import logger
-from sqlalchemy import select, func, update, text, and_, or_, insert, create_engine
+from sqlalchemy import select, func, update, and_, or_, insert, delete, Text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import AsyncAdaptedQueuePool
+from typing import Union
 from CONFIG import CONFIG
 from utl.代理.ProxyTool.ProxyObj import TypePDict
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, SDGrpcStat
-from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 sql_log = logger.bind(user='sqlite3')
 
@@ -37,7 +34,6 @@ sql_log = logger.bind(user='sqlite3')
 # 写一个redis锁
 
 
-
 def lock_wrapper(func: callable) -> callable:
     async def wrapper(*args, **kwargs):
         while True:
@@ -45,7 +41,8 @@ def lock_wrapper(func: callable) -> callable:
                 res = await func(*args, **kwargs)
                 return res
             except Exception as e:
-                sql_log.critical(traceback.format_exc())
+                traceback.format_exc()
+                sql_log.exception(e)
                 await asyncio.sleep(random.choice([5, 6, 7]))
                 continue
 
@@ -55,9 +52,8 @@ def lock_wrapper(func: callable) -> callable:
 class SQLHelper:
 
     def __init__(self):
-
         # self.async_lock = asyncio.Lock()
-        self._underscore_spe_time = 8 * 3600  # 0分以下的无响应代理休眠时间
+        self._underscore_spe_time = 5 * 3600  # 0分以下的无响应代理休眠时间
         self._412_sep_time = 2 * 3600  # 0分以上但是"-412"风控的代理休眠时间
         self.async_egn = create_async_engine(CONFIG.database.MYSQL.proxy_db_URI,
                                              echo=False,
@@ -69,13 +65,43 @@ class SQLHelper:
                                              future=True,
                                              pool_pre_ping=True,
                                              connect_args={
-                                                 "connect_timeout":200,
+                                                 "connect_timeout": 200,
                                              }
                                              )
         self.session = sessionmaker(self.async_egn,
                                     class_=AsyncSession,
                                     expire_on_commit=False,
                                     )
+
+        asyncio.ensure_future(self._fresh_db_thread())
+
+    async def _fresh_db_thread(self):
+        """
+        额外的进程用于定时删除
+        :return:
+        """
+        while 1:
+            try:
+                # async with self.session() as session:
+                #     sql = delete(ProxyTab).where(and_(ProxyTab.proxy_id == SDGrpcStat.proxy_id, or_(
+                #         and_(ProxyTab.status == -412, ProxyTab.success_times < -10, ProxyTab.score < -50),
+                #         and_(SDGrpcStat.sd_status == -412, SDGrpcStat.sd_success_times < -10, SDGrpcStat.sd_score < -50)
+                #     )))
+                #     res = await session.execute(sql)
+                #     logger.critical(f'删除数据库中无效的代理：{res.rowcount}个')
+                #     await session.commit()
+                async with self.session() as session:
+                    sql = Text("""DELETE FROM sd_grpc_stat 
+    WHERE proxy_id IN (SELECT * FROM (SELECT b.proxy_id from sd_grpc_stat b LEFT JOIN proxy_tab a
+    ON a.proxy_id=b.proxy_id 
+    WHERE a.proxy_id is NULL) resultTable)""")
+                    res = await session.execute(sql)
+                    logger.critical(f'删除数据库中无效的代理：{res.rowcount}个')
+                    await session.commit()
+            except:
+
+                pass
+            await asyncio.sleep(3600 * 2)
 
     def __preprocess_list_dict(self, orig_list_dict: list[dict]) -> list[dict]:
         '''
@@ -288,7 +314,6 @@ class SQLHelper:
             #     await session.delete(original)
         return 1
 
-    @lock_wrapper
     async def update_to_proxy_list(self, proxy_dict: dict, change_score_num=10) -> bool:
         '''
         更新数据 update 最好只用update，upsert会导致主键增长异常
@@ -435,6 +460,37 @@ class SQLHelper:
     # region grpc_proxy
 
     @lock_wrapper
+    async def fresh_grpc_proxy(self):
+        logger.debug('无可用代理，刷新-412代理')
+        avaliable_score = -50
+        available_status = 0
+        now = int(time.time())
+        unavaliable_status = -412
+        _412_sep_time = self._412_sep_time
+        nums=0
+        async with self.session() as session:
+            async with session.begin():
+                ___sql = update(ProxyTab).where(and_
+                                                (ProxyTab.status != available_status,
+                                                 now - ProxyTab.update_ts >= _412_sep_time,
+                                                 ProxyTab.score >= avaliable_score)
+                                                ).values(
+                    status=available_status,
+                    update_ts=now
+                )
+                nums += (await session.execute(___sql)).rowcount  # 刷新超过两小时的412风控代理 不改变分数，只改变status
+                ___sql = update(ProxyTab).where(
+                    and_(ProxyTab.score < avaliable_score,
+                         now - ProxyTab.update_ts >= self._underscore_spe_time)
+                ).values(
+                    status=available_status,
+                    update_ts=now,
+                    score=50
+                )
+                nums += (await session.execute(___sql)).rowcount # 刷新超过12小时的无效代理，改变status和score
+                await session.commit()
+        return nums
+    @lock_wrapper
     async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, dict]:
         available_status = 0
         available_score = 0
@@ -442,75 +498,26 @@ class SQLHelper:
         _412_sep_time = self._412_sep_time
         _underscore_spe_time = self._underscore_spe_time
 
-        async def fresh_grpc_proxy():
-            avaliable_score = 0
-            available_status = 0
-            now = int(time.time())
-            unavaliable_status = -412
-            _412_sep_time = self._412_sep_time
-            async with self.session() as session:
-                async with session.begin():
-                    ___sql = update(SDGrpcStat).where(and_
-                                                      (SDGrpcStat.sd_status == unavaliable_status,
-                                                       now - SDGrpcStat.sd_update_ts >= _412_sep_time,
-                                                       SDGrpcStat.sd_score >= avaliable_score)
-                                                      ).values(
-                        status=available_status,
-                        update_ts=now
-                    )
-                    # async with self.async_lock:
-                    await session.execute(___sql)  # 刷新超过两小时的412风控代理 不改变分数，只改变status
-
-                    ___sql = update(SDGrpcStat).where(
-                        and_(SDGrpcStat.sd_score < avaliable_score,
-                             now - SDGrpcStat.sd_update_ts >= _underscore_spe_time)
-                    ).values(
-                        status=available_status,
-                        update_ts=now,
-                        score=50
-                    )
-                    await session.execute(___sql)  # 刷新超过12小时的无效代理，改变status和score
-
-        async with (self.session() as session):
-            sql =text('SELECT COUNT(proxy_id) FROM sd_grpc_stat WHERE sd_grpc_stat.score>=0 AND sd_grpc_stat.status!=-412')
-            # select(func.count(SDGrpcStat.proxy_id)).where(
-            #     and_(SDGrpcStat.sd_score >= 0,
-            #          SDGrpcStat.sd_status != -412)
-            # )
-            # async with self.async_lock:
-            result = await session.execute(sql)
-            res = result.scalars().first()
-            if res == 0:
-                await fresh_grpc_proxy()
 
 
-            #             sql_str = f"""
-            # select * from(select
-            # proxy_tab.proxy_id,
-            # proxy_tab.proxy,
-            # ifnull(SD_grpc_stat.status,0) as status,
-            # SD_grpc_stat.update_ts as update_ts,ifnull(SD_grpc_stat.success_times,0) as success_times,
-            # ifnull(SD_grpc_stat.score,50) as score
-            # from proxy_tab
-            # left join SD_grpc_stat on proxy_tab.proxy_id=SD_grpc_stat.proxy_id)
-            # where (status={available_status} and score>={available_score})
-            # or (status={_412_status} and score>={available_score} and strftime('%s','now')-update_ts >={_412_sep_time})
-            # or (score<0 and strftime('%s','now')-update_ts >={_underscore_spe_time})
-            # order by random()
-            # limit 1
-            #     """.format(
-            #                 available_status=available_status,
-            #                 available_score=available_score,
-            #                 _412_status=_412_status,
-            #                 _412_sep_time=_412_sep_time,
-            #                 _underscore_spe_time=_underscore_spe_time,
-            #             )
+        # async with (self.session() as session):
+        #     sql = text(
+        #         'SELECT COUNT(proxy_id) FROM sd_grpc_stat WHERE sd_grpc_stat.score>=0 AND sd_grpc_stat.status!=-412')
+        #     # select(func.count(SDGrpcStat.proxy_id)).where(
+        #     #     and_(SDGrpcStat.sd_score >= 0,
+        #     #          SDGrpcStat.sd_status != -412)
+        #     # )
+        #     # async with self.async_lock:
+        #     result = await session.execute(sql)
+        #     res = result.scalars().first()
+        #     if res == 0:
+        #         await fresh_grpc_proxy()
         async with self.session() as session:
             sql = select(ProxyTab).where(
-                or_(and_(SDGrpcStat.status == available_status, SDGrpcStat.score >= available_score),
-                    and_(SDGrpcStat.status == _412_status, SDGrpcStat.score >= available_score,
-                         int(time.time()) - SDGrpcStat.update_ts >= _underscore_spe_time),
-                    and_(SDGrpcStat.score < 0, int(time.time()) - SDGrpcStat.update_ts >= _underscore_spe_time))
+                or_(and_(ProxyTab.status == available_status, ProxyTab.score >= available_score),
+                    and_(ProxyTab.status == _412_status, ProxyTab.score >= available_score,
+                         int(time.time()) - ProxyTab.update_ts >= _underscore_spe_time),
+                    and_(ProxyTab.score < 0, int(time.time()) - ProxyTab.update_ts >= _underscore_spe_time))
             ).order_by(func.random()).limit(1)
             # async with self.async_lock:
             result = await session.execute(sql)
@@ -527,6 +534,7 @@ class SQLHelper:
         if ret_list_dict:
             return self.__preprocess_ret_list_dict(ret_list_dict.to_dict())
         else:
+            await self.fresh_grpc_proxy()
             return {}
 
     @lock_wrapper
@@ -552,7 +560,6 @@ class SQLHelper:
             else:
                 return {}
 
-    @lock_wrapper
     async def upsert_grpc_proxy_status(self, proxy_id: int, status: int, score_change: int = 0):
         '''
 
@@ -563,47 +570,54 @@ class SQLHelper:
         '''
         async with self.session() as session:
             async with session.begin():
-                sql = select(SDGrpcStat).where(SDGrpcStat.proxy_id == proxy_id).limit(1)
+                sql = select(ProxyTab).where(ProxyTab.proxy_id == proxy_id).limit(1)
                 # async with self.async_lock:
                 res = await session.execute(sql)
-                grpc_proxy_detail: SDGrpcStat = res.scalars().first()
+                grpc_proxy_detail: ProxyTab = res.scalars().first()
                 if grpc_proxy_detail:
-                    success_times = grpc_proxy_detail.sd_success_times
+                    success_times = grpc_proxy_detail.success_times
                     if score_change > 0:
                         success_times += 1
                     else:
                         success_times -= 1
-                    if grpc_proxy_detail.sd_score > 100:
-                        score_change = 100 - grpc_proxy_detail.sd_score
-                    elif grpc_proxy_detail.sd_score < -50:
-                        score_change = -50 - grpc_proxy_detail.sd_score
-                    grpc_proxy_detail.sd_status = status
-                    grpc_proxy_detail.sd_score = grpc_proxy_detail.sd_score + score_change
-                    grpc_proxy_detail.sd_success_times = success_times
-                    grpc_proxy_detail.sd_update_ts = int(time.time())
-                    # async with self.async_lock:
-                    await session.flush()
-                    return
-                else:
-                    sql = insert(SDGrpcStat).values(
-                        proxy_id=proxy_id,
-                        sd_status=status,
-                        sd_score=score_change,
-                        sd_success_times=1 if score_change >= 0 else 0,
-                        sd_update_ts=int(time.time()),
+                    if grpc_proxy_detail.success_times > 100:
+                        score_change = 100 - grpc_proxy_detail.score
+                    elif grpc_proxy_detail.score < -50:
+                        score_change = -50 - grpc_proxy_detail.score
+                    await session.execute(
+                        update(
+                            ProxyTab
+                        ).where(
+                            ProxyTab.proxy_id == grpc_proxy_detail.proxy_id
+                        ).values(
+                            status=status,
+                            score=grpc_proxy_detail.score + score_change,
+                            success_times=success_times,
+                            update_ts=int(time.time())
+                        )
                     )
                     # async with self.async_lock:
-                    await session.execute(sql)
-                    # 刷新自带的主键
-                    await session.flush()
+                    await session.commit()
+                    return
+                # else:
+                #     sql = insert(SDGrpcStat).values(
+                #         proxy_id=proxy_id,
+                #         sd_status=status,
+                #         sd_score=score_change,
+                #         sd_success_times=1 if score_change >= 0 else 0,
+                #         sd_update_ts=int(time.time()),
+                #     )
+                #     # async with self.async_lock:
+                #     await session.execute(sql)
+                #     # 刷新自带的主键
+                #     await session.flush()
 
     # endregion
 
     async def test(self):
         # {'http': 'http://188.166.197.129:3128', 'https': 'http://188.166.197.129:3128'}
-        #for i in range(1000000):
-        res = await self.get_one_rand_grpc_proxy(
-        )
+        # for i in range(1000000):
+        res = await self.fresh_grpc_proxy()
         print(res)
 
 

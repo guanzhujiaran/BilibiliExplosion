@@ -1,5 +1,4 @@
 import ast
-
 import traceback
 from enum import Enum
 import pickle
@@ -38,39 +37,40 @@ class myRedisManager(RedisManagerBase):
         super().__init__()
 
     async def get_ip_list(self) -> list[GrpcProxyStatus]:
-        try:
-            resp = await self._get(self.RedisMap.ip_list.value)
-            if resp:
-                return [GrpcProxyStatus(**i) for i in pickle.loads(ast.literal_eval(resp))]
-            else:
-                return []
-        except:
-            traceback.print_exc()
-            return []
+        while 1:
+            try:
+                resp = await self._get(self.RedisMap.ip_list.value)
+                if resp:
+                    return [GrpcProxyStatus(**i) for i in pickle.loads(ast.literal_eval(resp))]
+                else:
+                    return []
+            except:
+                traceback.print_exc()
 
-    async def set_ip_status(self, ipstatus: GrpcProxyStatus):
+    async def set_ip_status(self, ipstatus: GrpcProxyStatus)->list[GrpcProxyStatus]:
+        ip_list = await self.get_ip_list()
+        ip_list.append(ipstatus)
         try:
-            ip_list = await self.get_ip_list()
             ips = list(filter(lambda x: x.ip == ipstatus.ip, ip_list))
             if ips:
                 ip_list.remove(ips[0])
-            ip_list.append(ipstatus)
-            if len(ip_list) > 100:
-                ip_list = ip_list[-100:]
+            if len(ip_list) > 1000:  # 只保留最新的1000个ip
+                ip_list = ip_list[-1000:]
                 ip_list = list(filter(lambda x: x.available, ip_list))
             await self._set(self.RedisMap.ip_list.value, repr(pickle.dumps([i.to_dict() for i in ip_list])))
+            return ip_list
         except:
             traceback.print_exc()
-
+        finally:
+            return ip_list
 
 class GrpcProxyTools:
     ip_list: list[GrpcProxyStatus] = []  # 所有的ip列表
-    use_avaliable_proxy_flag: bool = False  # 是否可以使用可用代理列表中的代理
     r = myRedisManager()
 
     @property
     def avalibleNum(self):
-        return len(self.ip_list)
+        return len([x for x in self.ip_list if x.available])
 
     @staticmethod
     def _check_ip_352(ip: str, ip_list: list[GrpcProxyStatus]) -> bool:
@@ -125,11 +125,15 @@ class GrpcProxyTools:
         return GrpcProxyTools._check_ip_352(ip, self.ip_list)
 
     async def set_ip_status(self, ipstatus: GrpcProxyStatus):
-        await self.r.set_ip_status(ipstatus)
+        """
+        设置代理状态的同时同步一下代理列表
+        :param ipstatus:
+        :return:
+        """
+        self.ip_list = await self.r.set_ip_status(ipstatus)
         return
 
     async def get_ip_status_by_ip(self, ip: str) -> GrpcProxyStatus:
-        # self.ip_list = await self.r.get_ip_list()
         resp = list(filter(lambda x: x.ip == ip, self.ip_list))
         if resp:
             return resp[0]
@@ -141,13 +145,10 @@ class GrpcProxyTools:
             )
 
     async def get_rand_avaliable_ip_status(self) -> Union[GrpcProxyStatus, None]:
+        if len(self.ip_list) >= 2000:
+            self.ip_list = [x for x in self.ip_list if x.available]
         avaliable_ip_status_list = [x for x in self.ip_list if x.available]
         if len(avaliable_ip_status_list) > 10:
-            self.use_avaliable_proxy_flag = True
-        if len(avaliable_ip_status_list) < 3:
-            self.use_avaliable_proxy_flag = False
-        if self.use_avaliable_proxy_flag:
-            if avaliable_ip_status_list:
-                return random.choice(avaliable_ip_status_list)
-            else:
-                return None
+            return random.choice(avaliable_ip_status_list)
+        else:
+            return None

@@ -354,7 +354,9 @@ class request_with_proxy:
         self.GetProxy_Flag = boolean
 
     # region 从代理网站获取代理
-    # region 从免费代理网站获取代理，每个网站的表格不一样，需要测试！
+
+    # region 从免费代理网站获取代理，每个网站的表格不一样，需要测试！网站按照表格的样式填充代理信息
+
     async def get_proxy_from_kuaidaili(self) -> tuple[list, bool]:
         headers = {
             'cookie': "Hm_lvt_7ed65b1cc4b810e9fd37959c9bb51b31=1680258680; Hm_lvt_e0cc8b6627fae1b9867ddfe65b85c079=1682493581; channelid=0; sid=1688887169922522; _gcl_au=1.1.1132663223.1688887171; __51vcke__K3h4gFH3WOf3aJqX=6c6a659f-9ac6-5a8c-abb0-bd2e2aaf2dd6; __51vuft__K3h4gFH3WOf3aJqX=1688887171061; _gid=GA1.2.1163372563.1688887171; __51uvsct__K3h4gFH3WOf3aJqX=2; _ga_DC1XM0P4JL=GS1.1.1688887171.1.1.1688889750.0.0.0; __vtins__K3h4gFH3WOf3aJqX=%7B%22sid%22%3A%20%22c86f1b8f-1e78-5ad1-86e8-f487d239c80b%22%2C%20%22vd%22%3A%202%2C%20%22stt%22%3A%20432874%2C%20%22dr%22%3A%20432874%2C%20%22expires%22%3A%201688891551028%2C%20%22ct%22%3A%201688889751028%7D; _ga=GA1.2.1430092584.1680258680; _gat=1; _ga_FWN27KSZJB=GS1.2.1688889318.2.1.1688889751.0.0.0",
@@ -364,7 +366,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
 
             url = f'https://www.kuaidaili.com/free/intr/{page}/'
             headers.update({'Referer': url})
@@ -414,7 +416,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
             url = f'https://www.zdaye.com/free/{page}/'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False,
@@ -460,7 +462,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
 
             url = f'http://www.66ip.cn/{page}.html'
             try:
@@ -510,7 +512,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
             url = f'https://www.89ip.cn/index_{page}.html'
             try:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
@@ -556,7 +558,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
 
             url = f'https://www.tyhttp.com/free/page{page}/'
             try:
@@ -602,7 +604,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
             url = f'http://www.kxdaili.com/dailiip/1/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -647,7 +649,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
             url = f'http://www.kxdaili.com/dailiip/2/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -693,7 +695,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
             url = f'http://www.ip3366.net/free/?stype=1&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -739,7 +741,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
             url = f'http://www.ip3366.net/free/?stype=2&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -786,7 +788,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
             url = f'https://proxy.ip3366.net/free/?action=china&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -963,7 +965,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page):
+        for page in range(1, self.get_proxy_page+1):
 
             url = f'https://proxyhub.me/'
             headers.update({"cookie": f"page={page};"})
@@ -1748,7 +1750,7 @@ class request_with_proxy:
 
     # endregion
 
-    # region github json格式代理（每个函数的json响应可能都不一样，要换里面解析json的方式）
+    # region json格式代理（每个函数的json响应可能都不一样，要换里面解析json的方式）
     async def get_proxy_from_t0mer_free_proxies(self) -> tuple[list, bool]:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
@@ -1784,19 +1786,63 @@ class request_with_proxy:
             Get_proxy_success = False
         return proxy_queue, Get_proxy_success
 
+    async def get_proxy_from_omegaproxy(self) -> tuple[list, bool]:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://www.omegaproxy.com/detection/proxyList'
+        for page in range(1,self.get_proxy_page+1):
+            params = {
+                'limit': 20,
+                'page': page,
+                'sort_by': 'lastChecked',
+                'sort_type': 'desc',
+                'protocols': 'http',
+            }
+            try:
+                req = await self.s.get(url=url, headers=headers,params=params, verify=False, timeout=self.timeout)
+            except:
+                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+                traceback.print_exc()
+                await asyncio.sleep(10)
+                # self.GetProxy_Flag = False
+                Get_proxy_success = False
+                return proxy_queue, Get_proxy_success
+            if req:
+
+                req_dict = json.loads(req.text)
+                http_p = req_dict.get('data')
+                for i in http_p:
+                    ip_port = f'http://{i.get("ip")}:{i.get("port")}'
+                    proxy_queue.append({
+                        'http': ip_port,
+                        'https': ip_port
+                    })
+                if len(proxy_queue) < 10:
+                    self.log.info(f'{req.text}, {url}')
+                self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+            else:
+                self.log.info(f'{req.text}, {url}')
+
+                Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
     # endregion
 
     # region 获取代理主函数
     async def __get_proxy(self):
         Get_proxy_success = False
         if self.GetProxy_Flag or time.time() - self.get_proxy_timestamp < self.get_proxy_sep_time:
-            self.log.debug(
+            self.log.info(
                 f'获取代理时间过短！返回！（冷却剩余：{self.get_proxy_sep_time - (int(time.time() - self.get_proxy_timestamp))}）')
             return
         else:
             self.GetProxy_Flag = True
-            self.get_proxy_timestamp = time.time()
-        self.log.info(f'开始获取代理\t{self._timeshift(time.time())}')
+        self.log.info(f'开始获取代理\t上次获取代理时间：{datetime.fromtimestamp(self.get_proxy_timestamp)}\t{self._timeshift(time.time())}')
+        self.get_proxy_timestamp = time.time()
         proxy_queue = []
         task_list = []
         try:
@@ -2008,6 +2054,13 @@ class request_with_proxy:
         except Exception as e:
             traceback.print_exc()
             self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_omegaproxy())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
         results: Union[tuple[list[str], bool] or Exception] = await asyncio.gather(*task_list,
                                                                                    return_exceptions=True)
         for result in results:
@@ -2027,8 +2080,7 @@ class request_with_proxy:
         try:
             await self.__get_proxy()
         except Exception as e:
-            traceback.print_exc()
-            self.log.critical(e)
+            self.log.exception(e)
         finally:
             loop = asyncio.get_event_loop()
             loop.call_later(30, self.set_GetProxy_Flag, False)

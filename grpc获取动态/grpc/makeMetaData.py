@@ -401,7 +401,6 @@ async def make_metadata(
     )
     if bili_ticket:
         metadata['x-bili-ticket'] = bili_ticket
-
     if access_key:
         metadata["authorization"] = f"identify_v1 {access_key}"
         metadata["x-bili-aurora-eid"] = gen_aurora_eid(mid)

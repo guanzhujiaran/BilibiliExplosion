@@ -18,10 +18,10 @@ from grpc获取动态.src.获取取关对象.db.models import UserInfo, SpaceDyn
 grpcapi = BiliGrpc()
 
 
-
 class GetRmFollowingListV1:
     def __init__(self, ):
-        self.sqliteLock=None
+        self.space_sem = None
+        self.sqliteLock = None
         self.logger = logger.bind(user=__name__, filter=lambda record: record["extra"].get('user') == __name__)
         self.lucky_up_list = []
         self.max_recorded_dyn_num = 300  # 每个uid最多记录多少个动态
@@ -116,7 +116,8 @@ class GetRmFollowingListV1:
                         else:
                             return False
             except Exception as e:
-                self.logger.critical(f'Exception while check is exist spece dyn! {dynamic_id}\n{e}')
+                self.logger.exception(f'Exception while check is exist spece dyn! {dynamic_id}\n{e}')
+                await asyncio.sleep(30)
 
     async def check_up_space_dyn(self, uid: int):
         """
@@ -124,90 +125,91 @@ class GetRmFollowingListV1:
         :param uid:
         :return:
         """
-        try:
-            uid = int(uid)
-        except:
-            self.logger.error("Invalid uid: {}".format(uid))
-            return
-        checking_mark = False
-        while 1:
-            if uid in self.now_check_up:
-                time.sleep(1)
-                checking_mark = True
-            else:
-                self.now_check_up.append(uid)
-                break
-        if checking_mark:
-            if uid in self.now_check_up:
-                self.now_check_up.remove(uid)
-            return
-        history_offset = ""
-        dyn_obj = None
-        is_lot_up = False
-        dynamic_flag = False
-        is_lot_dyn = 0
-        self.logger.debug(f"检查up主 {uid} 空间中")
-        while 1:
+        async with self.space_sem:
             try:
-                resp = await grpcapi.grpc_get_space_dyn_by_uid(uid, history_offset)
-                resp_len = len(resp.get('list', []))
-                self.logger.info(f'获取到{uid}空间响应{resp_len}条！')
-                space_dyn = DynTool.solve_space_dyn(resp)
-                history_offset = space_dyn.historyOffset
-                hasMore = space_dyn.hasMore
-                latest_dynamic_timestamp = int(time.time())
-                if space_dyn.DynList:
-                    for dyn_obj in space_dyn.DynList:
-                        if not dyn_obj:
-                            continue
-                        if dyn_obj.dynCard.pubTs <= latest_dynamic_timestamp:
-                            latest_dynamic_timestamp = dyn_obj.dynCard.pubTs
-                        if await self.is_exist_space_dyn(dyn_obj.dynamicId):
-                            dynamic_flag = True
-                            break
-                        else:
-                            is_lot_dyn = await self.create_space_dyn(dyn_obj)
-                            if is_lot_dyn:
-                                is_lot_up = True
-                # 终止规则
-                """
-                1.空间没有更多的动态
-                2.遇到获取过的动态
-                3.遇到超时的动态
-                4.遇到抽奖的动态
-                """
-                if is_lot_dyn:
+                uid = int(uid)
+            except:
+                self.logger.error("Invalid uid: {}".format(uid))
+                return
+            checking_mark = False
+            while 1:
+                if uid in self.now_check_up:
+                    time.sleep(1)
+                    checking_mark = True
+                else:
+                    self.now_check_up.append(uid)
                     break
-                if not hasMore:
-                    break
-                if dynamic_flag:
-                    break
-                if int(time.time()) - latest_dynamic_timestamp >= self.max_separat_time:  # 超过时间的直接跳过
-                    break
-            except Exception as e:
-                self.logger.critical(f"获取取关uid:{uid} {history_offset}失败！\n{e}")
-                await asyncio.sleep(10)
-        if dyn_obj:
-            self.logger.info(
-                f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间有动态")
-            await self.update_up_status(uid, dyn_obj.uname, dyn_obj.dynCard.officialVerify)
-        else:
-            self.logger.warning(
-                f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间没有动态")
+            if checking_mark:
+                if uid in self.now_check_up:
+                    self.now_check_up.remove(uid)
+                return
+            history_offset = ""
+            dyn_obj = None
+            is_lot_up = False
+            dynamic_flag = False
+            is_lot_dyn = 0
+            self.logger.debug(f"检查up主 {uid} 空间中")
             while 1:
                 try:
-                    async with self.sqliteLock:
-                        async with self.AsyncSession() as session:
-                            sql = select(UserInfo).where(UserInfo.uid == uid)
-                            result = await session.execute(sql)
-                            userinfo = result.scalars().first()
-                            break
+                    resp = await grpcapi.grpc_get_space_dyn_by_uid(uid, history_offset)
+                    resp_len = len(resp.get('list', []))
+                    self.logger.info(f'获取到{uid}空间响应{resp_len}条！')
+                    space_dyn = DynTool.solve_space_dyn(resp)
+                    history_offset = space_dyn.historyOffset
+                    hasMore = space_dyn.hasMore
+                    latest_dynamic_timestamp = int(time.time())
+                    if space_dyn.DynList:
+                        for dyn_obj in space_dyn.DynList:
+                            if not dyn_obj:
+                                continue
+                            if dyn_obj.dynCard.pubTs <= latest_dynamic_timestamp:
+                                latest_dynamic_timestamp = dyn_obj.dynCard.pubTs
+                            if await self.is_exist_space_dyn(dyn_obj.dynamicId):
+                                dynamic_flag = True
+                                break
+                            else:
+                                is_lot_dyn = await self.create_space_dyn(dyn_obj)
+                                if is_lot_dyn:
+                                    is_lot_up = True
+                    # 终止规则
+                    """
+                    1.空间没有更多的动态
+                    2.遇到获取过的动态
+                    3.遇到超时的动态
+                    4.遇到抽奖的动态
+                    """
+                    if is_lot_dyn:
+                        break
+                    if not hasMore:
+                        break
+                    if dynamic_flag:
+                        break
+                    if int(time.time()) - latest_dynamic_timestamp >= self.max_separat_time:  # 超过时间的直接跳过
+                        break
                 except Exception as e:
-                    self.logger.critical(f'Exception while query userinfo by uid!{uid}\n{e}')
-            await self.update_up_status(uid, userinfo.uname, userinfo.officialVerify)
-        self.logger.debug(
-            f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间动态检查完成！{'是抽奖up' if bool(is_lot_up) else '非抽奖up'}")
-        self.now_check_up.remove(uid)
+                    self.logger.critical(f"获取取关uid:{uid} {history_offset}失败！\n{e}")
+                    await asyncio.sleep(10)
+            if dyn_obj:
+                self.logger.info(
+                    f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间有动态")
+                await self.update_up_status(uid, dyn_obj.uname, dyn_obj.dynCard.officialVerify)
+            else:
+                self.logger.warning(
+                    f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间没有动态")
+                while 1:
+                    try:
+                        async with self.sqliteLock:
+                            async with self.AsyncSession() as session:
+                                sql = select(UserInfo).where(UserInfo.uid == uid)
+                                result = await session.execute(sql)
+                                userinfo = result.scalars().first()
+                                break
+                    except Exception as e:
+                        self.logger.critical(f'Exception while query userinfo by uid!{uid}\n{e}')
+                await self.update_up_status(uid, userinfo.uname, userinfo.officialVerify)
+            self.logger.debug(
+                f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间动态检查完成！{'是抽奖up' if bool(is_lot_up) else '非抽奖up'}")
+            self.now_check_up.remove(uid)
 
     async def update_up_status(self, uid: int, uname: str, officialVerify: int = -2, update_ts: int = int(time.time())):
         """
@@ -241,7 +243,8 @@ class GetRmFollowingListV1:
                             isLotUp = 1 if len(list(filter(is_lot_up, space_dyn_group_by_uid))) > 0 else 0
                             if len(space_dyn_group_by_uid) > self.max_recorded_dyn_num:
                                 delete_list: list[SpaceDyn] = space_dyn_group_by_uid[
-                                                              -(len(space_dyn_group_by_uid) - self.max_recorded_dyn_num):]
+                                                              -(
+                                                                      len(space_dyn_group_by_uid) - self.max_recorded_dyn_num):]
                                 for delete_dyn in delete_list:
                                     await session.delete(delete_dyn)
                             sql = update(UserInfo).where(UserInfo.uid == uid).values(
@@ -311,7 +314,8 @@ class GetRmFollowingListV1:
     async def main(self, following_list: list) -> list:
         if type(following_list) is not list:
             return []
-        self.sqliteLock=asyncio.Lock()
+        self.sqliteLock = asyncio.Lock()
+        self.space_sem = asyncio.Semaphore(5)
         self.lucky_up_list = self.get_lucky_up_list()
         resp_list = await self.check_lot_up(following_list)
         return resp_list

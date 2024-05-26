@@ -20,4 +20,4 @@ users.yaml
 /github/*
 !/github/my_operator/
 /b站app/bilireq/
-
+*.pt

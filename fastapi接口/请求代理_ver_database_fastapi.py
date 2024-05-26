@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 # 自己本地的fastapi封装接口服务 这是一个sqlite3数据库的接口，使用proxy相关操作
+import sys
 from loguru import logger
 # logger.remove()
-import sys
 
 myfastapi_logger = logger.bind(user=__name__ + 'fastapi')
 # myfastapi_logger.add(sys.stderr, level="INFO",
 #                      filter=lambda record: record["extra"].get('user') == __name__ + "fastapi")
-# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
+#logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
 
 
 import pydantic.main
@@ -180,25 +180,25 @@ def upsert_lot_detail(request_body: dict):
 
 @app.get('/get_others_lot_dyn')
 async def api_get_others_lot_dyn():
-    myfastapi_logger.debug('get_others_lot_dyn 开始获取别人的动态抽奖！')
-    get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
-    result = await get_OTHERS_LOT_DYN.get_new_dyn()
+    myfastapi_logger.debug('get_others_lot_dyn 开始获取B站其他用户的动态抽奖！')
+    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
+    result = await get_other_lot_dyn.get_new_dyn()
     return result
 
 
 @app.get('/get_others_official_lot_dyn')
 def api_get_others_official_lot_dyn():
     myfastapi_logger.debug('get_others_lot_dyn 开始获取别人的官方动态抽奖！')
-    get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
-    result = get_OTHERS_LOT_DYN.get_official_lot_dyn()
+    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
+    result = get_other_lot_dyn.get_official_lot_dyn()
     return result
 
 
 @app.get('/get_others_big_lot')
 def api_get_others_big_lot():
     myfastapi_logger.debug('get_others_lot_dyn 开始获取别人的大奖！')
-    get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
-    result = get_OTHERS_LOT_DYN.get_unignore_Big_lot_dyn()
+    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
+    result = get_other_lot_dyn.get_unignore_Big_lot_dyn()
     return result
 
 
@@ -214,8 +214,8 @@ class reserveInfo(pydantic.BaseModel):
 @app.get('/get_others_big_reserve')
 async def api_get_others_big_reserve() -> list[reserveInfo]:
     myfastapi_logger.debug('get_others_lot_dyn 开始获取重要的预约抽奖！')
-    get_OTHERS_LOT_DYN = GET_OTHERS_LOT_DYN()
-    result =await get_OTHERS_LOT_DYN.get_unignore_reserve_lot_space()
+    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
+    result = await get_other_lot_dyn.get_unignore_reserve_lot_space()
     reserveInfos = []
     for i in result:# 对df的每一行数据访问
         reserve_info = reserveInfo(
@@ -232,12 +232,14 @@ async def api_get_others_big_reserve() -> list[reserveInfo]:
 
 @app.get('/zhihu/get_others_lot_pins')
 async def zhuhu_avaliable_api():
+    myfastapi_logger.info('开始获取zhihu抽奖内容')
     resp = await zhihu_lotScrapy.api_get_all_pins()
     return resp
 
 
 @app.get('/toutiao/get_others_lot_ids')
 async def toutiao_get_others_lot_ids():
+    myfastapi_logger.info('开始获取toutiao抽奖内容')
     return await toutiaoSpaceFeedLotService.main()
 
 

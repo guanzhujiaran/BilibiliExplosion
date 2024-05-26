@@ -31,7 +31,7 @@ class RedisManagerBase:
         self.db =db
         self.pool = redis.ConnectionPool.from_url(
             url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True')
-
+        self.RedisTimeout = 30
     @retry
     async def _get(self, key):
         """
@@ -44,10 +44,10 @@ class RedisManagerBase:
                 pipe = r.pipeline()
                 for k in key:
                     await pipe.get(k)
-                async with r.lock('Lock_' + key[0], timeout=5):
+                async with r.lock('Lock_' + key[0], timeout=self.RedisTimeout):
                     return await pipe.execute()
             else:
-                async with r.lock('Lock_' + key, timeout=5):
+                async with r.lock('Lock_' + key, timeout=self.RedisTimeout):
                     return await r.get(key)
 
     @retry
@@ -57,10 +57,10 @@ class RedisManagerBase:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
                     await pipe.set(key[idx], value[idx])
-                async with r.lock('Lock_' + key[0], timeout=5):
+                async with r.lock('Lock_' + key[0], timeout=self.RedisTimeout):
                     return await pipe.execute()
             else:
-                async with r.lock('Lock_' + key, timeout=5):
+                async with r.lock('Lock_' + key, timeout=self.RedisTimeout):
                     return await r.set(key, value)
 
     @retry
@@ -70,8 +70,8 @@ class RedisManagerBase:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
                     await pipe.setex(name=key[idx], value=value[idx], time=_time)
-                async with r.lock('Lock_' + key[0], timeout=5):
+                async with r.lock('Lock_' + key[0], timeout=self.RedisTimeout):
                     return await pipe.execute()
             else:
-                async with r.lock('Lock_' + key, timeout=5):
+                async with r.lock('Lock_' + key, timeout=self.RedisTimeout):
                     return await r.setex(name=key, value=value, time=_time)

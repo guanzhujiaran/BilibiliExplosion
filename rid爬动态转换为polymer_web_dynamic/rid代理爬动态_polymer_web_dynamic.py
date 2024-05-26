@@ -11,7 +11,7 @@ import b站cookie.globalvar as gl
 import json
 import requests
 
-from utl.代理.请求代理 import *
+from utl.代理.请求代理_ver_database import *
 
 proxy_class = request_with_proxy()
 

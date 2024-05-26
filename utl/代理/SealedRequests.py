@@ -17,10 +17,10 @@ class MYASYNCHTTPX:
                 'https://': None,
             }
 
-    async def get(self, url, headers=None, verify=False, proxies=None, timeout=10):
+    async def get(self, url, headers=None, verify=False, proxies=None, timeout=10,params=None):
         async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
                                      verify=False) as client:
-            resp = await client.get(url=url, headers=headers, timeout=timeout, follow_redirects=True)
+            resp = await client.get(url=url, headers=headers,params=params, timeout=timeout, follow_redirects=True)
             return resp
 
     async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10):
@@ -42,6 +42,23 @@ class MYASYNCHTTPX:
                       params: typing.Optional[QueryParamTypes] = None,
                       cookies: typing.Optional[CookieTypes] = None,
                       extensions: typing.Optional[dict] = None, ):
+        """
+
+        :param url:
+        :param data:
+        :param method:
+        :param headers:
+        :param verify:
+        :param proxies: {"http":"xxx.xxx.xxx.xxx", "https":"xxx.xxx.xxx.xxx"}
+        :param timeout:
+        :param content:
+        :param files:
+        :param json:
+        :param params:
+        :param cookies:
+        :param extensions:
+        :return:
+        """
         async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
                                      verify=False) as client:
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,

@@ -24,6 +24,7 @@ from utl.代理.request_with_proxy import request_with_proxy
 class SuccCounter:
     start_ts = int(time.time())
     succ_count = 0
+    first_dyn_id = 0
 
     def show_pace(self) -> float:
         """
@@ -38,6 +39,8 @@ class SuccCounter:
         else:
             return 0.0
 
+    def show_text(self)->str:
+            return f"平均获取速度：{self.show_pace():.2f} s/个动态\t最初的动态：{self.first_dyn_id}\t获取时间：{datetime.datetime.fromtimestamp(self.start_ts).strftime('%Y-%m-%d %H:%M:%S')}"
 
 class DynDetailScrapy:
     def __init__(self):
@@ -401,14 +404,16 @@ class DynDetailScrapy:
         else:
             ret_dict_list.append({'rid': rid, 'dynamic_id': '-1'})
         self.succ_times += 1
-        if ret_dict_list[0].get('dynamic_id') != '-1':
+        dynamic_id = ret_dict_list[0].get('dynamic_id')
+        if dynamic_id != '-1':
             self.succ_counter.succ_count += 1
-            self.common_log.debug(
-                f"平均获取速度：{self.succ_counter.show_pace()} s/个动态\n总共成功获取{self.succ_times}次\t{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{ret_dict_list[0].get('dynamic_id')} {dynamic_created_time if dynamic_created_time else ''}")
+            self.succ_counter.first_dyn_id = dynamic_id if not self.succ_counter.first_dyn_id else self.succ_counter.first_dyn_id
+            self.common_log.info(
+                f"{self.succ_counter.show_text()}\n总共成功获取{self.succ_times}次\t{rid} 获取单个动态详情成功！http://www.bilibili.com/opus/{dynamic_id} {dynamic_created_time if dynamic_created_time else ''}")
         else:
             self.succ_counter.succ_count += 1
-            self.common_log.debug(
-                f"平均获取速度：{self.succ_counter.show_pace()} s/个动态\n总共成功获取{self.succ_times}次\t获取单个动态详情成功，但动态被删除了！\t{resp_list}\thttp://t.bilibili.com/{rid}?type=2")
+            self.common_log.info(
+                f"{self.succ_counter.show_text()}\n总共成功获取{self.succ_times}次\t获取单个动态详情成功，但动态被删除了！\t{resp_list}\thttp://t.bilibili.com/{rid}?type=2")
         return ret_dict_list
 
     # endregion

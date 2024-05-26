@@ -1,10 +1,8 @@
 import asyncio
 
-from github.my_operator.get_others_lot.Tool.SqlHelper.models import TLotMainInfo, TLotUserInfo, TLotDynInfo, \
-    TLotUserSpaceResp
-from github.my_operator.get_others_lot.Tool.SqlHelper.SqlHelper import SqlHelper
 import Bilibili_methods.all_methods
-from github.my_operator.get_others_lot.main import FileMap, OfficialLotType
+from github.my_operator.get_others_lot.Tool.SqlHelper.SqlHelper import SqlHelper
+from github.my_operator.get_others_lot.new_main import OfficialLotType
 
 
 async def main():
