@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
+"""
+发布抽奖专栏
+"""
+
 import asyncio
-
 import re
-
 import json
 from CONFIG import CONFIG
 import pandas
@@ -18,6 +20,8 @@ import requests
 import threading
 import time
 from loguru import logger
+
+from utl.pushme.pushme import pushme
 from utl.代理 import grpc_api
 from grpc获取动态.src.DynObjectClass import dynAllDetail
 from grpc获取动态.src.SqlHelper import SQLHelper, sql_log
@@ -370,8 +374,7 @@ class generate_cv:
         if req.json().get('code') == 0:
             return req.json().get('data').get('aid')
         else:
-            print(req.text, 'get_cv_aid')
-            exit(req.text)
+            pushme('提交专栏失败！', req.text)
 
     def submit_cv(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint, tags,
                   image_urls,
@@ -434,8 +437,7 @@ class generate_cv:
                 print(req.text)
                 return True
             else:
-                print(req.text, 'submit_cv')
-                exit(req.text)
+                pushme('提交专栏失败！', req.text)
         return True
 
 
@@ -456,14 +458,17 @@ class LOTSqlHelper(SQLHelper):
                          )]
         return ret_list_dict
 
-class exctract_official_lottery:
+
+class ExctractOfficialLottery:
     def __init__(self):
         self.BiliGrpc = grpc_api.BiliGrpc()
-        self.__dir = CONFIG.root_dir + 'opus新版官方抽奖/转发抽奖/'
-        if not os.path.exists('log'):
-            os.mkdir('log')
-        if not os.path.exists('result'):
-            os.mkdir('result')
+        self.__dir = os.path.dirname(os.path.abspath(__file__))
+        self.log_path = os.path.join(self.__dir, 'log')
+        self.result_path = os.path.join(self.__dir, 'result')
+        if not os.path.exists(self.log_path):
+            os.mkdir(self.log_path)
+        if not os.path.exists(self.result_path):
+            os.mkdir(self.result_path)
         self.oringinal_official_lots: [dict] = []
 
         self.all_offcial_lots: [dict] = []  # 所有的抽奖
@@ -476,21 +481,7 @@ class exctract_official_lottery:
 
         self.sql = LOTSqlHelper()
         self.proxy_request = request_with_proxy()
-        self.common_log = logger.bind(user=__name__+"common_log")
-        # self.common_log_handle = logger.add(sys.stderr, level="INFO",
-        #                                         filter=lambda record: record["extra"].get('user') == __name__+ "common_log")
-        self.error_log = logger.bind(user="error_log")
-        # self.error_log_handler1 = logger.add(sys.stderr, level="INFO",
-        #                                         filter=lambda record: record["extra"].get('user') == __name__ + "error_log")
-        # self.error_log_handler2 =logger.add(
-        #     "log/error_log.log",
-        #     encoding="utf-8",
-        #     enqueue=True,
-        #     rotation="500MB",
-        #     compression="zip",
-        #     retention="15 days",
-        #     filter=lambda record: record["extra"].get('user') == "error_log"
-        # )
+        self.log = logger.bind(user="官方抽奖")
         self.__no_lot_timer = 0
         self.__no_lot_timer_lock = threading.Lock()
         self.limit_no_lot_times = 3000  # 3000个rid没有得到抽奖信息就退出
@@ -523,16 +514,17 @@ class exctract_official_lottery:
     def write_in_file(self):
         if self.all_offcial_lots:
             df1 = pd.DataFrame(self.all_offcial_lots)
-            if os.path.isfile('/result/全部转发抽奖.csv'):
-                df1.to_csv('/result/全部转发抽奖.csv', index=False, sep=self.csv_sep_letter)
+            if os.path.isfile(os.path.join(self.__dir, 'result/全部转发抽奖.csv')):
+                df1.to_csv(os.path.join(self.__dir, 'result/全部转发抽奖.csv'), index=False, sep=self.csv_sep_letter)
             else:
-                df1.to_csv('/result/全部转发抽奖.csv', index=False, mode='a+', header=False, sep=self.csv_sep_letter)
+                df1.to_csv(os.path.join(self.__dir, 'result/全部转发抽奖.csv'), index=False, mode='a+', header=False,
+                           sep=self.csv_sep_letter)
 
         if self.last_update_offcial_lots:
             df2 = pd.DataFrame(self.last_update_offcial_lots)
-            df2.to_csv('/result/更新的转发抽奖.csv', index=False, sep=self.csv_sep_letter)
+            df2.to_csv(os.path.join(self.__dir, 'result/更新的转发抽奖.csv'), index=False, sep=self.csv_sep_letter)
 
-        with open('idsstart.txt', 'w', encoding='utf-8') as f:
+        with open(os.path.join(self.__dir, 'idsstart.txt'), 'w', encoding='utf-8') as f:
             f.write(str(self.latest_rid))
 
     async def get_lot_notice(self, bussiness_type: int, business_id: str):
@@ -548,10 +540,15 @@ class exctract_official_lottery:
                 'business_type': bussiness_type,
                 'business_id': business_id,
             }
-            resp = await self.proxy_request.request_with_proxy(url=url, method='get', params=params,
-                                                               headers={'user-agent': random.choice(CONFIG.UA_LIST)})
+            resp = await self.proxy_request.request_with_proxy(
+                url=url,
+                method='get',
+                params=params,
+                headers={'user-agent': random.choice(CONFIG.UA_LIST)},
+                hybrid='1'
+            )
             if resp.get('code') != 0:
-                self.error_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
+                self.log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
                 time.sleep(10)
                 if resp.get('code') == -9999:
                     return resp
@@ -565,12 +562,12 @@ class exctract_official_lottery:
         :return: 更新抽奖
         """
 
-        async def solve_lot_data(lotData):
+        async def solve_lot_data(lot_data):
             """
 
-            :param lotData:
+            :param lot_data:
             """
-            newly_lot_resp = await self.get_lot_notice(lotData['business_type'], lotData['business_id'])
+            newly_lot_resp = await self.get_lot_notice(lot_data['business_type'], lot_data['business_id'])
             newly_lotData = newly_lot_resp['data']
 
             if newly_lotData:
@@ -579,7 +576,7 @@ class exctract_official_lottery:
             async with data_lock:
                 newly_updated_lot_data.append(newly_lotData)
 
-        self.common_log.info(f'开始更新抽奖，共计{len(original_lot_notice)}条抽奖需要更新')
+        self.log.info(f'开始更新抽奖，共计{len(original_lot_notice)}条抽奖需要更新，开始重新通过b站api获取抽奖数据！')
         data_lock = asyncio.Lock()
         newly_updated_lot_data = []
         thread_num = 50
@@ -593,20 +590,27 @@ class exctract_official_lottery:
 
         return newly_updated_lot_data
 
-    async def get_lot_dict(self, all_lots: [lot_detail]) -> tuple[list[dict], list[dict], list[dict], list[dict]]:
+    async def get_lot_dict(self, all_lots: [lot_detail], latest_lots_judge_ts=20 * 3600) -> tuple[
+        list[dict], list[dict], list[dict], list[dict]]:
         """
-        获取最新的抽奖的dict，这个函数没有问题
+        获取最新的抽奖的dict
+        :param latest_lots_judge_ts: 判断更新抽奖的间隔时间
         :param all_lots:数据库的抽奖信息
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
-        update_lots_lot_ids = [int(x['lottery_id']) for x in all_lots if (int(time.time()) - int(x['ts'])) <= 20 * 3600] # 24小时之内更新进去的都算？
+        update_lots_lot_ids = [int(x['lottery_id']) for x in all_lots if
+                               (
+                                       int(time.time())
+                                       - int(x['ts'])  # x['ts'] 是api请求之后生成的时间戳
+                               )
+                               <= latest_lots_judge_ts]
         # 获取到的更新抽奖的lot_id
         if len(update_lots_lot_ids) == len(all_lots):
             update_lots_lot_ids = []
 
         freshed_all_lot_datas = await self.update_lot_notice(all_lots)  # 更新抽奖
 
-        self.common_log.info(f'更新完成，当前抽奖剩余{len(freshed_all_lot_datas)}条')
+        self.log.info(f'更新完成，当前抽奖剩余{len(freshed_all_lot_datas)}条')
         all_lot_official_data = [x for x in freshed_all_lot_datas if
                                  x['status'] != 2 and x['status'] != -1 and x['business_type'] == 1]
         latest_updated_official_lot_data = [x for x in all_lot_official_data if
@@ -617,13 +621,13 @@ class exctract_official_lottery:
         latest_updated_charge_lot_data = [x for x in all_lot_charge_data if int(x['lottery_id']) in update_lots_lot_ids]
 
         df1 = pd.DataFrame(all_lot_official_data)
-        df1.to_csv('log/全部官抽.csv', index=False, header=True)
+        df1.to_csv(os.path.join(self.__dir, 'log/全部官抽.csv'), index=False, header=True)
         df2 = pd.DataFrame(latest_updated_official_lot_data)
-        df2.to_csv('log/更新官抽.csv', index=False, header=True)
+        df2.to_csv(os.path.join(self.__dir, 'log/更新官抽.csv'), index=False, header=True)
         df3 = pd.DataFrame(all_lot_charge_data)
-        df3.to_csv('log/全部充电.csv', index=False, header=True)
+        df3.to_csv(os.path.join(self.__dir, 'log/全部充电.csv'), index=False, header=True)
         df4 = pd.DataFrame(latest_updated_charge_lot_data)
-        df4.to_csv('log/更新充电.csv', index=False, header=True)
+        df4.to_csv(os.path.join(self.__dir, 'log/更新充电.csv'), index=False, header=True)
 
         return all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data
 
@@ -646,10 +650,12 @@ class exctract_official_lottery:
         return temp_rid, lot_id, dynamic_id, dynamic_created_time
 
     def get_repost_count(self, dynamic_id):
-        dynDetail = self.sql.get_all_dynamic_detail_by_dynamic_id(dynamic_id)
-        dynData = json.loads(dynDetail.get('dynData'), strict=False)
+        dyn_detail = self.sql.get_all_dynamic_detail_by_dynamic_id(dynamic_id)
+        if not dyn_detail.get('dynData'):
+            return 114514
+        dyn_data = json.loads(dyn_detail.get('dynData'), strict=False)
         repost_count = 0
-        for module in dynData.get('modules'):
+        for module in dyn_data.get('modules'):
             if module.get('moduleType') == 'module_stat':
                 if module.get('moduleStat').get('repost'):
                     repost_count = module.get('moduleStat').get('repost')
@@ -661,21 +667,34 @@ class exctract_official_lottery:
 
     def construct_lot_detail(self, lot_data_list: [dict], get_repost_count_flag: bool) -> list[lot_detail]:
         ret_list = []
+        need_keys = [
+            'lottery_id',
+            'lottery_time',
+            'first_prize',
+            'second_prize',
+            'third_prize',
+            'first_prize_cmt',
+            'second_prize_cmt',
+            'third_prize_cmt'
+        ]
         for lot_data in lot_data_list:
-            self.common_log.info(f'Constructing:{lot_data}')
-            lottery_id = lot_data['lottery_id']
+            if not all(key in lot_data.keys() for key in need_keys):
+                self.log.error(
+                    f'lot_data:{lot_data} is not complete! missing key:{[key for key in need_keys if key not in lot_data.keys()]}')
+            self.log.info(f'Constructing:{lot_data}')
+            lottery_id = lot_data.get('lottery_id', '')
             dynamic_id = lot_data.get('dynamic_id') or lot_data.get('business_id')
-            lottery_time = lot_data['lottery_time']
-            first_prize = lot_data['first_prize']
-            second_prize = lot_data['second_prize']
-            third_prize = lot_data['third_prize']
-            first_prize_cmt = lot_data['first_prize_cmt']
-            second_prize_cmt = lot_data['second_prize_cmt']
-            third_prize_cmt = lot_data['third_prize_cmt']
+            lottery_time = lot_data.get('lottery_time', 0)
+            first_prize = lot_data.get('first_prize', 0)
+            second_prize = lot_data.get('second_prize', 0)
+            third_prize = lot_data.get('third_prize', 0)
+            first_prize_cmt = lot_data.get('first_prize_cmt', '')
+            second_prize_cmt = lot_data.get('second_prize_cmt', '')
+            third_prize_cmt = lot_data.get('third_prize_cmt', '')
             if get_repost_count_flag:
                 participants = self.get_repost_count(dynamic_id)
             else:
-                participants = lot_data['participants']
+                participants = lot_data.get('participants', 0)
             result = lot_detail(
                 lottery_id,
                 dynamic_id,
@@ -737,14 +756,15 @@ class exctract_official_lottery:
                 task_list.append(task)
         await asyncio.gather(*task_list)
 
-    async def get_all_lots(self) -> tuple[[lot_detail], [lot_detail], [lot_detail], [lot_detail]]:
+    async def get_all_lots(self, latest_lots_judge_ts=20 * 3600) -> tuple[
+        [lot_detail], [lot_detail], [lot_detail], [lot_detail]]:
         """
         已经排除了开奖了的和失效了的抽奖了
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
         all_official_lots_undrawn = self.sql.get_official_and_charge_lot_not_drawn()
         all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data = await self.get_lot_dict(
-            all_official_lots_undrawn)  # 更新抽奖信息
+            all_official_lots_undrawn, latest_lots_judge_ts)  # 更新抽奖信息
         official_lot_dynamic_ids = [x['business_id'] for x in all_lot_official_data if x['status'] != 2]
         charge_lot_dynamic_ids = [x['business_id'] for x in all_lot_charge_data if x['status'] != 2]
         await self.get_and_update_all_details_by_dynamic_id_list(
@@ -763,17 +783,22 @@ class exctract_official_lottery:
 
         return all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail
 
-
-    async def main(self):
+    async def main(self, latest_lots_judge_ts: int = 20 * 3600, force_push: bool = False, debug_mode: bool = False) -> \
+            tuple[list[lot_detail], list[lot_detail]]:
         """
-        函数入口
+         函数入口
+        :param latest_lots_judge_ts:
+        :param force_push: 是否强制推送
+        :return:
         """
         # from grpc获取动态.src.getDynDetail import dynDetailScrapy
         # d = dynDetailScrapy()
         # d.main()# 爬取最新的动态
 
-        all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail = await self.get_all_lots()  # 获取并更新抽奖信息！
-
+        all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail = await self.get_all_lots(
+            latest_lots_judge_ts)  # 获取并更新抽奖信息！
+        if debug_mode:
+            return latest_official_lot_detail, latest_charge_lot_detail
         ua3 = gl.get_value('ua3')
         csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
         cookie3 = gl.get_value('cookie3')
@@ -781,13 +806,31 @@ class exctract_official_lottery:
         if cookie3 and csrf3 and ua3 and buvid3:
             gc = generate_cv(cookie3, ua3, csrf3, buvid3)
             # gc.post_flag = False  # 不直接发布
-            gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
-            gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
+            fabu_text = ''
+            if all_official_lot_detail or force_push:
+                gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
+                fabu_text += '官方抽奖专栏\n'
+            if all_charge_lot_detail or force_push:
+                gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
+                fabu_text += '充电抽奖专栏\n'
+            if fabu_text:
+                fabu_text = '已发布专栏：\n' + fabu_text
+            else:
+                fabu_text = '没有需要发布的专栏！\n'
+            self.log.error(fabu_text)
+            pushme('官方抽奖和充电抽奖已更新',
+                   f'{fabu_text}官方抽奖：'
+                   f'距离上次更新抽奖时间为：{round(latest_lots_judge_ts / 3600, 2)}小时！'
+                   f'{len(all_official_lot_detail)}个，最后更新的：{len(latest_official_lot_detail)}个'
+                   f'\n充电抽奖：{len(all_charge_lot_detail)}个，最后更新的：{len(latest_charge_lot_detail)}个'
+                   f'\n更新内容：\n{[x.__dict__ for x in latest_official_lot_detail]}\n{[x.__dict__ for x in latest_charge_lot_detail]}')
         else:
-            print('获取登陆信息失败！', cookie3, '\n', csrf3, '\n', ua3, '\n', buvid3)
+            self.log.error(f"获取登陆信息失败！{cookie3, csrf3, ua3, buvid3}")
+            pushme('官方抽奖和充电抽奖更新失败！', f"获取登陆信息失败！{cookie3, csrf3, ua3, buvid3}")
+        return latest_official_lot_detail, latest_charge_lot_detail
 
 
 if __name__ == '__main__':
-    m = exctract_official_lottery()
+    m = ExctractOfficialLottery()
     # m.Get_All_Flag = True  # 为True时重新获取所有的抽奖，为False时将更新的内容附加在所有的后面
-    asyncio.run(m.main())
+    asyncio.run(m.get_repost_count('940628499647954947'))

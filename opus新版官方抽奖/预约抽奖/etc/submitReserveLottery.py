@@ -1,28 +1,21 @@
 import asyncio
 import os.path
 from typing import Dict
-
 import time
-
-import numpy
 import pandas
 import re
 import sys
-
 from opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper
-
 sys.path.append('C:/pythontest/')
-
-import json
 import random
-
 import requests
 import urllib.parse
 import datetime
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
-
+from loguru import logger
+log = logger.bind(user='预约抽奖')
 
 class generate_cv:
     def __init__(self, cookie, ua, csrf, buvid):

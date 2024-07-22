@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import traceback
-
+import subprocess
+from functools import partial
+subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 import json
 import random

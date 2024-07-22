@@ -4,32 +4,35 @@
 '''
 import ast
 import asyncio
+import os
 import random
 import time
-import traceback
 from copy import deepcopy
+from typing import Union
+
 from loguru import logger
-from sqlalchemy import select, func, update, and_, or_, insert, delete, Text
+from sqlalchemy import select, func, update, and_, or_
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool
-from typing import Union
+
 from CONFIG import CONFIG
 from utl.代理.ProxyTool.ProxyObj import TypePDict
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, SDGrpcStat
 
-sql_log = logger.bind(user='sqlite3')
+sql_log = logger.bind(user='MysqlProxy')
 
+sql_log.add(
+    os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_proxy_db_log.log"),
+    level="WARNING",
+    encoding="utf-8",
+    enqueue=True,
+    rotation="500MB",
+    compression="zip",
+    retention="15 days",
+    filter=lambda record: record["extra"].get('user') == "MysqlProxy"
+)
 
-# logger.add(
-# CONFIG.root_dir + "utl/代理/log/sqlite3.log",
-# encoding="utf-8",
-# enqueue=True,
-# rotation="500MB",
-# compression="zip",
-# retention="15 days",
-# filter=lambda record: record["extra"].get('user') == "sqlite3"
-# )
 
 # 写一个redis锁
 
@@ -41,7 +44,6 @@ def lock_wrapper(func: callable) -> callable:
                 res = await func(*args, **kwargs)
                 return res
             except Exception as e:
-                traceback.format_exc()
                 sql_log.exception(e)
                 await asyncio.sleep(random.choice([5, 6, 7]))
                 continue
@@ -50,6 +52,12 @@ def lock_wrapper(func: callable) -> callable:
 
 
 class SQLHelper:
+    instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls.instance is None:
+            cls.instance = super().__new__(cls)
+        return cls.instance
 
     def __init__(self):
         # self.async_lock = asyncio.Lock()
@@ -73,35 +81,19 @@ class SQLHelper:
                                     expire_on_commit=False,
                                     )
 
-        asyncio.ensure_future(self._fresh_db_thread())
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._start_periodic_task())
+        # t = Thread(target=asyncio.run,args=(self._start_periodic_task(),),daemon=True)
+        # t.start()
 
-    async def _fresh_db_thread(self):
-        """
-        额外的进程用于定时删除
-        :return:
-        """
+    async def _start_periodic_task(self):
+        """启动后台任务"""
         while 1:
-            try:
-                # async with self.session() as session:
-                #     sql = delete(ProxyTab).where(and_(ProxyTab.proxy_id == SDGrpcStat.proxy_id, or_(
-                #         and_(ProxyTab.status == -412, ProxyTab.success_times < -10, ProxyTab.score < -50),
-                #         and_(SDGrpcStat.sd_status == -412, SDGrpcStat.sd_success_times < -10, SDGrpcStat.sd_score < -50)
-                #     )))
-                #     res = await session.execute(sql)
-                #     logger.critical(f'删除数据库中无效的代理：{res.rowcount}个')
-                #     await session.commit()
-                async with self.session() as session:
-                    sql = Text("""DELETE FROM sd_grpc_stat 
-    WHERE proxy_id IN (SELECT * FROM (SELECT b.proxy_id from sd_grpc_stat b LEFT JOIN proxy_tab a
-    ON a.proxy_id=b.proxy_id 
-    WHERE a.proxy_id is NULL) resultTable)""")
-                    res = await session.execute(sql)
-                    logger.critical(f'删除数据库中无效的代理：{res.rowcount}个')
-                    await session.commit()
-            except:
+            self.task = [asyncio.create_task(self.fresh_grpc_proxy())]
 
-                pass
-            await asyncio.sleep(3600 * 2)
+            await asyncio.gather(*self.task)
+
+            await asyncio.sleep(10 * 60)
 
     def __preprocess_list_dict(self, orig_list_dict: list[dict]) -> list[dict]:
         '''
@@ -213,7 +205,7 @@ class SQLHelper:
                 res = await session.execute(sql)
                 original = res.scalars().all()
                 if not original:
-                    sql_log.warning("代理数据重复记录不存在")
+                    sql_log.info("代理数据重复记录不存在")
                     return True
                 for record in original:
                     await session.delete(record)
@@ -459,7 +451,6 @@ class SQLHelper:
 
     # region grpc_proxy
 
-    @lock_wrapper
     async def fresh_grpc_proxy(self):
         logger.debug('无可用代理，刷新-412代理')
         avaliable_score = -50
@@ -467,7 +458,7 @@ class SQLHelper:
         now = int(time.time())
         unavaliable_status = -412
         _412_sep_time = self._412_sep_time
-        nums=0
+        nums = 0
         async with self.session() as session:
             async with session.begin():
                 ___sql = update(ProxyTab).where(and_
@@ -487,9 +478,11 @@ class SQLHelper:
                     update_ts=now,
                     score=50
                 )
-                nums += (await session.execute(___sql)).rowcount # 刷新超过12小时的无效代理，改变status和score
+                nums += (await session.execute(___sql)).rowcount  # 刷新超过12小时的无效代理，改变status和score
                 await session.commit()
+        sql_log.debug(f'【无可用代理，刷新-412代理】\t刷新代理，影响数量：{nums}个！')
         return nums
+
     @lock_wrapper
     async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, dict]:
         available_status = 0
@@ -497,8 +490,6 @@ class SQLHelper:
         _412_status = -412
         _412_sep_time = self._412_sep_time
         _underscore_spe_time = self._underscore_spe_time
-
-
 
         # async with (self.session() as session):
         #     sql = text(
@@ -534,7 +525,10 @@ class SQLHelper:
         if ret_list_dict:
             return self.__preprocess_ret_list_dict(ret_list_dict.to_dict())
         else:
-            await self.fresh_grpc_proxy()
+            try:
+                await self.fresh_grpc_proxy()
+            except Exception as e:
+                sql_log.exception(f'刷新代理失败！{e}')
             return {}
 
     @lock_wrapper
@@ -614,13 +608,17 @@ class SQLHelper:
 
     # endregion
 
-    async def test(self):
-        # {'http': 'http://188.166.197.129:3128', 'https': 'http://188.166.197.129:3128'}
-        # for i in range(1000000):
-        res = await self.fresh_grpc_proxy()
-        print(res)
+
+async def _test():
+    sq = SQLHelper()
+    # {'http': 'http://188.166.197.129:3128', 'https': 'http://188.166.197.129:3128'}
+    # for i in range(1000000):
+    # res = await sq.fresh_grpc_proxy()
+    while 1:
+        print('主线程运行中')
+        await asyncio.sleep(3)
+    # print(res)
 
 
 if __name__ == '__main__':
-    sq = SQLHelper()
-    asyncio.run(sq.test())
+    asyncio.run(_test())

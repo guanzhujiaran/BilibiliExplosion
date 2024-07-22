@@ -1,11 +1,8 @@
 # coding:utf-8
-import sys
-
 import asyncio
 import datetime
 import json
 import os
-import pandas
 import random
 import re
 import urllib.parse
@@ -15,6 +12,9 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any, Union
+import subprocess
+from functools import partial
+subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 from loguru import logger
 from CONFIG import CONFIG
@@ -31,10 +31,19 @@ from github.my_operator.get_others_lot.svmJudgeBigLot.judgeBigLot import big_lot
 from github.my_operator.get_others_lot.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
 from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
 
-root_dir = CONFIG.root_dir
-relative_dir = 'github/my_operator/get_others_lot/'  # 执行文件所在的相对路径
 request_proxy = request_with_proxy()
 get_others_lot_log = logger.bind(user='get_others_lot')
+get_others_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_get_others_lot_log.log"),
+                       level="WARNING",
+                       encoding="utf-8",
+                       enqueue=True,
+                       rotation="500MB",
+                       compression="zip",
+                       retention="15 days",
+                       filter=lambda record: record["extra"].get('user') == "get_others_lot",
+                       )
+
+
 # get_others_lot_log.add(sys.stderr, level="DEBUG",
 #                        filter=lambda record: record["extra"].get('user') == "get_others_lot")
 
@@ -136,22 +145,25 @@ class scrapyData:
 
 
 class FileMap(str, Enum):
-    _log_path = root_dir + relative_dir + 'log/'
-    lot_dyid = _log_path + 'lot_dyid.txt'
-    get_dyid = _log_path + 'get_dyid.txt'  # 最后写入文件记录
-    uidlist_json = _log_path + 'uidlist.json'
-    本轮检查的动态id = _log_path + '本轮检查的动态id.txt'
-    所有抽奖信息 = _log_path + '所有过滤抽奖信息.csv'
-    所有无用信息 = _log_path + '所有无用信息.csv'
+    current_file_path: str = os.path.dirname(os.path.abspath(__file__))
+    github_bili_upload: str = os.path.join(current_file_path, '../../bili_upload')
 
-    _result_path = root_dir + relative_dir + 'result/'
-    过滤抽奖信息 = _result_path + '过滤抽奖信息.csv'
-    无用信息 = _result_path + '无用信息.csv'
+    _log_path = os.path.join(current_file_path, 'log/')
+    lot_dyid = os.path.join(_log_path, 'lot_dyid.txt')
+    get_dyid = os.path.join(_log_path, 'get_dyid.txt')  # 最后写入文件记录
+    uidlist_json = os.path.join(_log_path, 'uidlist.json')
+    本轮检查的动态id = os.path.join(_log_path, '本轮检查的动态id.txt')
+    所有抽奖信息 = os.path.join(_log_path, '所有过滤抽奖信息.csv')
+    所有无用信息 = os.path.join(_log_path, '所有无用信息.csv')
 
-    获取过动态的b站用户 = root_dir + relative_dir + '获取过动态的b站用户.json'
-    get_dyn_ts = root_dir + relative_dir + 'get_dyn_ts.txt'
+    _result_path = os.path.join(current_file_path, 'result/')
+    过滤抽奖信息 = os.path.join(_result_path, '过滤抽奖信息.csv')
+    无用信息 = os.path.join(_result_path, '无用信息.csv')
 
-    loguru日志 = _log_path + 'loguru日志.log'
+    获取过动态的b站用户 = os.path.join(current_file_path, '获取过动态的b站用户.json')
+    get_dyn_ts = os.path.join(current_file_path, 'get_dyn_ts.txt')
+
+    loguru日志 = os.path.join(_log_path, 'loguru日志.log')
 
 
 class OfficialLotType(str, Enum):
@@ -645,7 +657,7 @@ class GetOthersLotDyn:
         return ret_list
 
     def fetchGiteeInfo(self):
-        os.system(f'cd "{root_dir}github/bili_upload" && git fetch --all && git reset --hard && git pull')
+        os.system(f'cd "{FileMap.github_bili_upload.value}" && git fetch --all && git reset --hard && git pull')
 
     # endregion
 
@@ -3094,7 +3106,7 @@ class GetOthersLotDyn:
             pass
 
     def getGiteeLotdyid(self) -> list[str]:
-        path = root_dir + "github/bili_upload"
+        path = FileMap.github_bili_upload.value
         datanames = os.listdir(path)
         path_dir_name = []
         for i in datanames:
@@ -3104,7 +3116,7 @@ class GetOthersLotDyn:
         effective_files_content_list = []
 
         for i in path_dir_name:
-            with open(root_dir + 'github/bili_upload/' + i + '/dyid.txt', 'r', encoding='utf-8') as f:
+            with open(os.path.join(FileMap.github_bili_upload.value, f'{i}/dyid.txt'), 'r', encoding='utf-8') as f:
                 effective_files_content_list.append(''.join(f.readlines()))
         for i in effective_files_content_list:
             self.queriedData.gitee_dyn_id_list = self.solveGiteeFileContent(i, self.queriedData.dyidList)  # 记录动态id
@@ -3130,7 +3142,7 @@ class GetOthersLotDyn:
             'host_mid': hostuid,
             'timezone_offset': -480,
             'platform': 'web',
-            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote',
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2',
             'web_location': "333.999",
         }
         dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
@@ -3158,7 +3170,8 @@ class GetOthersLotDyn:
                                                          headers=headers,
                                                          # data=dongtaidata,
                                                          verify=False,
-                                                         mode='single'
+                                                         mode='rand',
+                                                         hybrid='1'
                                                          )
             return req
         except Exception as e:
@@ -3224,8 +3237,7 @@ class GetOthersLotDyn:
                         # get_others_lot_log.info(f'添加进记录：{_}')
                         dynamic_id_list.append(str(_))  # 间接和原始的动态id全部记录
         else:
-            get_others_lot_log.error(space_req_dict)
-            get_others_lot_log.error('cards_json为None')
+            get_others_lot_log.error(f'cards_json为None\t{json.dumps(space_req_dict)}')
         if dynamic_id_list:
             self.spaceRecordedDynamicIdList.extend(dynamic_id_list)
 
@@ -3435,7 +3447,7 @@ class GetOthersLotDyn:
                                  isPubLotUser=isPubLotUser
                                  ))
                 if len(timelist) == 0:
-                    get_others_lot_log.error('timelist is empty')
+                    get_others_lot_log.error(f'timelist is empty\t{json.dumps(dyreq_dict)}')
                     break
                 if time.time() - timelist[-1] >= self.SpareTime:
                     get_others_lot_log.info(
@@ -3514,6 +3526,9 @@ class GetOthersLotDyn:
         get_others_lot_log.info('多线程获取动态')
         task_list = []
         for i in write_in_list:
+            if i is None:
+                get_others_lot_log.error(f'动态id获取为None:{i}')
+                continue
             await self.sem.acquire()
             tk = asyncio.create_task(judge_single_dynamic(i))
             task_list.append(tk)
@@ -3549,7 +3564,7 @@ class GetOthersLotDyn:
             # get_others_lot_log.critical(f'存在过的动态！！！{isDynExist.__dict__}')
             if isDynExist.officialLotType != OfficialLotType.抽奖动态的源动态.value:
                 dynamic_req = isDynExist.rawJsonStr
-                if type(dynamic_req) is not None:
+                if dynamic_req is not None:
                     dynamic_req = {
                         'code': 0,
                         'data': {
@@ -3560,7 +3575,7 @@ class GetOthersLotDyn:
         if isSpaceExist:
             # get_others_lot_log.critical(f'存在过的动态！！！{isDynExist.__dict__}')
             dynamic_req = isSpaceExist.spaceRespJson
-            if type(dynamic_req) is not None:
+            if dynamic_req is not None:
                 dynamic_req = {
                     'code': 0,
                     'data': {
@@ -3601,7 +3616,7 @@ class GetOthersLotDyn:
                 'platform': 'web',
                 'gaia_source': 'main_web',
                 'rid': dynamic_id,
-                'type':dynamic_type,
+                'type': dynamic_type,
                 'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden',
                 'web_location': '333.1368',
                 "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
@@ -3616,7 +3631,7 @@ class GetOthersLotDyn:
         try:
             if not dynamic_req:
                 dynamic_req = await request_proxy.request_with_proxy(method='GET', url=url_with_params, headers=headers,
-                                                                     mode='single')
+                                                                     mode='single', hybrid='1')
         except Exception as e:
             traceback.print_exc()
             return await self.get_dyn_detail_resp(dynamic_id, _cookie, _useragent)
@@ -3681,7 +3696,7 @@ class GetOthersLotDyn:
             card_stype = dynamic_item.get('type')
             dynamic_data_dynamic_id = dynamic_item.get('id_str')
             if dynamic_type == '2' and str(dynamic_data_dynamic_id) != dynamic_id:
-                get_others_lot_log.critical(f"获取的动态信息与需要的动态不符合！！！{dynamic_data}")
+                get_others_lot_log.critical(f"获取的动态信息与需要的动态不符合！！！\t{dynamic_data}")
                 new_req = await self.get_dyn_detail_resp(dynamic_id)
                 return await self.solve_dynamic_item_detail(dynamic_id, new_req)
             dynamic_rid = dynamic_item.get('basic').get('comment_id_str')
@@ -3744,8 +3759,7 @@ class GetOthersLotDyn:
                 get_others_lot_log.info(
                     f'未关注的response\nhttps://space.bilibili.com/{author_uid}\n{dynamic_data_dynamic_id}')
         except Exception as e:
-            get_others_lot_log.critical(f'https://t.bilibili.com/{dynamic_id}\n{dynamic_req}\n{e}')
-            traceback.print_exc()
+            get_others_lot_log.exception(f'解析动态失败！\thttps://t.bilibili.com/{dynamic_id}\t{dynamic_req}\t{e}')
             if dynamic_req.get('code') == -412:
                 get_others_lot_log.info('412风控')
                 await asyncio.sleep(10)
@@ -4061,7 +4075,7 @@ class GetOthersLotDyn:
             if str(dynamic_id) in self.queried_dynamic_id_list or \
                     str(dynamic_id) in self.queriedData.dyidList or \
                     str(dynamic_id) in self.queryingData.dyidList:
-                get_others_lot_log.warning(f'当前动态 {dynamic_id} 已经查询过了，不重复查询')
+                get_others_lot_log.info(f'当前动态 {dynamic_id} 已经查询过了，不重复查询')
                 return
             self.queried_dynamic_id_list.append(str(dynamic_id))
         suffix = ''
@@ -4236,7 +4250,7 @@ class GetOthersLotDyn:
                                 str(orig_dynamic_id) in self.queriedData.dyidList or \
                                 str(orig_dynamic_id) in self.queryingData.dyidList or \
                                 str(orig_dynamic_id) in self.queried_dynamic_id_list:  # 如果源动态已经被判定为抽奖动态过了的话，就不在加入抽奖列表里
-                            get_others_lot_log.warning(f'原动态 {orig_ret_url} 已经有抽奖过了，不加入抽奖动态中')
+                            get_others_lot_log.info(f'原动态 {orig_ret_url} 已经有抽奖过了，不加入抽奖动态中')
                             isRecorded = True
                         else:
                             # self.queryingData.dyidList.append(str(orig_dynamic_id))
@@ -4294,7 +4308,7 @@ class GetOthersLotDyn:
                                                                                   is_lot_orig=True
                                                                                   )
             else:
-                get_others_lot_log.warning(f'失效动态：https://t.bilibili.com/{dynamic_id}')
+                get_others_lot_log.info(f'失效动态：https://t.bilibili.com/{dynamic_id}')
                 await self.sqlHlper.addDynInfo(
                     TLotdyninfo(
                         dynId=str(dynamic_id),
@@ -4323,8 +4337,60 @@ class GetOthersLotDyn:
 
     # endregion
 
-    async def checkDBDyn(self):
-        allDyn = await self.sqlHlper.getAllDynByLotRound(self.nowRound.lotRound_id)
+    async def get_lot_notice(self, bussiness_type: int, business_id: str):
+        """
+        获取抽奖notice
+        :param bussiness_type:
+        :param business_id:
+        :return:
+        """
+        while 1:
+            url = 'http://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice'
+            params = {
+                'business_type': bussiness_type,
+                'business_id': business_id,
+            }
+            resp = await request_proxy.request_with_proxy(
+                url=url,
+                method='get',
+                params=params,
+                headers={'user-agent': random.choice(CONFIG.UA_LIST)},
+                hybrid='1'
+            )
+            if resp.get('code') != 0:
+                get_others_lot_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
+                time.sleep(10)
+                if resp.get('code') == -9999:
+                    return resp
+                continue
+            return resp
+
+    async def checkDBDyn(self, lot_round_id: int = None):
+        async def solve_word_lot_data(dyn_id: Union[str, int]):
+            """
+
+            :param dyn_id:
+            :return:
+            """
+
+            newly_lot_resp = await self.get_lot_notice(1, dyn_id)
+            newly_lotData = newly_lot_resp['data']
+
+            if newly_lotData:
+                await request_proxy.upsert_lot_detail(newly_lotData)
+
+        if lot_round_id is None:
+            lot_round_id = self.nowRound.lotRound_id
+        if lot_round_id is None:
+            return
+        allDyn: [TLotdyninfo] = await self.sqlHlper.getAllDynByLotRound(lot_round_id)
+        try:
+            official_words_lots: [TLotdyninfo] = [x for x in allDyn if
+                                                  (x.officialLotType == OfficialLotType.官方抽奖.value or x.officialLotType == OfficialLotType.充电抽奖.value) and x.rawJsonStr.get(
+                                                      'type') != "DYNAMIC_TYPE_DRAW"]
+            await asyncio.gather(*[solve_word_lot_data(x.dynId) for x in official_words_lots])
+        except Exception as e:
+            get_others_lot_log.exception(f'官方抽奖数据提取失败！！！\n{e}')
         useless_dynurl_list = [x.split('\t')[0] for x in self.useless_info]
         lottery_dynamicurl_list = [x.split('\t')[0] for x in self.lottery_dynamic_detail_list]
         for i in allDyn:
@@ -4416,13 +4482,13 @@ class GetOthersLotDyn:
         pub_lot_uid_list = [x.uid for x in self.pub_lot_user_info_list]
         pub_lot_uid_list = list(set(pub_lot_uid_list))  # 去个重先
 
-        print(f'总共要获取{len(pub_lot_uid_list)}个发起抽奖用户的空间！')
+        get_others_lot_log.debug(f'总共要获取{len(pub_lot_uid_list)}个发起抽奖用户的空间！')
         GOTO_check_lot_dyn_id_list.extend(await self.getAllSpaceDynId(pub_lot_uid_list, True))
 
         GOTO_check_lot_dyn_id_list = list(set(GOTO_check_lot_dyn_id_list))  # 去个重先
-        print(f'过滤前{len(GOTO_check_lot_dyn_id_list)}条待检查动态')
+        get_others_lot_log.debug(f'过滤前{len(GOTO_check_lot_dyn_id_list)}条待检查动态')
         GOTO_check_lot_dyn_id_list = [x for x in GOTO_check_lot_dyn_id_list if x not in self.queriedData.dyidList]
-        print(f'过滤后{len(GOTO_check_lot_dyn_id_list)}条待检查动态')
+        get_others_lot_log.debug(f'过滤后{len(GOTO_check_lot_dyn_id_list)}条待检查动态')
         writeIntoFile(GOTO_check_lot_dyn_id_list, FileMap.本轮检查的动态id, 'w', ',')
 
         await self.thread_judgedynamic(GOTO_check_lot_dyn_id_list)
@@ -4434,6 +4500,7 @@ class GetOthersLotDyn:
         self.nowRound.isRoundFinished = 1
         self.write_in_log()
         await self.sqlHlper.addLotMainInfo(self.nowRound)
+        # 抽奖获取结束 尝试将这一轮获取到的非图片抽奖添加进数据库
 
 
 class GET_OTHERS_LOT_DYN:
@@ -4514,19 +4581,20 @@ class GET_OTHERS_LOT_DYN:
             :param lot_det:
             :return:
             """
+
             lot_det_sep = lot_det.split('\t')
             pubtime_str = lot_det_sep[3]
             comment_count_str = lot_det_sep[5]
             rep_count_str = lot_det_sep[6]
             lot_type = lot_det_sep[9]
+            official_verify = lot_det_sep[2]
+            official_lot_desc = lot_det_sep[9]
             dt = datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')
             if dt.year < 2000:
                 return False
             pub_ts = int(datetime.datetime.timestamp(datetime.datetime.strptime(pubtime_str, '%Y年%m月%d日 %H:%M')))
             if int(time.time()) - pub_ts > 1 * 30 * 24 * 3600:  # 超过一个月的不要
                 return False
-            official_verify = lot_det_sep[2]
-            official_lot_desc = lot_det_sep[9]
             if official_lot_desc == OfficialLotType.官方抽奖.value:
                 if int(rep_count_str) < 200:
                     if int(self.get_dyn_ts - pub_ts) <= 2 * 3600:  # 获取时间和发布时间间隔小于2小时的不按照评论转发数量过滤
@@ -4542,7 +4610,8 @@ class GET_OTHERS_LOT_DYN:
         filtered_list: list[str] = list(filter(is_official_lot, all_lot_det))
         filtered_list.sort(key=lambda x: try_parse_int(x.split("\t")[5]), reverse=True)
         if filtered_list:
-            self.push_lot_csv(f"官方抽奖信息", filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
+            self.push_lot_csv(f"官方抽奖信息【{len(filtered_list)}】条",
+                              filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
         filtered_list.sort(key=lambda x: x.split("\t")[6], reverse=True)  # 按照转发数量降序排序
         ret_list = [x.split('\t')[0].replace('?tab=2', '') + '?tab=1' for x in filtered_list]
         return ret_list[:limit]
@@ -4577,7 +4646,8 @@ class GET_OTHERS_LOT_DYN:
             if big_lot_list[i] == 1:
                 ret_filtered_list.append(filtered_list[i])
         if ret_filtered_list:
-            self.push_lot_csv(f"必抽的大奖", ret_filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
+            self.push_lot_csv(f"必抽的大奖【{len(ret_filtered_list)}】条",
+                              ret_filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
         ret_list = [x.split('\t')[0] for x in ret_filtered_list]
         return ret_list
 
@@ -4597,7 +4667,7 @@ class GET_OTHERS_LOT_DYN:
                     ' '.join([f'https://space.bilibili.com/{recent_lots[i].upmid}/dynamic', recent_lots[i].text]))
                 ret_list.append(recent_lots[i])
         if ret_info_list:
-            pushme(f"必抽的预约抽奖", '\n'.join(ret_info_list[0:10]),
+            pushme(f"必抽的预约抽奖【{len(ret_info_list)}】条", '\n'.join(ret_info_list[0:10]),
                    'text')
         return ret_list
 
@@ -4695,7 +4765,8 @@ class GET_OTHERS_LOT_DYN:
                 all_lot_det.append(i.strip())
         filtered_list: list = list(filter(self.is_need_lot, all_lot_det))
         filtered_list.sort(key=lambda x: try_parse_int(x.split("\t")[5]), reverse=True)
-        self.push_lot_csv(f"动态抽奖信息", filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
+        self.push_lot_csv(f"动态抽奖信息【{len(filtered_list)}】条",
+                          filtered_list[0:10])  # {datetime.datetime.now().strftime('%m月%d日')}
         filtered_list.sort(key=lambda x: x.split("\t")[0], reverse=True)  # 按照降序排序
         ret_list = [x.split('\t')[0] for x in filtered_list]
         ret_list = list(set(ret_list))
@@ -4704,13 +4775,18 @@ class GET_OTHERS_LOT_DYN:
 
     # endregion
 
+async def __test():
+    b = GetOthersLotDyn()
+
+    for i in range(1,65):
+        print(await b.checkDBDyn(i))
+    pass
 
 if __name__ == '__main__':
-    b = GET_OTHERS_LOT_DYN()
+    asyncio.run(__test())
     # loop = asyncio.get_event_loop()
     # loop.run_until_complete(b.get_new_dyn())
-    print(b.solve_lot_csv())
-    pass
+
     # b = GET_OTHERS_LOT_DYN()
     # c = b.get_unignore_reserve_lot_space()
     # print(c)

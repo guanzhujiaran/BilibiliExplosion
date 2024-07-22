@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 from functools import reduce
 import traceback
 from typing import Dict
+import subprocess
+from functools import partial
+subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 import json
 import random

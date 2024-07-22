@@ -13,6 +13,8 @@ from CONFIG import CONFIG
 
 op_db_lock = threading.Lock()
 sql_log = logger.bind(user='sql_log')
+
+
 # sql_log.add(
 #     CONFIG.root_dir + "grpc获取动态/src/log/sql_err.log",
 #     encoding="utf-8",
@@ -31,10 +33,10 @@ def lock_wrapper(func: callable) -> callable:
                 try:
                     res = func(*args, **kwargs)
                     return res
-                except:
-                    sql_log.error(traceback.format_exc())
-                    sql_log.error(kwargs)
+                except Exception as e:
+                    sql_log.exception(e)
                     time.sleep(10)
+
     return wrapper
 
 
@@ -232,6 +234,7 @@ ORDER BY x;
             'order_by': 'dynamic_created_time desc',
         }
         if len(between_ts) == 2:
+            between_ts.sort()
             where += "and dynamic_created_time between datetime(:start_ts,'unixepoch','localtime') and datetime(:end_ts,'unixepoch','localtime')"
             where_args.update(
                 {'start_ts': between_ts[0],
@@ -269,6 +272,23 @@ ORDER BY x;
             )
         return self.op_db_table.rows_where(
             where=where, where_args=where_args)
+
+    @lock_wrapper
+    def query_official_lottery_by_timelimit(self, time_limit: int = 24 * 3600) -> Generator:
+        """
+        通过日期查询需要的动态，默认查询当天
+        :param between_ts:
+        :param RegExp:
+        :return:
+        """
+        now_ts = int(time.time())
+        target_ts = now_ts + time_limit
+        where = "status=0 and business_type=1 and lottery_time>=:now_ts and lottery_time<=:target_ts order by lottery_time desc"
+        return self.op_lot_table.rows_where(
+            where=where, where_args={
+                "now_ts": now_ts,
+                "target_ts": target_ts
+            })
 
     # endregion
 
@@ -328,7 +348,5 @@ ORDER BY x;
 
 if __name__ == '__main__':
     test_sql = SQLHelper()
-    resp = test_sql.upsert_DynDetail(doc_id=1145141919810, dynamic_id=1145141919810,
-                                     dynData='114514', lot_id=114514,
-                                     dynamic_created_time='114514')
+    resp = test_sql.get_all_dynamic_detail_by_dynamic_id('940628499647954947')
     print(resp)

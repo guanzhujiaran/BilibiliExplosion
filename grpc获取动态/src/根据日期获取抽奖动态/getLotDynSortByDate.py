@@ -4,12 +4,14 @@ import datetime
 import json
 import time
 from typing import Generator
+import subprocess
+from functools import partial
+subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 import pandas as pd
 import Bilibili_methods.all_methods
 from grpc获取动态.src.DynObjectClass import lotDynData
 from grpc获取动态.src.SqlHelper import SQLHelper
-from CONFIG import CONFIG
 """
 使用reg查询动态保存下来
 """
@@ -18,9 +20,9 @@ import os
 
 class LotDynSortByDate:
     def __init__(self, ):
-        self.path = CONFIG.root_dir+'grpc获取动态/src/根据日期获取抽奖动态/'
-        if not os.path.exists('result'):
-            os.makedirs('result')
+        self.path = os.path.dirname(os.path.abspath(__file__))
+        if not os.path.exists(os.path.join(self.path,'result')):
+            os.makedirs(os.path.join(self.path,'result'))
         self.sql = SQLHelper()
         self.BAPI = Bilibili_methods.all_methods.methods()
         self.highlight_word_list = [
@@ -307,14 +309,14 @@ class LotDynSortByDate:
                           '点赞数',
                           '是否需要人工判断', '高亮关键词', '抽奖类型', '抽奖id', '需要携带的词']
             date_start = datetime.date.fromtimestamp(ts[0])
-            if not os.path.exists(self.path + f'result/{date_start.year}/{date_start.month}'):
-                os.makedirs(self.path + f'result/{date_start.year}/{date_start.month}')
+            if not os.path.exists(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}')):
+                os.makedirs(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}'))
             df.to_csv(
-                self.path + f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv',
+                os.path.join(self.path , f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv'),
                 index=False, sep='\t', encoding='utf-8')
             print(f'{datetime.date.fromtimestamp(ts[0])}的动态处理完成，总计{len(df)}条！')
 
 
 if __name__ == '__main__':
     a = LotDynSortByDate()
-    a.main([int(time.time()) - 74 * 3600 * 24, int(time.time())])
+    a.main([int(time.time()) - 60 * 3600 * 24, int(time.time())])

@@ -26,6 +26,11 @@ def lock_wrapper(func: Callable) -> Callable:
 
 
 class SqlHelper:
+    __instance = None
+    def __new__(cls, *args, **kwargs):
+        if not cls.__instance:
+            cls.__instance = super().__new__(cls)
+        return cls.__instance
     def __init__(self):
         _SQL_URI = CONFIG.MYSQL.bili_reserve_URI
         self._engine = create_async_engine(_SQL_URI)
@@ -197,6 +202,26 @@ class SqlHelper:
             result = await session.execute(sql)
             return result.scalars().all()
 
+    @lock_wrapper
+    async def get_all_available_reserve_lotterys_by_time(self,limit_time:int) -> list[TUpReserveRelationInfo]:
+        """
+        获取所有有效的预约抽奖 （按照etime升序排列
+        :return:
+        """
+        async with self._session() as session:
+            sql = select(TUpReserveRelationInfo).filter(
+                and_(
+                    TUpReserveRelationInfo.lotteryType == 1,
+                    TUpReserveRelationInfo.etime >= int(time.time()),
+                    TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
+                    TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
+                    TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
+                    TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
+                    TUpReserveRelationInfo.etime<= int(time.time())+limit_time
+                )
+            ).order_by(TUpReserveRelationInfo.etime.asc())
+            result = await session.execute(sql)
+            return result.scalars().all()
 
 # region 测试用代码
 async def test():

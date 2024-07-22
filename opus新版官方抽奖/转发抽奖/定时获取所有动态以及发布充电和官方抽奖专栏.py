@@ -1,43 +1,21 @@
 # -*- coding: utf-8 -*-
+import math
 import os.path
-
+import traceback
 from typing import Union
-
 import pydantic
-import sys
 import asyncio
 import time
 from datetime import datetime, timedelta
 from loguru import logger
-
 from CONFIG import CONFIG
 from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
-from opus新版官方抽奖.转发抽奖.获取官方抽奖信息 import exctract_official_lottery
+from opus新版官方抽奖.转发抽奖.获取官方抽奖信息 import ExctractOfficialLottery
 from grpc获取动态.src.getDynDetail import DynDetailScrapy
+from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
+from apscheduler.schedulers.blocking import BlockingScheduler
 
-logger.remove()
-log = logger.bind(user=__name__ + "官方抽奖")
-logger.add(sys.stderr, level="INFO",
-#            filter=lambda record: record["extra"].get('user') in [
-#     '全局日志',
-#     'doc_id转dynamic_id日志',
-#     'unknown_module',
-#     'unknown_card',
-#     'common_error_log',
-#     'additional_module_log'
-# ]
-           )
-# logger.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == __name__ + "官方抽奖")
-# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
-logger.add(
-    "log/error_log.log",
-    encoding="utf-8",
-    enqueue=True,
-    rotation="500MB",
-    compression="zip",
-    retention="15 days",
-    filter=lambda record: record["extra"].get('user') == "error_log"
-)
+log = logger.bind(user="官方抽奖")
 
 
 class pubArticleInfo(pydantic.BaseModel):
@@ -47,11 +25,11 @@ class pubArticleInfo(pydantic.BaseModel):
 
     def __init__(self):
         super().__init__()
-        settingPath = CONFIG.root_dir + 'opus新版官方抽奖/转发抽奖/log/'
-        if not os.path.exists(settingPath):
-            os.mkdir(settingPath)
+        setting_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log/')
+        if not os.path.exists(setting_path):
+            os.mkdir(setting_path)
         try:
-            with open(settingPath + 'lastPubTs.txt', 'r', encoding='utf-8') as f:
+            with open(os.path.join(setting_path, 'lastPubTs.txt'), 'r', encoding='utf-8') as f:
                 contents = f.read().strip()
                 self.lastPubDate = datetime.fromtimestamp(int(contents))
                 log.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -60,8 +38,10 @@ class pubArticleInfo(pydantic.BaseModel):
 
     def save_lastPubTs(self):
         try:
-            settingPath = CONFIG.root_dir + 'opus新版官方抽奖/转发抽奖/log/'
-            with open(settingPath + 'lastPubTs.txt', 'w', encoding='utf-8') as f:
+            now = datetime.now()
+            self.lastPubDate = now
+            setting_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log/')
+            with open(os.path.join(setting_path, 'lastPubTs.txt'), 'w', encoding='utf-8') as f:
                 f.write(str(int(self.lastPubDate.timestamp())))
         except Exception as e:
             log.exception(e)
@@ -69,55 +49,105 @@ class pubArticleInfo(pydantic.BaseModel):
     def is_need_to_publish(self):
         if self.lastPubDate:
             now = datetime.now()
-            if self.lastPubDate.day != now.day:
-                if now.hour >= self.shouldPubHour or now.timestamp() - self.lastPubDate.timestamp() >= 24 * 3600:
-                    self.lastPubDate = now
-                    log.info('满足发布专栏文章条件，发布专栏！')
+            if self.lastPubDate.day != now.day:  # 上次发布日期不在同一天
+                if now.hour >= self.shouldPubHour or now.timestamp() - self.lastPubDate.timestamp() >= 15 * 3600:  # 如果当前时间在20点之后或者距离上次发布超过了15小时，则直接发布
+                    log.error(f'满足发布专栏文章条件，发布专栏！\t上次发布时间：{self.lastPubDate}')
                     return True
+            else:  # 上次发布日期在同一天
+                if now.timestamp() - self.lastPubDate.timestamp() >= 24 * 3600:  # 同一天只要满足超过24小时，就直接发布
+                    log.error(f'满足发布专栏文章条件，发布专栏！\t上次发布时间：{self.lastPubDate}')
+                    return True
+
         else:
             now = datetime.now()
             self.lastPubDate = now - timedelta(days=1)
-        log.debug('不满足发布专栏文章条件，不发布专栏！')
+        log.error(f'不满足发布专栏文章条件，不发布专栏！\t上次发布时间：{self.lastPubDate}')
         return False
 
 
-async def main():
+@async_pushme_try_catch_decorator
+async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     d = DynDetailScrapy()
+    if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
+        d.scrapy_sem = asyncio.Semaphore(20)
+    else:
+        d.scrapy_sem = asyncio.Semaphore(10)
     await d.main()
+    log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
-        e = exctract_official_lottery()
-        await e.main()
-
+        e = ExctractOfficialLottery()
+        update_time: int = int(time.time()) - int(
+            pub_article_info.lastPubDate.timestamp()) - 1800  # 这段逻辑关乎更新抽奖的数量！！！
+        # 空闲中间的半个小时就是上一次发布之后休息的事件，可以往小调，但决不能是+一个时间段！！！
+        latest_official_lot, latest_charge_lot = await e.main(
+            latest_lots_judge_ts=update_time
+        )
+        log.error(f'\n上次发布专栏时间：{pub_article_info.lastPubDate}'
+                  f'\n更新抽奖时间为：{round(update_time / 3600, 2)}小时！'
+                  f'\n官方抽奖更新数量：{len(latest_official_lot)}'
+                  f'\n充电抽奖更新数量：{len(latest_charge_lot)}'
+                  f'\n更新内容：{[x.__dict__ for x in latest_official_lot]}\n{[x.__dict__ for x in latest_charge_lot]}')
         g = LotDynSortByDate()
-        g.main([pub_article_info.start_ts, int(time.time())])
+        g.main([int(pub_article_info.lastPubDate.timestamp()), int(time.time())])
         pub_article_info.start_ts = int(time.time())
         pub_article_info.save_lastPubTs()
-        log.info('今天这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
 
 
-def run(*args, **kwargs):
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(main())
-
-    if schedule_mark:
-        nextjob = schedulers.add_job(run, trigger='date', run_date=datetime.now() + timedelta(hours=1))
+@pushme_try_catch_decorator
+def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool, *args,
+        **kwargs):
+    delta_hour = 3
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(main(pub_article_info, schedule_mark))
+    except Exception as e:
+        log.exception(e)
+        delta_hour = 24
+        pushme(f'定时发布充电和官方抽奖专栏任务出错', f'{traceback.format_exc()}')
+    if schedule_mark and schedulers:
+        nextjob = schedulers.add_job(run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
+                                     run_date=datetime.now() + timedelta(hours=delta_hour))
         log.info(f"任务结束，等待下一次{nextjob.trigger}执行。")
+        """
+            每隔三个小时获取一次全部图片动态
+        """
 
 
-if __name__ == "__main__":
-    schedule_mark = True
+@pushme_try_catch_decorator
+def schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = True):
+    """
+    模块主入口
+    :param schedule_mark: 是否定时执行
+    :param show_log: 是否打印日志
+    :return:
+    """
+    if not show_log:
+        log.remove()
+    log.add(
+        os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_official_lot_log.log"),
+        level="WARNING",
+        encoding="utf-8",
+        enqueue=True,
+        rotation="500MB",
+        compression="zip",
+        retention="15 days",
+        filter=lambda record: record["extra"].get('user') == "官方抽奖"
+    )
     pub_article_info = pubArticleInfo()
     if schedule_mark:
-        from apscheduler.schedulers.blocking import BlockingScheduler
-
         # from apscheduler.triggers.cron import CronTrigger
-
         # cron_str = '0 20 * * *'
         # crontrigger = CronTrigger.from_crontab(cron_str)
         schedulers = BlockingScheduler()
-        job = schedulers.add_job(run, trigger='date', run_date=datetime.now(), misfire_grace_time=360)
+        job = schedulers.add_job(run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
+                                 run_date=datetime.now(), misfire_grace_time=360)
         log.info(
             f'使用内置定时器,开启定时任务,等待时间（{job.trigger}）到达后执行')
         schedulers.start()
     else:
-        run()
+        run(None, pub_article_info, schedule_mark)
+
+
+if __name__ == '__main__':
+    schedule_get_official_lot_main()

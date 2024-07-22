@@ -21,3 +21,4 @@ users.yaml
 !/github/my_operator/
 /b站app/bilireq/
 *.pt
+/NUL

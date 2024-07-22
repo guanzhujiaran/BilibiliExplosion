@@ -13,12 +13,13 @@ import random
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from google.protobuf.json_format import MessageToDict
 from grpc import aio
 from loguru import logger
 from utl.代理.SealedRequests import MYASYNCHTTPX
-myreq=MYASYNCHTTPX()
+
+myreq = MYASYNCHTTPX()
 from bilibili.api.ticket.v1 import ticket_pb2_grpc, ticket_pb2
 from bilibili.metadata.device.device_pb2 import Device
 from bilibili.metadata.fawkes.fawkes_pb2 import FawkesReq
@@ -240,8 +241,6 @@ def make_base_metadata(
         "grpc-accept-encoding": "identity, gzip",
         "env": "prod",
         "app-key": "android64",
-        "env": "prod",
-        "app-key": "android64",
         'user-agent': metaDataNeedInfo.ua,
         "x-bili-trace-id": gen_trace_id(),
         "x-bili-aurora-eid": "",
@@ -347,8 +346,6 @@ async def make_metadata(
         "grpc-accept-encoding": "identity, gzip",
         "env": "prod",
         "app-key": "android64",
-        "env": "prod",
-        "app-key": "android64",
         'user-agent': metaDataNeedInfo.ua,
         "x-bili-trace-id": gen_trace_id(),
         "x-bili-aurora-eid": "",
@@ -359,13 +356,9 @@ async def make_metadata(
         "x-bili-metadata-bin": Metadata(**metadata_params).SerializeToString(),
         "x-bili-device-bin": device_info_bytes,
         "x-bili-network-bin": Network(type=NetworkType.WIFI, oid=random.choice(['46000',
-                                                                                '46001',
                                                                                 '46002',
-                                                                                '46003',
-                                                                                '46601',
-                                                                                '46606',
-                                                                                '46668',
-                                                                                '46688'
+                                                                                '46007',
+                                                                                '46008'
                                                                                 ])).SerializeToString(),
         "x-bili-restriction-bin": Restriction(
             # teenagers_mode=False, lessons_mode=False, mode=ModeType.NORMAL, review=True, disable_rcmd=False
@@ -382,7 +375,7 @@ async def make_metadata(
         ).SerializeToString(),
         "x-bili-exps-bin": Exps().SerializeToString(),
         "buvid": BUVID,
-        "x-bili-fawkes-request-bin": FawkesReq(
+        "x-bili-fawkes-req-bin": FawkesReq(
             appkey="android64", env="prod", session_id=random_id()
         ).SerializeToString(),
         'content-type': "application/grpc"
@@ -431,6 +424,9 @@ async def get_bili_ticket(device_info: bytes,
                           md,
                           proxy=None
                           ):
+    rand_model = ''.join(random.choices(string.ascii_uppercase + string.digits, k=11)) # 随机模型名
+    android_build_id_moc =f"{''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))}.{ (datetime.now() - timedelta(days=random.randint(365, 365 * 5))).strftime('%y%m%d') }.{str(random.randint(10000000, 99999999))}"
+    android_product_name_moc =  ''.join(random.choices(string.ascii_uppercase + string.digits, k=13))
     x_fingerprint = android_device_info_pb2.AndroidDeviceInfo(
         sdkver='0.2.4',
         app_id='1',
@@ -448,7 +444,11 @@ async def get_bili_ticket(device_info: bytes,
         screen='1440,3200,480',
         boot=4740001,
         emu='000',
-        oid='46007',
+        oid=random.choice(['46000',
+                           '46002',
+                           '46007',
+                           '46008'
+                           ]),
         network='WIFI',
         mem=random.randint(10 ** 10, 10 ** 12),
         sensor='[]',
@@ -461,7 +461,7 @@ async def get_bili_ticket(device_info: bytes,
             'ro.boot.hardware': 'qcom',
             'gsm.sim.state': 'LOADED',
             'ro.build.date.utc': f'{int(time.time())}',
-            'ro.product.device': 'star2qltechn',
+            'ro.product.device': rand_model,
             'persist.sys.language': 'en',
             'ro.debuggable': '1',
             'net.gprs.local-ip': '',
@@ -472,25 +472,25 @@ async def get_bili_ticket(device_info: bytes,
             'ro.boot.serialno': '00536fe6',
             'gsm.network.type': "LTE",
             'net.eth0.gw': '',
-            'net.dns1': '192.168.0.1',
+            'net.dns1': f'192.168.{random.randint(0,100)}.1',
             'sys.usb.state': '',
             'http.agent': ''
         },
         sys={
             'product': model,
             'cpu_model_name': 'Qualcomm Technologies, Inc MSM8998',
-            'display': 'PQ3B.190801.03191204 release-keys',
+            'display': f'{android_build_id_moc} release-keys',
             'cpu_abi_list': 'arm64-v8a,armeabi-v7a',
             'cpu_abi_libc': 'ARM',
-            'manufacturer': 'Xiaomi',
+            'manufacturer': brand,
             'cpu_hardware': 'Qualcomm Technologies, Inc MSM8998',
             'cpu_processor': 'AArch64 Processor rev 256 (aarch64)',
             'cpu_abi_libc64': 'ARM64-V8A',
             'cpu_abi': 'arm64-v8a',
             'serial': 'unknown',
             'cpu_features': 'fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics',
-            'fingerprint': 'samsung/star2qltezh/star2qltechn:9/PQ3B.190801.03191204/G9650ZHU2ARC6:user/release-keys',
-            'device': 'star2qltechn',
+            'fingerprint': f'{brand}/{rand_model}/{rand_model}:{random.randint(5,9)}/{android_build_id_moc}/{android_product_name_moc}:user/release-keys',
+            'device': rand_model,
             'hardware': 'qcom'
         },
         adid=hashlib.md5(str(time.time()).encode()).hexdigest()[:16],
@@ -506,7 +506,7 @@ async def get_bili_ticket(device_info: bytes,
         androidsysapp20='[]',
         battery=100,
         battery_state='BATTERY_STATUS_CHARGING',
-        build_id='PQ3B.190801.03191204 release-keys',
+        build_id=f'{android_build_id_moc} release-keys',
         country_iso='JP',
         free_memory=random.randint(10 ** 8, 10 ** 10),
         fstorage=f'{random.randint(10 ** 8, 10 ** 10)}',
@@ -524,7 +524,7 @@ async def get_bili_ticket(device_info: bytes,
         gyroscope_sensor=1,
         biometric=1,
         biometrics=['touchid'],
-        ui_version='pq3b.190801.03191204 release-keys',
+        ui_version=f'{android_build_id_moc} release-keys',
         sensors_info=[],
         battery_present=1,
         battery_technology='Li-ion',
@@ -564,10 +564,11 @@ async def get_bili_ticket(device_info: bytes,
     proto = reqdata.SerializeToString()
     data = b"\0" + len(proto).to_bytes(4, "big") + proto
     try:
-        resp = await myreq.post(url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',data=data, headers=headers, proxies = {
-            'http': proxy['proxy']['http'],
-            'https': proxy['proxy']['https']}if proxy else None, verify=False
-                   )
+        resp = await myreq.post(url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket', data=data,
+                                headers=headers, proxies={
+                'http': proxy['proxy']['http'],
+                'https': proxy['proxy']['https']} if proxy else None, verify=False
+                                )
         gresp = ticket_pb2.GetTicketResponse()
         gresp.ParseFromString(resp.content[5:])
         return gresp.ticket

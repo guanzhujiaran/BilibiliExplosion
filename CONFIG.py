@@ -19,7 +19,7 @@ class REDISINFO:
 
 @dataclass
 class ChatGptSettings:
-    baseurl: str = "https://api.chatanywhere.com.cn/v1"
+    baseurl: str = "https://api.chatanywhere.tech/v1"
     open_ai_api_key: str = 'sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
 
 
@@ -77,7 +77,7 @@ class database:
     proxy_db = "K:/sqlite_database/proxy_database/proxy_db.db"
     proxy_db_URI = 'sqlite+aiosqlite:///K:/sqlite_database/proxy_database/proxy_db.db?check_same_thread=False'
     followingup_db_RUI = 'sqlite+aiosqlite:///G:/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
-    get_other_lotDb = DBINFO('H:/GetOthersLotDB/LotInfoDB.db', 'sqlite+aiosqlite:///H:/GetOthersLotDB/LotInfoDB.db')
+    bili_live_monitor_db_URI = fr'sqlite:///H:\liveLotMonitorDB\Bili_live_database.db''?check_same_thread=False'  # b站直播数据库
     MYSQL = MYSQL()
     proxyRedis = REDISINFO()
 
@@ -85,25 +85,49 @@ class database:
 class RabbitMQConfig:
     class QueueName(Enum):
         bili_352_voucher = 'bili_352_voucher'
+        ipv6_change = 'ipv6_change'
 
     host = '127.0.0.1'
     port = 5672
     user = 'Xingtong'
     pwd = '114514'
     queue_name_list = [x.value for x in QueueName]
+    broker_url = f"amqp://{user}:{pwd}@{host}:{port}/"
 
+
+class ProjectPath(str, Enum):
+    bili_live_monitor = "K:/Bili_live_monitor"
+    toutiao = "K:/toutiao/pyProject"
+    bili_lottery = 'K:/python test'
+    py_test = 'K:/python测试专用'
+    zhihu = 'K:/zhihu'
+    grpc_api_proto="K:/python test/grpc获取动态/grpc/grpc_proto"
 
 # endregion
 
 
 class CONFIG:
     root_dir = 'K:/python test/'  # b站代码的根目录
+    V2ray_proxy = 'http://127.0.0.1:10808'
+    project_path = ProjectPath
     pushnotify = pushnotify()  # 推送设置
     zhihu_CONFIG = zhihu_CONFIG()  # 知乎设置
     database = database()
     UA_LIST = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
     ]  # UA列表
-    chat_gpt_config = ChatGptSettings()
-    my_ipv6_addr = 'http://192.168.1.13:3128'
+    chat_gpt_configs = [
+        ChatGptSettings(
+
+        ),
+        ChatGptSettings(
+            baseurl='https://free.gpt.ge/v1',
+            open_ai_api_key='sk-B0JwJwpkzqhlwh3qC2638d73De5042C3Aa02951313Bd1e39'
+        ),
+        ChatGptSettings(
+            baseurl='https://api.openai-hk.com/v1',
+            open_ai_api_key='hk-reurs910000380223c324e435ac8ef84f5d0a75f22a4e6c0'
+        ),
+    ]
+    my_ipv6_addr = 'http://192.168.1.11:3128'
     RabbitMQConfig = RabbitMQConfig()

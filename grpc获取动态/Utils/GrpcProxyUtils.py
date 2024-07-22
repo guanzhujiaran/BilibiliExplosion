@@ -71,6 +71,9 @@ class GrpcProxyTools:
     @property
     def avalibleNum(self):
         return len([x for x in self.ip_list if x.available])
+    @property
+    def allNum(self):
+        return len(self.ip_list)
 
     @staticmethod
     def _check_ip_352(ip: str, ip_list: list[GrpcProxyStatus]) -> bool:

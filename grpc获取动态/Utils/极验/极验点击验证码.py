@@ -37,29 +37,46 @@ import os
 import time
 from typing import Union
 from curl_cffi import requests
+
 from loguru import logger
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from selenium.webdriver.chrome.options import Options
-
+import CONFIG
 from grpc获取动态.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, GeetestSuccessTimeCalc
 from grpc获取动态.Utils.极验.util.utils_get_target_center_position import CaptchaDetector
+import bili_ticket_gt_python
 
-# TODO 开发新的图像匹配方法，主要用于生成成本矩阵
+
+# TODO:开发新的图像匹配方法，主要用于生成成本矩阵
 class GeetestV3Breaker:
-    captcha_detector = CaptchaDetector()
-    options = Options()
-    options.add_experimental_option('excludeSwitches', ['enable-automation'])
-    driver = webdriver.Chrome(options=options)
-    driver.execute_cdp_cmd('Network.enable', {})
-    current_file_root_dir = os.path.dirname(os.path.abspath(__file__))  # 就是当前文件的路径目录
-    geetest_validator_html_path ="file://" + os.path.join(current_file_root_dir, 'Geetest_html/geetest-validator/index.html') # 本地极验校验工具的路径
-    log = logger.bind(user='GeetestV3Breaker')
-    wait = WebDriverWait(driver=driver, timeout=10, poll_frequency=0.5)
-    succ_stats = GeetestSuccessTimeCalc()
+    def __init__(self):
+        self.log = logger.bind(user='GeetestV3Breaker')
+        self.current_file_root_dir = os.path.dirname(os.path.abspath(__file__))  # 就是当前文件的路径目录
+        self.driver = None
+        self.wait = None
+        self.captcha_detector = None
+        self.geetest_validator_html_path = "file://" + os.path.join(self.current_file_root_dir,
+                                                                    'Geetest_html/geetest-validator/index.html')
+        # 本地极验校验工具的路径
+        self.succ_stats = GeetestSuccessTimeCalc()
+        self.click = bili_ticket_gt_python.ClickPy()
+
+    def init_det(self):
+        self.captcha_detector = CaptchaDetector.Instance()
+
+    def init_browser(self):
+        self.log.info('初始化了一个selenium')
+
+        options = Options()
+        options.binary_location = 'C:/WebDriver/chrome.exe'
+        self.driver = webdriver.Chrome(service=Service('C:/WebDriver/bin/chromedriver.exe'), options=options)
+        self.wait = WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5)
+
 
     def _step1_input_gt_challenge(self, gt, challenge):
         gt_text_box = self.driver.find_element(By.CSS_SELECTOR, '.inp[id=gt]')
@@ -127,7 +144,7 @@ class GeetestV3Breaker:
     def break_geetest(self, gt, challenge) -> Union[str, None]:
         if not self.driver.current_window_handle:
             self.driver = webdriver.Chrome()
-        if 'file' not in self.driver.current_url :
+        if 'file' not in self.driver.current_url:
             self.driver.get(self.geetest_validator_html_path)
         self._step1_input_gt_challenge(gt, challenge)
         time.sleep(0.5)
@@ -141,7 +158,7 @@ class GeetestV3Breaker:
             return validattion
 
         self.captcha_detector.save_draw_rectangle(captcha_result_info.origin_img, captcha_result_info.bboxes,
-                                                  f'log/detect_failed_pic/验证码识别失败_{captcha_result_info.img_name}')
+                                                  self.captcha_detector.log_path.detect_failed_pic + f'geetest_validate_fail_{captcha_result_info.img_name}')
         return None
 
     # region 静态方法，获取极验信息和验证用
@@ -156,13 +173,20 @@ class GeetestV3Breaker:
             'Accept': 'application/json, text/plain, */* ',
             "Accept-Encoding": "gzip, deflate, br, zstd",
             "Content-Type": "application/x-www-form-urlencoded",
-            "Origin": "http://t.bilibili.com",
-            "Referer": "http://t.bilibili.com/",
+            "Origin": "http://www.bilibili.com",
+            "Referer": "http://www.bilibili.com/",
             "User-Agent": ua,
         }
-        req = requests.post('https://api.bilibili.com/x/gaia-vgate/v1/register', data=data, headers=headers)
+        req: requests.Response = requests.post('https://api.bilibili.com/x/gaia-vgate/v1/register', data=data,
+                                               headers=headers, proxies={
+                'http': CONFIG.CONFIG.my_ipv6_addr,
+                'https': CONFIG.CONFIG.my_ipv6_addr
+            })
         resp_json = req.json()
         if resp_json.get('code') == 0:
+            if resp_json.get('data').get('geetest') is None:
+                logger.error(f"\n获取极验信息失败: {resp_json}\n{req.headers}")
+                return False
             logger.debug(f"\n成功获取极验challenge：{resp_json}")
             return GeetestRegInfo(
                 type=resp_json.get('data').get('type'),
@@ -192,52 +216,74 @@ class GeetestV3Breaker:
             "Referer": "http://t.bilibili.com/",
             "User-Agent": ua,
         }
-        req = requests.post('https://api.bilibili.com/x/gaia-vgate/v1/validate', data=data, headers=headers)
+        req = requests.post('https://api.bilibili.com/x/gaia-vgate/v1/validate', data=data, headers=headers, proxies={
+            'http': CONFIG.CONFIG.my_ipv6_addr,
+            'https': CONFIG.CONFIG.my_ipv6_addr
+        })
         resp_json = req.json()
+        if resp_json.get('code') != 0:
+            logger.error(f"\n验证validate极验失败:{challenge, token, validate}\n {resp_json}")
+            return False
         logger.debug(f'\n验证成功：{resp_json}')
         return True
 
     # endregion
 
-    def main(self, v_voucher: str,
-             ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
-                       "Safari/537.36 Edg/125.0.0.0"):
-        self.succ_stats.total_time += 1
+    def validate_form_voucher_ua(self, v_voucher: str,
+                                 ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
+                                           "Safari/537.36 Edg/125.0.0.0",
+                                 use_bili_ticket_gt=True):
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
         try:
             geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, ua)
-            if geetest_reg_info:
-                if validation := self.break_geetest(geetest_reg_info.geetest_gt, geetest_reg_info.geetest_challenge):
+            if geetest_reg_info is False:
+                return False
+            # 验证码获取成功才加1
+            self.succ_stats.total_time += 1
+            if use_bili_ticket_gt:
+                if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
+                                                               geetest_reg_info.geetest_challenge):
+                    self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
                     validate_result = GeetestV3Breaker.validate_geetest(geetest_reg_info.geetest_challenge,
                                                                         geetest_reg_info.token,
                                                                         validation)
                     if validate_result:
                         self.succ_stats.succ_time += 1
-        except Exception as e:
-            self.log.error(e)
-            if not self.driver.current_window_handle:
-                self.driver = webdriver.Chrome()
             else:
-                body_element = self.driver.find_element(By.TAG_NAME, "body")
-                ActionChains(self.driver).move_to_element_with_offset(body_element, body_element.rect.get('width') / 2,
-                                                                      body_element.rect.get(
-                                                                          'height') / 2).click().perform()
+                if geetest_reg_info:
+                    if self.driver is None:
+                        self.init_browser()
+                        self.init_det()
+                    if validation := self.break_geetest(geetest_reg_info.geetest_gt,
+                                                        geetest_reg_info.geetest_challenge):
+                        validate_result = GeetestV3Breaker.validate_geetest(
+                            geetest_reg_info.geetest_challenge,
+                            geetest_reg_info.token,
+                            validation)
+                        if validate_result:
+                            self.succ_stats.succ_time += 1
+                elif not geetest_reg_info:
+                    self.succ_stats.total_time -= 1
+
+        except Exception as e:
+            if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
+                return
+            self.log.exception(e)
+            self.succ_stats.total_time -= 1
         finally:
-            self.driver.refresh()# 用本地的html，不管成功还是失败，每次执行结束都直接刷新
-#             self.driver.execute_script(
-#                 """
-# let arr1 = [...document.getElementsByClassName('geetest_holder geetest_wind geetest_radar_success')].map(el =>  el?.remove());
-# let arr2 = [...document.getElementsByClassName('geetest_holder geetest_wind geetest_detect')].map(el =>  el?.remove());
-# let arr3 = [...document.getElementsByClassName('geetest_holder geetest_wind geetest_radar_click_hide')].map(el =>  el?.remove());
-# let arr4 = [...document.getElementsByClassName('geetest_popup_box')].map(el =>  el?.remove());
-# let arr5 = [document.getElementById('wait')].map(el =>  el?.remove());
-# return arr1,arr2,arr3,arr5;
-#                 """)  # 移除所有生成成功提醒结果，多余的检测窗口和popup
+            if use_bili_ticket_gt:
+                pass
+            else:
+                try:
+                    _ = self.driver.current_window_handle
+                except:
+                    self.driver = webdriver.Chrome()
+                self.driver.refresh()  # 用本地的html，不管成功还是失败，每次执行结束都直接刷新
 
 
 if __name__ == '__main__':
-    __ = GeetestV3Breaker()
     while 1:
-        v = input('输入voucher:')
-        __.main(v.strip())
+        vc = input('输入极验voucher:').strip()
+        res = GeetestV3Breaker.get_geetest_reg_info(vc)
+        print(res)

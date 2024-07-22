@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 # 最终将请求api的方法全部放到这里面，里面就是一个class
 # 相当于一个客户端，所以设置为永不超时，无限次重试
-import sys
 
 import asyncio
 import json
 import traceback
-from typing import Coroutine, Any, Union
+from typing import Union
 
 import httpx
 from loguru import logger
+
 from utl.代理.ProxyTool.ProxyObj import TypePDict
+from utl.代理.SealedRequests import MYASYNCHTTPX
 from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy as redis_request_with_proxy
 
 
@@ -27,6 +28,7 @@ class request_with_proxy:
         self.log = logger.bind(user=__name__ + "request_with_proxy")
         # self.log.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == __name__ + "request_with_proxy")
         self.redis_request_with_proxy = redis_request_with_proxy()
+        self.session = MYASYNCHTTPX()
 
     #
     # async def request_with_proxy(self, *args, **kwargs) -> dict or list[dict]:
@@ -50,6 +52,13 @@ class request_with_proxy:
     #             traceback.print_exc()
     #             await asyncio.sleep(10)
     async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
+        """
+        :param args:
+        :param kwargs:
+        mode : single|rand 设置代理是否选择最高的单一代理还是随机
+        hybrid : 是否将本地ipv6代理加入随机选择中
+        :return:
+        """
         while 1:
             try:
                 resp = await self.redis_request_with_proxy.request_with_proxy(*args, **kwargs)

@@ -4,8 +4,6 @@ import json
 import random
 import re
 import time
-
-import execjs
 import requests
 import numpy
 # noinspection PyUnresolvedReferences

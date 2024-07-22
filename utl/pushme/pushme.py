@@ -1,38 +1,72 @@
 # -*- coding: utf-8 -*-
 import json
-
+import os
+import socket
 import traceback
-
+from functools import wraps
+import inspect
+from loguru import logger
 import requests
 from requests import Response
 
 from CONFIG import CONFIG
 
+pushme_log = logger.bind(user='pushme')
+pushme_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_pushme_log.log"),
+               level="WARNING",
+               encoding="utf-8",
+               enqueue=True,
+               rotation="500MB",
+               compression="zip",
+               retention="15 days",
+               filter=lambda record: record["extra"].get('user') == "pushme",
+               )
 
-def pushme(title: str, content: str, __type='text')->Response:
+
+def __preprocess_content(content: str) -> str:
+    try:
+        ipv4 = requests.get('https://4.ipw.cn/').text
+    except:
+        ipv4 = ""
+    ipv4 = f'http://{ipv4}:23333/docs'
+    try:
+        ipv6 = requests.get('https://6.ipw.cn/').text
+        ipv6 = f'http://[{ipv6}]:23333/docs'
+        content += f'\n当前服务器ip信息：\n{ipv4}\n{ipv6}'
+    except Exception as e:
+        pushme_log.exception(e)
+    return content
+
+
+def pushme(title: str, content: str, __type='text') -> Response:
     try:
         url = CONFIG.pushnotify.pushme.url
         token = CONFIG.pushnotify.pushme.token
+        push_content = __preprocess_content(content)
         data = {
             "push_key": token,
             "title": title,
-            "content": content,
+            "content": push_content,
             'type': __type
         }
-        return requests.post(url=url, data=data, verify=False)
-    except:
-        print(f'推送失败！\n{traceback.format_exc()}')
-        print(f'开始尝试微信pushpush推送！')
+        return requests.post(url=url, data=data, verify=False, proxies={
+            "http": CONFIG.V2ray_proxy,
+            "https": CONFIG.V2ray_proxy
+        })
+    except Exception as e:
+        pushme_log.info(f'开始尝试微信pushpush推送！')
         return _pushpush(title, content, __type)
+    finally:
+        pushme_log.error(f'\n{title}\n{content}')
 
 
 def _pushpush(title: str, content: str, __type='txt'):
     if __type == 'text':
         __type = 'txt'
-    elif __type=='data':
+    elif __type == 'data':
         __type = 'json'
-    elif __type=='markdata':
-        __type='markdown'
+    elif __type == 'markdata':
+        __type = 'markdown'
     elif __type == 'html':
         pass
     elif __type == 'txt':
@@ -52,23 +86,55 @@ def _pushpush(title: str, content: str, __type='txt'):
     else:
         __type = 'txt'
     try:
+        push_content = __preprocess_content(content)
         url = CONFIG.pushnotify.pushplus.url
-
         data = {
             "token": CONFIG.pushnotify.pushplus.token,
             "title": title,
-            "content": content,
+            "content": push_content,
             "template": __type
         }
         req = requests.post(url=url, data=json.dumps(data), headers={
             "Content-Type": "application/json"
         })
+
         if req.json().get('code') != 200:
             raise SyntaxError(f'推送请求失败！{req.text}')
         return req
-    except:
-        print(f'推送失败！\n{traceback.format_exc()}')
+    except Exception as e:
+        pushme_log.exception(f'推送失败！\n{e}')
+
+
+def pushme_try_catch_decorator(func: callable) -> callable:
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except Exception as e:
+            pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
+            pushme_log.exception(e)
+            raise e
+
+    return wrapper
+
+
+def async_pushme_try_catch_decorator(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        try:
+            await func(*args, **kwargs)
+        except Exception as e:
+            pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
+            pushme_log.exception(e)
+            raise e
+
+    return wrapper
+
+
+@pushme_try_catch_decorator
+def _test():
+    raise ValueError(114514)
 
 
 if __name__ == '__main__':
-    pushme('测试标题', '测试内容')
+    _test()

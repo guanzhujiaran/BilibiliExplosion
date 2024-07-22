@@ -1,5 +1,7 @@
 # 使用joblib加载模型
 # 或
+import os
+
 import jieba
 import joblib  # 对于新版sklearn
 import pickle
@@ -17,10 +19,10 @@ def preprocess_text(text):
 def big_reserve_predict(da_list: list[str]) -> list[int]:
     if len(da_list) == 0:
         return []
-    relative_dir = 'github/my_operator/get_others_lot/svmJudgeBigReserve/'
-    with open(CONFIG.root_dir + relative_dir + 'svm_model.pkl', 'rb') as file:
+    current_file_dir = os.path.dirname(__file__)
+    with open(os.path.join(current_file_dir, 'svm_model.pkl'), 'rb') as file:
         loaded_model = pickle.load(file)
-    with open(CONFIG.root_dir + relative_dir + 'svm_vectorizer.pkl', 'rb') as file:
+    with open(os.path.join(current_file_dir, 'svm_vectorizer.pkl'), 'rb') as file:
         loaded_vector = pickle.load(file)
     X_list = []
     for i in da_list:

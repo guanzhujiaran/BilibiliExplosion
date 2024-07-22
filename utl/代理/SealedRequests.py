@@ -17,13 +17,13 @@ class MYASYNCHTTPX:
                 'https://': None,
             }
 
-    async def get(self, url, headers=None, verify=False, proxies=None, timeout=10,params=None):
+    async def get(self, url, headers=None, verify=False, proxies=None, timeout=10,params=None, *args, **kwargs):
         async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
                                      verify=False) as client:
             resp = await client.get(url=url, headers=headers,params=params, timeout=timeout, follow_redirects=True)
             return resp
 
-    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10):
+    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10, *args, **kwargs):
         async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
                                      verify=False) as client:
             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
@@ -41,7 +41,7 @@ class MYASYNCHTTPX:
                       json: typing.Optional[typing.Any] = None,
                       params: typing.Optional[QueryParamTypes] = None,
                       cookies: typing.Optional[CookieTypes] = None,
-                      extensions: typing.Optional[dict] = None, ):
+                      extensions: typing.Optional[dict] = None, *args, **kwargs):
         """
 
         :param url:

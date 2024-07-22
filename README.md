@@ -11,7 +11,8 @@
 [__天选抽奖监控__](K:\Bili_live_monitor\src\monitor.py) （需要安装redis，抽奖数据上传至redis中）\
 [__手动推送抽奖__](K:\Bili_live_monitor\src\手动推送抽奖.py)\
 > \
-[__AI判断情感__](utl/机器学习/情感分析/情感分析.py)(需要安装redis)
+[__AI判断情感__](utl/机器学习/情感分析/情感分析.py)(需要安装redis)\
+> [__极验V3点选验证码破解__](grpc获取动态/Utils/MQClient/VoucherMQClient.py)(需要安装RabbitMQ)
 >># __可选功能__
 > >>[根据日期获取抽奖信息](grpc获取动态\src\根据日期获取抽奖动态\getLotDynSortByDate.py)\
 [根据关键词查询动态](grpc获取动态\src\获取特殊关键词动态\getKeyWordDynDetail.py)\

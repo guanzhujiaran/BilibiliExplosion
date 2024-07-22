@@ -1,30 +1,23 @@
 # -*- coding: utf-8 -*-
 # 发生sqlite不能在不同线程运行的时候，将sqlite_utils 里面的check_same_thread改成False
-import ast
 import asyncio
-import linecache
 import pandas
 from dataclasses import dataclass
 from functools import reduce
-import json
 import random
 import sys
-from loguru import logger
 import CONFIG
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from utl.代理.request_with_proxy import request_with_proxy
-
 import time
-import traceback
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import requests
 import os
 import Bilibili_methods.all_methods
-import atexit
 from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper
-
 BAPI = Bilibili_methods.all_methods.methods()
+from loguru import logger
 log = logger.bind(user="预约抽奖")
 
 
@@ -40,9 +33,8 @@ class dynamic_timestamp_info:
 class rid_get_dynamic:
     def __init__(self):
         self.sqlHlper = SqlHelper()
-        self.root_dir = CONFIG.CONFIG.root_dir
+        self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.now_round_id = 0
-        self.relative_dir = 'opus新版官方抽奖/预约抽奖/etc/'
         self.ids_list = []
         self.ids_change_lock = asyncio.Lock()
         self.quit_lock = asyncio.Lock()
@@ -198,10 +190,10 @@ class rid_get_dynamic:
                 except:
                     # self.dynamic_timestamp = 0
                     log.info(f'\n\t\t\t\t第{self.times}次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
-                                                                                            time.localtime()) +
-                                '\t\t\t\trid:{}'.format(rid) + '\n' +
-                                f'直播预约失效，被删除:{req1_dict}\n当前已经有{self.null_timer}条data为None的sid'
-                                )
+                                                                                         time.localtime()) +
+                             '\t\t\t\trid:{}'.format(rid) + '\n' +
+                             f'直播预约失效，被删除:{req1_dict}\n当前已经有{self.null_timer}条data为None的sid'
+                             )
                 self.code_check(dycode)
                 return
             if dycode == -412:
@@ -375,7 +367,7 @@ class rid_get_dynamic:
         log.info(
             f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{self.dynamic_timestamp.get_time_str_until_now()}秒，退出！')
         log.info(f'当前rid记录分别回滚{self.rollback_num + None_num1}和{self.rollback_num + None_num2}条')
-        ridstartfile = open('idsstart.txt', 'w', encoding='utf-8')
+        ridstartfile = open(os.path.join(self.current_dir,'idsstart.txt'), 'w', encoding='utf-8')
         finnal_rid_list = [
             str(self.ids_list[0] - self.rollback_num - None_num1),
             str(self.ids_list[1] - self.rollback_num - None_num2)
@@ -396,8 +388,7 @@ class rid_get_dynamic:
         )
         await self.sqlHlper.add_reserve_round_info(new_round_info)
 
-
-    async def generate_update_reserve_lotterys_by_round_id(self,round_id)->list[TUpReserveRelationInfo]:
+    async def generate_update_reserve_lotterys_by_round_id(self, round_id) -> list[TUpReserveRelationInfo]:
         """
         获取特定round更新的预约抽奖并写入文件，如果本次round更新的抽奖数量为0,则报错退出！
         :return:
@@ -410,9 +401,9 @@ class rid_get_dynamic:
             TUpReserveRelationInfo,
             exclude_attrs
         )
-        if not os.path.exists(self.root_dir + self.relative_dir + 'result'):
-            os.mkdir(self.root_dir + self.relative_dir +'result')
-        newly_updated_reserve_file_name = self.root_dir + self.relative_dir + 'result/' + '最后一次更新的直播预约抽奖.csv'
+        if not os.path.exists(os.path.join(self.current_dir, 'result')):
+            os.mkdir(os.path.join(self.current_dir, 'result'))
+        newly_updated_reserve_file_name = os.path.join(self.current_dir, 'result/最后一次更新的直播预约抽奖.csv')
         if len(newly_updated_reserve_list) == 0:
             log.error('更新抽奖数量为0，检查代码！')
             exit('更新抽奖数量为0，检查代码！')
@@ -440,15 +431,15 @@ class rid_get_dynamic:
         初始化信息
         :return:
         '''
-        if not os.path.exists(self.root_dir + self.relative_dir + 'log'):
-            os.mkdir(self.root_dir + self.relative_dir + 'log')
+        if not os.path.exists(os.path.join(  self.current_dir , 'log')):
+            os.mkdir(os.path.join(  self.current_dir , 'log'))
 
-        self.unknown = self.root_dir + self.relative_dir + 'log/未知类型.csv'
+        self.unknown = os.path.join(self.current_dir ,'log/未知类型.csv')
 
-        self.getfail = self.root_dir + self.relative_dir + 'log/获取失败.csv'
+        self.getfail =os.path.join(self.current_dir ,'log/获取失败.csv')
 
         try:
-            ridstartfile = open(self.root_dir + self.relative_dir + 'idsstart.txt', 'r', encoding='utf-8')
+            ridstartfile = open(os.path.join(self.current_dir ,'idsstart.txt'), 'r', encoding='utf-8')
             async with self.ids_change_lock:
                 self.ids_list.extend([int(x) for x in ridstartfile.readlines()])
                 self.ids = self.ids_list[0]

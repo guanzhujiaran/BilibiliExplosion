@@ -4,9 +4,8 @@ import json
 import random
 import traceback
 from typing import Union, Callable
-
 from loguru import logger
-from sqlalchemy import AsyncAdaptedQueuePool, select, and_
+from sqlalchemy import AsyncAdaptedQueuePool, select, and_, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from github.my_operator.get_others_lot.Tool.newSqlHelper.models import *
@@ -29,6 +28,11 @@ def lock_wrapper(func: Callable) -> Callable:
 
 
 class SqlHelper:
+    __instance = None
+    def __new__(cls, *args, **kwargs):
+        if not cls.__instance:
+            cls.__instance = super().__new__(cls)
+        return cls.__instance
     def __init__(self):
         SQLITE_URI = CONFIG.database.MYSQL.get_other_lot_URI
         self.op_db_lock = asyncio.Lock()
@@ -66,10 +70,10 @@ class SqlHelper:
                     res = await session.execute(sql)
                     ret: TLotmaininfo = res.scalars().first()
                     if ret:
-                        ret.lotNum=LotMainInfo.lotNum
-                        ret.allNum=LotMainInfo.allNum
-                        ret.uselessNum=LotMainInfo.uselessNum
-                        ret.isRoundFinished=LotMainInfo.isRoundFinished
+                        ret.lotNum = LotMainInfo.lotNum
+                        ret.allNum = LotMainInfo.allNum
+                        ret.uselessNum = LotMainInfo.uselessNum
+                        ret.isRoundFinished = LotMainInfo.isRoundFinished
                         await session.flush()
                     else:
                         session.add(LotMainInfo)
@@ -96,6 +100,27 @@ class SqlHelper:
                 res = await session.execute(sql)
                 ret = res.scalars().all()
                 return ret
+
+    @lock_wrapper
+    async def getAllLotDynByLotRoundNum(self, LotRoundNum: int) -> list[TLotdyninfo]:
+        """
+        根据轮次数量获取最新的抽奖信息
+        :param LotRoundNum:
+        :return:
+        """
+        last_round = await self.getLatestRound()
+        if last_round:
+            async with self.op_db_lock:
+                async with self._session() as session:
+                    last_round_id = last_round.lotRound_id if last_round.isRoundFinished else last_round.lotRound_id - 1
+                    sql = select(TLotdyninfo).filter(and_(TLotdyninfo.dynLotRound_id > (last_round_id - LotRoundNum),
+                                                     TLotdyninfo.isLot == 1)).order_by(
+                        TLotdyninfo.dynId.desc())
+                    res = await session.execute(sql)
+                    ret = res.scalars().all()
+                    return ret
+        else:
+            return []
 
     @lock_wrapper
     async def isExistDynInfoByDynId(self, DynId: str) -> Union[TLotdyninfo, None]:
@@ -223,10 +248,11 @@ class SqlHelper:
                 res = await session.execute(sql)
                 ret = res.scalars().first()
                 return ret
+
     # endregion
 
     @lock_wrapper
-    async def isExistSpaceInfoByDynId(self, dynamic_id)->Union[TLotuserspaceresp,None]:
+    async def isExistSpaceInfoByDynId(self, dynamic_id) -> Union[TLotuserspaceresp, None]:
         async with self.op_db_lock:
             async with self._session() as session:
                 sql = select(TLotuserspaceresp).filter(TLotuserspaceresp.spaceOffset == str(dynamic_id)).limit(1)
@@ -238,10 +264,10 @@ class SqlHelper:
 async def __test__():
     a = SqlHelper()
 
-    result = await a.isExistDynInfoByDynId(
-        913425606979354663
+    result = await a.getAllLotDynByLotRoundNum(
+        1
     )
-    print(result.isLot)
+    print([x.__dict__ for x in result])
 
 
 if __name__ == '__main__':

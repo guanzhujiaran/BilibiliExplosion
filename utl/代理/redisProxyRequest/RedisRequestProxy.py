@@ -5,7 +5,6 @@ import json
 import os
 import random
 import re
-import sys
 import threading
 import time
 import traceback
@@ -17,11 +16,12 @@ from typing import Union
 import bs4
 from loguru import logger
 from CONFIG import CONFIG
+from grpc获取动态.Utils.MQServer.VoucherMQServer import VoucherRabbitMQ
 from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, APIExClimbWuzhi
+from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.ProxyTool.ProxyObj import MyProxyData, MyProxyDataTools, TypePDict
 from utl.代理.SealedRequests import MYASYNCHTTPX
-from utl.redisTool.RedisManager import RedisManagerBase
-from utl.代理.数据库操作 import async_proxy_op_alchemy_mysql_ver as sqlite3_proxy_op
+from utl.代理.数据库操作 import async_proxy_op_alchemy_mysql_ver
 
 
 @dataclass
@@ -34,8 +34,6 @@ class CheckProxyTime:
             'last_checked_ts': self.last_checked_ts,
             'checked_ts_sep': self.checked_ts_sep
         }
-
-
 
 
 class MyRedisManager(RedisManagerBase):
@@ -85,10 +83,10 @@ class MyRedisManager(RedisManagerBase):
     async def get_using_p_dict_list(self) -> list[MyProxyData]:
         resp = await self._get(self.RedisMap.using_p_dict_list.value)
         if resp:
-            retList = []
+            ret_list = []
             for i in json.loads(resp):
-                retList.append(MyProxyData(**i))
-            return retList
+                ret_list.append(MyProxyData(**i))
+            return ret_list
         else:
             return []
 
@@ -128,13 +126,19 @@ class MyRedisManager(RedisManagerBase):
 
 
 class request_with_proxy:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(request_with_proxy, cls).__new__(cls)
+        return cls._instance
 
     def __init__(self):
         self.redis = MyRedisManager()
         self.cookie_lock = threading.Lock()
         self.use_p_dict_flag = False
         self.channel = 'bili'
-        self.sqlite3_proxy_op = sqlite3_proxy_op.SQLHelper()
+        self.mysql_proxy_op = async_proxy_op_alchemy_mysql_ver.SQLHelper()
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
         self.log = logger.bind(user="MYREQ")
         self.get_proxy_sep_time = 0.5 * 3600  # 获取代理的间隔
@@ -159,6 +163,7 @@ class request_with_proxy:
         #  self.s = session()
         self.s = MYASYNCHTTPX()
         self.fake_cookie = ''
+        self._352MQServer = VoucherRabbitMQ.Instance()
 
     async def Get_Bili_Cookie(self, ua: str) -> str:
         self.cookies_ts = await self.redis.get_cookies_ts()
@@ -185,73 +190,94 @@ class request_with_proxy:
         return realtime
 
     async def get_one_rand_proxy(self):
-        return await self.sqlite3_proxy_op.select_one_proxy('rand', channel=self.channel)
+        return await self.mysql_proxy_op.select_one_proxy('rand', channel=self.channel)
 
-    def generate_httpx_proxy_from_requests_proxy(self, request_proxy: dict) -> dict:
+    def _generate_httpx_proxy_from_requests_proxy(self, request_proxy: dict) -> dict:
         return {
             'http://': request_proxy['http'],
             'https://': request_proxy['https'],
         }
 
+    async def _prepare_proxy_from_using_p_dict(self, ) -> Union[TypePDict, dict]:
+        p_dict = {}
+        self.using_p_dict_list = await self.redis.get_using_p_dict_list()
+        if len(self.using_p_dict_list) > 10:
+            self.use_p_dict_flag = True
+        if len(self.using_p_dict_list) < 3:
+            self.use_p_dict_flag = False
+        if self.use_p_dict_flag and self.using_p_dict_list:
+            task_list = []
+
+            def remove_unavailable_ProxyData(ProxyData: MyProxyData):
+                if ProxyData.is_available():
+                    return True
+                else:
+                    task_list.append(self._update_to_proxy_dict(ProxyData.__dict__(), 0))
+                    return False
+
+            self.using_p_dict_list = list(filter(remove_unavailable_ProxyData, self.using_p_dict_list))
+            if task_list:
+                await asyncio.gather(*task_list)
+            temp: MyProxyData = random.choice(self.using_p_dict_list)
+            if temp.is_available(True):
+                p_dict = temp.__dict__()
+                p_dict['status'] = -412 if p_dict['status'] != 0 else p_dict['status']
+        return p_dict
+
     async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
+        """
+
+        :param args:
+        :param kwargs:
+        mode : single|rand 设置代理是否选择最高的单一代理还是随机
+        hybrid : 是否将本地ipv6代理加入随机选择中
+        :return:
+        """
         kwargs.update(*args)
         args = ()
         mode = self.mode
+        hybrid = None
         if 'mode' in kwargs.keys():
             mode = kwargs.pop('mode')
+        if 'hybrid' in kwargs.keys():
+            hybrid = random.choices([kwargs.pop('hybrid'), None], weights=[1, 9], k=1)[0]
+        status = 0
         while True:
-            # if kwargs.get('headers').get('user-agent'):
-            #     if kwargs.get('headers').get('user-agent') in self.ban_ua_list:
-            #         if self.User_Agent_List:
-            #             kwargs.get('headers').update({
-            #                 'user-agent': random.choice(self.User_Agent_List)
-            #             })
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
                 'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
                 if self.fake_cookie:
                     kwargs.get('headers').update({'cookie': self.fake_cookie})
                 else:
-                    if not self.fake_cookie:
-                        await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
-                        kwargs.get('headers').update({'cookie': self.fake_cookie})
+                    await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
+                    kwargs.get('headers').update({'cookie': self.fake_cookie})
             if self.GetProxy_Flag:
                 self.log.info('获取代理中')
                 await asyncio.sleep(30)
                 loop = asyncio.get_event_loop()
                 loop.call_later(30, self.set_GetProxy_Flag, False)
                 continue
-            p_dict: Union[TypePDict, {}] = {}
-            self.using_p_dict_list = await self.redis.get_using_p_dict_list()
-            if len(self.using_p_dict_list) > 10:
-                self.use_p_dict_flag = True
-            if len(self.using_p_dict_list) < 3:
-                self.use_p_dict_flag = False
-            if self.use_p_dict_flag and self.using_p_dict_list:
-                task_list = []
-
-                def remove_unavailable_ProxyData(ProxyData: MyProxyData):
-                    if ProxyData.is_available():
-                        return True
-                    else:
-                        task_list.append(self._update_to_proxy_dict(ProxyData.__dict__(), 0))
-                        return False
-
-                self.using_p_dict_list = list(filter(remove_unavailable_ProxyData, self.using_p_dict_list))
-                if task_list:
-                    await asyncio.gather(*task_list)
-                temp: MyProxyData = random.choice(self.using_p_dict_list)
-                if temp.is_available(True):
-                    p_dict = temp.__dict__()
-                    p_dict['status'] = -412 if p_dict['status'] != 0 else p_dict['status']
-            if not p_dict:
-                p_dict = await self._set_new_proxy(mode)
-                if p_dict.get('proxy') in [x.proxy for x in self.using_p_dict_list]:
-                    temp: MyProxyData = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'),
-                                                                                       self.using_p_dict_list)
-                    temp.is_available(True)
-            p = p_dict.get('proxy', {})
-            status = 0
+            if not hybrid or status != 0:
+                p_dict: Union[TypePDict, dict] = await self._prepare_proxy_from_using_p_dict()
+                if not p_dict:
+                    p_dict = await self._set_new_proxy(mode)
+                    if p_dict.get('proxy') in [x.proxy for x in self.using_p_dict_list]:
+                        temp: MyProxyData = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'),
+                                                                                           self.using_p_dict_list)
+                        temp.is_available(True)
+                p = p_dict.get('proxy', {})
+            else:
+                p_dict: Union[TypePDict, dict] = {
+                    'proxy_id': -1,
+                    'proxy': {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr},
+                    'status': 0,
+                    'update_ts': 0,
+                    'score': 0,
+                    'add_ts': 0,
+                    'success_times': 0,
+                    'zhihu_status': 0
+                }
+                p = p_dict.get('proxy', {})
             if not p:
                 self.log.debug('刷新全局-412代理')
                 await self._refresh_412_proxy()
@@ -294,18 +320,18 @@ class request_with_proxy:
                         temp.status = -352
                         temp.max_counter_ts = int(time.time())
                     self.log.critical(
-                        f'{req_dict.get("code")}报错,换个ip\t{p_dict}\t{self._timeshift(time.time())}\t{req_dict}\n{args}\t{kwargs}')
+                        f'{req_dict.get("code")}报错,换个ip\t{p_dict}\t{self._timeshift(time.time())}\t{req_dict}\n{args}\t{kwargs}\n{req.headers}')
                     if req_dict.get('code') == 65539:
                         pass
                     if req_dict.get('code') == -412:
                         # self._check_ip_by_bili_zone(p, status=status, score=p_dict['score'])  # 如何代理ip检测没问题就追加回去
                         pass
                     elif req_dict.get('code') == -352:
+                        voucher = req.headers.get('x-bili-gaia-vvoucher')
+                        ua = req.request.headers.get('user-agent')
+                        self._352MQServer.push_voucher_info(voucher, ua)
                         self._352_time = await self.redis.get__352_time()
-                        self._352_time += 1
-                        if self._352_time >= 10:
-                            await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
-                            self._352_time = 0
+                        await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
                         await self.redis.set__352_time(self._352_time)
                     p_dict['score'] += 10
                     p_dict['status'] = status
@@ -326,7 +352,7 @@ class request_with_proxy:
                 #     self._remove_proxy_list(p_dict['proxy'])
                 # except:
                 #     pass
-                self.log.warning(f'请求结束，报错了！\t{p}\n{traceback.format_exc()}\n{req_text}')
+                self.log.warning(f'请求结束，报错了！\t{p}\n{e}\n{req_text}')
                 status = -412
                 temp = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'), self.using_p_dict_list)
                 if temp:
@@ -337,7 +363,7 @@ class request_with_proxy:
                 # self.log.warning(f'更新数据库中的代理status:{status}')
                 await self._update_to_proxy_dict(p_dict, change_score_num=-10)
                 self.log.warning(
-                    f'{mode}使用代理访问失败，代理扣分。\n{e}\t{type(e)}\n{kwargs}\n获取请求时使用的代理信息：{p_dict}\t{self._timeshift(time.time())}\t剩余{await self.sqlite3_proxy_op.get_available_proxy_nums()}/{await self.sqlite3_proxy_op.get_all_proxy_nums()}个代理')
+                    f'{mode}使用代理访问失败，代理扣分。\n{e}\t{type(e)}\n{kwargs}\n获取请求时使用的代理信息：{p_dict}\t{self._timeshift(time.time())}\t剩余{await self.mysql_proxy_op.get_available_proxy_nums()}/{await self.mysql_proxy_op.get_all_proxy_nums()}个代理')
                 continue
             p_dict['score'] += 50
             p_dict['status'] = status
@@ -366,7 +392,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
 
             url = f'https://www.kuaidaili.com/free/intr/{page}/'
             headers.update({'Referer': url})
@@ -416,11 +442,11 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.zdaye.com/free/{page}/'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False,
-                                       proxies=(await self.sqlite3_proxy_op.select_score_top_proxy()).get('proxy'))
+                                       proxies=(await self.mysql_proxy_op.select_score_top_proxy()).get('proxy'))
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
                 self.log.critical(traceback.format_exc())
@@ -462,12 +488,12 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
 
             url = f'http://www.66ip.cn/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                       proxies=(await self.sqlite3_proxy_op.select_score_top_proxy()).get('proxy')
+                                       proxies=(await self.mysql_proxy_op.select_score_top_proxy()).get('proxy')
                                        )
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
@@ -512,7 +538,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.89ip.cn/index_{page}.html'
             try:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
@@ -558,7 +584,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
 
             url = f'https://www.tyhttp.com/free/page{page}/'
             try:
@@ -604,7 +630,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.kxdaili.com/dailiip/1/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -649,7 +675,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.kxdaili.com/dailiip/2/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -695,7 +721,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.ip3366.net/free/?stype=1&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -741,7 +767,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.ip3366.net/free/?stype=2&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -788,7 +814,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             url = f'https://proxy.ip3366.net/free/?action=china&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
@@ -965,7 +991,7 @@ class request_with_proxy:
         Get_proxy_success = True
         req = ''
         proxy_queue = []
-        for page in range(1, self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
 
             url = f'https://proxyhub.me/'
             headers.update({"cookie": f"page={page};"})
@@ -1794,7 +1820,7 @@ class request_with_proxy:
         req = ''
         proxy_queue = []
         url = f'https://www.omegaproxy.com/detection/proxyList'
-        for page in range(1,self.get_proxy_page+1):
+        for page in range(1, self.get_proxy_page + 1):
             params = {
                 'limit': 20,
                 'page': page,
@@ -1803,7 +1829,7 @@ class request_with_proxy:
                 'protocols': 'http',
             }
             try:
-                req = await self.s.get(url=url, headers=headers,params=params, verify=False, timeout=self.timeout)
+                req = await self.s.get(url=url, headers=headers, params=params, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
                 traceback.print_exc()
@@ -1841,7 +1867,8 @@ class request_with_proxy:
             return
         else:
             self.GetProxy_Flag = True
-        self.log.info(f'开始获取代理\t上次获取代理时间：{datetime.fromtimestamp(self.get_proxy_timestamp)}\t{self._timeshift(time.time())}')
+        self.log.info(
+            f'开始获取代理\t上次获取代理时间：{datetime.fromtimestamp(self.get_proxy_timestamp)}\t{self._timeshift(time.time())}')
         self.get_proxy_timestamp = time.time()
         proxy_queue = []
         task_list = []
@@ -2072,7 +2099,7 @@ class request_with_proxy:
         self.log.info(f'最终共有{len(proxy_queue)}个代理需要检查')
         for _ in range(len(proxy_queue)):
             await self._check_ip_by_bili_zone(proxy_queue.pop())
-        await self.sqlite3_proxy_op.remove_list_dict_data_by_proxy()
+        await self.mysql_proxy_op.remove_list_dict_data_by_proxy()
         Get_proxy_success = True
         return
 
@@ -2131,7 +2158,7 @@ class request_with_proxy:
         ret_p_dict = {}
         while 1:
             try:
-                p_dict = await self.sqlite3_proxy_op.select_one_proxy(mode, channel=self.channel)
+                p_dict = await self.mysql_proxy_op.select_one_proxy(mode, channel=self.channel)
                 if p_dict == {}:
                     self.log.critical('获取代理为空')
                     await self.get_proxy()
@@ -2142,9 +2169,9 @@ class request_with_proxy:
                 if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
                     self.check_proxy_time = await self.redis.get_check_proxy_time()
                 if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-                    _412_counter = await self.sqlite3_proxy_op.get_412_proxy_num()
-                    latest_add_ts = await self.sqlite3_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
-                    proxy_num = await self.sqlite3_proxy_op.get_all_proxy_nums()
+                    _412_counter = await self.mysql_proxy_op.get_412_proxy_num()
+                    latest_add_ts = await self.mysql_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
+                    proxy_num = await self.mysql_proxy_op.get_all_proxy_nums()
                     if _412_counter > proxy_num - 10:
                         self.log.warning(
                             f'-412风控代理过多\t{_412_counter, proxy_num}\t{time.strftime("%Y-%m-%d %H:%M:", time.localtime(time.time()))}')
@@ -2173,7 +2200,7 @@ class request_with_proxy:
         刷新两个小时前的412代理状态
         :return:
         '''
-        await self.sqlite3_proxy_op.refresh_412_proxy()
+        await self.mysql_proxy_op.refresh_412_proxy()
 
     async def _remove_proxy_list(self, proxy_dict):
         '''
@@ -2181,7 +2208,7 @@ class request_with_proxy:
         :param proxy_dict:
         :return:
         '''
-        await self.sqlite3_proxy_op.remove_proxy(proxy_dict['proxy'])
+        await self.mysql_proxy_op.remove_proxy(proxy_dict['proxy'])
 
     async def _update_to_proxy_dict(self, proxy_dict: dict,
                                     change_score_num=10):
@@ -2191,6 +2218,8 @@ class request_with_proxy:
         :param proxy_dict:
         :return:
         '''
+        if proxy_dict.get('proxy', {}).get('http') == CONFIG.my_ipv6_addr:
+            return
         proxy_dict['update_ts'] = int(time.time())
         if proxy_dict['score'] > 100000:
             proxy_dict['score'] = 100000
@@ -2200,7 +2229,7 @@ class request_with_proxy:
             proxy_dict['success_times'] = 100
         if proxy_dict['success_times'] < -10:
             proxy_dict['success_times'] = -10
-        await self.sqlite3_proxy_op.update_to_proxy_list(proxy_dict, change_score_num)
+        await self.mysql_proxy_op.update_to_proxy_list(proxy_dict, change_score_num)
 
     async def _add_to_proxy_list(self, proxy_dict: dict):
         '''
@@ -2208,15 +2237,15 @@ class request_with_proxy:
         :param proxy_dict:
         :return:
         '''
-        have_flag = await self.sqlite3_proxy_op.is_exist_proxy_by_proxy(proxy_dict['proxy'])
+        have_flag = await self.mysql_proxy_op.is_exist_proxy_by_proxy(proxy_dict['proxy'])
         if not have_flag:
             proxy_dict.update({'add_ts': int(time.time())})
             self.log.info(f'新增代理：{proxy_dict}')
-            await self.sqlite3_proxy_op.add_to_proxy_list(proxy_dict)
+            await self.mysql_proxy_op.add_to_proxy_list(proxy_dict)
 
     async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, None]:
         while 1:
-            ret_proxy = await self.sqlite3_proxy_op.get_one_rand_grpc_proxy()
+            ret_proxy = await self.mysql_proxy_op.get_one_rand_grpc_proxy()
             if not ret_proxy:
                 # self.log.critical(f'没有可用的Grpc代理，尝试获取新代理！')
                 await self.get_proxy()
@@ -2230,7 +2259,7 @@ class request_with_proxy:
         :return:
         '''
         while 1:
-            ret_proxy = await self.sqlite3_proxy_op.get_grpc_proxy_by_ip(ip)
+            ret_proxy = await self.mysql_proxy_op.get_grpc_proxy_by_ip(ip)
             if ret_proxy:
                 return ret_proxy
             else:
@@ -2242,9 +2271,9 @@ class request_with_proxy:
         if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
             self.check_proxy_time = await self.redis.get_check_proxy_time()
         if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-            grpc_412_num = await self.sqlite3_proxy_op.get_412_proxy_num()
-            latest_add_ts = await self.sqlite3_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
-            proxy_num = await self.sqlite3_proxy_op.grpc_get_all_proxy_nums()
+            grpc_412_num = await self.mysql_proxy_op.get_412_proxy_num()
+            latest_add_ts = await self.mysql_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
+            proxy_num = await self.mysql_proxy_op.grpc_get_all_proxy_nums()
             if grpc_412_num > proxy_num * 0.8:
                 self.log.warning(
                     f'-412风控代理过多\t{grpc_412_num, proxy_num}\t{time.strftime("%Y-%m-%d %H:%M:", time.localtime(time.time()))}')
@@ -2262,11 +2291,11 @@ class request_with_proxy:
         # else:
         #     self.check_proxy_time['last_checked_ts'] = int(time.time())
 
-        await self.sqlite3_proxy_op.upsert_grpc_proxy_status(**kwargs)
+        await self.mysql_proxy_op.upsert_grpc_proxy_status(**kwargs)
 
     async def _grpc_refresh_412_proxy(self):
         '''
         刷新两个小时前的412代理状态
         :return:
         '''
-        await self.sqlite3_proxy_op.grpc_refresh_412_proxy()
+        await self.mysql_proxy_op.grpc_refresh_412_proxy()

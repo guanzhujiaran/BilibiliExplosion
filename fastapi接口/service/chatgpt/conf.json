@@ -1,0 +1,16 @@
+{
+    "openai": [
+        {
+            "baseurl": "https://free.gpt.ge/v1",
+            "open_ai_api_key": "sk-B0JwJwpkzqhlwh3qC2638d73De5042C3Aa02951313Bd1e39"
+        },
+        {
+            "baseurl": "https://api.openai-hk.com/v1",
+            "open_ai_api_key": "hk-reurs910000380223c324e435ac8ef84f5d0a75f22a4e6c0"
+        },
+        {
+            "baseurl": "https://api.chatanywhere.tech/v1",
+            "open_ai_api_key": "sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS"
+        }
+    ]
+}

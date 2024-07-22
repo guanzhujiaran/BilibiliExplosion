@@ -4,22 +4,24 @@ import time
 import threading
 import json
 import os
-from asgiref.sync import async_to_sync
-from utl.代理.grpc_api import BiliGrpc
-from utl.pushme.pushme import pushme
+
 from CONFIG import CONFIG
+from utl.代理.grpc_api import BiliGrpc
+from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
 from loguru import logger
+
+log = logger.bind(user='space_monitor')
 
 
 class monitor:
     def __init__(self):
-        self.dir_path = CONFIG.root_dir + 'grpc获取动态/src/监控up动态/'
-        if not os.path.exists(self.dir_path + 'data/'):
-            os.makedirs(self.dir_path + 'data/')
+        self.dir_path = os.path.dirname(os.path.abspath(__file__))
+        if not os.path.exists(os.path.join(self.dir_path, 'data/')):
+            os.makedirs(os.path.join(self.dir_path, 'data/'))
         self.uid_list = [370877395]  # 监控的up的uid
         self.monitor_uid_list = None
-        if os.path.exists(self.dir_path + 'data/monitor_uid_list.json'):
-            with open(self.dir_path + 'data/monitor_uid_list.json', 'r', encoding='utf-8') as f:
+        if os.path.exists(os.path.join(self.dir_path, 'data/monitor_uid_list.json')):
+            with open(os.path.join(self.dir_path, 'data/monitor_uid_list.json'), 'r', encoding='utf-8') as f:
                 content = f.read()
                 if content.strip():
                     self.monitor_uid_list = json.loads(content)
@@ -46,7 +48,7 @@ class monitor:
         return realtime
 
     def save_monitor_uid_list(self):
-        with open(self.dir_path + 'data/monitor_uid_list.json', 'w', encoding='utf-8') as f:
+        with open(os.path.join(self.dir_path ,'data/monitor_uid_list.json'), 'w', encoding='utf-8') as f:
             f.write(json.dumps(self.monitor_uid_list, indent='\t'))
 
     def push_dyn_notify(self, dynamic_item):
@@ -71,14 +73,14 @@ class monitor:
         elif dynamic_item.get('extend').get('origDesc'):
             dynamic_content += ''.join([x.get('text') for x in
                                         dynamic_item.get('extend').get('origDesc')])
-        logger.debug(f'【Bilibili】你关注的up主 {author_name}有新的动态！\nhttps://www.bilibili.com/opus/{dynIdStr}')
+        log.debug(f'【Bilibili】你关注的up主 {author_name}有新的动态！\nhttps://www.bilibili.com/opus/{dynIdStr}')
         try:
             pushme(f'【Bilibili】你关注的up主 {author_name}有新的动态！',
                    f'|信息|内容|\n|---|---|\n|跳转APP|[__点击跳转app__](bilibili://opus/detail/{dynIdStr})|\n|动态类型|{cardType}|\n|up昵称|{author_name}|\n|空间主页|{author_space}|\n|发布时间|{pub_time}|\n|动态内容|{dynamic_content.replace("&#124;", "|")}|',
                    'markdown'
                    )
-        except:
-            logger.error('推送失败，请检查配置或网络')
+        except Exception as e:
+            log.exception(f'推送失败，请检查配置或网络{e}')
 
     async def monitor_main(self, uid):
         latest_dynamic_id_list = []
@@ -90,7 +92,7 @@ class monitor:
             space_hist_resp = await self.grpc_api.grpc_get_space_dyn_by_uid(uid)
             resp_list = space_hist_resp.get('list')
             if resp_list:
-                logger.info(f'获取到了up主 https://space.bilibili.com/{uid} 的{len(resp_list)}条动态')
+                log.info(f'获取到了up主 https://space.bilibili.com/{uid} 的{len(resp_list)}条动态')
                 for i in resp_list:
                     dynIdStr = i.get('extend').get('dynIdStr')
                     if dynIdStr not in latest_dynamic_id_list:
@@ -104,10 +106,22 @@ class monitor:
             await asyncio.sleep(self.sep_time)
             first_round = False
 
-    async def main(self):
+    @async_pushme_try_catch_decorator
+    async def main(self, show_log=True):
+        if not show_log:
+            log.remove()
+        log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_space_monitor_log.log"),
+                level="WARNING",
+                encoding="utf-8",
+                enqueue=True,
+                rotation="500MB",
+                compression="zip",
+                retention="15 days",
+                filter=lambda record: record["extra"].get('user') == "space_monitor",
+                )
         task_list = []
         for i in self.monitor_uid_list:
-            task=asyncio.create_task(self.monitor_main(i.get('uid')))
+            task = asyncio.create_task(self.monitor_main(i.get('uid')))
             task_list.append(task)
         await asyncio.gather(*task_list)
 

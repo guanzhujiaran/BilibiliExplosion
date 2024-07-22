@@ -15,7 +15,7 @@ class BiliGrpc:
     def __init__(self):
         self.post_localhost_timeout = None
         self.base_url = 'http://127.0.0.1:23333'
-        self.log = logger.bind(name="BiliGrpcClient")
+        self.log = logger.bind(user="BiliGrpcClient")
         # logger.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == "BiliGrpcClient")
         self.mygrpc_api = mygrpc_api()
         # 不能设置self.client这种东西，存在一个最大的连接数，超过会报错！
@@ -133,7 +133,7 @@ class BiliGrpc:
                 resp.raise_for_status()
                 return resp.json()
             except:
-                self.log.error(traceback.format_exc())
+                self.log.warning(traceback.format_exc())
 
 
 if __name__ == '__main__':

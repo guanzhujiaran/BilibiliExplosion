@@ -4,7 +4,9 @@ import json
 import random
 import time
 import traceback
-
+import subprocess
+from functools import partial
+subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 import numpy
 import requests

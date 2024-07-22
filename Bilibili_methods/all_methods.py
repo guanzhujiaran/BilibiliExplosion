@@ -2426,7 +2426,7 @@ class methods:
         return retmsg + random.choice(self.xiaoweiba) + random.choice(self.xiaoweibawenan)
 
     def get_all_sixin(self, uid, cookie, ua):
-        url = 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs?talker_id={}&session_type=1&size=200&begin_seqno=0&build=0&mobi_app=web'.format(
+        url = 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs?talker_id={}&session_type=1&size=10&begin_seqno=0&build=0&mobi_app=web'.format(
             uid)
         headers = {
             'cookie': cookie,

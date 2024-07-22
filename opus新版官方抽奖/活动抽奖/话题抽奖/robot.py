@@ -18,10 +18,12 @@ from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAre
 from utl.代理.request_with_proxy import request_with_proxy
 from loguru import logger
 
-#logger.remove()
+# logger.remove()
 log = logger.bind(user='topic_lottery')
-#log.add(sys.stderr, level="DEBUG", filter=lambda record: record["extra"].get('user') == 'topic_lottery')
-#logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
+
+
+# log.add(sys.stderr, level="DEBUG", filter=lambda record: record["extra"].get('user') == 'topic_lottery')
+# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
 
 
 class TopicRobot:
@@ -31,7 +33,7 @@ class TopicRobot:
         self.req = request_with_proxy()
         self.stop_flag = False
         self.sql = sqlHelper()
-        self.sem_limit= 40
+        self.sem_limit = 40
         self.sem = asyncio.Semaphore(self.sem_limit)
         self._stop_counter = 0
         self._max_stop_count = 1000
@@ -47,7 +49,8 @@ class TopicRobot:
             'source': 'Web'
         }
         resp = await self.req.request_with_proxy(url=self.baseurl, method='get', params=params,
-                                                 headers={'user-agent': random.choice(CONFIG.UA_LIST)})
+                                                 headers={'user-agent': random.choice(CONFIG.UA_LIST)}
+                                                 )
         return resp
 
     async def save_resp(self, topic_id: int, resp: dict):
@@ -74,10 +77,14 @@ class TopicRobot:
             if top_details:
                 topic_creator = top_details.get('topic_creator')
                 if topic_creator:
-                    tTopicCreator = TTopicCreator(**topic_creator)
+                    allowed_keys = TTopicCreator.__table__.columns.keys()
+                    filtered_topic_creator = {key: value for key, value in topic_creator.items() if key in allowed_keys}
+                    tTopicCreator = TTopicCreator(**filtered_topic_creator)
                 topic_item = top_details.get('topic_item')
                 if topic_item:
-                    tTopicItem = TTopicItem(**topic_item)
+                    allowed_keys = TTopicItem.__table__.columns.keys()
+                    filtered_topic_item = {key: value for key, value in topic_item.items() if key in allowed_keys}
+                    tTopicItem = TTopicItem(**filtered_topic_item)
                     if type(topic_item.get('ctime')) is int:
                         if int(time.time()) - topic_item.get('ctime') <= self.min_sep_ts:
                             self.stop_flag = True
@@ -90,12 +97,15 @@ class TopicRobot:
                 )
             functional_card = da.get('functional_card')
             if functional_card:
+
                 tFunctionalCard = TFunctionalCard(
                     json_data=functional_card
                 )
                 traffic_card = functional_card.get('traffic_card')
                 if traffic_card:
-                    tTrafficCard = TTrafficCard(**traffic_card)
+                    allowed_keys = TTrafficCard.__table__.columns.keys()
+                    filtered_traffic_card = {key: value for key, value in traffic_card.items() if key in allowed_keys}
+                    tTrafficCard = TTrafficCard(**filtered_traffic_card)
             click_area_card = da.get('click_area_card')
             if click_area_card:
                 tClickAreaCard = TClickAreaCard(json_data=click_area_card)
@@ -124,7 +134,7 @@ class TopicRobot:
 
     async def main(self):
         get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(self._max_stop_count)
-        task_list =  set()
+        task_list = set()
         for i in get_failed_topic_ids:
             await self.sem.acquire()
             task = asyncio.create_task(self.pipeline(i))
@@ -132,7 +142,7 @@ class TopicRobot:
             task.add_done_callback(task_list.discard)
         self.start_topic_id = await self.sql.get_max_topic_id()
         log.info(f'开始从{self.start_topic_id + 1}开始获取话题！')
-        task_list =  set()
+        task_list = set()
         while not self.stop_flag:
             self.start_topic_id += 1
             await self.sem.acquire()
@@ -143,103 +153,6 @@ class TopicRobot:
             last_sem_list = [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]
             await asyncio.gather(*last_sem_list)
         await asyncio.gather(*task_list)
-
-
-async def test():
-    a = TopicRobot()
-    resp1 = """{
-  "code": 0,
-  "message": "0",
-  "ttl": 1,
-  "data": {
-    "top_details": {
-      "topic_item": {
-        "id": 8995,
-        "name": "寒假不咕咕",
-        "view": 488338287,
-        "discuss": 642172,
-        "fav": 45,
-        "dynamics": 38483,
-        "jump_url": "https://m.bilibili.com/topic-detail?topic_id=8995",
-        "back_color": "#6188FF",
-        "description": "寒假不做鸽子精，这次一定！分享寒假日常就从现在开始",
-        "share_pic": "http://i0.hdslb.com/bfs/vc/7701fba940e721ceb756cc73694ebb8f510fe0cc.png",
-        "share": 1,
-        "like": 136,
-        "share_url": "https://m.bilibili.com/topic-detail?topic_id=8995",
-        "ctime": 1641380305
-      },
-      "topic_creator": {
-        "uid": 32708726,
-        "face": "https://i2.hdslb.com/bfs/face/92c24db539b6531277aae69c422fded520f758ac.jpg",
-        "name": "傲娇的时尚喵"
-      },
-      "operation_content": {},
-      "has_create_jurisdiction": true,
-      "word_color": 0,
-      "close_pub_layer_entry": false
-    },
-    "functional_card": {},
-    "click_area_card": {}
-  }
-}"""
-    resp_dict1 = json.loads(resp1)
-    resp2 = """{
-      "code": 0,
-      "message": "0",
-      "ttl": 1,
-      "data": {
-        "top_details": {
-          "topic_item": {
-            "id": 9000,
-            "name": "红红火火穿搭指南",
-            "view": 236251827,
-            "discuss": 282841,
-            "fav": 76,
-            "dynamics": 5989,
-            "jump_url": "https://m.bilibili.com/topic-detail?topic_id=9000",
-            "back_color": "#6188FF",
-            "description": "新年焕新衣当然要整起来！拜年穿搭、新年断舍离、2022大改造、年度单品...这里应有尽有",
-            "share_pic": "http://i0.hdslb.com/bfs/vc/7701fba940e721ceb756cc73694ebb8f510fe0cc.png",
-            "share": 3,
-            "like": 52,
-            "share_url": "https://m.bilibili.com/topic-detail?topic_id=9000",
-            "ctime": 1641382505
-          },
-          "topic_creator": {
-            "uid": 32708726,
-            "face": "https://i2.hdslb.com/bfs/face/92c24db539b6531277aae69c422fded520f758ac.jpg",
-            "name": "傲娇的时尚喵"
-          },
-          "operation_content": {},
-          "has_create_jurisdiction": true,
-          "word_color": 0,
-          "close_pub_layer_entry": false
-        },
-        "functional_card": {
-          "traffic_card": {
-            "name": "红红火火穿搭指南",
-            "jump_url": "https://www.bilibili.com/blackboard/dynamic/170580",
-            "icon_url": "https://i0.hdslb.com/bfs/activity-plat/static/20211019/4c5b6134e2def772efe20dabcca1f6e1/vGqnSBjy8N.png",
-            "benefit_point": "有奖征稿",
-            "card_desc": "活动已结束",
-            "jump_title": "立即参加"
-          }
-        },
-        "click_area_card": {}
-      }
-    }"""
-    resp_dict2 = json.loads(resp2)
-    resp3 = """{
-  "code": 4401031,
-  "message": "话题不存在",
-  "ttl": 1,
-  "data": null
-}"""
-    resp_dict3 = json.loads(resp3)
-    await a.save_resp(9000, resp_dict3)
-    await a.save_resp(8995, resp_dict1)
-    await a.save_resp(9000, resp_dict2)
 
 
 def run():
