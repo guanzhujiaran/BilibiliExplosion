@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 import json
 import os
-import socket
 import traceback
 from functools import wraps
-import inspect
 from loguru import logger
 import requests
 from requests import Response
@@ -39,6 +37,7 @@ def __preprocess_content(content: str) -> str:
 
 
 def pushme(title: str, content: str, __type='text') -> Response:
+    resp = Response()
     try:
         url = CONFIG.pushnotify.pushme.url
         token = CONFIG.pushnotify.pushme.token
@@ -49,15 +48,17 @@ def pushme(title: str, content: str, __type='text') -> Response:
             "content": push_content,
             'type': __type
         }
-        return requests.post(url=url, data=data, verify=False, proxies={
+        resp = requests.post(url=url, data=data, proxies={
             "http": CONFIG.V2ray_proxy,
             "https": CONFIG.V2ray_proxy
-        })
+        }, timeout=10)
+        return resp
     except Exception as e:
-        pushme_log.info(f'开始尝试微信pushpush推送！')
-        return _pushpush(title, content, __type)
+        pushme_log.info(f'推送pushme失败！{e}\n开始尝试微信pushpush推送！')
+        resp = _pushpush(title, content, __type)
+        return resp
     finally:
-        pushme_log.error(f'\n{title}\n{content}')
+        pushme_log.error(f'请求响应：{resp.text}\n{title}\n{content}')
 
 
 def _pushpush(title: str, content: str, __type='txt'):
@@ -131,10 +132,5 @@ def async_pushme_try_catch_decorator(func):
     return wrapper
 
 
-@pushme_try_catch_decorator
-def _test():
-    raise ValueError(114514)
-
-
 if __name__ == '__main__':
-    _test()
+    _pushpush('测试3', 'test3')

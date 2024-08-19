@@ -31,12 +31,12 @@ class UuidInfoc:
         t = int(round(time.time() * 1000)) % 100_000
 
         random_part = '-'.join([
-            ''.join(random.choice(DIGHT_MAP) for _ in range(8)) + '-',
-            ''.join(random.choice(DIGHT_MAP) for _ in range(4)) + '-',
-            ''.join(random.choice(DIGHT_MAP) for _ in range(4)) + '-',
-            ''.join(random.choice(DIGHT_MAP) for _ in range(4)) + '-',
+            ''.join(random.choice(DIGHT_MAP) for _ in range(8)),
+            ''.join(random.choice(DIGHT_MAP) for _ in range(4)),
+            ''.join(random.choice(DIGHT_MAP) for _ in range(4)),
+            ''.join(random.choice(DIGHT_MAP) for _ in range(4)),
             ''.join(random.choice(DIGHT_MAP) for _ in range(12))
-        ])[:-1]  # 去掉最后一个不必要的 '-'
+        ])
 
         return random_part + format(t, '05') + 'infoc'
 
@@ -78,6 +78,10 @@ class APIExClimbWuzhi:
     @property
     def spi(self):
         return self._spi
+
+    @property
+    def uuid(self):
+        return self._uuid
 
 
 class BuvidFp:
@@ -556,9 +560,9 @@ class ExClimbWuzhi:
             # 'home_feed_column=4',
             # f'browser_resolution={apiExClimbWuzhi.browser_resolution.avail_h}-{apiExClimbWuzhi.browser_resolution.avail_w}',
             f'buvid_fp={fingerprint}',
-            f'fingerprint={fingerprint}'
-            'buvid_fp_plain=undefined',
-            'hit-dyn-v2=1',
+            f'fingerprint={fingerprint}',
+            # 'buvid_fp_plain=undefined',
+            # 'hit-dyn-v2=1',
             # 'PVID=2',
             # 'bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTI0NzIxNzgsImlhdCI6MTcxMjIxMjkxOCwicGx0IjotMX0.iFVNtJggzuTyDJoXs0MFfdrerUJV32Bfsy7zUFgpzOk'
             # 'bili_ticket_expires=1712472118'
@@ -566,7 +570,7 @@ class ExClimbWuzhi:
 
         cookie.append("=".join(['b_lsid', utils.lsid()]))
         apiExClimbWuzhi._uuid = UuidInfoc.gen()
-        cookie.append("=".join(['_uuid', apiExClimbWuzhi._uuid]))
+        cookie.append("=".join(['_uuid', apiExClimbWuzhi.uuid]))
         cookie.append("=".join(['b_nut', str(int(time.time()))]))
         try:
             if useProxy:
@@ -641,15 +645,15 @@ class ExClimbWuzhi:
 
     @staticmethod
     async def verifyExClimbWuzhi(url: str = "https://www.bilibili.com/",
-                                 MYCFG: APIExClimbWuzhi = APIExClimbWuzhi(),
-                                 useProxy=False) -> str:
-        if type(MYCFG) != APIExClimbWuzhi:
-            raise Exception(f"MYCFG type is not an APIExClimbWuzi!\n{MYCFG}")
-        if not MYCFG.ua:
-            MYCFG = APIExClimbWuzhi()
-        MYCFG.renderer_id = renderer_id = f"#X{''.join([random.choice(string.ascii_letters + '123456789') for x in range(9)])}" if not MYCFG.renderer_id else MYCFG.renderer_id
-        MYCFG.renderer = renderer = f"ANGLE (NVIDIA, NVIDIA GeForce RTX {random.choice('34')}0{random.choice('56789')}0 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11) {renderer_id}" if not MYCFG.renderer else MYCFG.renderer
-        cookie = await ExClimbWuzhi._get_b3_b4_Cookie(MYCFG, useProxy=useProxy)
+                                 my_cfg: APIExClimbWuzhi = APIExClimbWuzhi(),
+                                 use_proxy=False) -> str:
+        if type(my_cfg) != APIExClimbWuzhi:
+            raise Exception(f"MYCFG type is not an APIExClimbWuzi!\n{my_cfg}")
+        if not my_cfg.ua:
+            my_cfg = APIExClimbWuzhi()
+        my_cfg.renderer_id = renderer_id = f"#X{''.join([random.choice(string.ascii_letters + '123456789') for x in range(9)])}" if not my_cfg.renderer_id else my_cfg.renderer_id
+        my_cfg.renderer = renderer = f"ANGLE (NVIDIA, NVIDIA GeForce RTX {random.choice('34')}0{random.choice('56789')}0 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11) {renderer_id}" if not my_cfg.renderer else my_cfg.renderer
+        cookie = await ExClimbWuzhi._get_b3_b4_Cookie(my_cfg, useProxy=use_proxy)
 
         payload = {
             "3064": 1,  # ptype, mobile => 2, others => 1
@@ -659,7 +663,7 @@ class ExClimbWuzhi:
             "34f1": "",  # target_url, default empty now
             "d402": "",  # screenx, default empty
             "654a": "",  # screeny, default empty
-            "6e7c": f"{MYCFG.browser_resolution.w}x{MYCFG.browser_resolution.h}",
+            "6e7c": f"{my_cfg.browser_resolution.w}x{my_cfg.browser_resolution.h}",
             # browser_resolution, window.innerWidth || document.body && document.body.clientWidth + "x" + window.innerHeight || document.body && document.body.clientHeight
             "3c43": {  # 3c43 => msg
                 "2673": 1,
@@ -668,27 +672,27 @@ class ExClimbWuzhi:
                 "6527": 0,  # addBehavior, !!window.HTMLElement.prototype.addBehavior, html5 api
                 "7003": 1,  # indexedDb, !!window.indexedDB, html5 api
                 "807e": 1,  # cookieEnabled, navigator.cookieEnabled
-                "b8ce": MYCFG.ua,
+                "b8ce": my_cfg.ua,
                 # ua
                 "641c": 0,  # webdriver, navigator.webdriver, like Selenium
-                "07a4": MYCFG.language,  # language
-                "1c57": MYCFG.deviceMemory,  # deviceMemory in GB, navigator.deviceMemory
-                "0bd0": MYCFG.CPUCoreNum,  # hardwareConcurrency, navigator.hardwareConcurrency
+                "07a4": my_cfg.language,  # language
+                "1c57": my_cfg.deviceMemory,  # deviceMemory in GB, navigator.deviceMemory
+                "0bd0": my_cfg.CPUCoreNum,  # hardwareConcurrency, navigator.hardwareConcurrency
                 "748e": [
-                    MYCFG.browser_resolution.window_w,  # window.screen.width
-                    MYCFG.browser_resolution.window_h  # window.screen.height
+                    my_cfg.browser_resolution.window_w,  # window.screen.width
+                    my_cfg.browser_resolution.window_h  # window.screen.height
                 ],  # screenResolution
                 "d61f": [
-                    MYCFG.browser_resolution.avail_w,  # window.screen.availWidth
-                    MYCFG.browser_resolution.avail_h  # window.screen.availHeight
+                    my_cfg.browser_resolution.avail_w,  # window.screen.availWidth
+                    my_cfg.browser_resolution.avail_h  # window.screen.availHeight
                 ],  # availableScreenResolution
-                "fc9d": MYCFG.timezoneOffset,  # timezoneOffset, (new Date).getTimezoneOffset()
-                "6aa9": MYCFG.timezone,  # timezone, (new window.Intl.DateTimeFormat).resolvedOptions().timeZone
+                "fc9d": my_cfg.timezoneOffset,  # timezoneOffset, (new Date).getTimezoneOffset()
+                "6aa9": my_cfg.timezone,  # timezone, (new window.Intl.DateTimeFormat).resolvedOptions().timeZone
                 "75b8": 1,  # sessionStorage, window.sessionStorage, html5 api
                 "3b21": 1,  # localStorage, window.localStorage, html5 api
                 "8a1c": 0,  # openDatabase, window.openDatabase, html5 api
                 "d52f": "not available",  # cpuClass, navigator.cpuClass
-                "adca": "Win32" if "Linux" not in MYCFG.ua else "Linux",  # platform, navigator.platform
+                "adca": "Win32" if "Linux" not in my_cfg.ua else "Linux",  # platform, navigator.platform
                 "80c9": [
                     [
                         "PDF Viewer",
@@ -898,7 +902,7 @@ class ExClimbWuzhi:
             "54ef": "{\"b_ut\":\"7\",\"home_version\":\"V8\",\"i-wanna-go-back\":\"-1\",\"in_new_ab\":true,\"ab_version\":{\"for_ai_home_version\":\"V8\",\"tianma_banner_inline\":\"CONTROL\",\"enable_web_push\":\"DISABLE\"},\"ab_split_num\":{\"for_ai_home_version\":54,\"tianma_banner_inline\":54,\"enable_web_push\":10}}",
             # abtest info, embedded in html
             "8b94": "",  # refer_url, document.referrer ? encodeURIComponent(document.referrer).substr(0, 1e3) : ""
-            "df35": MYCFG._uuid,
+            "df35": my_cfg._uuid,
             # _uuid, set from cookie, generated by client side(algorithm remains unknown)
             "07a4": "zh-CN",  # language
             "5f45": None,  # laboratory, set from cookie, null if empty, source remains unknown
@@ -919,11 +923,11 @@ class ExClimbWuzhi:
             "Cookie": cookie,
             "User-Agent": APIExClimbWuzhi.ua
         }
-        if useProxy:
+        if use_proxy:
             # resp = await MYREQ.request_with_proxy(url=MYCFG.giaGateWayExClimbWuzhi, method='post',
             #                                       data=json.dumps({"payload": json.dumps(payload)}),
             #                                       headers=headers)
-            resp = (await MyAsyncReq.request(url=MYCFG.giaGateWayExClimbWuzhi,
+            resp = (await MyAsyncReq.request(url=my_cfg.giaGateWayExClimbWuzhi,
                                              method='post',
                                              data=json.dumps({"payload": json.dumps(payload)}),
                                              headers=headers,
@@ -933,7 +937,7 @@ class ExClimbWuzhi:
                                              }
                                              )).json()
         else:
-            resp_json = await MyAsyncReq.request(url=MYCFG.giaGateWayExClimbWuzhi,
+            resp_json = await MyAsyncReq.request(url=my_cfg.giaGateWayExClimbWuzhi,
                                                  method='post',
                                                  data=json.dumps({"payload": json.dumps(payload)}),
                                                  headers=headers,

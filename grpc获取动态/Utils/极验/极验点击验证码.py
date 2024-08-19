@@ -33,6 +33,7 @@ validate: 92de0515cc6d566587828b24c7891287}
 ```
 
 """
+import json
 import os
 import time
 from typing import Union
@@ -40,8 +41,8 @@ from curl_cffi import requests
 
 from loguru import logger
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.edge.options import Options
+from selenium.webdriver.edge.service import Service
 from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -73,10 +74,9 @@ class GeetestV3Breaker:
         self.log.info('初始化了一个selenium')
 
         options = Options()
-        options.binary_location = 'C:/WebDriver/chrome.exe'
-        self.driver = webdriver.Chrome(service=Service('C:/WebDriver/bin/chromedriver.exe'), options=options)
+        # options.binary_location = 'C:/WebDriver/chrome.exe'
+        self.driver = webdriver.Edge(service=Service('C:/WebDriver/bin/msedgedriver.exe'), options=options)
         self.wait = WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5)
-
 
     def _step1_input_gt_challenge(self, gt, challenge):
         gt_text_box = self.driver.find_element(By.CSS_SELECTOR, '.inp[id=gt]')
@@ -143,7 +143,7 @@ class GeetestV3Breaker:
 
     def break_geetest(self, gt, challenge) -> Union[str, None]:
         if not self.driver.current_window_handle:
-            self.driver = webdriver.Chrome()
+            self.driver = webdriver.Edge()
         if 'file' not in self.driver.current_url:
             self.driver.get(self.geetest_validator_html_path)
         self._step1_input_gt_challenge(gt, challenge)
@@ -165,27 +165,32 @@ class GeetestV3Breaker:
     @staticmethod
     def get_geetest_reg_info(v_voucher: str,
                              ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
-                                       "Safari/537.36 Edg/125.0.0.0") -> Union[GeetestRegInfo, bool]:
+                                       "Safari/537.36 Edg/125.0.0.0",
+                             ck: str = "",
+                             ori: str = "",
+                             ref: str = ""
+                             ) -> Union[GeetestRegInfo, bool]:
         data = {
             "v_voucher": v_voucher
         }
         headers = {
-            'Accept': 'application/json, text/plain, */* ',
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Origin": "http://www.bilibili.com",
-            "Referer": "http://www.bilibili.com/",
-            "User-Agent": ua,
+            'accept': 'application/json, text/plain, */* ',
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "content-type": "application/x-www-form-urlencoded",
+            "origin": ori,
+            "referer": ref,
+            "user-agent": ua,
+            'cookie': ck
         }
-        req: requests.Response = requests.post('https://api.bilibili.com/x/gaia-vgate/v1/register', data=data,
-                                               headers=headers, proxies={
+        response: requests.Response = requests.post('https://api.bilibili.com/x/gaia-vgate/v1/register', data=data,
+                                                    headers=headers, proxies={
                 'http': CONFIG.CONFIG.my_ipv6_addr,
                 'https': CONFIG.CONFIG.my_ipv6_addr
             })
-        resp_json = req.json()
+        resp_json = response.json()
         if resp_json.get('code') == 0:
             if resp_json.get('data').get('geetest') is None:
-                logger.error(f"\n获取极验信息失败: {resp_json}\n{req.headers}")
+                logger.error(f"\n获取极验信息失败: {resp_json}\n请求头：{headers}\n响应头：{response.headers}")
                 return False
             logger.debug(f"\n成功获取极验challenge：{resp_json}")
             return GeetestRegInfo(
@@ -201,7 +206,18 @@ class GeetestV3Breaker:
     @staticmethod
     def validate_geetest(challenge, token, validate,
                          ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
-                                   "Safari/537.36 Edg/125.0.0.0") -> bool:
+                                   "Safari/537.36 Edg/125.0.0.0",
+                         ck: str = "",
+                         ori: str = "",
+                         ref: str = "") -> bool:
+        """
+        TODO:validate是正确的，但是还是无法验证，需要抓包查看一下具体是如何验证的
+        :param challenge:
+        :param token:
+        :param validate:
+        :param ua:
+        :return:
+        """
         data = {
             "challenge": challenge,
             "seccode": validate + "|jordan",
@@ -209,12 +225,14 @@ class GeetestV3Breaker:
             "validate": validate
         }
         headers = {
-            'Accept': 'application/json, text/plain, */* ',
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Origin": "http://t.bilibili.com",
-            "Referer": "http://t.bilibili.com/",
-            "User-Agent": ua,
+            'accept': '*/*',
+            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6,zh-TW;q=0.5,ja;q=0.4',
+            'content-type': 'application/x-www-form-urlencoded',
+            "cookie": ck,
+            'priority': 'u=1, i',
+            "origin": ori,
+            "referer": ref,
+            "user-agent": ua,
         }
         req = requests.post('https://api.bilibili.com/x/gaia-vgate/v1/validate', data=data, headers=headers, proxies={
             'http': CONFIG.CONFIG.my_ipv6_addr,
@@ -232,11 +250,17 @@ class GeetestV3Breaker:
     def validate_form_voucher_ua(self, v_voucher: str,
                                  ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
                                            "Safari/537.36 Edg/125.0.0.0",
+                                 ck: str = "",
+                                 ori: str = "",
+                                 ref: str = "",
                                  use_bili_ticket_gt=True):
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
+        if self.driver is None and not use_bili_ticket_gt:
+            self.init_browser()
+            self.init_det()
         try:
-            geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, ua)
+            geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, ua, ck, ori, ref)
             if geetest_reg_info is False:
                 return False
             # 验证码获取成功才加1
@@ -247,25 +271,31 @@ class GeetestV3Breaker:
                     self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
                     validate_result = GeetestV3Breaker.validate_geetest(geetest_reg_info.geetest_challenge,
                                                                         geetest_reg_info.token,
-                                                                        validation)
+                                                                        validation,
+                                                                        ua,
+                                                                        ck,
+                                                                        ori,
+                                                                        ref
+                                                                        )
                     if validate_result:
                         self.succ_stats.succ_time += 1
             else:
                 if geetest_reg_info:
-                    if self.driver is None:
-                        self.init_browser()
-                        self.init_det()
                     if validation := self.break_geetest(geetest_reg_info.geetest_gt,
                                                         geetest_reg_info.geetest_challenge):
                         validate_result = GeetestV3Breaker.validate_geetest(
                             geetest_reg_info.geetest_challenge,
                             geetest_reg_info.token,
-                            validation)
+                            validation,
+                            ua,
+                            ck,
+                            ori,
+                            ref
+                        )
                         if validate_result:
                             self.succ_stats.succ_time += 1
                 elif not geetest_reg_info:
                     self.succ_stats.total_time -= 1
-
         except Exception as e:
             if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
                 return
@@ -275,10 +305,6 @@ class GeetestV3Breaker:
             if use_bili_ticket_gt:
                 pass
             else:
-                try:
-                    _ = self.driver.current_window_handle
-                except:
-                    self.driver = webdriver.Chrome()
                 self.driver.refresh()  # 用本地的html，不管成功还是失败，每次执行结束都直接刷新
 
 

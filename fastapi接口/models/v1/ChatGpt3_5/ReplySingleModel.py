@@ -22,6 +22,7 @@ class ReplyRes(BaseModel):
 
 class OpenAiClientModel(BaseModel):
     OpenAiclient: Any  # langchain用的v1的pydantic 和fastapi的v2版本不兼容，所以直接设置成Any，不校验
+    base_url:str = ""
     useNum: int = 0
     isAvailable: bool = True
     latestUseDate: datetime = datetime.now()

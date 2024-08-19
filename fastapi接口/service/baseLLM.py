@@ -12,10 +12,10 @@ class BaseLLM:
         OpenAiClientModel(
             OpenAiclient=ChatOpenAI(openai_api_key=x.open_ai_api_key, openai_api_base=x.baseurl,
                                     model_name="gpt-3.5-turbo"),
+            base_url=x.baseurl
         )
         for x in CONFIG.chat_gpt_configs
     ]
-
     @property
     def OpenAIClient(self) -> OpenAiClientModel:
         for i in self._OpenAiclients:

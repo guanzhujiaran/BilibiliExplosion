@@ -5,7 +5,6 @@ import json
 import os
 import random
 import re
-import threading
 import time
 import traceback
 from dataclasses import dataclass
@@ -25,6 +24,14 @@ from utl.代理.数据库操作 import async_proxy_op_alchemy_mysql_ver
 
 
 @dataclass
+class CookieWrapper:
+    ck: str
+    ua: str
+    expire_ts: int
+    able: bool = True
+
+
+@dataclass
 class CheckProxyTime:
     last_checked_ts: int = 0
     checked_ts_sep: int = 2 * 3600
@@ -41,7 +48,6 @@ class MyRedisManager(RedisManagerBase):
         fake_cookie = 'fake_cookie'
         using_p_dict_list = 'using_p_dict_list'
         _352_time = '_352_time'
-        cookies_ts = 'cookies_ts'
         check_proxy_time = 'check_proxy_time'
         isGettingCookie = 'isGettingCookie'
 
@@ -59,16 +65,6 @@ class MyRedisManager(RedisManagerBase):
 
     async def set_check_proxy_time(self, check_proxy_time: CheckProxyTime):
         return await self._set(self.RedisMap.check_proxy_time.value, json.dumps(check_proxy_time.to_dict()))
-
-    async def get_cookies_ts(self) -> int:
-        resp = await self._get(self.RedisMap.cookies_ts.value)
-        if resp:
-            return int(resp)
-        else:
-            return 0
-
-    async def set_cookies_ts(self, cookies_ts):
-        return await self._set(self.RedisMap.cookies_ts.value, str(cookies_ts))
 
     async def set__352_time(self, _352_time):
         return await self._set(self.RedisMap._352_time.value, str(_352_time))
@@ -135,7 +131,6 @@ class request_with_proxy:
 
     def __init__(self):
         self.redis = MyRedisManager()
-        self.cookie_lock = threading.Lock()
         self.use_p_dict_flag = False
         self.channel = 'bili'
         self.mysql_proxy_op = async_proxy_op_alchemy_mysql_ver.SQLHelper()
@@ -147,11 +142,8 @@ class request_with_proxy:
         self.get_proxy_page = 7  # 获取代理网站的页数
         self.__dir_path = CONFIG.root_dir + 'utl/代理/'
         self.check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
-        self.fresh_cookie_lock = threading.Lock()
-        self.cookies_ts = 0
         self._352_time = 0
         self.using_p_dict_list: list[MyProxyData] = []  # 正在使用的代理列表，可以使用的，无法使用则删除
-
         self.timeout = 10
         self.mode = 'rand'  # single || rand # 默认是rand，改成single之后从分数最高的代理开始用，这样获取响应特别快
         self.mode_fixed = True  # 是否固定mode (已丢弃的功能)
@@ -162,27 +154,52 @@ class request_with_proxy:
         self.GetProxy_Flag = False
         #  self.s = session()
         self.s = MYASYNCHTTPX()
-        self.fake_cookie = ''
+        self.fake_cookie_list: list[CookieWrapper] = []
+        self.cookie_lock = asyncio.Lock()
+        self.cookie_queue_num = 0
         self._352MQServer = VoucherRabbitMQ.Instance()
 
-    async def Get_Bili_Cookie(self, ua: str) -> str:
-        self.cookies_ts = await self.redis.get_cookies_ts()
-        if await self.redis.isGettingCookie():
-            logger.debug('正在获取cookie，等待...')
-            await asyncio.sleep(10)
-            return await self.Get_Bili_Cookie(ua)
-        if int(time.time()) - self.cookies_ts <= 2 * 3600:
-            self.fake_cookie = await self.redis.get_fake_cookie()
-            if self.fake_cookie:
-                return self.fake_cookie
-        await self.redis.setIsGettingCookie(True, 30)
-        self.cookies_ts = int(time.time())
-        await self.redis.set_cookies_ts(self.cookies_ts)
-        logger.debug('立刻前往获取cookie')
-        self.fake_cookie = await ExClimbWuzhi.verifyExClimbWuzhi(MYCFG=APIExClimbWuzhi(ua=ua), useProxy=False)
-        await self.redis.set_fake_cookie(self.fake_cookie, )
-        await self.redis.setIsGettingCookie(False, 100)
-        return self.fake_cookie
+    async def Get_Bili_Cookie(self, ua: str) -> CookieWrapper:
+        """
+        获取b站cookie
+        :param ua:
+        :return:
+        """
+        await self.cookie_lock.acquire()
+        if self.cookie_queue_num < 20:
+            self.cookie_queue_num += 1
+            cookie_data: Union[CookieWrapper, None] = None
+        else:
+            while 1:
+                if len(self.fake_cookie_list) > 0:
+                    cookie_data = random.choice(self.fake_cookie_list)
+                    if cookie_data.expire_ts < time.time() or cookie_data.able == False:
+                        self.cookie_queue_num -= 1
+                        self.fake_cookie_list.remove(cookie_data)
+                        continue
+                    break
+                if len(self.fake_cookie_list) == 0 and self.cookie_queue_num == 0:
+                    self.cookie_queue_num += 1
+                    cookie_data = None
+                    break
+                await asyncio.sleep(1)
+        self.cookie_lock.release()
+        if not cookie_data:
+            while 1:
+                logger.debug(
+                    f'当前cookie池数量：{len(self.fake_cookie_list)}，总共{self.cookie_queue_num}个cookie信息，前往获取新的cookie')
+                ck = await ExClimbWuzhi.verifyExClimbWuzhi(my_cfg=APIExClimbWuzhi(ua=ua), use_proxy=False)
+                # if not dict(md).get('x-bili-ticket'):
+                #     logger.error(f'bili-ticket获取失败！{md}')
+                #     await asyncio.sleep(30)
+                #     continue
+                # else:
+                #     break
+                break
+            cookie_data = CookieWrapper(ck=ck, ua=ua, expire_ts=int(time.time() + 4 * 3600))  # cookie时间长一点应该没问题吧
+            self.fake_cookie_list.append(cookie_data)
+        logger.debug(f'当前cookie池数量：{len(self.fake_cookie_list)}')
+        return cookie_data
 
     def _timeshift(self, timestamp):
         local_time = time.localtime(timestamp)
@@ -201,9 +218,9 @@ class request_with_proxy:
     async def _prepare_proxy_from_using_p_dict(self, ) -> Union[TypePDict, dict]:
         p_dict = {}
         self.using_p_dict_list = await self.redis.get_using_p_dict_list()
-        if len(self.using_p_dict_list) > 10:
+        if len(self.using_p_dict_list) > 1000:
             self.use_p_dict_flag = True
-        if len(self.using_p_dict_list) < 3:
+        if len(self.using_p_dict_list) < 500:
             self.use_p_dict_flag = False
         if self.use_p_dict_flag and self.using_p_dict_list:
             task_list = []
@@ -229,35 +246,48 @@ class request_with_proxy:
 
         :param args:
         :param kwargs:
-        mode : single|rand 设置代理是否选择最高的单一代理还是随机
-        hybrid : 是否将本地ipv6代理加入随机选择中
+        :mode single|rand 设置代理是否选择最高的单一代理还是随机
+        :hybrid 是否将本地ipv6代理加入随机选择中
         :return:
         """
         kwargs.update(*args)
         args = ()
         mode = self.mode
-        hybrid = None
+        hybrid: bool = False
+        hybrid_flag = False
+        _hybrid_t_w = 1
+        _hybrid_f_w = 9
         if 'mode' in kwargs.keys():
             mode = kwargs.pop('mode')
         if 'hybrid' in kwargs.keys():
-            hybrid = random.choices([kwargs.pop('hybrid'), None], weights=[1, 9], k=1)[0]
+            hybrid_flag = True
         status = 0
+        ua = kwargs.get('headers', {}).get('user-agent', '') or kwargs.get('headers', {}).get('User-Agent',
+                                                                                              '') or random.choice(
+            CONFIG.UA_LIST)
+        url = kwargs.get('url')
+        origin = kwargs.get('headers', {}).get('origin', 'https://www.bilibili.com')
+        referer = kwargs.get('headers', {}).get('referer', 'https://www.bilibili.com/')
+        kwargs.get('headers').update({'user-agent': ua})
+        use_cookie_flag = False
         while True:
+            cookie_data = await self.Get_Bili_Cookie(ua)
+            if hybrid_flag:
+                hybrid = random.choices([_hybrid_t_w, _hybrid_f_w], weights=[1, 9], k=1)[0]
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
                 'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
-                if self.fake_cookie:
-                    kwargs.get('headers').update({'cookie': self.fake_cookie})
-                else:
-                    await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
-                    kwargs.get('headers').update({'cookie': self.fake_cookie})
+                kwargs.get('headers').update({'cookie': cookie_data.ck, 'user-agent': cookie_data.ua})
+                use_cookie_flag = True
             if self.GetProxy_Flag:
                 self.log.info('获取代理中')
                 await asyncio.sleep(30)
                 loop = asyncio.get_event_loop()
                 loop.call_later(30, self.set_GetProxy_Flag, False)
                 continue
-            if not hybrid or status != 0:
+            # if not hybrid or status != 0:
+            if not hybrid or status == -352:
+                _hybrid_t_w += 1
                 p_dict: Union[TypePDict, dict] = await self._prepare_proxy_from_using_p_dict()
                 if not p_dict:
                     p_dict = await self._set_new_proxy(mode)
@@ -267,6 +297,7 @@ class request_with_proxy:
                         temp.is_available(True)
                 p = p_dict.get('proxy', {})
             else:
+                _hybrid_f_w += 1
                 p_dict: Union[TypePDict, dict] = {
                     'proxy_id': -1,
                     'proxy': {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr},
@@ -288,7 +319,7 @@ class request_with_proxy:
                 # self.log.info(f'正在发起请求中！\t{p}\n{args}\n{kwargs}\n')
                 req = await self.s.request(*args, **kwargs, timeout=self.timeout, proxies=p)
                 req_text = req.text
-                self.log.debug(f'url:{kwargs.get("url")}) 获取到请求结果！\t{p}\n{req.text[0:200]}\n')
+                self.log.debug(f'url:{kwargs.get("url")}) 获取到请求结果！\n{p}\n{req.text[0:200]}\n')
                 if 'code' not in req.text and 'bili' in req.url.host:  # 如果返回的不是json那么就打印出来看看是什么
                     self.log.info(req.text.replace('\n', ''))
                 try:
@@ -304,14 +335,19 @@ class request_with_proxy:
                     return req_dict
                 if type(req_dict) is not dict:
                     self.log.warning(f'请求获取的req_dict类型出错！{req_dict}')
-                if (req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict == {'code': 5,
-                                                                                                          'message': 'Not Found'}) and 'bili' in req.url.host:
+                if ((req_dict.get('code') is None
+                     or type(req_dict.get('code')) is not int
+                     or req_dict == {'code': 5, 'message': 'Not Found'})
+                        or req_dict.get('msg') == 'system error'
+                        and 'bili' in req.url.host):
                     self.log.warning(f'获取bili真实响应失败！\n{req.text}\n{args}\n{kwargs}\n')
                     p_dict['score'] -= 10
                     p_dict['status'] = -412
                     await self._update_to_proxy_dict(p_dict, -10)
                     continue
                 if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
+                    if use_cookie_flag:
+                        cookie_data.able = False
                     status = -412
                     # 代理被风控
                     temp = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'),
@@ -329,7 +365,11 @@ class request_with_proxy:
                     elif req_dict.get('code') == -352:
                         voucher = req.headers.get('x-bili-gaia-vvoucher')
                         ua = req.request.headers.get('user-agent')
-                        self._352MQServer.push_voucher_info(voucher, ua)
+                        self._352MQServer.push_voucher_info(voucher=voucher,
+                                                            ua=ua,
+                                                            ck=cookie_data.ck if use_cookie_flag else "",
+                                                            origin=origin,
+                                                            referer=referer)
                         self._352_time = await self.redis.get__352_time()
                         await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
                         await self.redis.set__352_time(self._352_time)
@@ -2299,3 +2339,12 @@ class request_with_proxy:
         :return:
         '''
         await self.mysql_proxy_op.grpc_refresh_412_proxy()
+
+
+async def __test():
+    a = request_with_proxy()
+    print(await a._prepare_proxy_from_using_p_dict())
+
+
+if __name__ == "__main__":
+    asyncio.run(__test())

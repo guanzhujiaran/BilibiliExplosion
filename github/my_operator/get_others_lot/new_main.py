@@ -14,6 +14,7 @@ from enum import Enum
 from typing import Dict, Any, Union
 import subprocess
 from functools import partial
+
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 from loguru import logger
@@ -138,7 +139,8 @@ class scrapyData:
         1817853136,
         1741486871,
         266223923,
-        646327721
+        646327721,
+        3546605886114075
     ])
     dyidList: list[str] = field(default_factory=list)  # 动态id
     lotidList: list[str] = field(default_factory=list)  # 抽奖id
@@ -3135,14 +3137,16 @@ class GetOthersLotDyn:
         ua = random.choice(CONFIG.UA_LIST)
         headers = {
             'user-agent': ua,
-            'cookie': '1'
+            'cookie': '1',
+            "origin": "https://space.bilibili.com",
+            'referer': f"https://space.bilibili.com/{hostuid}/dynamic"
         }
         dongtaidata = {
             'offset': offset,
             'host_mid': hostuid,
             'timezone_offset': -480,
             'platform': 'web',
-            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2',
+            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,forwardListHidden,ugcDelete',
             'web_location': "333.999",
         }
         dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
@@ -3159,11 +3163,7 @@ class GetOthersLotDyn:
         })
 
         url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
-        headers.update({'referer': f"https://space.bilibili.com/{hostuid}/dynamic"
-                        }
-                       )
         url_params = url + '?' + urllib.parse.urlencode(dongtaidata, safe='[],:')
-
         try:
             req = await request_proxy.request_with_proxy(method='GET',
                                                          url=url_params,
@@ -3175,7 +3175,7 @@ class GetOthersLotDyn:
                                                          )
             return req
         except Exception as e:
-            get_others_lot_log.critical(f'Exception while getting space history dynamic {hostuid} {offset}!\n{e}')
+            get_others_lot_log.exception(f'Exception while getting space history dynamic {hostuid} {offset}!\n{e}')
             return await self.get_space_dynamic_req_with_proxy(hostuid, offset)
 
     def solveSpaceDetailResp(self, space_req_dict: dict):  # 直接处理
@@ -3490,7 +3490,7 @@ class GetOthersLotDyn:
             await self.get_user_space_dynamic_id(uid, secondRound=True, isPubLotUser=isPubLotUser)
         if n <= 4 and time.time() - timelist[-1] >= self.SpareTime and secondRound == False:
             # self.uidlist.remove(uid)
-            get_others_lot_log.info(f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
+            get_others_lot_log.critical(f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
         self.space_sem.release()
 
     async def getAllSpaceDynId(self, uidlist=None, isPubLotUser=False) -> list[str]:
@@ -3502,7 +3502,14 @@ class GetOthersLotDyn:
             await self.space_sem.acquire()
             task = asyncio.create_task(self.get_user_space_dynamic_id(i, isPubLotUser=isPubLotUser))
             tasks.append(task)
-        await asyncio.gather(*tasks)
+        # while 1:
+        #     task_doing = [i for i in tasks if not i.done()]
+        #     get_others_lot_log.info(f'当前正在获取用户空间的任务进度【{len(task_doing)}/{len(tasks)}】')
+        #     if len(task_doing) == 0:
+        #         break
+        #     else:
+        #         await asyncio.sleep(10)
+        # await asyncio.gather(*tasks)
         while True:
             task_doing = [i for i in tasks if not i.done()]
             if len(task_doing) == 0:
@@ -3539,7 +3546,7 @@ class GetOthersLotDyn:
                 break
             else:
                 get_others_lot_log.debug(f'当前正在获取动态的任务数量：{len(task_doing)}/{len(task_list)}')
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
         get_dyn_resp_result = await asyncio.gather(*task_list, return_exceptions=False)
         get_others_lot_log.info(f'获取动态报错结果：{get_dyn_resp_result}')
@@ -3586,11 +3593,13 @@ class GetOthersLotDyn:
             headers = {
                 'referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
                 'user-agent': random.choice(CONFIG.UA_LIST),
-                'cookie': '1'
+                'cookie': '1',
+                "origin": "https://t.bilibili.com",
             }
         else:
             headers = {
-                'referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
+                'referer': f'https://t.bilibili.com/{dynamic_id}',
+                # 'Connection': 'close',
                 'user-agent': random.choice(CONFIG.UA_LIST),
                 'cookie': _cookie
                 # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
@@ -3605,7 +3614,8 @@ class GetOthersLotDyn:
             'platform': 'web',
             'gaia_source': 'main_web',
             'id': dynamic_id,
-            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden',
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,'
+                        'ugcDelete',
             'web_location': '333.1368',
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
             "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
@@ -3617,7 +3627,8 @@ class GetOthersLotDyn:
                 'gaia_source': 'main_web',
                 'rid': dynamic_id,
                 'type': dynamic_type,
-                'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden',
+                'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,'
+                            'ugcDelete',
                 'web_location': '333.1368',
                 "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
                 "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
@@ -3633,7 +3644,7 @@ class GetOthersLotDyn:
                 dynamic_req = await request_proxy.request_with_proxy(method='GET', url=url_with_params, headers=headers,
                                                                      mode='single', hybrid='1')
         except Exception as e:
-            traceback.print_exc()
+            get_others_lot_log.exception(e)
             return await self.get_dyn_detail_resp(dynamic_id, _cookie, _useragent)
         return dynamic_req
 
@@ -3865,9 +3876,7 @@ class GetOthersLotDyn:
             else:
                 get_others_lot_log.info('非转发动态，无原动态')
         except Exception as e:
-            get_others_lot_log.info(dynamic_req)
-            get_others_lot_log.error(e)
-            traceback.print_exc()
+            get_others_lot_log.exception(f"解析动态失败！\n{dynamic_req}\n{e}")
         structure = {
             'rawJSON': dynamic_item,  # 原始的item数据
             'dynamic_id': dynamic_data_dynamic_id,
@@ -3935,9 +3944,9 @@ class GetOthersLotDyn:
         else:
             oid = rid
         pinglunheader = {
-            'Referer': f'https://t.bilibili.com/{rid}?type={_type}',
-            'Connection': 'close',
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'referer': f'https://t.bilibili.com/{rid}?type={_type}',
+            # 'connection': 'close',
+            'user-agent': random.choice(CONFIG.UA_LIST),
             'cookie': '1'
         }
         pinglunurl = 'http://api.bilibili.com/x/v2/reply/main?next=' + str(pn) + '&type=' + str(ctype) + '&oid=' + str(
@@ -3953,7 +3962,7 @@ class GetOthersLotDyn:
         }
         try:
             pinglunreq = await request_proxy.request_with_proxy(method="GET", url=pinglunurl, data=pinglundata,
-                                                                headers=pinglunheader, mode='single')
+                                                                headers=pinglunheader,mode='single', hybrid='1')
         except:
             traceback.print_exc()
             get_others_lot_log.info(f'{pinglunurl}\t获取评论失败')
@@ -4386,7 +4395,8 @@ class GetOthersLotDyn:
         allDyn: [TLotdyninfo] = await self.sqlHlper.getAllDynByLotRound(lot_round_id)
         try:
             official_words_lots: [TLotdyninfo] = [x for x in allDyn if
-                                                  (x.officialLotType == OfficialLotType.官方抽奖.value or x.officialLotType == OfficialLotType.充电抽奖.value) and x.rawJsonStr.get(
+                                                  (
+                                                          x.officialLotType == OfficialLotType.官方抽奖.value or x.officialLotType == OfficialLotType.充电抽奖.value) and x.rawJsonStr.get(
                                                       'type') != "DYNAMIC_TYPE_DRAW"]
             await asyncio.gather(*[solve_word_lot_data(x.dynId) for x in official_words_lots])
         except Exception as e:
@@ -4775,12 +4785,14 @@ class GET_OTHERS_LOT_DYN:
 
     # endregion
 
+
 async def __test():
     b = GetOthersLotDyn()
 
-    for i in range(1,65):
+    for i in range(1, 65):
         print(await b.checkDBDyn(i))
     pass
+
 
 if __name__ == '__main__':
     asyncio.run(__test())

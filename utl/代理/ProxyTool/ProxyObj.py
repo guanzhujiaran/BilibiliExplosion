@@ -42,7 +42,7 @@ class MyProxyData:
         检查是否可用，如果正在使用则使用次数自动加1
         :return:
         '''
-        if int(time.time()) - self.max_counter_ts >= 3600:  # 如果一小时以上就重置为0
+        if int(time.time()) - self.max_counter_ts >= 4*3600:  # 如果4小时以上就重置为0
             self.counter = 1
             self.code = 0
             self.max_counter_ts = int(time.time())

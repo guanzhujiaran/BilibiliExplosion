@@ -1,20 +1,13 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import os
-from loguru import logger
 from datetime import datetime
-
 from CONFIG import CONFIG
+from opus新版官方抽奖.预约抽奖.etc.log.base_log import reserve_lot_log
 from opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import rid_get_dynamic
 from opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import submit_reserve__lot_main
 from utl.pushme.pushme import pushme_try_catch_decorator
 
-# logger.remove()
-reserve_lot_log = logger.bind(user="预约抽奖")
-
-
-# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
-#
 
 async def main():
     rid_run = rid_get_dynamic()
@@ -38,16 +31,15 @@ def sync_main():
 def schedule_get_reserve_lot_main(schedule_mark: bool = True, show_log: bool = True):
     if not show_log:
         reserve_lot_log.remove()
-    reserve_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_reserve_lot_log.log"),
-                        level="WARNING",
-                        encoding="utf-8",
-                        enqueue=True,
-                        rotation="500MB",
-                        compression="zip",
-                        retention="15 days",
-                        filter=lambda record: record["extra"].get('user') == "预约抽奖",
-                        )
-
+        reserve_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_reserve_lot_log.log"),
+                            level="WARNING",
+                            encoding="utf-8",
+                            enqueue=True,
+                            rotation="500MB",
+                            compression="zip",
+                            retention="15 days",
+                            filter=lambda record: record["extra"].get('user') == "预约抽奖",
+                            )
     if schedule_mark:
         from apscheduler.schedulers.blocking import BlockingScheduler
         from apscheduler.triggers.cron import CronTrigger
@@ -61,3 +53,6 @@ def schedule_get_reserve_lot_main(schedule_mark: bool = True, show_log: bool = T
         schedulers.start()
     else:
         sync_main()
+
+if __name__ == '__main__':
+    asyncio.run(main())

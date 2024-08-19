@@ -5,8 +5,11 @@ import time
 import pandas
 import re
 import sys
+
+from opus新版官方抽奖.Base.generate_cv import GenerateCvBase
 from opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper
+
 sys.path.append('C:/pythontest/')
 import random
 import requests
@@ -14,50 +17,14 @@ import urllib.parse
 import datetime
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
-from loguru import logger
-log = logger.bind(user='预约抽奖')
 
-class generate_cv:
+
+class GenerateReserveLotCv(GenerateCvBase):
     def __init__(self, cookie, ua, csrf, buvid):
+        super().__init__(cookie, ua, csrf, buvid)
         self.target_timeformat = '%m-%d %H:%M'  # 专栏的最终时间格式
-        self.csrf = csrf
-        self.buvid = buvid
-        self.ua = ua
-        self.cookie = cookie
-        self.s = requests.Session()
-        self.username = ''
-        self.uid = ''
         self.post_flag = True  # 是否直接发布
         self.sqlhelper = SqlHelper()
-
-        def login_check(_cookie, _ua):
-            headers = {
-                'User-Agent': _ua,
-                'cookie': _cookie
-            }
-            url = 'https://api.bilibili.com/x/web-interface/nav'
-            res = requests.get(url=url, headers=headers).json()
-            if res['data']['isLogin'] == True:
-                self.username = res['data']['uname']
-                self.uid = res['data']['mid']
-                print(f'登录成功,当前账号用户名为{self.username}\tuid:{self.uid}')
-                return 1
-            else:
-                print('登陆失败,请重新登录')
-                sys.exit('登陆失败,请重新登录')
-
-        login_check(self.cookie, self.ua)
-
-    def judge_lottery_time(self, Date_str):
-        '''
-        过期了返回True,没过期返回False
-        :param Date_str: %Y-%m-%d %H:%M:%S 格式的日期
-        :return: bool: 是否过期
-        '''
-        # today = datetime.datetime.today()
-        # next_day = today + datetime.timedelta(days=1)
-        lottery_end_date = datetime.datetime.strptime(Date_str, '%Y-%m-%d %H:%M:%S')
-        return lottery_end_date < datetime.datetime.now()  # 如果比当前时间大，返回True
 
     def zhuanlan_format(self, zhuanlan_dict: Dict[str, list[TUpReserveRelationInfo]], blank_space: int = 0) -> str:
         """
@@ -156,14 +123,6 @@ class generate_cv:
         '''
         return sorted(zhuanlan_data, key=lambda x: x['etime'])
 
-    def pandas_file_writer(self, file_path, new_df, mode='w', sep='滹'):
-        if not os.path.exists(file_path):
-            mode = 'w'
-        if mode == 'a+' or mode == 'a':
-            old_df = pandas.read_csv(file_path, index_col=0, dtype=str, sep=sep)
-            new_df = pandas.concat([old_df, new_df])
-        new_df.to_csv(file_path, header=True, encoding='utf-8', sep=sep)
-
     async def reserve_lottery(self):
         '''
         state含义：
@@ -175,7 +134,8 @@ class generate_cv:
         :return:
         '''
         last_round = await self.sqlhelper.get_latest_reserve_round(readonly=True)
-        zhuanlan_data: list[TUpReserveRelationInfo] = await self.sqlhelper.get_all_available_reserve_lotterys()  # 获取所有有效的预约抽奖 （按照etime升序排列
+        zhuanlan_data: list[
+            TUpReserveRelationInfo] = await self.sqlhelper.get_all_available_reserve_lotterys()  # 获取所有有效的预约抽奖 （按照etime升序排列
         zhuanlan_data_date_sort = self.zhuanlan_date_sort(zhuanlan_data)
         article_content = self.zhuanlan_format(zhuanlan_data_date_sort)
 
@@ -228,123 +188,6 @@ class generate_cv:
                        up_reply_closed, comment_selected,
                        publish_time, items, platform, buvid, device, build, mobi_app, csrf)
 
-    def get_cv_aid(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint, tags,
-                   image_urls,
-                   origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, csrf):
-        url = 'https://api.bilibili.com/x/article/creative/draft/addupdate'
-        headers = {
-            'accept': 'application/json, text/javascript, */*; q=0.01',
-            'accept-encoding': 'gzip, deflate',
-            'accept-language': 'zh-CN,zh;q=0.9',
-            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'cookie': self.cookie,
-            'origin': 'https://member.bilibili.com',
-            'referer': 'https://member.bilibili.com/',
-            'sec-ch-ua': '\"Google Chrome\";v=\"107\", \"Chromium\";v=\"107\", \"Not=A?Brand\";v=\"24\"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '\"Windows\"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site',
-            'user-agent': self.ua,
-        }
-        data = {
-            'title': title,
-            'banner_url': banner_url,
-            'content': article_content,
-            'summary': summary,
-            'words': words,
-            'category': category,
-            'list_id': list_id,
-            'tid': tid,
-            'reprint': reprint,
-            'tags': tags,
-            'image_urls': image_urls,
-            'origin_image_urls': origin_image_urls,
-            'dynamic_intro': dynamic_intro,
-            'media_id': media_id,
-            'spoiler': spoiler,
-            'original': original,
-            'top_video_bvid': top_video_bvid,
-            'csrf': csrf
-        }
-        data = urllib.parse.urlencode(data)
-        req = self.s.post(url=url,
-                          data=data,
-                          headers=headers
-                          )
-        print(req.text)
-        if req.json().get('code') == 0:
-            return req.json().get('data').get('aid')
-        else:
-            print(req.text, 'get_cv_aid')
-            exit(req.text)
-
-    def submit_cv(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint, tags,
-                  image_urls,
-                  origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, aid, up_reply_closed,
-                  comment_selected, publish_time, items, platform, buvid, device, build, mobi_app, csrf):
-        data = {
-            'title': title,
-            'banner_url': banner_url,
-            'content': article_content,
-            'summary': summary,
-            'words': words,
-            'category': category,
-            'list_id': list_id,
-            'tid': tid,
-            'reprint': reprint,
-            'tags': tags,
-            'image_urls': image_urls,
-            'origin_image_urls': origin_image_urls,
-            'dynamic_intro': dynamic_intro,
-            'media_id': media_id,
-            'spoiler': spoiler,
-            'original': original,
-            'top_video_bvid': top_video_bvid,
-            'aid': aid,
-            'up_reply_closed': up_reply_closed,
-            'comment_selected': comment_selected,
-            'publish_time': publish_time,
-            'items': items,
-            'platform': platform,
-            'buvid': buvid,
-            'device': device,
-            'build': build,
-            'mobi_app': mobi_app,
-            'csrf': csrf
-        }
-        data = urllib.parse.urlencode(data)
-        headers = {
-            'accept': 'application/json, text/javascript, */*; q=0.01',
-            'accept-encoding': 'gzip, deflate',
-            'accept-language': 'zh-CN,zh;q=0.9',
-            'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'cookie': self.cookie,
-            'origin': 'https://member.bilibili.com',
-            'referer': 'https://member.bilibili.com/',
-            'sec-ch-ua': '\"Google Chrome\";v=\"107\", \"Chromium\";v=\"107\", \"Not=A?Brand\";v=\"24\"',
-            'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': '\"Windows\"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site',
-            'user-agent': self.ua,
-        }
-        if self.post_flag:
-            req = self.s.post(url='https://api.bilibili.com/x/article/creative/article/submit',
-                              data=data,
-                              headers=headers
-                              )
-
-            if req.json().get('code') == 0:
-                print(req.text)
-                return True
-            else:
-                print(req.text, 'submit_cv')
-                exit(req.text)
-        return True
-
 
 async def submit_reserve__lot_main(is_post=True):
     """
@@ -357,11 +200,12 @@ async def submit_reserve__lot_main(is_post=True):
     cookie3 = gl.get_value('cookie3')
     buvid3 = gl.get_value('buvid3_3')
     if cookie3 and csrf3 and ua3 and buvid3:
-        gc = generate_cv(cookie3, ua3, csrf3, buvid3)
+        gc = GenerateReserveLotCv(cookie3, ua3, csrf3, buvid3)
         gc.post_flag = is_post
         await gc.reserve_lottery()
     else:
         print(cookie3, '\n', csrf3, '\n', ua3, '\n', buvid3)
+
 
 if __name__ == '__main__':
     asyncio.run(submit_reserve__lot_main(True))

@@ -1,28 +1,20 @@
-from typing import Callable
-
-import sys
-
+from typing import Callable, Union
 import asyncio
-from loguru import logger
 from sqlalchemy import select
-
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-
+from opus新版官方抽奖.活动抽奖.log.base_log import  topic_lot_log as log
 import CONFIG
 from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic
 
-lock = asyncio.Lock()
-log = logger.bind(user='topic_lottery')
 
 
 def lock_wrapper(func: Callable) -> Callable:
     async def wrapper(*args, **kwargs):
         while 1:
             try:
-                async with lock:
-                    return await func(*args, **kwargs)
+                return await func(*args, **kwargs)
             except Exception as e:
                 log.exception(e)
                 await asyncio.sleep(3)
@@ -47,11 +39,15 @@ class sqlHelper:
                          tFunctionalCard: TFunctionalCard,
                          tClickAreaCard: TClickAreaCard,
                          tTrafficCard: TTrafficCard):
+        if tFunctionalCard:
+            existed_functional_card = await self.get_functional_card_by_jump_url(tTrafficCard.jump_url)
+            if not existed_functional_card:
+                tFunctionalCard.traffic_card = tTrafficCard
+                tTopic.functional_card = tFunctionalCard
+            else:
+                tTopic.functional_card = existed_functional_card
         async with self._session() as session:
             async with session.begin():
-                if tFunctionalCard:
-                    tFunctionalCard.traffic_card = tTrafficCard
-                    tTopic.functional_card = tFunctionalCard
                 tTopic.click_area_card = tClickAreaCard
                 if tTopDetails:
                     tTopDetails.topic_creator = tTopicCreator
@@ -62,7 +58,8 @@ class sqlHelper:
     @lock_wrapper
     async def get_max_topic_id(self) -> int:
         async with self._session() as session:
-            sql = select(TTopic.topic_id).filter(TTopic.topic_detail_id != None).order_by(TTopic.topic_id.desc()).limit(1)
+            sql = select(TTopic.topic_id).filter(TTopic.topic_detail_id != None).order_by(TTopic.topic_id.desc()).limit(
+                1)
             result = await session.execute(sql)
             data = result.scalars().first()
             if not data:
@@ -70,18 +67,30 @@ class sqlHelper:
             return data
 
     @lock_wrapper
-    async def get_recent_failed_topic_id(self,limit=1000)->list[int]:
+    async def get_functional_card_by_jump_url(self, jump_url: str) -> Union[TFunctionalCard, None]:
         async with self._session() as session:
-            sql = select(TTopic.topic_id).filter(TTopic.topic_detail_id == None).order_by(TTopic.topic_id.desc()).limit(limit)
+            sql = select(TFunctionalCard).join(TTrafficCard).filter(TTrafficCard.jump_url == jump_url).order_by(
+                TFunctionalCard.id.desc()).limit(
+                1)
+            result = await session.execute(sql)
+            data = result.scalars().first()
+            return data
+
+    @lock_wrapper
+    async def get_recent_failed_topic_id(self, limit=1000) -> list[int]:
+        async with self._session() as session:
+            sql = select(TTopic.topic_id).filter(TTopic.topic_detail_id == None).order_by(TTopic.topic_id.desc()).limit(
+                limit)
             result = await session.execute(sql)
             data = result.scalars().all()
             return data
 
-async def test():
+
+async def _test():
     a = sqlHelper()
-    b = await a.get_recent_failed_topic_id()
-    print(b)
+    b = await a.get_functional_card_by_jump_url("https://www.bilibili.com/blackboard/era/WGzl8l4LJUO1cA4y.html")
+    print(b.dict())
 
 
 if __name__ == '__main__':
-    asyncio.run(test())
+    asyncio.run(_test())

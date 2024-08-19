@@ -108,26 +108,42 @@ class ProjectPath(str, Enum):
 
 class CONFIG:
     root_dir = 'K:/python test/'  # b站代码的根目录
-    V2ray_proxy = 'http://127.0.0.1:10808'
+    V2ray_proxy = 'http://127.0.0.1:10809' # socket端口+1
     project_path = ProjectPath
     pushnotify = pushnotify()  # 推送设置
     zhihu_CONFIG = zhihu_CONFIG()  # 知乎设置
     database = database()
     UA_LIST = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/125.0.0.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/126.0.0.0",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0",
     ]  # UA列表
     chat_gpt_configs = [
         ChatGptSettings(
-
+            baseurl= "https://api.chatanywhere.tech/v1",
+            open_ai_api_key= 'sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
+        ),
+        ChatGptSettings(
+            baseurl="https://api.chatanywhere.tech/v1",
+            open_ai_api_key='sk-15uefwaxlC3ik3Rzc6olDUUJ9pzDl8fFiesHJvTEXdz66Gba'
         ),
         ChatGptSettings(
             baseurl='https://free.gpt.ge/v1',
             open_ai_api_key='sk-B0JwJwpkzqhlwh3qC2638d73De5042C3Aa02951313Bd1e39'
         ),
         ChatGptSettings(
+            baseurl='https://free.gpt.ge/v1',
+            open_ai_api_key='sk-rooVNOUA9Xs2AqtpE9445cC879F3467b9f6a97B6De2219C1'
+        ),
+        ChatGptSettings(
             baseurl='https://api.openai-hk.com/v1',
             open_ai_api_key='hk-reurs910000380223c324e435ac8ef84f5d0a75f22a4e6c0'
         ),
+        ChatGptSettings(
+            baseurl='https://api.openai-hk.com/v1',
+            open_ai_api_key='hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25'
+        ),
     ]
-    my_ipv6_addr = 'http://192.168.1.11:3128'
+    my_ipv6_addr = 'http://192.168.1.7:3128'
     RabbitMQConfig = RabbitMQConfig()

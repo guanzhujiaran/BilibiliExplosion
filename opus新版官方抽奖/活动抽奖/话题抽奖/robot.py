@@ -1,43 +1,30 @@
-import pydantic
 import time
-
-import sys
-
 import asyncio
-
 from typing import Union
-
-import json
-
 import random
-
 from CONFIG import CONFIG
 from opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import sqlHelper
 from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic
 from utl.代理.request_with_proxy import request_with_proxy
-from loguru import logger
-
-# logger.remove()
-log = logger.bind(user='topic_lottery')
-
-
-# log.add(sys.stderr, level="DEBUG", filter=lambda record: record["extra"].get('user') == 'topic_lottery')
-# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
+from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
 
 
 class TopicRobot:
     def __init__(self):
+        self.start_topic_id = 1  # 开始的话题id
         self.min_sep_ts = 2 * 3600  # 最小的间隔时间
         self.baseurl = 'https://app.bilibili.com/x/topic/web/details/top'
         self.req = request_with_proxy()
         self.stop_flag = False
         self.sql = sqlHelper()
-        self.sem_limit = 40
+        self.sem_limit = 10
         self.sem = asyncio.Semaphore(self.sem_limit)
         self._stop_counter = 0
         self._max_stop_count = 1000
+        self._max_stop_timestamp = 2 * 3600 # 距离当前时间超过2小时就停止
         self._latest_topic_id = 0
+        self._traffic_card_lock = asyncio.Lock()  # 活动数据锁
 
     async def scrapy_topic_dict(self, topic_id: int) -> dict:
         """
@@ -49,13 +36,15 @@ class TopicRobot:
             'source': 'Web'
         }
         resp = await self.req.request_with_proxy(url=self.baseurl, method='get', params=params,
-                                                 headers={'user-agent': random.choice(CONFIG.UA_LIST)}
+                                                 headers={'user-agent': random.choice(CONFIG.UA_LIST)},
+                                                 hybrid="1"
                                                  )
         return resp
 
-    async def save_resp(self, topic_id: int, resp: dict):
+    async def save_resp(self, topic_id: int, resp: dict, is_get_recent_failed_topic=False):
         """
        保存话题字典
+        :param is_get_recent_failed_topic:
        :param topic_id:
        :param resp:
        :return:
@@ -88,7 +77,7 @@ class TopicRobot:
                     if type(topic_item.get('ctime')) is int:
                         if int(time.time()) - topic_item.get('ctime') <= self.min_sep_ts:
                             self.stop_flag = True
-                            log.info('到达最近时间，退出')
+                            topic_lot_log.info('到达最近时间，退出')
                 tTopDetails = TTopDetails(
                     close_pub_layer_entry=top_details.get('close_pub_layer_entry'),
                     has_create_jurisdiction=top_details.get('has_create_jurisdiction'),
@@ -97,7 +86,6 @@ class TopicRobot:
                 )
             functional_card = da.get('functional_card')
             if functional_card:
-
                 tFunctionalCard = TFunctionalCard(
                     json_data=functional_card
                 )
@@ -110,9 +98,8 @@ class TopicRobot:
             if click_area_card:
                 tClickAreaCard = TClickAreaCard(json_data=click_area_card)
         else:
-            if topic_id > self._latest_topic_id:
+            if topic_id > self._latest_topic_id and not is_get_recent_failed_topic:
                 self._stop_counter += 1
-
         return await self.sql.add_TTopic(
             tTopic,
             tTopicItem,
@@ -122,26 +109,29 @@ class TopicRobot:
             tClickAreaCard,
             tTrafficCard
         )
-
-    async def pipeline(self, topic_id):
+    async def pipeline(self, topic_id, is_get_recent_failed_topic=False):
         resp_dict = await self.scrapy_topic_dict(topic_id)
-        log.debug(f'topic_id 【{topic_id}】 {resp_dict}')
-        if self._stop_counter >= self._max_stop_count:
+        topic_lot_log.debug(f'topic_id 【{topic_id}】 {resp_dict}')
+        if self._stop_counter >= self._max_stop_count and not is_get_recent_failed_topic:
             self.stop_flag = True
-            log.info('到达最大无效值，退出！')
-        await self.save_resp(topic_id, resp_dict)
+            topic_lot_log.info('到达最大无效值，退出！')
+        async with self._traffic_card_lock:
+            await self.save_resp(topic_id, resp_dict, is_get_recent_failed_topic)
         self.sem.release()
 
     async def main(self):
-        get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(self._max_stop_count)
-        task_list = set()
+        # region 重新获取获取失败的数据
+        get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(self._max_stop_count + self.sem_limit)
+        _task_list = set()
         for i in get_failed_topic_ids:
             await self.sem.acquire()
-            task = asyncio.create_task(self.pipeline(i))
-            task_list.add(task)
-            task.add_done_callback(task_list.discard)
+            task = asyncio.create_task(self.pipeline(i, is_get_recent_failed_topic=True))
+            _task_list.add(task)
+            task.add_done_callback(_task_list.discard)
+        await asyncio.gather(*_task_list)
         self.start_topic_id = await self.sql.get_max_topic_id()
-        log.info(f'开始从{self.start_topic_id + 1}开始获取话题！')
+        # endregion
+        topic_lot_log.info(f'开始从{self.start_topic_id + 1}开始获取话题！')
         task_list = set()
         while not self.stop_flag:
             self.start_topic_id += 1
@@ -150,8 +140,10 @@ class TopicRobot:
             task.set_name(str(self.start_topic_id))
             task_list.add(task)
             task.add_done_callback(task_list.discard)
-            last_sem_list = [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]
-            await asyncio.gather(*last_sem_list)
+            while [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]:
+                await asyncio.sleep(1)
+            # await asyncio.gather(*last_sem_list)
+        topic_lot_log.info(f'获取完成！等待任务列表剩余【{[x for x in task_list if not x.done()]}】个任务！')
         await asyncio.gather(*task_list)
 
 

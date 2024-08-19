@@ -39,7 +39,7 @@ class VoucherMQClient(BasicMQServer):
                 if int(time.time()) - voucher_info.generate_ts > 10:
                     return
                 log.info(f"Received: {ct}")
-                self.GeetestV3Breaker.validate_form_voucher_ua(voucher_info.voucher, voucher_info.ua, True)
+                self.GeetestV3Breaker.validate_form_voucher_ua(voucher_info.voucher, voucher_info.ua,voucher_info.ck,voucher_info.origin,voucher_info.referer, True)
             except Exception as e:
                 pushme('-352Voucher出错', traceback.format_exc())
                 log.exception(f'-352Voucher出错\n{e}')

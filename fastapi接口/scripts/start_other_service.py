@@ -1,9 +1,18 @@
 import asyncio
+import io
+import os
+import sys
 import time
-from multiprocessing import Process
+import multiprocessing as mp
 from threading import Thread
 from types import MethodType
 from loguru import logger
+sys.path.append(os.path.dirname(os.path.join(__file__, '../../../')))  # 将CONFIG导入
+from CONFIG import CONFIG
+sys.path.extend([
+    x.value for x in CONFIG.project_path
+])
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 class OtherService:
     log = logger.bind(user='OtherService')
@@ -65,7 +74,7 @@ def start_scripts():
     for i in ots.__dir__():
         m = getattr(ots, i)
         if type(m) is MethodType:
-            p = Process(target=m, name=i, daemon=False)
+            p = mp.Process(target=m, name=i, daemon=False)
             logger.info(f'执行方法：{i}')
             p.start()
             p_set.add(p)

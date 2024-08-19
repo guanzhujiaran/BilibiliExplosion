@@ -3,7 +3,6 @@
 import io
 import os
 import sys
-import threading
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
@@ -35,12 +34,6 @@ myfastapi_logger.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/er
                      filter=lambda record: record["extra"].get('user') == 'fastapi',
                      )
 # logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
-from fastapi接口.scripts.start_other_service import start_scripts
-myfastapi_logger.info("开启其他服务") # 提前开启，不导入其他无关的包，减少内存占用
-__t = threading.Thread(target=start_scripts, daemon=False)
-__t.start()
-myfastapi_logger.info("其他服务已启动")
-
 
 from contextlib import asynccontextmanager
 from fastapi_cache import FastAPICache
@@ -85,12 +78,22 @@ r1 = redis.Redis(host='localhost', port=11451, db=1)  # 情感分析数据
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
+    # from apscheduler.schedulers.background import BackgroundScheduler
+    # scheduler = BackgroundScheduler()
+    # from fastapi接口.scripts.start_other_service import start_scripts
+    #
+    # myfastapi_logger.info("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
+    # # __t = threading.Thread(target=start_scripts, daemon=False)
+    # # __t.start()
+    # scheduler.add_job(func=start_scripts, )
+    # scheduler.start()
+    # myfastapi_logger.info("其他服务已启动")
     yield
-    t.join()
 
 
 app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
+
 
 @app.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息', )
 def v1_get_live_lots(
@@ -285,13 +288,16 @@ async def api_get_others_big_reserve() -> list[reserveInfo]:
 async def zhuhu_avaliable_api():
     myfastapi_logger.info('开始获取zhihu抽奖内容')
     resp = await zhihu_lotScrapy.api_get_all_pins()
+    pushme(f'获取到知乎抽奖{len(resp)}条', '\n'.join(resp))
     return resp
 
 
 @app.get('/toutiao/get_others_lot_ids')
 async def toutiao_get_others_lot_ids():
     myfastapi_logger.info('开始获取toutiao抽奖内容')
-    return await toutiaoSpaceFeedLotService.main()
+    result = await toutiaoSpaceFeedLotService.main()
+    pushme(f'获取到头条抽奖{len(result)}条', '\n'.join(result))
+    return result
 
 
 # endregion

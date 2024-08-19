@@ -17,12 +17,14 @@ class VoucherRabbitMQ(BasicMQServer):
         self.q_name = self.CONFIG.RabbitMQConfig.QueueName.bili_352_voucher.value
         self.log = logger.bind(user='VoucherRabbitMQServer')
 
-    def push_voucher_info(self, voucher: str, ua: str):
+    def push_voucher_info(self, voucher: str, ua: str, ck: str, origin: str, referer: str):
         try:
             assert type(voucher) is str and type(ua) is str, "voucher和ua必须为字符串"
             assert voucher and ua, "voucher和ua不能为空"
+
             # 推送数据至MQ
-            voucher_info: VoucherInfo = VoucherInfo(voucher=voucher, ua=ua, generate_ts=int(time.time()))
+            voucher_info: VoucherInfo = VoucherInfo(voucher=voucher, ua=ua, generate_ts=int(time.time()), ck=ck,
+                                                    origin=origin, referer=referer)
             voucher_info_dict = asdict(voucher_info)
             self.log.info(f"推送voucher_info_dict数据至MQ: {voucher_info_dict}")
             self._queue_push(json.dumps(voucher_info_dict), self.q_name)

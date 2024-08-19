@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import math
 import os.path
 import traceback
 from typing import Union
@@ -9,12 +8,11 @@ import time
 from datetime import datetime, timedelta
 from loguru import logger
 from CONFIG import CONFIG
-from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
-from opus新版官方抽奖.转发抽奖.获取官方抽奖信息 import ExctractOfficialLottery
-from grpc获取动态.src.getDynDetail import DynDetailScrapy
+from opus新版官方抽奖.活动抽奖.话题抽奖.robot import TopicRobot
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
-from opus新版官方抽奖.转发抽奖.log.base_log import official_lot_log as log
+
+log = logger.bind(user="话题抽奖")
 
 
 class pubArticleInfo(pydantic.BaseModel):
@@ -40,6 +38,8 @@ class pubArticleInfo(pydantic.BaseModel):
             now = datetime.now()
             self.lastPubDate = now
             setting_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log/')
+            if not os.path.exists(setting_path):
+                os.mkdir(setting_path)
             with open(os.path.join(setting_path, 'lastPubTs.txt'), 'w', encoding='utf-8') as f:
                 f.write(str(int(self.lastPubDate.timestamp())))
         except Exception as e:
@@ -66,17 +66,22 @@ class pubArticleInfo(pydantic.BaseModel):
 
 @async_pushme_try_catch_decorator
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
-    d = DynDetailScrapy()
+    '''
+    todo 这个地方需要修改
+    :param pub_article_info:
+    :param schedule_mark:
+    :return:
+    '''
+    d = TopicRobot()
     if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
-        d.scrapy_sem = asyncio.Semaphore(20)
+        d.sem = asyncio.Semaphore(20)
     else:
-        d.scrapy_sem = asyncio.Semaphore(10)
+        d.sem = asyncio.Semaphore(10)
     await d.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
         e = ExctractOfficialLottery()
-        update_time: int = int(time.time()) - int(
-            pub_article_info.lastPubDate.timestamp()) - 1800  # 这段逻辑关乎更新抽奖的数量！！！
+        update_time: int = int(time.time()) - int(pub_article_info.lastPubDate.timestamp()) - 1800  # 这段逻辑关乎更新抽奖的数量！！！
         # 空闲中间的半个小时就是上一次发布之后休息的事件，可以往小调，但决不能是+一个时间段！！！
         latest_official_lot, latest_charge_lot = await e.main(
             latest_lots_judge_ts=update_time
@@ -103,7 +108,7 @@ def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticle
     except Exception as e:
         log.exception(e)
         delta_hour = 24
-        pushme(f'定时发布充电和官方抽奖专栏任务出错', f'{traceback.format_exc()}')
+        pushme(f'定时发布话题抽奖抽奖专栏任务出错', f'{traceback.format_exc()}')
     if schedule_mark and schedulers:
         nextjob = schedulers.add_job(run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
                                      run_date=datetime.now() + timedelta(hours=delta_hour))
@@ -123,16 +128,16 @@ def schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = 
     """
     if not show_log:
         log.remove()
-        log.add(
-            os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_official_lot_log.log"),
-            level="WARNING",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "官方抽奖"
-        )
+        topic_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_topic_lot_log.log"),
+                          level="WARNING",
+                          encoding="utf-8",
+                          enqueue=True,
+                          rotation="500MB",
+                          compression="zip",
+                          retention="15 days",
+                          filter=lambda record: record["extra"].get('user') == "话题抽奖",
+                          )
+
     pub_article_info = pubArticleInfo()
     if schedule_mark:
         # from apscheduler.triggers.cron import CronTrigger

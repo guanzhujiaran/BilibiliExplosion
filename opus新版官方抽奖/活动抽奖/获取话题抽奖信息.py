@@ -1,77 +1,6 @@
-# -*- coding: utf-8 -*-
-"""
-发布抽奖专栏
-"""
-
-import asyncio
-import re
-import json
-from CONFIG import CONFIG
-import pandas
-import random
-import datetime
-import urllib.parse
-import sys
-import b站cookie.b站cookie_
-import b站cookie.globalvar as gl
 import os
-import pandas as pd
-import requests
-import threading
-import time
-from loguru import logger
-
+from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
 from opus新版官方抽奖.Base.generate_cv import GenerateCvBase
-from utl.pushme.pushme import pushme
-from utl.代理 import grpc_api
-from grpc获取动态.src.DynObjectClass import dynAllDetail
-from grpc获取动态.src.SqlHelper import SQLHelper, sql_log
-from utl.代理.request_with_proxy import request_with_proxy
-
-
-class LOTSqlHelper(SQLHelper):
-    """
-    获取抽奖信息用的sql，继承自grpc的SQLHelper
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    @sql_log.catch
-    def get_official_and_charge_lot_not_drawn(self) -> [dict]:
-        ret_list_dict = [row for row in
-                         self.op_lot_table.rows_where(
-                             where='lottery_result is Null and status=0 and business_type!=10',
-                             order_by='lottery_id'
-                         )]
-        return ret_list_dict
-
-
-class LotDetail:
-    """
-    抽奖信息详情
-    """
-
-    def __init__(self, lottery_id, dynamic_id, lottery_time, first_prize, second_prize,
-                 third_prize, first_prize_cmt, second_prize_cmt, third_prize_cmt, participants):
-        self.lottery_id: int = lottery_id
-        self.dynamic_id: str = dynamic_id
-        self.lottery_time: int = lottery_time  # 时间戳
-        self.first_prize: int = first_prize  # 一等奖人数
-        self.second_prize: int = second_prize  # 二等奖人数
-        self.third_prize: int = third_prize  # 三等奖人数
-        self.first_prize_cmt: str = first_prize_cmt  # 奖品描述
-        self.second_prize_cmt: str = second_prize_cmt
-        self.third_prize_cmt: str = third_prize_cmt
-        self.participants: int = participants  # 参加人数
-        chance_number: int = 100 if int(participants) <= (
-                int(first_prize) + int(second_prize) + int(third_prize)) else (
-                                                                                      int(first_prize) + int(
-                                                                                  second_prize) + int(
-                                                                                  third_prize)) / int(
-            participants) * 100
-        self.chance: str = "%.2f%%" % chance_number
-
 
 class GenerateOfficialLotCv(GenerateCvBase):
     def __init__(self, cookie, ua, csrf, buvid):
@@ -302,9 +231,11 @@ class GenerateOfficialLotCv(GenerateCvBase):
                        publish_time, items, platform, buvid, device, build, mobi_app, csrf)
 
 
-class ExctractOfficialLottery:
+class ExctractTopicLottery:
+    """
+    话题抽奖信息不设置更新内容，因为本来就比较少，直接显示截止日期就行了
+    """
     def __init__(self):
-        self.BiliGrpc = grpc_api.BiliGrpc()
         self.__dir = os.path.dirname(os.path.abspath(__file__))
         self.log_path = os.path.join(self.__dir, 'log')
         self.result_path = os.path.join(self.__dir, 'result')
@@ -324,7 +255,6 @@ class ExctractOfficialLottery:
 
         self.sql = LOTSqlHelper()
         self.proxy_request = request_with_proxy()
-        self.log = logger.bind(user="官方抽奖")
         self.__no_lot_timer = 0
         self.__no_lot_timer_lock = threading.Lock()
         self.limit_no_lot_times = 3000  # 3000个rid没有得到抽奖信息就退出
@@ -671,9 +601,3 @@ class ExctractOfficialLottery:
             self.log.error(f"获取登陆信息失败！{cookie3, csrf3, ua3, buvid3}")
             pushme('官方抽奖和充电抽奖更新失败！', f"获取登陆信息失败！{cookie3, csrf3, ua3, buvid3}")
         return latest_official_lot_detail, latest_charge_lot_detail
-
-
-if __name__ == '__main__':
-    m = ExctractOfficialLottery()
-    # m.Get_All_Flag = True  # 为True时重新获取所有的抽奖，为False时将更新的内容附加在所有的后面
-    asyncio.run(m.get_repost_count('940628499647954947'))

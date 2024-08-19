@@ -228,23 +228,25 @@ class SQLHelper:
                 sql = update(ProxyTab).where(
                     and_(ProxyTab.status == unavaliable_status,
                          now - ProxyTab.update_ts >= _412_sep_time,
-                         ProxyTab.score >= avaliable_score)
+                         ProxyTab.score >= avaliable_score,
+                         ProxyTab.success_times >= 5
+                         )
                 ).values(
                     status=available_status,
                     update_ts=now)
                 # async with self.async_lock:
                 await session.execute(sql)
 
-                sql = update(ProxyTab).where(
-                    and_(ProxyTab.score < avaliable_score,
-                         now - ProxyTab.update_ts >= _underscore_spe_time)
-                ).values(
-                    status=available_status,
-                    update_ts=now,
-                    score=50
-                )
+                # sql = update(ProxyTab).where(
+                #     and_(ProxyTab.score < avaliable_score,
+                #          now - ProxyTab.update_ts >= _underscore_spe_time)
+                # ).values(
+                #     status=available_status,
+                #     update_ts=now,
+                #     score=50
+                # )
                 # async with self.async_lock:
-                await session.execute(sql)  # 刷新超过12小时的无效代理，改变status和score
+                # await session.execute(sql)  # 刷新超过12小时的无效代理，改变status和score
                 # sql = select(ProxyTab).where(ProxyTab.score<avaliable_score and ProxyTab.success_times<-3) # 删除无效代理，暂时先不用
                 # res = await session.execute(sql)
                 # original = res.scalars().all()
@@ -461,11 +463,13 @@ class SQLHelper:
         nums = 0
         async with self.session() as session:
             async with session.begin():
-                ___sql = update(ProxyTab).where(and_
-                                                (ProxyTab.status != available_status,
-                                                 now - ProxyTab.update_ts >= _412_sep_time,
-                                                 ProxyTab.score >= avaliable_score)
-                                                ).values(
+                ___sql = update(ProxyTab).where(and_(
+                    ProxyTab.status != available_status,
+                    now - ProxyTab.update_ts >= _412_sep_time,
+                    ProxyTab.score >= avaliable_score,
+                    ProxyTab.success_times >= 5  # 必须是成功过的代理才刷新
+                ),
+                ).values(
                     status=available_status,
                     update_ts=now
                 )

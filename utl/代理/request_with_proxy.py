@@ -56,7 +56,7 @@ class request_with_proxy:
         :param args:
         :param kwargs:
         mode : single|rand 设置代理是否选择最高的单一代理还是随机
-        hybrid : 是否将本地ipv6代理加入随机选择中
+        hybrid : 随便给个值 是否将本地ipv6代理加入随机选择中
         :return:
         """
         while 1:

@@ -1,16 +1,14 @@
 import time
-
 import asyncio
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
 from typing import Callable, Union
 from sqlalchemy import create_engine, inspect, select, and_
 import CONFIG
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
+from opus新版官方抽奖.预约抽奖.etc.log.base_log import reserve_lot_log
 
 lock = asyncio.Lock()
-log = logger.bind(user='reserve_lottery')
 
 
 def lock_wrapper(func: Callable) -> Callable:
@@ -19,7 +17,7 @@ def lock_wrapper(func: Callable) -> Callable:
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
-                log.exception(e)
+                reserve_lot_log.exception(e)
                 await asyncio.sleep(3)
 
     return wrapper
@@ -27,17 +25,20 @@ def lock_wrapper(func: Callable) -> Callable:
 
 class SqlHelper:
     __instance = None
+
     def __new__(cls, *args, **kwargs):
         if not cls.__instance:
             cls.__instance = super().__new__(cls)
         return cls.__instance
+
     def __init__(self):
         _SQL_URI = CONFIG.MYSQL.bili_reserve_URI
         self._engine = create_async_engine(_SQL_URI)
         self._session = sessionmaker(
             self._engine, expire_on_commit=False, class_=AsyncSession
         )
-        self.reserve_info_column_names = []
+        self.reserve_info_column_names = [
+        ]
 
     async def init(self):
         def get_column_name(conn: str) -> list[str]:
@@ -45,7 +46,8 @@ class SqlHelper:
             return inspector.get_columns(TUpReserveRelationInfo.__tablename__)
 
         async with self._session().bind.connect() as connection:
-            self.reserve_info_column_names = await connection.run_sync(get_column_name)
+            column_name_dict = await connection.run_sync(get_column_name)
+            self.reserve_info_column_names = list(map(lambda el: el.get('name'), column_name_dict))
 
     @staticmethod
     def solve_reserve_resp(resp_dict: dict) -> dict:
@@ -71,10 +73,13 @@ class SqlHelper:
         :param resp_dict:
         :return:
         """
+        if not self.reserve_info_column_names:
+            await self.init()
         resp_dict = SqlHelper.solve_reserve_resp(origin_resp_dict)
-        new_field = list(set(self.reserve_info_column_names) - set(list(resp_dict.keys())))
-        for k in new_field:
-            resp_dict.pop(k)
+        new_field = list(set(resp_dict.keys()) - set(list(self.reserve_info_column_names)))
+        if new_field:
+            for k in new_field:
+                resp_dict.update({"new_field": {k: resp_dict.pop(k)}})
         reserve_info = TUpReserveRelationInfo(**resp_dict)
         reserve_info.raw_JSON = origin_resp_dict
         reserve_info.reserve_round_id = round_id
@@ -85,7 +90,7 @@ class SqlHelper:
                 await session.merge(reserve_info)
 
     @lock_wrapper
-    async def get_latest_reserve_round(self,readonly=False) -> TReserveRoundInfo:
+    async def get_latest_reserve_round(self, readonly=False) -> TReserveRoundInfo:
         async with self._session() as session:
             sql = select(TReserveRoundInfo).order_by(TReserveRoundInfo.id.desc()).limit(1)
             result = await session.execute(sql)
@@ -203,7 +208,7 @@ class SqlHelper:
             return result.scalars().all()
 
     @lock_wrapper
-    async def get_all_available_reserve_lotterys_by_time(self,limit_time:int) -> list[TUpReserveRelationInfo]:
+    async def get_all_available_reserve_lotterys_by_time(self, limit_time: int) -> list[TUpReserveRelationInfo]:
         """
         获取所有有效的预约抽奖 （按照etime升序排列
         :return:
@@ -217,51 +222,30 @@ class SqlHelper:
                     TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
                     TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
                     TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
-                    TUpReserveRelationInfo.etime<= int(time.time())+limit_time
+                    TUpReserveRelationInfo.etime <= int(time.time()) + limit_time
                 )
             ).order_by(TUpReserveRelationInfo.etime.asc())
             result = await session.execute(sql)
             return result.scalars().all()
 
+
 # region 测试用代码
-async def test():
-    a = SqlHelper()
 
-    print(await a.get_latest_reserve_round())
-
-
-def test_solve_reserve_resp():
-    a = {'code': 0, 'message': '0', 'ttl': 1, 'data': {'list': {
-        '1538260': {'sid': 1538260, 'name': '一键订阅DPC夏季赛赛程', 'total': 17359, 'stime': 1684130400,
-                    'etime': 1687752000, 'isFollow': 0, 'state': 100, 'oid': '', 'type': 3, 'upmid': 17561885,
-                    'reserveRecordCtime': 0, 'livePlanStartTime': 1687752000, 'upActVisible': 0, 'lotteryType': 1,
-                    'prizeInfo': {'text': '预约有奖：DOTA2炸弹人手办*1份、DOTA2可旋转键帽*1份、DOTA2赛事周边*8份',
-                                  'jumpUrl': 'https://www.bilibili.com/h5/lottery/result?business_id=1538260&business_type=10'},
-                    'dynamicId': '', 'reserveTotalShowLimit': 0, 'desc': '观赛赢刀塔手办',
-                    'start_show_time': 1684130400, 'hide': {}, 'ext': '{}'}}}, 'ids': 1538260}
-
-    print(SqlHelper.solve_reserve_resp(a))
+async def _test_solve_reserve_resp():
+    a = [
 
 
-async def test_get_reserve_info_by_ids():
-    a = SqlHelper()
+    ]
+    b = SqlHelper()
+    for i in a:
 
-    rest = await a.get_reserve_by_ids(1323931)
-    print(rest.raw_JSON)
-
-
-async def test_get_all_available_reserve_lotterys():
-    a = SqlHelper()
-
-    rest = await a.get_all_available_reserve_lotterys()
-    for i in rest:
-        print(i.__dict__)
+        print(await b.add_reserve_info_by_resp_dict(i, 122))
 
 
 # endregion
 
 
 if __name__ == '__main__':
-    asyncio.run(test_get_all_available_reserve_lotterys())
+    asyncio.run(_test_solve_reserve_resp())
     # test()
     # test_solve_reserve_resp()

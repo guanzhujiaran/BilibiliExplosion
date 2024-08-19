@@ -28,7 +28,7 @@ class request_with_proxy:
             if self.fake_cookie:
                 return self.fake_cookie
         self.cookies_ts = int(time.time())
-        self.fake_cookie = await ExClimbWuzhi.verifyExClimbWuzhi(MYCFG=APIExClimbWuzhi(ua=ua), useProxy=False)
+        self.fake_cookie = await ExClimbWuzhi.verifyExClimbWuzhi(my_cfg=APIExClimbWuzhi(ua=ua), use_proxy=False)
         return self.fake_cookie
 
     def __init__(self):
