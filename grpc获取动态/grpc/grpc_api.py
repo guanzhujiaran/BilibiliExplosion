@@ -56,7 +56,15 @@ def grpc_error(err):
 class MetaDataWrapper:
     md: tuple
     expire_ts: int
-    able: bool = True
+    version_name: str
+    times_352: int = 0
+
+    @property
+    def able(self) -> bool:
+        if self.times_352 >= 10:
+            return False
+        else:
+            return True
 
 
 class RequestInterceptor(grpc.UnaryUnaryClientInterceptor):
@@ -281,7 +289,11 @@ class BiliGrpc:
                     continue
                 else:
                     break
-            metadata = MetaDataWrapper(md=md, expire_ts=int(time.time() + 0.5 * 3600))  # TODO 时间长一点应该没问题吧
+            metadata = MetaDataWrapper(
+                md=md,
+                expire_ts=int(time.time() + 0.5 * 3600),
+                version_name=version_name
+            )  # TODO 时间长一点应该没问题吧
             self.metadata_list.append(metadata)
         logger.debug(f'当前metadata池数量：{len(self.metadata_list)}')
 
@@ -367,9 +379,12 @@ class BiliGrpc:
                     self._352MQServer.push_voucher_info(
                         voucher=resp.headers.get('x-bili-gaia-vvoucher'),
                         ua=headers.get('user-agent'),
-                        ck=headers.get('cookie'),
+                        ck=headers.get('buvid'),
                         origin=f"https://{parsed_url.netloc}",
-                        referer=url)
+                        referer=url,
+                        ticket=headers.get('x-bili-ticket'),
+                        version=md.version_name
+                    )
                     raise MY_Error(
                         f'{func_name}\t-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{proxy}\n{str(data)}\n{grpc_req_message}')
                 gresp = grpc_resp_msg
@@ -387,6 +402,8 @@ class BiliGrpc:
                 self.grpc_api_any_log.info(
                     f'{func_name}\t{url} 获取grpc动态请求成功代理：{proxy.get("proxy")} {grpc_req_message}\n{headers}'
                     f'\n当前可用代理数量：{self.GrpcProxyTools.avalibleNum}/{self.GrpcProxyTools.allNum}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
+                if md.times_352 > 0:
+                    md.times_352 = 0
                 return resp_dict
             except Exception as err:
                 if str(err) == 'Error parsing message':
@@ -420,7 +437,7 @@ class BiliGrpc:
                             if cookies == self.cookies:
                                 self.cookies = None
                                 await self.__set_available_cookies(None, useProxy=True)
-                    md.able = False  # -352报错就舍弃当前metadata
+                    md.times_352 += 1  # -352报错就增加一次352次数，满了之后舍弃
                     if proxy['proxy']['http'] != self.my_proxy_addr:
                         if not ip_status:
                             ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
@@ -518,8 +535,9 @@ class BiliGrpc:
             'dyn_type': dynamic_type,
             'rid': rid,
             "ad_param": AdParam(
-                ad_extra=''.join(random.choices(string.ascii_uppercase + string.digits,
-                                                k=random.choice([x for x in range(1300, 1350)])))
+                ad_extra=''
+                # ''.join(random.choices(string.ascii_uppercase + string.digits,
+                #                                 k=random.choice([x for x in range(1300, 1350)])))
             ),
             'player_args': PlayerArgs(qn=32, fnval=272, voice_balance=1),
             'share_id': 'dt.dt-detail.0.0.pv',

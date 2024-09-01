@@ -1,16 +1,15 @@
-from typing import Callable, Union
+from typing import Callable, Union, List
 import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from opus新版官方抽奖.活动抽奖.log.base_log import  topic_lot_log as log
+from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log as log
 import CONFIG
 from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, TTrafficCard, \
-    TFunctionalCard, TTopDetails, TTopic
+    TFunctionalCard, TTopDetails, TTopic, TCapsule
 
 
-
-def lock_wrapper(func: Callable) -> Callable:
+def lock_wrapper(func):
     async def wrapper(*args, **kwargs):
         while 1:
             try:
@@ -32,20 +31,27 @@ class sqlHelper:
         )
 
     @lock_wrapper
-    async def add_TTopic(self, tTopic: TTopic,
+    async def add_TTopic(self,
+                         tTopic: TTopic,
                          tTopicItem: TTopicItem,
                          tTopicCreator: TTopicCreator,
                          tTopDetails: TTopDetails,
                          tFunctionalCard: TFunctionalCard,
                          tClickAreaCard: TClickAreaCard,
-                         tTrafficCard: TTrafficCard):
-        if tFunctionalCard:
+                         tTrafficCard: TTrafficCard,
+                         tCapsules: List[TCapsule]
+                         ):
+        if tFunctionalCard and tTrafficCard:
             existed_functional_card = await self.get_functional_card_by_jump_url(tTrafficCard.jump_url)
             if not existed_functional_card:
                 tFunctionalCard.traffic_card = tTrafficCard
                 tTopic.functional_card = tFunctionalCard
             else:
                 tTopic.functional_card = existed_functional_card
+        if tFunctionalCard and tCapsules:
+            tFunctionalCard.t_capsule = tCapsules
+            tTopic.functional_card = tFunctionalCard
+
         async with self._session() as session:
             async with session.begin():
                 tTopic.click_area_card = tClickAreaCard
@@ -64,6 +70,15 @@ class sqlHelper:
             data = result.scalars().first()
             if not data:
                 return 1000
+            return data
+
+    @lock_wrapper
+    async def get_capsules_by_jump_urls(self, jump_urls) -> List[TCapsule]:
+        async with self._session() as session:
+            sql = select(TCapsule).filter(TTrafficCard.jump_url.in_(jump_urls)).order_by(
+                TCapsule.pk.desc())
+            result = await session.execute(sql)
+            data = result.scalars().all()
             return data
 
     @lock_wrapper

@@ -178,7 +178,6 @@ class CaptchaDetector:
             x1, y1, x2, y2 = bbox
             im = cv2.rectangle(origin_im, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.imwrite(os.path.join(self.current_file_root_dir, file_name), im)
-
     def detect(self, geetest_pic_url: str) -> CaptchaResultInfo:
         """
         传入极验图片地址，直接返回对应的点图结果，检测失败则返回None

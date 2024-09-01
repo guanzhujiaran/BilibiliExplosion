@@ -650,16 +650,16 @@ class ExctractOfficialLottery:
             gc = GenerateOfficialLotCv(cookie3, ua3, csrf3, buvid3)
             # gc.post_flag = False  # 不直接发布
             fabu_text = ''
-            if all_official_lot_detail or force_push:
+            if latest_official_lot_detail:
                 gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
                 fabu_text += '官方抽奖专栏\n'
-            if all_charge_lot_detail or force_push:
+            if latest_charge_lot_detail:
                 gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
                 fabu_text += '充电抽奖专栏\n'
             if fabu_text:
                 fabu_text = '已发布专栏：\n' + fabu_text
             else:
-                fabu_text = '没有需要发布的专栏！\n'
+                fabu_text = '更新内容为空，不发布专栏，去检查日志是否有问题！\n'
             self.log.error(fabu_text)
             pushme('官方抽奖和充电抽奖已更新',
                    f'{fabu_text}官方抽奖：'

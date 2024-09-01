@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import math
 import os.path
 import traceback
 from typing import Union
@@ -7,7 +6,6 @@ import pydantic
 import asyncio
 import time
 from datetime import datetime, timedelta
-from loguru import logger
 from CONFIG import CONFIG
 from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
 from opus新版官方抽奖.转发抽奖.获取官方抽奖信息 import ExctractOfficialLottery
@@ -49,8 +47,8 @@ class pubArticleInfo(pydantic.BaseModel):
         if self.lastPubDate:
             now = datetime.now()
             if self.lastPubDate.day != now.day:  # 上次发布日期不在同一天
-                # if now.hour >= self.shouldPubHour or now.timestamp() - self.lastPubDate.timestamp() >= 15 * 3600:  # 如果当前时间在20点之后或者距离上次发布超过了15小时，则直接发布
-                if now.timestamp() - self.lastPubDate.timestamp() >= 2 * 3600:
+                if now.hour >= self.shouldPubHour or now.timestamp() - self.lastPubDate.timestamp() >= 15 * 3600:  # 如果当前时间在20点之后或者距离上次发布超过了15小时，则直接发布
+                # if now.timestamp() - self.lastPubDate.timestamp() >= 2 * 3600:
                     log.error(f'满足发布专栏文章条件，发布专栏！\t上次发布时间：{self.lastPubDate}')
                     return True
             else:  # 上次发布日期在同一天
@@ -68,9 +66,9 @@ class pubArticleInfo(pydantic.BaseModel):
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     d = DynDetailScrapy()
     if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
-        d.scrapy_sem = asyncio.Semaphore(20)
+        d.scrapy_sem = asyncio.Semaphore(30)
     else:
-        d.scrapy_sem = asyncio.Semaphore(10)
+        d.scrapy_sem = asyncio.Semaphore(15)
     await d.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():

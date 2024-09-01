@@ -8,16 +8,12 @@ import json
 import random
 import re
 import sys
-
 sys.path.append('C:/pythontest/')
 # sys.path.append('/home/aistudio/') #将该目录添加到该文件夹下，把当前目录当成根目录使用
 import datetime
 import os
-
-import js2py
 import requests
 import time
-
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import Bilibili_methods.all_methods

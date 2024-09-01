@@ -8,6 +8,8 @@ import time
 from datetime import datetime, timedelta
 from loguru import logger
 from CONFIG import CONFIG
+from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
+from opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import ExtractTopicLottery
 from opus新版官方抽奖.活动抽奖.话题抽奖.robot import TopicRobot
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -31,7 +33,8 @@ class pubArticleInfo(pydantic.BaseModel):
                 self.lastPubDate = datetime.fromtimestamp(int(contents))
                 log.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
-            log.warning(f"获取到上一次发布专栏的时间失败")
+            log.warning(f"获取到上一次发布专栏的时间失败！使用当前时间！")
+            self.lastPubDate = datetime.fromtimestamp(int(time.time()))
 
     def save_lastPubTs(self):
         try:
@@ -74,25 +77,18 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     '''
     d = TopicRobot()
     if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
-        d.sem = asyncio.Semaphore(20)
+        d.sem = asyncio.Semaphore(30)
     else:
-        d.sem = asyncio.Semaphore(10)
+        d.sem = asyncio.Semaphore(15)
     await d.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
-        e = ExctractOfficialLottery()
+        e = ExtractTopicLottery()
         update_time: int = int(time.time()) - int(pub_article_info.lastPubDate.timestamp()) - 1800  # 这段逻辑关乎更新抽奖的数量！！！
         # 空闲中间的半个小时就是上一次发布之后休息的事件，可以往小调，但决不能是+一个时间段！！！
-        latest_official_lot, latest_charge_lot = await e.main(
-            latest_lots_judge_ts=update_time
-        )
+        await e.main()
         log.error(f'\n上次发布专栏时间：{pub_article_info.lastPubDate}'
-                  f'\n更新抽奖时间为：{round(update_time / 3600, 2)}小时！'
-                  f'\n官方抽奖更新数量：{len(latest_official_lot)}'
-                  f'\n充电抽奖更新数量：{len(latest_charge_lot)}'
-                  f'\n更新内容：{[x.__dict__ for x in latest_official_lot]}\n{[x.__dict__ for x in latest_charge_lot]}')
-        g = LotDynSortByDate()
-        g.main([int(pub_article_info.lastPubDate.timestamp()), int(time.time())])
+                  f'\n更新抽奖时间为：{round(update_time / 3600, 2)}小时！')
         pub_article_info.start_ts = int(time.time())
         pub_article_info.save_lastPubTs()
 
@@ -100,7 +96,7 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
 @pushme_try_catch_decorator
 def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool, *args,
         **kwargs):
-    delta_hour = 3
+    delta_hour = 8
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -108,7 +104,7 @@ def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticle
     except Exception as e:
         log.exception(e)
         delta_hour = 24
-        pushme(f'定时发布话题抽奖抽奖专栏任务出错', f'{traceback.format_exc()}')
+        pushme(f'定时发布话题抽奖专栏任务出错', f'{traceback.format_exc()}')
     if schedule_mark and schedulers:
         nextjob = schedulers.add_job(run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
                                      run_date=datetime.now() + timedelta(hours=delta_hour))

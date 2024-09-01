@@ -1,5 +1,7 @@
 import asyncio
 import typing
+from typing import Union
+
 from httpx import AsyncClient
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
 
@@ -17,15 +19,31 @@ class MYASYNCHTTPX:
                 'https://': None,
             }
 
-    async def get(self, url, headers=None, verify=False, proxies=None, timeout=10,params=None, *args, **kwargs):
+    async def get(self, url, headers=None, verify=False, proxies: Union[dict, None] = None, timeout=10, params=None,
+                  *args, **kwargs):
+        """
+
+        :param url:
+        :param headers:
+        :param verify:
+        :param proxies: like {
+            'http':'http://1.1.1.1',
+            'https':'http://1.1.1.1'
+        }
+        :param timeout:
+        :param params:
+        :param args:
+        :param kwargs:
+        :return:
+        """
         async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                                     verify=False) as client:
-            resp = await client.get(url=url, headers=headers,params=params, timeout=timeout, follow_redirects=True)
+                               verify=False) as client:
+            resp = await client.get(url=url, headers=headers, params=params, timeout=timeout, follow_redirects=True)
             return resp
 
     async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10, *args, **kwargs):
         async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                                     verify=False) as client:
+                               verify=False) as client:
             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
             return resp
 
@@ -60,7 +78,7 @@ class MYASYNCHTTPX:
         :return:
         """
         async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                                     verify=False) as client:
+                               verify=False) as client:
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
                                         content=content, files=files, json=json, params=params, cookies=cookies,
                                         extensions=extensions, follow_redirects=True)

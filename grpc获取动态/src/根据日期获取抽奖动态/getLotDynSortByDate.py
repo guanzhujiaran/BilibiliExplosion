@@ -6,7 +6,8 @@ import time
 from typing import Generator
 import subprocess
 from functools import partial
-subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
+subprocess.Popen = partial(subprocess.Popen, encoding='utf-8')
+
 import execjs
 import pandas as pd
 import Bilibili_methods.all_methods
@@ -305,18 +306,19 @@ class LotDynSortByDate:
                  ]
                 for x in lot_data
             )
-            df.columns = ['发布者空间', '动态链接', 'up昵称', '账号类型', '发布时间', '动态内容', '评论数', '转发数',
-                          '点赞数',
-                          '是否需要人工判断', '高亮关键词', '抽奖类型', '抽奖id', '需要携带的词']
-            date_start = datetime.date.fromtimestamp(ts[0])
-            if not os.path.exists(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}')):
-                os.makedirs(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}'))
-            df.to_csv(
-                os.path.join(self.path , f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv'),
-                index=False, sep='\t', encoding='utf-8')
+            if not df.empty:
+                df.columns = ['发布者空间', '动态链接', 'up昵称', '账号类型', '发布时间', '动态内容', '评论数', '转发数',
+                              '点赞数',
+                              '是否需要人工判断', '高亮关键词', '抽奖类型', '抽奖id', '需要携带的词']
+                date_start = datetime.date.fromtimestamp(ts[0])
+                if not os.path.exists(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}')):
+                    os.makedirs(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}'))
+                df.to_csv(
+                    os.path.join(self.path , f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv'),
+                    index=False, sep='\t', encoding='utf-8')
             print(f'{datetime.date.fromtimestamp(ts[0])}的动态处理完成，总计{len(df)}条！')
 
 
 if __name__ == '__main__':
     a = LotDynSortByDate()
-    a.main([int(time.time()) - 60 * 3600 * 24, int(time.time())])
+    a.main([int(time.time()) - 2 * 3600 * 24, int(time.time())])

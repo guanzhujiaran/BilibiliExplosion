@@ -7,6 +7,8 @@ import json
 from enum import Enum
 
 import random
+from typing import Literal, Dict
+
 import requests
 import time
 import urllib.parse
@@ -200,7 +202,7 @@ def getWbiKeys() -> tuple[str, str]:
     return img_key, sub_key
 
 
-async def get_wbi_params(params: dict) -> dict:
+async def get_wbi_params(params: dict) -> Dict[Literal["w_rid", "wts"], str]:
     wbiKeys = await my_dm_img_Redis.get_wbiKeys()
     img_key, sub_key = wbiKeys.img_key, wbiKeys.sub_key
     new_pm = deepcopy(params)
@@ -218,8 +220,9 @@ def gen_dm_args(params: dict):
 
     dm_rand = 'ABCDEFGHIJK'
     dm_img_list = json.dumps([], separators=(',', ':'))
-    dm_img_str = ''.join(random.sample(dm_rand, 2))#'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ'
-    dm_cover_img_str =''.join(random.sample(dm_rand, 2)) #"QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyA2MzAgKDB4MDAwMDU5MUIpIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEpR29vZ2xlIEluYy4gKEludGVsKQ"
+    dm_img_str = ''.join(random.sample(dm_rand, 2))  # 'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ'
+    dm_cover_img_str = ''.join(random.sample(dm_rand,
+                                             2))  # "QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyA2MzAgKDB4MDAwMDU5MUIpIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEpR29vZ2xlIEluYy4gKEludGVsKQ"
     dm_img_inter = '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}'
 
     params.update(

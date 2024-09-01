@@ -38,7 +38,7 @@ class BaseLLM:
             with open(file_path, 'r', encoding='utf-8') as f:
                 json_obj = json.loads(f.read())
             assert type(json_obj.get('openai')) is list, f'读取chatgpt配置文件出错，请检查文件内容\n{file_path}'
-            u_list = [x.baseurl for x in self._OpenAiclients]
+            u_list = [x.base_url for x in self._OpenAiclients]
             for i in json_obj.get('openai'):
                 if i.get('baseurl') in u_list:
                     continue

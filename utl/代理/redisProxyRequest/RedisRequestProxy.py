@@ -369,7 +369,10 @@ class request_with_proxy:
                                                             ua=ua,
                                                             ck=cookie_data.ck if use_cookie_flag else "",
                                                             origin=origin,
-                                                            referer=referer)
+                                                            referer=referer,
+                                                            ticket='',
+                                                            version=""
+                                                            )
                         self._352_time = await self.redis.get__352_time()
                         await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
                         await self.redis.set__352_time(self._352_time)

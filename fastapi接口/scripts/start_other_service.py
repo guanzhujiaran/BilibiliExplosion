@@ -57,6 +57,10 @@ class OtherService:
         m.main(ShowLog=False)
 
     def _352_geetest_mq_client(self):
+        """
+        极验验证码
+        :return:
+        """
         from grpc获取动态.Utils.MQClient.VoucherMQClient import VoucherMQClient
         t_set = set()
         for i in range(3):
