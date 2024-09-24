@@ -11,6 +11,73 @@ import ssl
 
 
 class SSLFactory:
+    tls_ciphers = {
+        "Google Chrome": [
+            # TLS 1.3 ciphers (Chrome uses a limited set of ciphers for TLS 1.3)
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            # TLS 1.2 and below ciphers
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-CHACHA20-POLY1305"
+        ],
+        "Mozilla Firefox": [
+            # TLS 1.3 ciphers
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            # TLS 1.2 and below ciphers
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-AES256-GCM-SHA384"
+        ],
+        "Microsoft Edge": [
+            # TLS 1.3 ciphers (Edge is based on Chromium, so it's similar to Chrome)
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            # TLS 1.2 and below ciphers
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-CHACHA20-POLY1305"
+        ],
+        "Safari (on macOS and iOS)": [
+            # Safari does not support custom cipher suites configuration, but here are some commonly used ones
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "ECDHE-ECDSA-AES128-GCM-SHA256",
+            "ECDHE-ECDSA-AES256-GCM-SHA384",
+            "ECDHE-ECDSA-CHACHA20-POLY1305",
+            "ECDHE-RSA-AES128-GCM-SHA256",
+            "ECDHE-RSA-AES256-GCM-SHA384",
+            "ECDHE-RSA-CHACHA20-POLY1305"
+        ],
+        "OkHttp (Android library)": [
+            # OkHttp uses the system's default SSL context, which can vary by Android version
+            # For newer versions, these are some common ciphers:
+            "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+            "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+            "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256",
+            "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+            "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+            "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+            "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256",
+            "TLS_DHE_DSS_WITH_AES_128_GCM_SHA256",
+            "TLS_DHE_RSA_WITH_AES_256_GCM_SHA384",
+            "TLS_DHE_DSS_WITH_AES_256_GCM_SHA384"
+        ]
+    }
     ciphers = [
         "TLS_AES_128_GCM_SHA256",
         "TLS_AES_256_GCM_SHA384",
