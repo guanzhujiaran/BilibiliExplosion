@@ -40,7 +40,6 @@ class SSLFactory:
         context = ssl.SSLContext(ssl.PROTOCOL_TLS)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.maximum_version = ssl.TLSVersion.TLSv1_2
-
         context.set_alpn_protocols(["http/2"])
         context.set_ciphers(self.cipher_string)
         return context
