@@ -21,6 +21,9 @@ users.yaml
 !/github/my_operator/
 /b站app/bilireq/
 *.pt
+*.jpg
+*.png
+*.pkl
 /NUL
 /github/ChatGLM2-6B/.idea/inspectionProfiles/profiles_settings.xml
 /github/ChatGLM2-6B/.idea/inspectionProfiles/Project_Default.xml
