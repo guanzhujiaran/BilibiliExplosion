@@ -231,7 +231,6 @@ def gen_dm_args(params: dict):
             "dm_img_str": dm_img_str,
             "dm_cover_img_str": dm_cover_img_str,
             "dm_img_inter": dm_img_inter,
-            'order_avoided': True
         }
     )
 

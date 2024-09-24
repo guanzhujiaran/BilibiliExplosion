@@ -1,51 +1,72 @@
 # -*- coding: utf-8 -*-
+import asyncio.tasks
 import base64
-import httpx
+import random
 
+import httpx
+from bilibili.app.dynamic.v2.dynamic_pb2 import AdParam
 from bilibili.app.dynamic.v2.dynamic_pb2 import Config
 from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
-from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
-from grpc获取动态.grpc.makeMetaData import make_metadata
-from utl.代理.request_with_proxy import request_with_proxy
+from bilibili.app.dynamic.v2 import dynamic_pb2
+from grpc获取动态.Utils.metadata.makeMetaData import make_metadata
 
+event_loop = asyncio.get_event_loop()
 uid = 2
-
+url = "https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail"
 data_dict = {
-    'host_uid': int(uid),
-    'history_offset': '',
+    'uid': random.randint(1, 9223372036854775807),
+    'dyn_type': 2,
+    'rid': 326834723,
+    "ad_param": AdParam(
+        ad_extra=''
+        # ''.join(random.choices(string.ascii_uppercase + string.digits,
+        #                                 k=random.choice([x for x in range(1300, 1350)])))
+    ),
+    'player_args': PlayerArgs(qn=32, fnval=272, voice_balance=1),
+    'share_id': 'dt.dt-detail.0.0.pv',
+    'share_mode': 3,
     'local_time': 8,
-    'page': 99999,
-    'from': 'space'
+    'config': Config()
 }
 
-msg = dynamic_pb2.DynSpaceReq(**data_dict)
+grpc_req_message = dynamic_pb2.DynDetailReq(**data_dict)
+grpc_resp_msg = dynamic_pb2.DynDetailReply()
+msg = grpc_req_message
 proto = msg.SerializeToString()
 data = b"\0" + len(proto).to_bytes(4, "big") + proto
 headers = {
-    # "User-Agent": "Dalvik/2.1.0 (Linux; Android) os/android",
-    "User-Agent": "Mozilla/5.0",
-    "Content-Type": "application/grpc",
-    # "x-bili-device-bin": ""
+    "content-type": "application/grpc",
+    # 'Connection': 'close',
+    # "user-agent": ua,
+    # 'user-agent': random.choice(CONFIG.UA_LIST),
 }
-headers.update(dict(make_metadata("")))
+headers.update(dict(
+    event_loop.run_until_complete(make_metadata(""))
+))
 for k, v in list(headers.items()):
     if k == 'user-agent':
         headers.pop(k)
     if k.endswith('-bin'):
-        if type(v) == bytes:
+        if isinstance(v, bytes):
             headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
-resp = httpx.post("https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace", data=data,
+resp = httpx.post(url,
+                  data=data,
                   headers=headers,
-                  verify=False,
+                  proxies={
+                      'https://': "http://127.0.0.1:10809",
+                      'http://': "http://127.0.0.1:10809"
+                  }
                   )
-resp.raise_for_status()
-print(resp.headers)
-gresp = dynamic_pb2.DynSpaceRsp()
+print(headers)
+print(resp)
+print(resp.content)
+gresp = grpc_resp_msg
 gresp.ParseFromString(resp.content[5:])
 resp_dict = MessageToDict(gresp)
 
 print(resp_dict)
+
 
 # te = dynamic_pb2.DynSpaceRsp(resp_dict)
 # print(te)

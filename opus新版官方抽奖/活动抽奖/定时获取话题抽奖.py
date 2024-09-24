@@ -33,8 +33,8 @@ class pubArticleInfo(pydantic.BaseModel):
                 self.lastPubDate = datetime.fromtimestamp(int(contents))
                 log.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
-            log.warning(f"获取到上一次发布专栏的时间失败！使用当前时间！")
-            self.lastPubDate = datetime.fromtimestamp(int(time.time()))
+            log.warning(f"获取到上一次发布专栏的时间失败！使用0时间！")
+            self.lastPubDate = datetime.fromtimestamp(0)
 
     def save_lastPubTs(self):
         try:

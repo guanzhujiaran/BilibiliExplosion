@@ -320,7 +320,8 @@ async def some_middleware(request: Request, call_next):
                         headers=dict(response.headers), media_type=response.media_type)
     except Exception as e:
         myfastapi_logger.exception(e)
-        pushme('fastapi请求异常', traceback.format_exc())
+        if e.__str__() != 'No OpenAiClient is available' and e.__str__()!="Error code: 429 - {'error': {'message': '免费API限制每日200次请求，请00:00后再试，如有更多需求，请访问 https://buyca.shop 购买付费API。The free account is limited to 200 requests per day. Please try again after 00:00 the next day. If you have additional requirements, please visit https://buyca.shop to purchase a premium key.', 'type': 'chatanywhere_error', 'param': None, 'code': '429 TOO_MANY_REQUESTS'}}":
+            pushme('fastapi请求异常', traceback.format_exc())
         raise HTTPException(
             status_code=500,
             # detail 可以传递任何可以转换成JSON格式的数据

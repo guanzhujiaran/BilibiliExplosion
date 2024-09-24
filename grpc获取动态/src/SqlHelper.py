@@ -12,18 +12,7 @@ from loguru import logger
 from CONFIG import CONFIG
 
 op_db_lock = threading.Lock()
-sql_log = logger.bind(user='sql_log')
-
-
-# sql_log.add(
-#     CONFIG.root_dir + "grpc获取动态/src/log/sql_err.log",
-#     encoding="utf-8",
-#     enqueue=True,
-#     rotation="500MB",
-#     compression="zip",
-#     # retention="15 days",
-#     filter=lambda record: record["extra"].get('user') == "sql_log"
-# )  # 添加之后，遇到报错会全部写进log文件里面，之后自己进去一个个查就是了
+sql_log = logger.bind(user='fastapi')
 
 @sql_log.catch
 def lock_wrapper(func: callable) -> callable:

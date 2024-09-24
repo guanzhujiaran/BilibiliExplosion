@@ -1,29 +1,52 @@
 import asyncio
 import hashlib
+import json
 import random
+import time
 import urllib.parse
+import uuid
+
 from curl_cffi import requests
 from curl_cffi.requests import BrowserType
+import CONFIG
+from grpc获取动态.Utils.UserAgentParser import UserAgentParser
+from grpc获取动态.Utils.极验.models.captcha_models import GeetestRegInfo
 from grpc获取动态.grpc.bapi.base_log import bapi_log
 from grpc获取动态.grpc.bapi.models import LatestVersionBuild
+from utl.代理.SealedRequests import MYASYNCHTTPX
 from utl.代理.request_with_proxy import request_with_proxy
+from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
 
 proxy_req = request_with_proxy()
-comm_headers = {
-    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6",
-    "content-type": "application/json;charset=UTF-8",
-    "dnt": "1",
-    "sec-ch-ua": '"Not.A/Brand";v="8", "Chromium";v="114", "Microsoft Edge";v="114"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-site",
-    "user-agent": "Mozilla/5.0",
-}
+_my_sealed_req = MYASYNCHTTPX()
+_custom_proxy = {'http': CONFIG.CONFIG.my_ipv6_addr, 'https': CONFIG.CONFIG.my_ipv6_addr}
 
 
-def appsign(params, appkey='1d8b6e7d45233436', appsec='560c52ccd288fed045859ed18bffd973'):
+# _custom_proxy = {'http': 'http://127.0.0.1:1919', 'https': 'http://127.0.0.1:1919'}
+
+
+def gen_trace_id() -> str:
+    trace_id_uid = str(uuid.uuid4()).replace("-", "")[0:26].lower()
+    trace_id_hex = hex(int(round(time.time()) / 256)).lower().replace("0x", "")
+    trace_id = trace_id_uid + trace_id_hex + ":" + trace_id_uid[-10:] + trace_id_hex + ":0:0"
+    return trace_id
+
+
+def get_request_func(use_custom_proxy=False) -> callable:
+    if use_custom_proxy:
+        return _my_sealed_req.request
+    else:
+        return proxy_req.request_with_proxy
+
+
+def _gen_headers(*extra_headers) -> dict:
+    ua = random.choice(CONFIG.CONFIG.UA_LIST)
+    ua_parser = UserAgentParser(ua, is_mobile=False, fetch_dest='empty', fetch_mode='cors',
+                                fetch_site='same-site')
+    return ua_parser.get_headers_dict(*extra_headers)
+
+
+def appsign(params, appkey='1d8b6e7d45233436', appsec='560c52ccd288fed045859ed18bffd973') -> dict:
     """
     为请求参数进行 APP 签名
     :param params:
@@ -46,9 +69,10 @@ def get_latest_version_builds() -> [LatestVersionBuild]:
     return [LatestVersionBuild(**item) for item in resp_dict['data']]
 
 
-async def get_lot_notice(bussiness_type: int, business_id: str):
+async def get_lot_notice(bussiness_type: int, business_id: str, use_custom_proxy=False):
     """
     获取抽奖notice
+    :param use_custom_proxy:
     :param bussiness_type: 抽奖类型  12:充电 1：转发抽奖 10：预约抽奖
     :param business_id:
     :return:
@@ -59,10 +83,17 @@ async def get_lot_notice(bussiness_type: int, business_id: str):
             'business_type': bussiness_type,
             'business_id': business_id,
         }
-        resp = await proxy_req.request_with_proxy(url=url, method='get', params=params,
-                                                       headers=comm_headers,
-                                                       hybrid='1'
-                                                       )
+        if use_custom_proxy:
+            resp = await get_request_func(use_custom_proxy=use_custom_proxy)(url=url, method='get', params=params,
+                                                                             headers=_gen_headers(),
+                                                                             hybrid='1',
+                                                                             proxies=_custom_proxy
+                                                                             )
+        else:
+            resp = await get_request_func(use_custom_proxy=use_custom_proxy)(url=url, method='get', params=params,
+                                                                             headers=_gen_headers(),
+                                                                             hybrid='1',
+                                                                             )
         if resp.get('code') != 0:
             bapi_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
             await asyncio.sleep(10)
@@ -72,54 +103,247 @@ async def get_lot_notice(bussiness_type: int, business_id: str):
         return resp
 
 
-if __name__ == "__main__":
-    print([LatestVersionBuild(**x) for x in [
-        {
-            "build": 8000200,
-            "version": "8.0.0"
-        },
-        {
-            "build": 7810200,
-            "version": "7.81.0"
-        },
-        {
-            "build": 7800300,
-            "version": "7.80.0"
-        },
-        {
-            "build": 7790400,
-            "version": "7.79.0"
-        },
-        {
-            "build": 7780300,
-            "version": "7.78.0"
-        },
-        {
-            "build": 7770300,
-            "version": "7.77.0"
-        },
-        {
-            "build": 7760700,
-            "version": "7.76.0"
-        },
-        {
-            "build": 7750300,
-            "version": "7.75.0"
-        },
-        {
-            "build": 7740200,
-            "version": "7.74.0"
-        },
-        {
-            "build": 7730300,
-            "version": "7.73.0"
-        },
-        {
-            "build": 7720200,
-            "version": "7.72.0"
-        },
-        {
-            "build": 7710300,
-            "version": "7.71.0"
+async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_custom_proxy=False):
+    while 1:
+        url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
+        headers = _gen_headers({
+            "origin": "https://space.bilibili.com",
+            'referer': f"https://space.bilibili.com/{hostuid}/dynamic?spm_id_from=333.1368.list.card_avatar.click",
+            'cookie': '1'
+        })
+        dongtaidata = {
+            'offset': offset,
+            'host_mid': hostuid,
+            'timezone_offset': -480,
+            'platform': 'web',
+            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,forwardListHidden,ugcDelete,onlyfansQaCard',
+            'web_location': "333.999",
         }
-    ]][:10])
+        dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
+        dongtaidata.update({
+            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
+            "x-bili-web-req-json": json.dumps({"spm_id": "333.999"}, separators=(',', ':'))
+        })
+        wbi_sign = await get_wbi_params(dongtaidata)
+        dongtaidata.update({
+            'w_rid': wbi_sign['w_rid']
+        })
+        dongtaidata.update({
+            "wts": wbi_sign['wts']
+        })
+        url_params = url + '?' + urllib.parse.urlencode(dongtaidata, safe='[],:')
+        if use_custom_proxy:
+            req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET',
+                                                                            url=url_params,
+                                                                            headers=headers,
+                                                                            mode='rand',
+                                                                            hybrid='1',
+                                                                            proxies=_custom_proxy
+                                                                            )
+        else:
+            req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET',
+                                                                            url=url_params,
+                                                                            headers=headers,
+                                                                            mode='rand',
+                                                                            hybrid='1',
+                                                                            )
+        return req
+
+
+async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, rid: str | int | None = None,
+                                         dynamic_type: str | int | None = None, use_custom_proxy=False):
+    url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail'
+    headers = _gen_headers({
+        "origin": "https://t.bilibili.com",
+        'referer': f"https://t.bilibili.com/{dynamic_id}" if dynamic_id else f"https://t.bilibili.com/{rid}?type={dynamic_type}",
+        'priority': 'u=4',
+        'te': 'trailers',
+        'cookie': '1'
+    })
+    if dynamic_id:
+        data = {
+            'timezone_offset': -480,
+            'platform': 'web',
+            'gaia_source': 'main_web',
+            'id': dynamic_id,
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,commentsNewVersion',
+            'web_location': '333.1368',
+            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
+            "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
+        }
+    else:
+        data = {
+            'timezone_offset': -480,
+            'platform': 'web',
+            'gaia_source': 'main_web',
+            'rid': rid,
+            'type': dynamic_type,
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,commentsNewVersion',
+            'web_location': '333.1368',
+            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
+            "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
+        }
+    wbi_sign = await get_wbi_params(data)
+    data.update({
+        'w_rid': wbi_sign['w_rid'],
+        "wts": wbi_sign['wts']
+    })
+    url_with_params = url + '?' + urllib.parse.urlencode(data, safe='[],:')
+    if use_custom_proxy:
+        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url_with_params,
+                                                                                headers=headers,
+                                                                                mode='single', hybrid='1',
+                                                                                proxies=_custom_proxy
+                                                                                )
+    else:
+        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url_with_params,
+                                                                                headers=headers,
+                                                                                mode='single', hybrid='1',
+                                                                                )
+    return dynamic_req
+
+
+async def get_geetest_reg_info(v_voucher: str,
+                               h5_ua: str = "Mozilla/5.0 (Linux; Android 9; PCRT00 Build/PQ3A.190605.05081124; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 os/android model/PCRT00 build/8130300 osVer/9 sdkInt/28 network/2 BiliApp/8130300 mobi_app/android channel/master Buvid/XYC415CC0C4C410574E19A3772711795B96A8 sessionID/34420383 innerVer/8130300 c_locale/zh_CN s_locale/zh_CN disable_rcmd/0 themeId/1 sh/24 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 channel/master innerVer/8130300 osVer/9 network/2",
+                               buvid: str = "",
+                               ori: str = "",
+                               ref: str = "",
+                               ticket: str = "",
+                               version: str = "8.9.0"
+                               ) -> GeetestRegInfo | bool:
+    url = 'https://api.bilibili.com/x/gaia-vgate/v1/register'
+    data = {
+        "disable_rcmd": 0,
+        "mobi_app": "android",
+        "platform": "android",
+        "statistics": json.dumps({"appId": 1, "platform": 3, "version": version, "abtest": ""},
+                                 separators=(',', ':')),
+        "ts": int(time.time()),
+        "v_voucher": v_voucher,
+    }
+    data = appsign(data)
+    headers_raw = [
+        ('native_api_from', 'h5'),
+        ("cookie", f'Buvid={buvid}' if buvid else ''),
+        ('buvid', buvid if buvid else ''),
+        ('accept', 'application/json, text/plain, */*'),
+        ("referer", "https://www.bilibili.com/h5/risk-captcha"),
+        ('env', 'prod'),
+        ('app-key', 'android'),
+        ('env', 'prod'),
+        ('app-key', 'android'),
+        ("user-agent", h5_ua),
+        ('x-bili-trace-id', gen_trace_id()),
+        ("x-bili-aurora-eid", ''),
+        ('x-bili-mid', ''),
+        ('x-bili-aurora-zone', ''),
+        ('x-bili-gaia-vtoken', ''),
+        ('x-bili-ticket', ticket),
+        ('content-type', "application/x-www-form-urlencoded; charset=utf-8"),
+        # ('content-length', str(len(json.dumps(data).encode('utf-8')))),
+        ('accept-encoding', 'gzip')
+    ]
+    # data = urllib.parse.urlencode(data)
+    response = await get_request_func(use_custom_proxy=True)(
+        method='POST',
+        url=url,
+        data=data,
+        headers=headers_raw,
+        proxies=_custom_proxy
+    )
+    resp_json = response.json()
+    if resp_json.get('code') == 0:
+        if resp_json.get('data').get('geetest') is None:
+            bapi_log.error(f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
+            return False
+        bapi_log.debug(f"\n成功获取极验challenge：{resp_json}")
+        return GeetestRegInfo(
+            type=resp_json.get('data').get('type'),
+            token=resp_json.get('data').get('token'),
+            geetest_challenge=resp_json.get('data').get('geetest').get('challenge'),
+            geetest_gt=resp_json.get('data').get('geetest').get('gt')
+        )
+    else:
+        bapi_log.error(f"\n获取极验信息失败: {resp_json}")
+        return False
+
+
+async def validate_geetest(challenge, token, validate,
+                           h5_ua: str = "Mozilla/5.0 (Linux; Android 9; PCRT00 Build/PQ3A.190605.05081124; wv)"
+                                        " AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile "
+                                        "Safari/537.36 os/android model/PCRT00 build/8130300 osVer/9 sdkInt/28 network/2 "
+                                        "BiliApp/8130300 mobi_app/android channel/master "
+                                        "Buvid/XYC415CC0C4C410574E19A3772711795B96A8 sessionID/34420383 "
+                                        "innerVer/8130300 c_locale/zh_CN s_locale/zh_CN disable_rcmd/0 themeId/1 "
+                                        "sh/24 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 "
+                                        "channel/master innerVer/8130300 osVer/9 network/2",
+                           buvid: str = "",
+                           ori: str = "",
+                           ref: str = "",
+                           ticket: str = "",
+                           version: str = "8.9.0"
+                           ) -> str:
+    """
+    :param challenge:
+    :param token:
+    :param validate:
+    :param ua:
+    :return:
+    """
+    url = 'https://api.bilibili.com/x/gaia-vgate/v1/validate'
+    data = {
+        "challenge": challenge,
+        "disable_rcmd": 0,
+        "mobi_app": "android",
+        "platform": "android",
+        "seccode": validate + "|jordan",
+        "statistics": json.dumps({"appId": 1, "platform": 3, "version": version, "abtest": ""},
+                                 separators=(',', ':')),
+        "token": token,
+        "ts": int(time.time()),
+        "validate": validate
+    }
+    data = appsign(data)
+    headers_raw = [
+        ('native_api_from', 'h5'),
+        ("cookie", f'Buvid={buvid}' if buvid else ''),
+        ('buvid', buvid if buvid else ''),
+        ('accept', 'application/json, text/plain, */*'),
+        ("referer", "https://www.bilibili.com/h5/risk-captcha"),
+        ('env', 'prod'),
+        ('app-key', 'android'),
+        ('env', 'prod'),
+        ('app-key', 'android'),
+        ("user-agent", h5_ua),
+        ('x-bili-trace-id', gen_trace_id()),
+        ("x-bili-aurora-eid", ''),
+        ('x-bili-mid', ''),
+        ('x-bili-aurora-zone', ''),
+        ('x-bili-gaia-vtoken', ''),
+        ('x-bili-ticket', ticket),
+        ('content-type', "application/x-www-form-urlencoded; charset=utf-8"),
+        # ('content-length', str(len(urllib.parse.urlencode(data).encode('utf-8')))),
+        ('accept-encoding', 'gzip')
+    ]
+    # data = urllib.parse.urlencode(data)
+    response = await get_request_func(use_custom_proxy=True)(
+        method='POST',
+        url=url,
+        data=data,
+        headers=headers_raw,
+        proxies=_custom_proxy
+    )
+    resp_json = response.json()
+    if resp_json.get('code') != 0:
+        bapi_log.error(
+            f"\n发请求 {url} 验证validate极验失败:{challenge, token, validate}\n {resp_json}\n{data}\n{headers_raw}")
+        return ''
+    bapi_log.debug(f'\n发请求验证成功：{resp_json}')
+    return token
+
+
+if __name__ == "__main__":
+    _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
+    _____x = asyncio.run(get_space_dynamic_req_with_proxy(hostuid=95309300, offset='',
+                                                          use_custom_proxy=True))
+    print(_____x.json())

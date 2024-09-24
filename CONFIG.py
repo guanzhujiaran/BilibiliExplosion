@@ -145,5 +145,5 @@ class CONFIG:
             open_ai_api_key='hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25'
         ),
     ]
-    my_ipv6_addr = 'http://192.168.1.7:3128'
+    my_ipv6_addr = 'http://192.168.1.201:3128'
     RabbitMQConfig = RabbitMQConfig()

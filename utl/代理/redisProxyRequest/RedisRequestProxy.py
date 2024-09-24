@@ -28,7 +28,13 @@ class CookieWrapper:
     ck: str
     ua: str
     expire_ts: int
-    able: bool = True
+    times_352: bool = 0
+
+    @property
+    def able(self) -> bool:
+        if self.times_352 > 10:
+            return False
+        return True
 
 
 @dataclass
@@ -196,7 +202,7 @@ class request_with_proxy:
                 # else:
                 #     break
                 break
-            cookie_data = CookieWrapper(ck=ck, ua=ua, expire_ts=int(time.time() + 4 * 3600))  # cookie时间长一点应该没问题吧
+            cookie_data = CookieWrapper(ck=ck, ua=ua, expire_ts=int(time.time() + 24 * 3600))  # cookie时间长一点应该没问题吧
             self.fake_cookie_list.append(cookie_data)
         logger.debug(f'当前cookie池数量：{len(self.fake_cookie_list)}')
         return cookie_data
@@ -273,7 +279,7 @@ class request_with_proxy:
         while True:
             cookie_data = await self.Get_Bili_Cookie(ua)
             if hybrid_flag:
-                hybrid = random.choices([_hybrid_t_w, _hybrid_f_w], weights=[1, 9], k=1)[0]
+                hybrid: bool = random.choices([True, False], weights=[_hybrid_t_w, _hybrid_f_w], k=1)[0]
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
                 'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
@@ -347,7 +353,7 @@ class request_with_proxy:
                     continue
                 if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
                     if use_cookie_flag:
-                        cookie_data.able = False
+                        cookie_data.times_352 += 1
                     status = -412
                     # 代理被风控
                     temp = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'),
@@ -430,7 +436,7 @@ class request_with_proxy:
         headers = {
             'cookie': "Hm_lvt_7ed65b1cc4b810e9fd37959c9bb51b31=1680258680; Hm_lvt_e0cc8b6627fae1b9867ddfe65b85c079=1682493581; channelid=0; sid=1688887169922522; _gcl_au=1.1.1132663223.1688887171; __51vcke__K3h4gFH3WOf3aJqX=6c6a659f-9ac6-5a8c-abb0-bd2e2aaf2dd6; __51vuft__K3h4gFH3WOf3aJqX=1688887171061; _gid=GA1.2.1163372563.1688887171; __51uvsct__K3h4gFH3WOf3aJqX=2; _ga_DC1XM0P4JL=GS1.1.1688887171.1.1.1688889750.0.0.0; __vtins__K3h4gFH3WOf3aJqX=%7B%22sid%22%3A%20%22c86f1b8f-1e78-5ad1-86e8-f487d239c80b%22%2C%20%22vd%22%3A%202%2C%20%22stt%22%3A%20432874%2C%20%22dr%22%3A%20432874%2C%20%22expires%22%3A%201688891551028%2C%20%22ct%22%3A%201688889751028%7D; _ga=GA1.2.1430092584.1680258680; _gat=1; _ga_FWN27KSZJB=GS1.2.1688889318.2.1.1688889751.0.0.0",
             'Sec-Fetch-Site': 'same-origin',
-            'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43",
+            'user-agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -479,7 +485,7 @@ class request_with_proxy:
 
     async def get_proxy_from_zdayip(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -526,7 +532,7 @@ class request_with_proxy:
 
     async def get_proxy_from_66daili(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43",
+            'user-agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -622,7 +628,7 @@ class request_with_proxy:
 
     async def get_proxy_from_taiyangdaili(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43",
+            'user-agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -668,7 +674,7 @@ class request_with_proxy:
 
     async def get_proxy_from_kxdaili_1(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -713,7 +719,7 @@ class request_with_proxy:
 
     async def get_proxy_from_kxdaili_2(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -758,7 +764,7 @@ class request_with_proxy:
 
     async def get_proxy_from_ip3366_1(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -804,7 +810,7 @@ class request_with_proxy:
 
     async def get_proxy_from_ip3366_2(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -851,7 +857,7 @@ class request_with_proxy:
 
     async def get_proxy_from_qiyun(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -897,7 +903,7 @@ class request_with_proxy:
 
     async def get_proxy_from_ihuan(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -945,7 +951,7 @@ class request_with_proxy:
 
     async def get_proxy_from_docip(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -987,7 +993,7 @@ class request_with_proxy:
 
     async def get_proxy_from_openproxylist(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1029,7 +1035,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxyhub(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.43",
+            'user-agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1079,10 +1085,431 @@ class request_with_proxy:
     # endregion
 
     # region Github获取的text格式的代理，每行格式为ip:port
+    async def get_proxy_from_SevenworksDev_proxy_list_https(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/https.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_SevenworksDev_proxy_list_http(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/http.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_monosans_proxy_list(self) -> tuple[list, bool]:
+
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_r00tee_Proxy_List(self) -> tuple[list, bool]:
+
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Https.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_themiralay_Proxy_List_World(self) -> tuple[list, bool]:
+
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/themiralay/Proxy-List-World/refs/heads/master/data.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_lalifeier_proxy_scraper_https(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/https.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip().split(' ')[0],
+                        'https': 'http://' + i.strip().split(' ')[0]
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_lalifeier_proxy_scraper_http(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/http.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip().split(' ')[0],
+                        'https': 'http://' + i.strip().split(' ')[0]
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_claude89757_free_https_proxies(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/claude89757/free_https_proxies/refs/heads/main/free_https_proxies.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_Simatwa_free_proxies_http(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/Simatwa/free-proxies/master/files/http.json'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.json().get('proxies'):
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_zloi_user_hideipme(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/main/connect.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + ':'.join(i.strip().split(':')[0:2]),
+                        'https': 'http://' + ':'.join(i.strip().split(':')[0:2])
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_elliottophellia_proxylist_http(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://cdn.rei.my.id/proxy/pHTTP'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if i.strip():
+                    append_dict = {
+                        'http': i.strip(),
+                        'https': i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_elliottophellia_proxylist_socks5(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': random.choice(CONFIG.UA_LIST)
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://cdn.rei.my.id/proxy/pSOCKS5'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if i.strip():
+                    append_dict = {
+                        'http': i.strip(),
+                        'https': i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
 
     async def get_proxy_from_officialputuid_KangProxy_KangProxy_https(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1119,7 +1546,7 @@ class request_with_proxy:
 
     async def get_proxy_from_officialputuid_KangProxy_KangProxy_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1156,7 +1583,7 @@ class request_with_proxy:
 
     async def get_proxy_from_MuRongPIG_Proxy_Master(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1193,7 +1620,7 @@ class request_with_proxy:
 
     async def get_proxy_from_roosterkid_openproxylist_main_HTTPS_RAW(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1233,7 +1660,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxy_casals_ar_main_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1273,7 +1700,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Zaeem20_FREE_PROXIES_LIST_master_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1312,7 +1739,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Zaeem20_FREE_PROXIES_LIST_master_https(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1351,7 +1778,7 @@ class request_with_proxy:
 
     async def get_proxy_from_TheSpeedX_PROXY_List_master_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1391,7 +1818,7 @@ class request_with_proxy:
 
     async def get_proxy_from_yemixzy_proxy_list_main_proxies_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1431,7 +1858,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Free_Proxies_blob_main_proxy_files_http_proxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1470,7 +1897,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Free_Proxies_blob_main_proxy_files_https_proxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1510,7 +1937,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxifly_free_proxy_list_main_proxies_protocols_http_data(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1551,7 +1978,7 @@ class request_with_proxy:
 
     async def get_proxy_from_sarperavci_freeCheckedHttpProxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1591,7 +2018,7 @@ class request_with_proxy:
 
     async def get_proxy_from_prxchk_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1631,7 +2058,7 @@ class request_with_proxy:
 
     async def get_proxy_from_andigwandi_free_proxy(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
 
         Get_proxy_success = True
@@ -1671,7 +2098,7 @@ class request_with_proxy:
 
     async def get_proxy_from_elliottophellia_yakumo(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1708,7 +2135,7 @@ class request_with_proxy:
 
     async def get_proxy_from_im_razvan_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1745,7 +2172,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxy4parsing_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1782,7 +2209,7 @@ class request_with_proxy:
 
     async def get_proxy_from_mmpx12_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1822,7 +2249,7 @@ class request_with_proxy:
     # region json格式代理（每个函数的json响应可能都不一样，要换里面解析json的方式）
     async def get_proxy_from_t0mer_free_proxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -1857,7 +2284,7 @@ class request_with_proxy:
 
     async def get_proxy_from_omegaproxy(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.79',
+            'User-Agent': random.choice(CONFIG.UA_LIST),
         }
         Get_proxy_success = True
         req = ''
@@ -2127,6 +2554,90 @@ class request_with_proxy:
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_omegaproxy())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_elliottophellia_proxylist_socks5())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_elliottophellia_proxylist_http())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_zloi_user_hideipme())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_Simatwa_free_proxies_http())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_claude89757_free_https_proxies())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_lalifeier_proxy_scraper_http())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_lalifeier_proxy_scraper_https())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_themiralay_Proxy_List_World())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_r00tee_Proxy_List())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_monosans_proxy_list())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_SevenworksDev_proxy_list_https())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_SevenworksDev_proxy_list_http())
             task_list.append(task)
         except Exception as e:
             traceback.print_exc()

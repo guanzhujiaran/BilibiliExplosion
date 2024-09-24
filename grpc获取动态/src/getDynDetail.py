@@ -154,7 +154,7 @@ class DynDetailScrapy:
         temp_rid = dynData.get('extend').get('businessId')
         dynamic_id = dynData.get('extend').get('dynIdStr')
         dynamic_calculated_ts = int((int(dynamic_id) + 6437415932101782528) / 4294939971.297)
-        if time.time() - dynamic_calculated_ts < self.stop_limit_time:
+        if time.time() - dynamic_calculated_ts < self.stop_limit_time and time.time() - dynamic_calculated_ts > 0:
             async with self.stop_Flag_lock:
                 self.log.debug(f'遇到终止动态！连续终止数+1！\n{dynData}')
                 self.stop_counter.cur_stop_continuous_num += 1

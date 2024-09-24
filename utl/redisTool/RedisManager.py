@@ -1,7 +1,6 @@
 import asyncio
 import time
 import traceback
-
 from typing import Union, Any, List, Callable
 from datetime import timedelta
 from redis import asyncio as redis
@@ -167,3 +166,100 @@ class RedisManagerBase:
             else:
                 async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
                     return await r.setex(name=key, value=value, time=_time)
+
+    # region 集合Set操作
+    @retry
+    async def _sadd(self, set_name, val):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
+                return await r.sadd(set_name, val)
+
+    @retry
+    async def _sget_rand(self, set_name):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
+                return r.srandmember(set_name)
+
+    @retry
+    async def _scount(self, set_name):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
+                return await r.scard(set_name)
+
+    @retry
+    async def _sget_all(self, set_name):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
+                return await r.smembers(set_name)
+
+    @retry
+    async def _srem(self, set_name, *val):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
+                return await r.srem(set_name, *val)
+
+    # endregion
+
+    # region 有序集合ZSet操作
+
+    @retry
+    async def _z_exist(self, key, element):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zscore(key, element) is not None
+
+    @retry
+    async def _zadd(self, key, mapping: dict):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zadd(key, mapping, )
+
+    @retry
+    async def _zscore_change(self, key, element, score_change: int):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zincrby(key, score_change, element)
+
+    @retry
+    async def _zget_range(self, key, start: int, end: int, num: int = None, offset: int = None):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zrange(key, start, end, num=num, offset=offset)
+
+    @retry
+    async def _zget_range_by_score(self, key, min_score: int, max_score: int, start: int = None, num: int = None):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zrangebyscore(key, min_score, max_score, start=start, num=num, )
+
+    @retry
+    async def _zdel_elements(self, key, *elements_to_remove):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zrem(key, *elements_to_remove)
+
+    @retry
+    async def _zdel_range(self, key, start: int, end: int):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zremrangebyrank(key, start, end)
+
+    # endregion
+
+    @retry
+    async def _hmset(self, name, field_values):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
+                return await r.hset(name=name, mapping=field_values)
+
+    @retry
+    async def _hmgetall(self, name, ):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
+                return await r.hgetall(name=name)
+
+    @retry
+    async def _hmdel(self, name):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
+                return await r.delete(name)

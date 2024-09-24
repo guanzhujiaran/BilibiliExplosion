@@ -1,5 +1,6 @@
 {
-    "openai": [{
+    "openai": [
+        {
             "baseurl": "https://api.chatanywhere.tech/v1",
             "open_ai_api_key": "sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS"
         },
@@ -22,6 +23,14 @@
         {
             "baseurl": "https://api.openai-hk.com/v1",
             "open_ai_api_key": "hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25"
+        },
+        {
+            "baseurl": "https://api.chatnio.net/v1",
+            "open_ai_api_key": "sk-9919d9ea3d053a0b61d979843dd0ba6622dc88ec38fc2651"
+        },
+        {
+            "baseurl": "https://ngedlktfticp.cloud.sealos.io/v1",
+            "open_ai_api_key": "sk-qKvrmwYHeuYMPhepD8E48d71A4Fa4353Aa13082331243e25"
         }
     ]
 }

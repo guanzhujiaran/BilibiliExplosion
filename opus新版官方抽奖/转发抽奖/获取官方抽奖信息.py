@@ -208,6 +208,7 @@ class GenerateOfficialLotCv(GenerateCvBase):
         next_day = today + _
         title = f'{next_day.date().month}.{next_day.date().day}之后的官方抽奖'
         article_content = article_content + split_article_content + article_content1
+        self.save_article_to_local(title, article_content)
         banner_url = ''
         summary = ''.join(re.findall('>(.*?)<', article_content)).replace(' ', '').replace('\t', ' ')[0:500]
         words = len(
@@ -265,6 +266,7 @@ class GenerateOfficialLotCv(GenerateCvBase):
         next_day = today + _
         title = f'{next_day.date().month}.{next_day.date().day}之后的充电抽奖'
         article_content = article_content + split_article_content + article_content1
+        self.save_article_to_local(title, article_content)
         banner_url = ''
         summary = ''.join(re.findall('>(.*?)<', article_content)).replace(' ', '').replace('\t', ' ')[0:500]
         words = len(
@@ -442,11 +444,8 @@ class ExctractOfficialLottery:
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
         update_lots_lot_ids = [int(x['lottery_id']) for x in all_lots if
-                               (
-                                       int(time.time())
-                                       - int(x['ts'])  # x['ts'] 是api请求之后生成的时间戳
-                               )
-                               <= latest_lots_judge_ts]
+                               (int(time.time()) - int(x['ts']))
+                               <= latest_lots_judge_ts]  # x['ts'] 是api请求之后生成的时间戳
         # 获取到的更新抽奖的lot_id
         if len(update_lots_lot_ids) == len(all_lots):
             update_lots_lot_ids = []
@@ -458,11 +457,9 @@ class ExctractOfficialLottery:
                                  x['status'] != 2 and x['status'] != -1 and x['business_type'] == 1]
         latest_updated_official_lot_data = [x for x in all_lot_official_data if
                                             int(x['lottery_id']) in update_lots_lot_ids]
-
         all_lot_charge_data = [x for x in freshed_all_lot_datas if
                                x['status'] != 2 and x['status'] != -1 and x['business_type'] == 12]
         latest_updated_charge_lot_data = [x for x in all_lot_charge_data if int(x['lottery_id']) in update_lots_lot_ids]
-
         df1 = pd.DataFrame(all_lot_official_data)
         df1.to_csv(os.path.join(self.__dir, 'log/全部官抽.csv'), index=False, header=True)
         df2 = pd.DataFrame(latest_updated_official_lot_data)
@@ -630,6 +627,7 @@ class ExctractOfficialLottery:
             tuple[list[LotDetail], list[LotDetail]]:
         """
          函数入口
+        :param debug_mode:
         :param latest_lots_judge_ts:
         :param force_push: 是否强制推送
         :return:
@@ -650,12 +648,13 @@ class ExctractOfficialLottery:
             gc = GenerateOfficialLotCv(cookie3, ua3, csrf3, buvid3)
             # gc.post_flag = False  # 不直接发布
             fabu_text = ''
-            if latest_official_lot_detail:
-                gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
-                fabu_text += '官方抽奖专栏\n'
-            if latest_charge_lot_detail:
-                gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
-                fabu_text += '充电抽奖专栏\n'
+            # if latest_official_lot_detail or force_push:
+
+            gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
+            fabu_text += '官方抽奖专栏\n'
+            # if latest_charge_lot_detail or force_push:
+            gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
+            fabu_text += '充电抽奖专栏\n'
             if fabu_text:
                 fabu_text = '已发布专栏：\n' + fabu_text
             else:
@@ -676,4 +675,4 @@ class ExctractOfficialLottery:
 if __name__ == '__main__':
     m = ExctractOfficialLottery()
     # m.Get_All_Flag = True  # 为True时重新获取所有的抽奖，为False时将更新的内容附加在所有的后面
-    asyncio.run(m.get_repost_count('940628499647954947'))
+    asyncio.run(m.main(1725304229))

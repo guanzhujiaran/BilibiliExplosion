@@ -17,7 +17,7 @@ log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_352Vouche
         level="WARNING",
         encoding="utf-8",
         enqueue=True,
-        rotation="500MB",
+        rotation="100MB",
         compression="zip",
         retention="15 days",
         filter=lambda record: record["extra"].get('user') == "-352Voucher",
@@ -58,7 +58,7 @@ class VoucherMQClient(BasicMQServer):
 
 if __name__ == '__main__':
     threads = set()
-    for i in range(3):
+    for i in range(10):
         __ = VoucherMQClient()
         thread = Thread(target=__.start_voucher_break_consumer)
         thread.start()

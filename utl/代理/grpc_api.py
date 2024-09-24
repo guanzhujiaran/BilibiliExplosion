@@ -97,8 +97,8 @@ class BiliGrpc:
             try:
                 resp = await self.mygrpc_api.grpc_get_dynamic_detail_by_type_and_rid(rid, dynamic_type)
                 return resp
-            except:
-                self.log.error(traceback.format_exc(1))
+            except Exception as e:
+                self.log.exception(e)
                 await asyncio.sleep(10)
 
     async def grpc_get_space_dyn_by_uid(self, uid: int, history_offset: str = '', page: int = 1) -> dict:

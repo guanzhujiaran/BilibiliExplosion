@@ -15,7 +15,8 @@ from typing import Dict, Any, Union
 import subprocess
 from functools import partial
 
-from grpc获取动态.grpc.bapi.biliapi import get_lot_notice, proxy_req
+from grpc获取动态.grpc.bapi.biliapi import get_lot_notice, proxy_req, get_space_dynamic_req_with_proxy, \
+    get_polymer_web_dynamic_detail
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
@@ -761,56 +762,6 @@ class GetOthersLotDyn:
         return self.queriedData.gitee_dyn_id_list
 
     # region 获取uidlist中的空间动态
-    async def get_space_dynamic_req_with_proxy(self, hostuid: Union[int, str], offset: str):
-        '''
-        获取动态空间的response
-        :param hostuid:要访问的uid
-        :param offset:
-        :return:reqtext
-        '''
-        ua = random.choice(CONFIG.UA_LIST)
-        headers = {
-            'user-agent': ua,
-            'cookie': '1',
-            "origin": "https://space.bilibili.com",
-            'referer': f"https://space.bilibili.com/{hostuid}/dynamic"
-        }
-        dongtaidata = {
-            'offset': offset,
-            'host_mid': hostuid,
-            'timezone_offset': -480,
-            'platform': 'web',
-            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,forwardListHidden,ugcDelete',
-            'web_location': "333.999",
-        }
-        dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
-        dongtaidata.update({
-            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
-            "x-bili-web-req-json": json.dumps({"spm_id": "333.999"}, separators=(',', ':'))
-        })
-        wbi_sign = await get_wbi_params(dongtaidata)
-        dongtaidata.update({
-            'w_rid': wbi_sign['w_rid']
-        })
-        dongtaidata.update({
-            "wts": wbi_sign['wts']
-        })
-
-        url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
-        url_params = url + '?' + urllib.parse.urlencode(dongtaidata, safe='[],:')
-        try:
-            req = await proxy_req.request_with_proxy(method='GET',
-                                                     url=url_params,
-                                                     headers=headers,
-                                                     # data=dongtaidata,
-                                                     verify=False,
-                                                     mode='rand',
-                                                     hybrid='1'
-                                                     )
-            return req
-        except Exception as e:
-            get_others_lot_log.exception(f'Exception while getting space history dynamic {hostuid} {offset}!\n{e}')
-            return await self.get_space_dynamic_req_with_proxy(hostuid, offset)
 
     def solveSpaceDetailResp(self, space_req_dict: dict):  # 直接处理
         '''
@@ -1025,7 +976,7 @@ class GetOthersLotDyn:
                     'ttl': 1
                 }
             else:
-                dyreq_dict = await self.get_space_dynamic_req_with_proxy(uid, offset)
+                dyreq_dict = await get_space_dynamic_req_with_proxy(uid, offset)
                 dyreq_dict = await addSpaceCardToDb(dyreq_dict)
             try:
                 if dyreq_dict.get('data').get('items'):
@@ -1186,7 +1137,7 @@ class GetOthersLotDyn:
         get_dyn_resp_result = await asyncio.gather(*task_list, return_exceptions=False)
         get_others_lot_log.info(f'获取动态报错结果：{[x for x in get_dyn_resp_result if x]}')
 
-    async def get_dyn_detail_resp(self, dynamic_id, _cookie="", _useragent="", dynamic_type=2) -> dict:
+    async def get_dyn_detail_resp(self, dynamic_id, dynamic_type=2) -> dict:
         """
         返回{
                         'code':0,
@@ -1195,8 +1146,6 @@ class GetOthersLotDyn:
                         }
                     }这样的dict
         :param dynamic_id:
-        :param _cookie:
-        :param _useragent:
         :param dynamic_type:
         :return:
         """
@@ -1225,63 +1174,15 @@ class GetOthersLotDyn:
                         "item": dynamic_req
                     }
                 }
-        if _cookie == '':
-            headers = {
-                'referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
-                'user-agent': random.choice(CONFIG.UA_LIST),
-                'cookie': '1',
-                "origin": "https://t.bilibili.com",
-            }
-        else:
-            headers = {
-                'referer': f'https://t.bilibili.com/{dynamic_id}',
-                # 'Connection': 'close',
-                'user-agent': random.choice(CONFIG.UA_LIST),
-                'cookie': _cookie
-                # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
-                #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
-                # 'X-Real-IP': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
-                #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
-                # 'From': 'bingbot(at)microsoft.com',
-            }
-        url = 'http://api.bilibili.com/x/polymer/web-dynamic/v1/detail'
-        data = {
-            'timezone_offset': -480,
-            'platform': 'web',
-            'gaia_source': 'main_web',
-            'id': dynamic_id,
-            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,'
-                        'ugcDelete',
-            'web_location': '333.1368',
-            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
-            "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
-        }
-        if dynamic_type != 2:
-            data = {
-                'timezone_offset': -480,
-                'platform': 'web',
-                'gaia_source': 'main_web',
-                'rid': dynamic_id,
-                'type': dynamic_type,
-                'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,'
-                            'ugcDelete',
-                'web_location': '333.1368',
-                "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
-                "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
-            }
-        wbi_sign = await get_wbi_params(data)
-        data.update({
-            'w_rid': wbi_sign['w_rid'],
-            "wts": wbi_sign['wts']
-        })
-        url_with_params = url + '?' + urllib.parse.urlencode(data, safe='[],:')
         try:
             if not dynamic_req:
-                dynamic_req = await proxy_req.request_with_proxy(method='GET', url=url_with_params, headers=headers,
-                                                                 mode='single', hybrid='1')
+                if dynamic_type != 2:
+                    dynamic_req = await get_polymer_web_dynamic_detail(rid=dynamic_id, dynamic_type=dynamic_type)
+                else:
+                    dynamic_req = await get_polymer_web_dynamic_detail(dynamic_id=dynamic_id, )
         except Exception as e:
             get_others_lot_log.exception(e)
-            return await self.get_dyn_detail_resp(dynamic_id, _cookie, _useragent)
+            return await self.get_dyn_detail_resp(dynamic_id, )
         return dynamic_req
 
     async def solve_dynamic_item_detail(self, dynamic_id, dynamic_req: dict) -> dict:
@@ -1689,8 +1590,7 @@ class GetOthersLotDyn:
                     }
                     for k, v in fake_cookie.items():
                         fake_cookie_str += f'{k}={v}; '
-                dynamic_resp = await self.get_dyn_detail_resp(dynamic_id, fake_cookie_str,
-                                                              random.choice(CONFIG.UA_LIST),
+                dynamic_resp = await self.get_dyn_detail_resp(dynamic_id,
                                                               dynamic_type=dynamic_type)  # 需要增加假的cookie
                 dynamic_detail = await self.solve_dynamic_item_detail(dynamic_id, dynamic_resp)
                 if dynamic_type == 2:

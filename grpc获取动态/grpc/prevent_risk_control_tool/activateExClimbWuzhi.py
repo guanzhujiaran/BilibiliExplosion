@@ -62,7 +62,7 @@ class APIExClimbWuzhi:
     CPUCoreNum: int = 4
     _uuid: str = ''
     language: str = "zh-CN"
-    timezone: str = "Asia/Hong_Kong"
+    timezone: str = "Asia/Shanghai"
     timezoneOffset: int = -480
     renderer_id: str = ''
     renderer: str = ''

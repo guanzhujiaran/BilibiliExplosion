@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import datetime
 import json
+import os
 import random
 import time
 import urllib.parse
@@ -24,6 +25,7 @@ class GenerateCvBase:
         self.username = ''
         self.uid = ''
         self.post_flag = True  # 是否直接发布
+        self.current_dir = os.path.dirname(os.path.abspath(__file__))
 
         def login_check(_cookie, _ua):
             headers = {
@@ -39,7 +41,6 @@ class GenerateCvBase:
                 return 1
             else:
                 print('登陆失败,请重新登录')
-                sys.exit('登陆失败,请重新登录')
 
         login_check(self.cookie, self.ua)
 
@@ -97,6 +98,8 @@ class GenerateCvBase:
     def get_cv_aid(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint, tags,
                    image_urls,
                    origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, csrf):
+        if not self.uid or not self.csrf or not self.username:
+            return
         url = 'https://api.bilibili.com/x/article/creative/draft/addupdate'
         headers = {
             'accept': 'application/json, text/javascript, */*; q=0.01',
@@ -149,6 +152,8 @@ class GenerateCvBase:
                   image_urls,
                   origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, aid, up_reply_closed,
                   comment_selected, publish_time, items, platform, buvid, device, build, mobi_app, csrf):
+        if not self.uid or not self.csrf or not self.username:
+            return
         data = {
             'title': title,
             'banner_url': banner_url,
@@ -366,3 +371,13 @@ class GenerateCvBase:
             pushme(f'提交专栏【{title}】失败！', req.text)
 
     # endregion
+
+    def save_article_to_local(self, title, content, ):
+        try:
+            article_path = os.path.join(self.current_dir, f'../PubArticle/')
+            if not os.path.exists(article_path):
+                os.mkdir(article_path)
+            with open(os.path.join(article_path, f'{title}.txt'), 'w', encoding='utf-8') as f:
+                f.write(content)
+        except Exception as e:
+            pushme(f'保存文章【{title}】失败！', str(e))

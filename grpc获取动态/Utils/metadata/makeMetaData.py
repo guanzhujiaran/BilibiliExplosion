@@ -1,22 +1,20 @@
 # -*- coding: utf-8 -*-
 import copy
-
+import gzip
+import secrets
 import string
-
-import grpc
 import hmac
-
 import base64
 import hashlib
-import json
 import random
 import re
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from google.protobuf.json_format import MessageToDict
-from grpc import aio
 from loguru import logger
+
+from grpc获取动态.grpc.bapi.biliapi import appsign
 from utl.代理.SealedRequests import MYASYNCHTTPX
 
 myreq = MYASYNCHTTPX()
@@ -98,17 +96,10 @@ def fake_buvid():
 
 
 def gen_trace_id() -> str:
-    random_id = "".join(random.choices("0123456789abcdefghijklmnopqrstuvwxyz", k=32))
-    random_trace_id = random_id[:24]
-    b_arr = [0] * 3
-    ts = int(time.time())
-    for i in reversed(range(3)):
-        ts >>= 8
-        b_arr[i] = ts % 256 if (ts // 128) % 2 == 0 else ts % 256 - 256
-    for i in range(3):
-        random_trace_id += "{:02x}".format(b_arr[i] & 0xFF)
-    random_trace_id += random_id[-2:]
-    return f"{random_trace_id}:{random_trace_id[16:]}:0:0"
+    trace_id_uid = str(uuid.uuid4()).replace("-", "")[0:26].lower()
+    trace_id_hex = hex(int(round(time.time()) / 256)).lower().replace("0x", "")
+    trace_id = trace_id_uid + trace_id_hex + ":" + trace_id_uid[-10:] + trace_id_hex + ":0:0"
+    return trace_id
 
 
 class gen_x_bili_ticket:
@@ -182,122 +173,20 @@ class MetaDataNeedInfo:
             logger.error(f'{build, device_model, osver, version_name, brand, channel}')
 
 
-def make_base_metadata(
-        access_key,
-        brand='Xiaomi',
-        Dalvik="Dalvik/2.1.0 (Linux; U; Android 13; 22081212C Build/TQ2A.230505.002.A1)",
-        version_name="7.63.0",
-        build=7630200,
-        channel='bili',
-        proxy=None
-) -> dict:
-    """
-    不带bili-ticket的基础metadata
-    :param access_key:
-    :param brand:
-    :param Dalvik:
-    :param version_name:
-    :param build:
-    :param channel:
-    :param proxy:
-    :return:
-    """
-    mid = 0
-    metaDataNeedInfo = MetaDataNeedInfo()
-    metaDataNeedInfo.generate_ua_from_Dalvik_appVer(Dalvik, version_name, build, channel, brand)
-    BUVID = fake_buvid()
-    device_model = metaDataNeedInfo.device_model
-    fp_generator = Fp(BUVID, device_model, "")
-    gen_ts = int(time.time() - random.randint(0, 15 * 3600 * 24))
-    fp = fp_generator.gen(gen_ts)
-    device_params = {
-        "app_id": 1,
-        "build": metaDataNeedInfo.build,
-        "buvid": BUVID,
-        "mobi_app": "android",
-        "platform": "android",
-        "channel": metaDataNeedInfo.channel,
-        "brand": metaDataNeedInfo.brand,
-        "model": device_model,
-        "device": "phone",
-        "osver": metaDataNeedInfo.osver,
-        "fp_local": fp_generator.gen(gen_ts + random.randint(10, 60)),
-        "fp_remote": fp,
-        "version_name": metaDataNeedInfo.version_name,
-        "fp": fp,
-        "fts": gen_ts
-    }
-
-    device_info_bytes = Device(**device_params).SerializeToString()
-    metadata_params = {
-        "mobi_app": "android",
-        "build": metaDataNeedInfo.build,
-        "channel": metaDataNeedInfo.channel,
-        "buvid": BUVID,
-        "platform": "android"
-    }
-    metadata = {
-        "accept-encoding": "identity",
-        "grpc-accept-encoding": "identity, gzip",
-        "env": "prod",
-        "app-key": "android64",
-        'user-agent': metaDataNeedInfo.ua,
-        "x-bili-trace-id": gen_trace_id(),
-        "x-bili-aurora-eid": "",
-        "x-bili-mid": str(mid) if mid else "",
-        "x-bili-aurora-zone": "",
-        "x-bili-gaia-vtoken": "",
-        'x-bili-ticket': '',
-        "x-bili-metadata-bin": Metadata(**metadata_params).SerializeToString(),
-        "x-bili-device-bin": device_info_bytes,
-        "x-bili-network-bin": Network(type=NetworkType.WIFI, oid=random.choice(['46000',
-                                                                                '46001',
-                                                                                '46002',
-                                                                                '46003',
-                                                                                '46601',
-                                                                                '46606',
-                                                                                '46668',
-                                                                                '46688'
-                                                                                ])).SerializeToString(),
-        "x-bili-restriction-bin": Restriction(
-            # teenagers_mode=False, lessons_mode=False, mode=ModeType.NORMAL, review=True, disable_rcmd=False
-        ).SerializeToString(),
-        "x-bili-local-bin": Locale(
-            c_locale=LocaleIds(
-                language='zh',
-                region='CN'
-            ),
-            s_locale=LocaleIds(
-                language='zh',
-                region='CN'
-            ),
-        ).SerializeToString(),
-        "x-bili-exps-bin": Exps().SerializeToString(),
-        "buvid": BUVID,
-        "x-bili-fawkes-request-bin": FawkesReq(
-            appkey="android64", env="prod", session_id=random_id()
-        ).SerializeToString(),
-        'content-type': "application/grpc"
-        # "x-bili-ticket":gen_random_x_bili_ticket(BUVID), # ticket没有搞明白怎么获取，应该是发一个请求，然后将这个请求的string作为参数，不变
-    }
-
-    if access_key:
-        metadata["authorization"] = f"identify_v1 {access_key}"
-        metadata["x-bili-aurora-eid"] = gen_aurora_eid(mid)
-    return metadata
-
-
 async def make_metadata(
         access_key,
         brand='Xiaomi',
         Dalvik="Dalvik/2.1.0 (Linux; U; Android 13; 22081212C Build/TQ2A.230505.002.A1)",
-        version_name="7.63.0",
-        build=7630200,
+        version_name="8.12.0",
+        build=81200100,
         channel='bili',
-        proxy=None
+        proxy=None,
+        mid=0
 ) -> tuple:
     '''
     根据ua自动生成包含ua信息的MetaData
+    :param mid:
+    :param proxy:
     :param brand:
     :param Dalvik:
     :param version_name:
@@ -307,13 +196,12 @@ async def make_metadata(
     :param ua:
     :return:
     '''
-    mid = 0
     metaDataNeedInfo = MetaDataNeedInfo()
     metaDataNeedInfo.generate_ua_from_Dalvik_appVer(Dalvik, version_name, build, channel, brand)
     BUVID = fake_buvid()
     device_model = metaDataNeedInfo.device_model
     fp_generator = Fp(BUVID, device_model, "")
-    gen_ts = int(time.time() - random.randint(0, 15 * 3600 * 24))
+    gen_ts = int(time.time())
     fp = fp_generator.gen(gen_ts)
     device_params = {
         "app_id": 1,
@@ -324,7 +212,7 @@ async def make_metadata(
         "channel": metaDataNeedInfo.channel,
         "brand": metaDataNeedInfo.brand,
         "model": device_model,
-        "device": "phone",
+        # "device": "phone",
         "osver": metaDataNeedInfo.osver,
         "fp_local": fp_generator.gen(gen_ts + random.randint(10, 60)),
         "fp_remote": fp,
@@ -341,29 +229,34 @@ async def make_metadata(
         "buvid": BUVID,
         "platform": "android"
     }
-    metadata = {
-        "accept-encoding": "identity",
-        "grpc-accept-encoding": "identity, gzip",
-        "env": "prod",
-        "app-key": "android64",
-        'user-agent': metaDataNeedInfo.ua,
-        "x-bili-trace-id": gen_trace_id(),
-        "x-bili-aurora-eid": "",
-        "x-bili-mid": str(mid) if mid else "",
-        "x-bili-aurora-zone": "",
-        "x-bili-gaia-vtoken": "",
-        'x-bili-ticket': '',
-        "x-bili-metadata-bin": Metadata(**metadata_params).SerializeToString(),
-        "x-bili-device-bin": device_info_bytes,
-        "x-bili-network-bin": Network(type=NetworkType.WIFI, oid=random.choice(['46000',
-                                                                                '46002',
-                                                                                '46007',
-                                                                                '46008'
-                                                                                ])).SerializeToString(),
-        "x-bili-restriction-bin": Restriction(
-            # teenagers_mode=False, lessons_mode=False, mode=ModeType.NORMAL, review=True, disable_rcmd=False
-        ).SerializeToString(),
-        "x-bili-local-bin": Locale(
+    metadata: tuple = (
+        ("accept-encoding", "identity"),
+        ("grpc-encoding", "gzip"),
+        ("grpc-accept-encoding", "identity, gzip"),
+        ("env", "prod"),
+        ("app-key", "android"),
+        ("env", "prod"),
+        ("app-key", "android"),
+        ('user-agent', metaDataNeedInfo.ua),
+        ("x-bili-trace-id", gen_trace_id()),
+        ("x-bili-aurora-eid", gen_aurora_eid(mid) if mid and access_key else ""),
+        ("x-bili-mid", str(mid) if mid else ""),
+        ("x-bili-aurora-zone", ""),
+        ("x-bili-gaia-vtoken", ""),
+        ('x-bili-ticket', ""),
+        ("x-bili-metadata-bin", Metadata(**metadata_params).SerializeToString()),
+        ("x-bili-device-bin", device_info_bytes),
+        ("x-bili-network-bin", Network(type=NetworkType.WIFI, oid=random.choice(['46000',
+                                                                                 '46002',
+                                                                                 '46007',
+                                                                                 '46008'
+                                                                                 ])).SerializeToString()),
+        ("x-bili-restriction-bin", Restriction(unknown1=16).SerializeToString()
+         # Restriction(
+         #     # teenagers_mode=False, lessons_mode=False, mode=ModeType.NORMAL, review=True, disable_rcmd=False
+         # ).SerializeToString()
+         ),
+        ("x-bili-locale-bin", Locale(
             c_locale=LocaleIds(
                 language='zh',
                 region='CN'
@@ -372,15 +265,17 @@ async def make_metadata(
                 language='zh',
                 region='CN'
             ),
-        ).SerializeToString(),
-        "x-bili-exps-bin": Exps().SerializeToString(),
-        "buvid": BUVID,
-        "x-bili-fawkes-req-bin": FawkesReq(
-            appkey="android64", env="prod", session_id=random_id()
-        ).SerializeToString(),
-        'content-type': "application/grpc"
+        ).SerializeToString()),
+        ("x-bili-exps-bin", ""
+         # Exps().SerializeToString()
+         ),
+        ("buvid", BUVID),
+        ("x-bili-fawkes-req-bin", FawkesReq(
+            appkey="android", env="prod", session_id=random_id()
+        ).SerializeToString()),
+        ('content-type', "application/grpc"),
         # "x-bili-ticket":gen_random_x_bili_ticket(BUVID), # ticket没有搞明白怎么获取，应该是发一个请求，然后将这个请求的string作为参数，不变
-    }
+    )
     bili_ticket = await get_bili_ticket(
         device_info=device_info_bytes,
         app_version=metaDataNeedInfo.version_name,
@@ -389,15 +284,20 @@ async def make_metadata(
         osver=metaDataNeedInfo.osver,
         model=metaDataNeedInfo.device_model,
         brand=metaDataNeedInfo.brand,
-        md=tuple(metadata.items()),
+        md=metadata,
         proxy=proxy
     )
     if bili_ticket:
-        metadata['x-bili-ticket'] = bili_ticket
+        new_metadata = []
+        for k, v in metadata:
+            if k == 'x-bili-ticket':
+                new_metadata.append((k, bili_ticket))
+                continue
+            new_metadata.append((k, v))
+        metadata = tuple(new_metadata)
     if access_key:
-        metadata["authorization"] = f"identify_v1 {access_key}"
-        metadata["x-bili-aurora-eid"] = gen_aurora_eid(mid)
-    return tuple(metadata.items())
+        metadata.__add__(("authorization", f"identify_v1 {access_key}"))
+    return metadata
 
 
 def is_useable_Dalvik(Dalvik: str):
@@ -424,9 +324,9 @@ async def get_bili_ticket(device_info: bytes,
                           md,
                           proxy=None
                           ):
-    rand_model = ''.join(random.choices(string.ascii_uppercase + string.digits, k=11)) # 随机模型名
-    android_build_id_moc =f"{''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))}.{ (datetime.now() - timedelta(days=random.randint(365, 365 * 5))).strftime('%y%m%d') }.{str(random.randint(10000000, 99999999))}"
-    android_product_name_moc =  ''.join(random.choices(string.ascii_uppercase + string.digits, k=13))
+    rand_model = ''.join(random.choices(string.ascii_uppercase + string.digits, k=11))  # 随机模型名
+    android_build_id_moc = f"{''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))}.{(datetime.now() - timedelta(days=random.randint(365, 365 * 5))).strftime('%y%m%d')}.{str(random.randint(10000000, 99999999))}"
+    android_product_name_moc = ''.join(random.choices(string.ascii_uppercase + string.digits, k=13))
     x_fingerprint = android_device_info_pb2.AndroidDeviceInfo(
         sdkver='0.2.4',
         app_id='1',
@@ -472,7 +372,7 @@ async def get_bili_ticket(device_info: bytes,
             'ro.boot.serialno': '00536fe6',
             'gsm.network.type': "LTE",
             'net.eth0.gw': '',
-            'net.dns1': f'192.168.{random.randint(0,100)}.1',
+            'net.dns1': f'192.168.{random.randint(0, 100)}.1',
             'sys.usb.state': '',
             'http.agent': ''
         },
@@ -489,7 +389,7 @@ async def get_bili_ticket(device_info: bytes,
             'cpu_abi': 'arm64-v8a',
             'serial': 'unknown',
             'cpu_features': 'fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics',
-            'fingerprint': f'{brand}/{rand_model}/{rand_model}:{random.randint(5,9)}/{android_build_id_moc}/{android_product_name_moc}:user/release-keys',
+            'fingerprint': f'{brand}/{rand_model}/{rand_model}:{random.randint(5, 9)}/{android_build_id_moc}/{android_product_name_moc}:user/release-keys',
             'device': rand_model,
             'hardware': 'qcom'
         },
@@ -549,28 +449,78 @@ async def get_bili_ticket(device_info: bytes,
         key_id='ec01',
         sign=sign,
     )
-    headers = {
-        "Content-Type": "application/grpc",
-        # 'Connection': 'close',
-        # "User-Agent": ua,
-        # 'User-Agent': random.choice(CONFIG.UA_LIST),
-    }
-    headers.update(md)
-    headers_copy = copy.deepcopy(headers)
-    for k, v in list(headers_copy.items()):
-        if k.endswith('-bin'):
-            if isinstance(v, bytes):
-                headers.update({k: base64.b64encode(v).decode('utf-8').strip('=')})
+    new_headers = []
+    for k, v in md:
+        if isinstance(v, bytes):
+            new_headers.append((k, base64.b64encode(v).decode('utf-8').strip('=')))
+            continue
+        if k == 'x-bili-trace-id':
+            new_headers.append((k, gen_trace_id()))
+            continue
+        new_headers.append((k, v))
     proto = reqdata.SerializeToString()
     data = b"\0" + len(proto).to_bytes(4, "big") + proto
     try:
-        resp = await myreq.post(url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket', data=data,
-                                headers=headers, proxies={
+        resp = await myreq.request(
+            url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',
+            method='post',
+            data=data,
+            headers=tuple(new_headers),
+            proxies={
                 'http': proxy['proxy']['http'],
                 'https': proxy['proxy']['https']} if proxy else None, verify=False
-                                )
+        )
         gresp = ticket_pb2.GetTicketResponse()
-        gresp.ParseFromString(resp.content[5:])
+        if 'gzip' in dict(new_headers).get('grpc-encoding'):
+            gresp.ParseFromString(gzip.decompress(resp.content[5:]))
+        else:
+            gresp.ParseFromString(resp.content[5:])
         return gresp.ticket
     except Exception as e:
-        logger.error(f'使用代理 {proxy} 获取bili_ticket失败！\t{e}')
+        logger.error(f'使用代理 {proxy} 获取bili_ticket失败！\t{type(e)}')
+
+
+async def active_buvid(brand, build, buvid, channel, app_version_build, app_version_name, model, ua):
+    """
+    激活buvid????
+    :return:
+    """
+    url = 'https://app.bilibili.com/x/polymer/buvid/get'
+    data = {
+        "androidId": ''.join([random.choice(string.ascii_lowercase + string.digits) for x in range(16)]),
+        "brand": brand,
+        "build": build,
+        "buvid": buvid,
+        "channel": channel,
+        "drmId": "",
+        "fawkesAppKey": "android",
+        "first": 1,
+        "firstStart": 1,
+        "imei": "",
+        "internalVersionCode": app_version_build,
+        "mac": ':'.join(['%02x' % random.randint(0, 255) for _ in range(6)]),
+        "model": model,
+        "neuronAppId": 1,
+        "neuronPlatformId": 3,
+        "oaid": "",
+        "versionCode": app_version_build,
+        "versionName": app_version_name
+    }
+    signed_data = appsign(data)
+    headers = (
+        ('env', 'prod'),
+        ('app-key', 'android'),
+        ('env', 'prod'),
+        ('app-key', 'android'),
+        ('user-agent', ua),
+        ('x-bili-trace-id', gen_trace_id()),
+        ('x-bili-aurora-eid', ''),
+        ('x-bili-mid', ''),
+        ('x-bili-aurora-zone', ''),
+        ('x-bili-gaia-vtoken', ''),
+        ('x-bili-ticket', ''),
+        ('content-type', 'application/x-www-form-urlencoded; charset=utf-8'),
+    )
+
+    req = await myreq.post(url=url, method='post', data=signed_data, headers=headers)
+    print(req.text)

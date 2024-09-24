@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import time
@@ -12,19 +13,20 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-import CONFIG
 from fastapi接口.service.geetest_captcha.jy_click_captcha import jy_click
+from grpc获取动态.Utils.UserAgentParser import UserAgentParser
 from grpc获取动态.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, GeetestSuccessTimeCalc
 from grpc获取动态.Utils.极验.util.utils_get_target_center_position import CaptchaDetector
 import bili_ticket_gt_python
 
-from grpc获取动态.grpc.bapi.biliapi import appsign
-from grpc获取动态.grpc.makeMetaData import gen_trace_id
+from grpc获取动态.grpc.bapi.biliapi import appsign, get_geetest_reg_info, validate_geetest
+from grpc获取动态.Utils.metadata.makeMetaData import gen_trace_id
+from utl.代理.SealedRequests import MYASYNCHTTPX
 
 
 class GeetestV3Breaker:
     def __init__(self):
-        self.log = logger.bind(user='GeetestV3Breaker')
+        self.log = logger.bind(user='-352Voucher')
         self.current_file_root_dir = os.path.dirname(os.path.abspath(__file__))  # 就是当前文件的路径目录
         self.driver = None
         self.wait = None
@@ -156,16 +158,14 @@ class GeetestV3Breaker:
         data = appsign(data)
         headers_raw = [
             ('native_api_from', 'h5'),
-            ('accept', 'application/json, text/plain, */*'),
             ("cookie", f'Buvid={ck}' if ck else ''),
             ('buvid', ck if ck else ''),
-            # "origin": ori,
+            ('accept', 'application/json, text/plain, */*'),
+            ("referer", "https://www.bilibili.com/h5/risk-captcha"),
             ('env', 'prod'),
             ('app-key', 'android'),
             ('env', 'prod'),
             ('app-key', 'android'),
-            # "referer": ref,
-            ("referer", 'https://www.bilibili.com/h5/risk-captcha'),
             ("user-agent", ua),
             ('x-bili-trace-id', gen_trace_id()),
             ("x-bili-aurora-eid", ''),
@@ -177,8 +177,9 @@ class GeetestV3Breaker:
             ('accept-encoding', 'gzip')
         ]
         # data = urllib.parse.urlencode(data)
-        response: requests.Response = httpx.post(
-            'https://api.bilibili.com/x/gaia-vgate/v1/register',
+        response: requests.Response = httpx.request(
+            method='POST',
+            url='https://api.bilibili.com/x/gaia-vgate/v1/register',
             data=data,
             headers=headers_raw,
             # proxies={
@@ -211,9 +212,8 @@ class GeetestV3Breaker:
                          ref: str = "",
                          ticket: str = "",
                          version: str = "8.9.0"
-                         ) -> bool:
+                         ) -> str:
         """
-        TODO:validate是正确的，但是还是无法验证，需要抓包查看一下具体是如何验证的
         :param challenge:
         :param token:
         :param validate:
@@ -236,16 +236,14 @@ class GeetestV3Breaker:
         data = appsign(data)
         headers_raw = [
             ('native_api_from', 'h5'),
-            ('accept', 'application/json, text/plain, */*'),
             ("cookie", f'Buvid={ck}' if ck else ''),
             ('buvid', ck if ck else ''),
-            # "origin": ori,
+            ('accept', 'application/json, text/plain, */*'),
+            ("referer", "https://www.bilibili.com/h5/risk-captcha"),
             ('env', 'prod'),
             ('app-key', 'android'),
             ('env', 'prod'),
             ('app-key', 'android'),
-            # "referer": ref,
-            ("referer", 'https://www.bilibili.com/h5/risk-captcha'),
             ("user-agent", ua),
             ('x-bili-trace-id', gen_trace_id()),
             ("x-bili-aurora-eid", ''),
@@ -257,8 +255,9 @@ class GeetestV3Breaker:
             ('accept-encoding', 'gzip')
         ]
         # data = urllib.parse.urlencode(data)
-        req = httpx.post(
-            url,
+        req = httpx.request(
+            method='POST',
+            url=url,
             data=data,
             headers=headers_raw,
             # proxies={
@@ -270,9 +269,9 @@ class GeetestV3Breaker:
         if resp_json.get('code') != 0:
             logger.error(
                 f"\n发请求 {url} 验证validate极验失败:{challenge, token, validate}\n {resp_json}\n{data}\n{headers_raw}")
-            return False
+            return ''
         logger.debug(f'\n发请求验证成功：{resp_json}')
-        return True
+        return token
 
     # endregion
 
@@ -286,7 +285,8 @@ class GeetestV3Breaker:
                                  version: str = "",
                                  use_bili_ticket_gt=True,
                                  use_jy_click_selenium=False
-                                 ):
+                                 ) -> str:
+        h5_ua = UserAgentParser.parse_h5_ua(ua, ck)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
         if self.driver is None:
@@ -295,10 +295,10 @@ class GeetestV3Breaker:
             if use_bili_ticket_gt:
                 self.init_det()
         try:
-            geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, ua, ck, ori, ref, ticket=ticket,
+            geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
                                                                      version=version)
             if geetest_reg_info is False:
-                return False
+                return ''
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
             if use_bili_ticket_gt:
@@ -309,7 +309,7 @@ class GeetestV3Breaker:
                         geetest_reg_info.geetest_challenge,
                         geetest_reg_info.token,
                         validation,
-                        ua,
+                        h5_ua,
                         ck,
                         ori,
                         ref,
@@ -318,6 +318,7 @@ class GeetestV3Breaker:
                     )
                     if validate_result:
                         self.succ_stats.succ_time += 1
+                    return validate_result
             else:
                 if geetest_reg_info:
                     if validation := self.break_geetest(
@@ -329,7 +330,7 @@ class GeetestV3Breaker:
                             challenge=geetest_reg_info.geetest_challenge,
                             token=geetest_reg_info.token,
                             validate=validation,
-                            ua=ua,
+                            ua=h5_ua,
                             ck=ck,
                             ori=ori,
                             ref=ref,
@@ -338,11 +339,90 @@ class GeetestV3Breaker:
                         )
                         if validate_result:
                             self.succ_stats.succ_time += 1
+                        return validate_result
                 elif not geetest_reg_info:
                     self.succ_stats.total_time -= 1
+                    return ''
         except Exception as e:
             if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
-                return
+                return ''
+            self.log.exception(e)
+            self.succ_stats.total_time -= 1
+        finally:
+            if use_bili_ticket_gt:
+                pass
+            else:
+                self.driver.refresh()  # 用本地的html，不管成功还是失败，每次执行结束都直接刷新
+
+    async def a_validate_form_voucher_ua(self, v_voucher: str,
+                                         ua: str = "Dalvik/2.1.0 (Linux; U; Android 9; PCRT00 Build/PQ3A.190605.05081124) 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 channel/master innerVer/8130300 osVer/9 network/2",
+                                         ck: str = "",
+                                         ori: str = "",
+                                         ref: str = "",
+                                         ticket: str = "",
+                                         version: str = "",
+                                         use_bili_ticket_gt=True,
+                                         use_jy_click_selenium=False):
+        h5_ua = UserAgentParser.parse_h5_ua(ua, ck)
+        self.log.info(
+            f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
+        if self.driver is None:
+            if use_bili_ticket_gt or use_jy_click_selenium:
+                self.init_browser()
+            if use_bili_ticket_gt:
+                self.init_det()
+        try:
+            geetest_reg_info = await get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
+                                                          version=version)
+            if geetest_reg_info is False:
+                return ''
+            # 验证码获取成功才加1
+            self.succ_stats.total_time += 1
+            if use_bili_ticket_gt:
+                if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
+                                                               geetest_reg_info.geetest_challenge):
+                    self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
+                    validate_result = await validate_geetest(
+                        geetest_reg_info.geetest_challenge,
+                        geetest_reg_info.token,
+                        validation,
+                        h5_ua,
+                        ck,
+                        ori,
+                        ref,
+                        ticket=ticket,
+                        version=version
+                    )
+                    if validate_result:
+                        self.succ_stats.succ_time += 1
+                    return validate_result
+            else:
+                if geetest_reg_info:
+                    if validation := await asyncio.to_thread(self.break_geetest,
+                                                             geetest_reg_info.geetest_gt,
+                                                             geetest_reg_info.geetest_challenge,
+                                                             use_jy_click_selenium,
+                                                             ):
+                        validate_result = await validate_geetest(
+                            challenge=geetest_reg_info.geetest_challenge,
+                            token=geetest_reg_info.token,
+                            validate=validation,
+                            h5_ua=h5_ua,
+                            buvid=ck,
+                            ori=ori,
+                            ref=ref,
+                            ticket=ticket,
+                            version=version
+                        )
+                        if validate_result:
+                            self.succ_stats.succ_time += 1
+                        return validate_result
+                elif not geetest_reg_info:
+                    self.succ_stats.total_time -= 1
+                    return ''
+        except Exception as e:
+            if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
+                return ''
             self.log.exception(e)
             self.succ_stats.total_time -= 1
         finally:
@@ -353,7 +433,7 @@ class GeetestV3Breaker:
 
 
 if __name__ == '__main__':
-    while 1:
-        vc = input('输入极验voucher:').strip()
-        res = GeetestV3Breaker.get_geetest_reg_info(vc)
-        print(res)
+    _g =GeetestV3Breaker()
+    asyncio.run(_g.a_validate_form_voucher_ua(
+        v_voucher=''
+    ))

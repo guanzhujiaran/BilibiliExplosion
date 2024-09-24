@@ -1,9 +1,52 @@
 import asyncio
+import random
 import typing
 from typing import Union
 
+from curl_cffi import CurlHttpVersion, CurlOpt, CurlSslVersion
+from curl_cffi.requests import AsyncSession, BrowserType, ExtraFingerprints, BrowserTypeLiteral
 from httpx import AsyncClient
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
+import ssl
+
+
+class SSLFactory:
+    ciphers = [
+        "TLS_AES_128_GCM_SHA256",
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_CHACHA20_POLY1305_SHA256",
+        "ECDHE-ECDSA-AES128-GCM-SHA256",
+        "ECDHE-RSA-AES128-GCM-SHA256",
+        "ECDHE-ECDSA-AES256-GCM-SHA384",
+        "ECDHE-RSA-AES256-GCM-SHA384",
+        "ECDHE-ECDSA-CHACHA20-POLY1305",
+        "ECDHE-RSA-CHACHA20-POLY1305",
+        "ECDHE-RSA-AES128-SHA",
+        "ECDHE-RSA-AES256-SHA",
+        "AES128-GCM-SHA256",
+        "AES256-GCM-SHA384",
+        "AES128-SHA",
+        "AES256-SHA"
+    ]
+
+    def __init__(self):
+        pass
+
+    @property
+    def cipher_string(self):
+        return ":".join(self.ciphers)
+
+    def __call__(self) -> ssl.SSLContext:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.maximum_version = ssl.TLSVersion.TLSv1_2
+
+        context.set_alpn_protocols(["http/2"])
+        context.set_ciphers(self.cipher_string)
+        return context
+
+
+sslgen = SSLFactory()
 
 
 class MYASYNCHTTPX:
@@ -36,14 +79,20 @@ class MYASYNCHTTPX:
         :param kwargs:
         :return:
         """
-        async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                               verify=False) as client:
+        async with AsyncClient(
+                proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+                verify=sslgen(),
+                http2=True,
+        ) as client:
             resp = await client.get(url=url, headers=headers, params=params, timeout=timeout, follow_redirects=True)
             return resp
 
     async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10, *args, **kwargs):
-        async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                               verify=False) as client:
+        async with AsyncClient(
+                proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+                verify=sslgen(),
+                http2=True,
+        ) as client:
             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
             return resp
 
@@ -77,26 +126,70 @@ class MYASYNCHTTPX:
         :param extensions:
         :return:
         """
-        async with AsyncClient(proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
-                               verify=False) as client:
+        async with AsyncClient(
+                proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+                verify=sslgen(),
+                http2=True,
+                http1=False,
+                follow_redirects=True
+        ) as client:
+            client.headers.clear()
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
                                         content=content, files=files, json=json, params=params, cookies=cookies,
-                                        extensions=extensions, follow_redirects=True)
+                                        extensions=extensions, follow_redirects=True,
+                                        )
             return resp
+
+    async def cffi_request(self, url,
+                           data: typing.Optional[RequestData] = None,
+                           method='GET',
+                           headers: typing.Optional[HeaderTypes] = None,
+                           verify=False,
+                           proxies=None,
+                           timeout=10,
+                           files: typing.Optional[RequestFiles] = None,
+                           json: typing.Optional[typing.Any] = None,
+                           params: typing.Optional[QueryParamTypes] = None,
+                           cookies: typing.Optional[CookieTypes] = None,
+                           ):
+        if type(headers) is tuple:
+            headers = list(headers)
+        impersonate = random.choice(list(BrowserTypeLiteral.__args__))
+        fp = ExtraFingerprints(
+            tls_min_version=CurlSslVersion.TLSv1_2,
+            tls_grease=True if 'chrome' in impersonate else False,
+        )
+        async with AsyncSession(
+                impersonate=BrowserType.chrome99_android,
+                http_version=CurlHttpVersion.V2TLS,
+                extra_fp=fp,
+                default_headers=False,
+                timeout=timeout
+        ) as client:
+            client.headers.clear()
+            resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
+                                        files=files, json=json, params=params, cookies=cookies,
+                                        proxies=proxies,
+                                        verify=False,
+                                        default_headers=False,
+                                        )
+        return resp
 
 
 if __name__ == '__main__':
     MyAsyncReq = MYASYNCHTTPX()
     loop = asyncio.get_event_loop()
-    task = loop.create_task(MyAsyncReq.request(method="get",
-                                               url="https://api.bilibili.com/x/frontend/finger/spi",
-                                               headers={
-                                                   "Referer": 'https://www.bilibili.com/',
-                                                   "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-                                                   "Cookie": "1",
-                                               }, proxies={
-            'https': 'http://127.0.0.1:23998',
-            'http': 'http://127.0.0.1:23998',
+    task = loop.create_task(MyAsyncReq.request(
+        method="get",
+        url='https://api.bilibili.com/x/polymer/web-dynamic/v1/detail?timezone_offset=-480&platform=web&gaia_source=main_web&rid=317195215&type=2&features=itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,commentsNewVersion&web_location=333.1368&x-bili-device-req-json=%7B%22platform%22:%22web%22,%22device%22:%22pc%22%7D&x-bili-web-req-json=%7B%22spm_id%22:%22333.1368%22%7D&w_rid=b1a89034dc09c7f56948c9c369136c02&wts=1726333426',
+        headers=
+        (("Referer", 'https://www.bilibili.com/'),
+         ("User-Agent",
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'),
+         ("Cookie", "1"),)
+        , proxies={
+            'https': 'http://192.168.1.7:3128',
+            'http': 'http://192.168.1.7:3128',
         }))
     loop.run_until_complete(task)
-    print(task.result().json())
+    print(task.result().text)

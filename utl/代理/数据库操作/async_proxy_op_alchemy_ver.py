@@ -451,7 +451,6 @@ class SQLHelper:
             if res == 0:
                 await fresh_grpc_proxy()
 
-
             #             sql_str = f"""
             # select * from(select
             # proxy_tab.proxy_id,

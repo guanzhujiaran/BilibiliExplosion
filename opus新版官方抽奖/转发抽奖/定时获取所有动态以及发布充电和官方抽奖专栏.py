@@ -31,7 +31,8 @@ class pubArticleInfo(pydantic.BaseModel):
                 self.lastPubDate = datetime.fromtimestamp(int(contents))
                 log.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
-            log.warning(f"获取到上一次发布专栏的时间失败")
+            log.warning(f"获取到上一次发布专栏的时间失败！使用0时间！")
+            self.lastPubDate = datetime.fromtimestamp(0)
 
     def save_lastPubTs(self):
         try:
@@ -48,7 +49,7 @@ class pubArticleInfo(pydantic.BaseModel):
             now = datetime.now()
             if self.lastPubDate.day != now.day:  # 上次发布日期不在同一天
                 if now.hour >= self.shouldPubHour or now.timestamp() - self.lastPubDate.timestamp() >= 15 * 3600:  # 如果当前时间在20点之后或者距离上次发布超过了15小时，则直接发布
-                # if now.timestamp() - self.lastPubDate.timestamp() >= 2 * 3600:
+                    # if now.timestamp() - self.lastPubDate.timestamp() >= 2 * 3600:
                     log.error(f'满足发布专栏文章条件，发布专栏！\t上次发布时间：{self.lastPubDate}')
                     return True
             else:  # 上次发布日期在同一天
@@ -65,16 +66,16 @@ class pubArticleInfo(pydantic.BaseModel):
 @async_pushme_try_catch_decorator
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     d = DynDetailScrapy()
-    if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
-        d.scrapy_sem = asyncio.Semaphore(30)
+    if time.time() - pub_article_info.lastPubDate.timestamp() > 8 * 3600:
+        d.scrapy_sem = asyncio.Semaphore(1000)
     else:
-        d.scrapy_sem = asyncio.Semaphore(15)
+        d.scrapy_sem = asyncio.Semaphore(900)
     await d.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
         e = ExctractOfficialLottery()
         update_time: int = int(time.time()) - int(
-            pub_article_info.lastPubDate.timestamp()) - 1800  # 这段逻辑关乎更新抽奖的数量！！！
+            pub_article_info.lastPubDate.timestamp())  # 这段逻辑关乎更新抽奖的数量！！！
         # 空闲中间的半个小时就是上一次发布之后休息的事件，可以往小调，但决不能是+一个时间段！！！
         latest_official_lot, latest_charge_lot = await e.main(
             latest_lots_judge_ts=update_time

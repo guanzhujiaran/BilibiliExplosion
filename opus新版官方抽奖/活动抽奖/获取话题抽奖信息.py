@@ -5,7 +5,7 @@ import json
 import os
 import random
 import time
-from typing import List
+from typing import List, Union
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import joinedload
 import b站cookie.b站cookie_
@@ -49,7 +49,7 @@ class TopicLotInfoSqlHelper(sqlHelper):
         return data
 
     @lock_wrapper
-    async def get_all_available_traffic_info_by_status(self, status: int) -> List[TTrafficCard]:
+    async def get_all_available_traffic_info_by_status(self, status: Union[int, None]) -> List[TTrafficCard]:
         async with (self._session() as session):
             sql = select(TTrafficCard).where(
                 and_(
@@ -326,6 +326,8 @@ class GenerateTopicLotCv(GenerateCvBase):
         # _ = datetime.timedelta(days=1)
         # next_day = today + _
         title = f'{today.date().month}.{today.date().day}为止的话题抽奖信息'
+        if pub_cv:
+            self.save_article_to_local(title, cv_content.rawContent)
         aid = await self.article_creative_draft_addupdate(
             title=title,
             banner_url="",
@@ -584,7 +586,8 @@ class ExtractTopicLottery:
 
         :return: 是否有新增的
         """
-        all_unread_traffic_card = await self.sql.get_all_available_traffic_info_by_status(status=0)
+        all_unread_traffic_card = [*await self.sql.get_all_available_traffic_info_by_status(status=0),
+                                   *await self.sql.get_all_available_traffic_info_by_status(status=None)]
         if all_unread_traffic_card:
             for x in all_unread_traffic_card:
                 try:
@@ -594,16 +597,16 @@ class ExtractTopicLottery:
                     result = 3
                 topic_lot_log.info(f'当前traffic_card:{x.id}，状态：{result}')
                 await self.sql.update_traffic_card_status(result, x.id)
-            return True
+            return True, len(all_unread_traffic_card)
         return False, len(all_unread_traffic_card)
 
-    async def main(self):
+    async def main(self, force_push=False):
         """
          函数入口 修改成如果有新增的则推送
         :return:
         """
         is_need_post, num = await self.spider_all_unread_traffic_card()
-        if is_need_post:
+        if is_need_post or force_push:
             ua3 = gl.get_value('ua3')
             csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
             cookie3 = gl.get_value('cookie3')
@@ -622,7 +625,7 @@ class ExtractTopicLottery:
 
 async def _test():
     _a = ExtractTopicLottery()
-    print(await _a.main())
+    print(await _a.main(force_push=True))
 
 
 async def _test_generate_cv():
@@ -638,4 +641,4 @@ async def _test_generate_cv():
 if __name__ == "__main__":
     import asyncio
 
-    asyncio.run(_test_generate_cv())
+    asyncio.run(_test())

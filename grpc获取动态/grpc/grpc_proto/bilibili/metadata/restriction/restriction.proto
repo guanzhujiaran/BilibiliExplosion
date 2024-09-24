@@ -24,4 +24,6 @@ message Restriction {
     bool disable_rcmd = 5;
     // 
     bool basic_mode = 6;
+    int32 unknown1 = 7;
+    bool unknown2 = 8;
 }

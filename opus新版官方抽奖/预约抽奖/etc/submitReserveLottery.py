@@ -152,6 +152,7 @@ class GenerateReserveLotCv(GenerateCvBase):
         next_day = today + _
         title = f'{next_day.date().month}.{next_day.date().day}之后的预约抽奖'
         article_content = article_content + split_article_content + article_content1
+        self.save_article_to_local(title, article_content)
         banner_url = ''
         summary = ''.join(re.findall('>(.*?)<', article_content)).replace(' ', '').replace('\t', ' ')[0:500]
         words = len(
@@ -199,12 +200,10 @@ async def submit_reserve__lot_main(is_post=True):
     csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
     cookie3 = gl.get_value('cookie3')
     buvid3 = gl.get_value('buvid3_3')
-    if cookie3 and csrf3 and ua3 and buvid3:
-        gc = GenerateReserveLotCv(cookie3, ua3, csrf3, buvid3)
-        gc.post_flag = is_post
-        await gc.reserve_lottery()
-    else:
-        print(cookie3, '\n', csrf3, '\n', ua3, '\n', buvid3)
+    gc = GenerateReserveLotCv(cookie3, ua3, csrf3, buvid3)
+    gc.post_flag = is_post
+    await gc.reserve_lottery()
+    print(cookie3, '\n', csrf3, '\n', ua3, '\n', buvid3)
 
 
 if __name__ == '__main__':
