@@ -1,11 +1,9 @@
-# coding:utf-8
 import asyncio
 import datetime
 import json
 import os
 import random
 import re
-import urllib.parse
 import time
 import traceback
 import uuid
@@ -14,10 +12,8 @@ from enum import Enum
 from typing import Dict, Any, Union
 import subprocess
 from functools import partial
-
 from grpc获取动态.grpc.bapi.biliapi import get_lot_notice, proxy_req, get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail
-
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 from loguru import logger
@@ -26,15 +22,12 @@ from github.my_operator.get_others_lot.Tool.newSqlHelper.models import TLotusers
     TLotmaininfo
 from opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from utl.pushme.pushme import pushme
-from utl.代理.request_with_proxy import request_with_proxy
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import Bilibili_methods.all_methods
 from github.my_operator.get_others_lot.Tool.newSqlHelper.SqlHelper import SqlHelper
 from github.my_operator.get_others_lot.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from github.my_operator.get_others_lot.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
-from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
-
 get_others_lot_log = logger.bind(user='get_others_lot')
 get_others_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_get_others_lot_log.log"),
                        level="WARNING",
@@ -703,9 +696,7 @@ class GetOthersLotDyn:
                     self.queriedData.queryUserInfo.update({
                         k: user_space_dyn_detail(**v)
                     })
-            get_others_lot_log.info('上次获取的动态：')
-            import pprint
-            pprint.pprint(self.queriedData.queryUserInfo, indent=4)
+            get_others_lot_log.info(f'上次获取的动态：{self.queriedData.queryUserInfo}')
         except Exception as e:
             get_others_lot_log.exception(f'获取b站用户的配置失败！使用默认内容！{e}')
 
@@ -1224,7 +1215,7 @@ class GetOthersLotDyn:
         """
         get_others_lot_log.debug(f'正在解析动态详情：{dynamic_id}')
         try:
-            if dynamic_req.get('code') == 4101131:
+            if dynamic_req.get('code') == 4101131 or dynamic_req.get('data') is None:
                 get_others_lot_log.info(f'动态内容不存在！{dynamic_id}\t{dynamic_req}')
                 return {'rawJSON': None}
             # get_others_lot_log.info(f'获取成功header:{headers}')
@@ -1484,7 +1475,7 @@ class GetOthersLotDyn:
         pinglunheader = {
             'referer': f'https://t.bilibili.com/{rid}?type={_type}',
             # 'connection': 'close',
-            'user-agent': random.choice(CONFIG.UA_LIST),
+            'user-agent': CONFIG.rand_ua,
             'cookie': '1'
         }
         pinglunurl = 'http://api.bilibili.com/x/v2/reply/main?next=' + str(pn) + '&type=' + str(ctype) + '&oid=' + str(
@@ -1599,9 +1590,9 @@ class GetOthersLotDyn:
                             f'获取动态响应与所求动态值（https://t.bilibili.com/{dynamic_id} ）不同！！{dynamic_detail}')
                         continue
                 break
-            except:
+            except Exception as e:
                 # await asyncio.sleep(60)
-                get_others_lot_log.critical(f'获取动态响应失败！！！\n{traceback.format_exc()}')
+                get_others_lot_log.exception(f'获取动态响应失败！！！\n{e}')
                 continue
                 # return await self.judge_lottery(dynamic_id, dynamic_type, is_lot_orig)
 

@@ -5,7 +5,6 @@
 import asyncio
 import copy
 import datetime
-import hashlib
 import json
 import os
 import random
@@ -87,7 +86,7 @@ class DynDetailScrapy:
             "sec-fetch-dest": "empty",
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-site",
-            "user-agent": random.choice(CONFIG.UA_LIST),
+            "user-agent": CONFIG.rand_ua,
         }
         self.Sqlhelper = SQLHelper()
         self.stop_counter: StopCounter = StopCounter()  # 停止标志
@@ -348,9 +347,10 @@ class DynDetailScrapy:
                     self.log.debug(
                         f"当前执行【{rid_list.index(rid) + 1}/{len(rid_list)}】：动态rid列表：{rid_list}\n跳转连接：http://t.bilibili.com/{rid}?type=2")
                     detail = (await self.get_grpc_single_dynDetail(rid))[0]
-                    self.Sqlhelper.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-                                                    dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-                                                    dynamic_created_time=detail.get('dynamic_created_time'))
+                    await asyncio.to_thread(self.Sqlhelper.upsert_DynDetail, doc_id=detail.get('rid'),
+                                            dynamic_id=detail.get('dynamic_id'),
+                                            dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
+                                            dynamic_created_time=detail.get('dynamic_created_time'))
                 return rid_list
             except Exception as e:
                 self.log.exception(e)
@@ -371,9 +371,11 @@ class DynDetailScrapy:
             # self.log.debug(f'\n获取rid_dynamic列表：\n{rid_dynamic_id_dict_list}')
             all_detail_list = self.get_grpc_dynDetails(rid_dynamic_id_dict_list)
             for detail in all_detail_list:
-                self.Sqlhelper.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-                                                dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-                                                dynamic_created_time=detail.get('dynamic_created_time'))
+                await asyncio.to_thread(self.Sqlhelper.upsert_DynDetail,
+                                        doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
+                                        dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
+                                        dynamic_created_time=detail.get('dynamic_created_time')
+                                        )
         except Exception as e:
             self.log.exception(e)
         self.scrapy_sem.release()
@@ -386,15 +388,18 @@ class DynDetailScrapy:
                 # self.log.debug(f'\n获取rid_dynamic列表：\n{rid_dynamic_id_dict_list}')
                 all_detail_list = await self.get_grpc_dynDetails(rid_dynamic_id_dict_list)
                 for detail in all_detail_list:
-                    self.Sqlhelper.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-                                                    dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-                                                    dynamic_created_time=detail.get('dynamic_created_time'))
+                    await asyncio.to_thread(
+                        self.Sqlhelper.upsert_DynDetail,
+                        doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
+                        dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
+                        dynamic_created_time=detail.get('dynamic_created_time')
+                    )
             except Exception as e:
                 self.log.exception(e)
             return rid_list
 
     async def get_discontious_dynamics(self) -> [int]:
-        all_rids = self.Sqlhelper.get_discountious_rids()
+        all_rids = await asyncio.to_thread(self.Sqlhelper.get_discountious_rids)
         self.log.info(f'共有{len(all_rids)}条缺失动态')
         task_args_list = []  # [[1,2,3,4,5,6,7,8],[9,10,11,12,13,14,15],...]
         for rid_index in range(len(all_rids) // self.offset + 1):
@@ -416,7 +421,7 @@ class DynDetailScrapy:
         通过获取单个rid动态的方式获取不连续的缺失动态
         :return:
         """
-        all_rids = self.Sqlhelper.get_discountious_rids()
+        all_rids = await asyncio.to_thread(self.Sqlhelper.get_discountious_rids)
         self.log.info(f'共有{len(all_rids)}条缺失动态')
         task_args_list = []  # [[1,2,3,4,5,6,7,8],[9,10,11,12,13,14,15],...]
         for rid_index in range(len(all_rids) // self.offset + 1):
@@ -442,7 +447,7 @@ class DynDetailScrapy:
         :return:
         '''
         self.log.debug("开始获取抽奖信息！")
-        all_lots = self.Sqlhelper.get_lost_lots()
+        all_lots = await asyncio.to_thread(self.Sqlhelper.get_lost_lots)
         self.log.debug(f'共有{len(all_lots)}条缺失抽奖信息！')
         task_list = []
         for all_detail in all_lots:
@@ -469,9 +474,11 @@ class DynDetailScrapy:
         try:
             for rid in rids_list:
                 detail = (await self.get_grpc_single_dynDetail(rid))[0]
-                self.Sqlhelper.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-                                                dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-                                                dynamic_created_time=detail.get('dynamic_created_time'))
+                await asyncio.to_thread(self.Sqlhelper.upsert_DynDetail,
+                                        doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
+                                        dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
+                                        dynamic_created_time=detail.get('dynamic_created_time')
+                                        )
         except Exception as e:
             self.log.exception(e)
         self.scrapy_sem.release()
@@ -485,7 +492,7 @@ class DynDetailScrapy:
         loop.close()
 
     async def main_get_dynamic_detail_by_rid(self):
-        latest_rid = int(self.Sqlhelper.get_latest_rid())
+        latest_rid = int(await asyncio.to_thread(self.Sqlhelper.get_latest_rid))
         if not latest_rid:
             self.log.debug("未获取到最后一个rid，启用默认值！")
             latest_rid = 260977479

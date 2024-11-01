@@ -2,15 +2,7 @@ import random
 import re
 import uuid
 
-ANDROID_VERSIONS = {
-    '1.0': 1, '1.1': 2, '1.5': 3, '1.6': 4, '2.0': 5, '2.0.1': 6, '2.1': 7, '2.2': 8, '2.3': 9, '2.3.3': 10,
-    '3.0': 11, '3.1': 12, '3.2': 13, '4.0': 14, '4.0.3': 15, '4.0.4': 15, '4.1': 16, '4.1.1': 16, '4.2': 17,
-    '4.3': 18, '4.4': 19, '4.4W': 20, '5.0': 21, '5.1': 22, '6.0': 23, '6': 23, '7.0': 24, '7': 24, '7.1': 25,
-    '8.0': 26, '8': 26,
-    '8.1': 27, '9.0': 28, '9': 28, '10.0': 29, '10': 29, '11.0': 30, '11': 30, '12.0': 31, '12': 31, '12.1': 32,
-    '13.0': 33,
-    '13': 33
-}
+from grpc获取动态.Utils.CONST import ANDROID_VERSIONS
 
 
 class UserAgentParser:
@@ -94,7 +86,7 @@ class UserAgentParser:
         return filtered_headers_dict
 
     @staticmethod
-    def parse_h5_ua(dalvik_ua, buvid) -> str:
+    def parse_h5_ua(dalvik_ua: str, buvid: str, session_id: str) -> str:
         def get_sdk_int(_android_version):
             # 根据Android版本获取对应的SDK Int
             for _version, _sdk_int in ANDROID_VERSIONS.items():
@@ -144,15 +136,13 @@ class UserAgentParser:
             model = '23113RKC6C'
         else:
             model = model_match.group(3)
-        # 随机会话ID
-        session_id = uuid.uuid4().hex[0:8]
 
         # 生成随机版本号
         webkit_version, chrome_version, safari_version = generate_random_versions()
         # 构建Mozilla/5.0格式的UA字符串
         mozilla_ua = (
             f"Mozilla/5.0 ({device_info}) "
-            f"AppleWebKit/{webkit_version} (KHTML, like Gecko) Version/4.0 Chrome/{chrome_version} Mobile Safari/{safari_version} "
+            f"AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 "
             f"os/android model/{model} build/{build_number} osVer/{android_version} sdkInt/{sdk_int} network/2 BiliApp/{build_number} "
             f"mobi_app/android channel/{channel} Buvid/{buvid} sessionID/{session_id} innerVer/{build_number} c_locale/zh_CN s_locale/zh_CN "
             f"disable_rcmd/0 themeId/1 sh/24 {app_version} os/android model/{model} mobi_app/android build/{build_number} "
@@ -165,5 +155,5 @@ class UserAgentParser:
 if __name__ == "__main__":
     # 使用示例
     user_agent = 'Dalvik/2.1.0 (Linux; U; Android 5.1; Impress Style Build/LMY47I) 8.2.0 os/android model/Impress Style mobi_app/android build/8020300 channel/360 innerVer/8020300 osVer/5.1 network/2'
-    ua_parser = UserAgentParser.parse_h5_ua(user_agent, 114514)
+    ua_parser = UserAgentParser.parse_h5_ua(user_agent, '114514','1919810')
     print(ua_parser)

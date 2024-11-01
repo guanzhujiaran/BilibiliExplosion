@@ -26,7 +26,8 @@ class GenerateReserveLotCv(GenerateCvBase):
         self.post_flag = True  # 是否直接发布
         self.sqlhelper = SqlHelper()
 
-    def zhuanlan_format(self, zhuanlan_dict: Dict[str, list[TUpReserveRelationInfo]], blank_space: int = 0) -> str:
+    def zhuanlan_format(self, zhuanlan_dict: Dict[str, list[TUpReserveRelationInfo]], blank_space: int = 0) -> tuple[
+        str, str]:
         """
 
         :param zhuanlan_dict:
@@ -34,11 +35,12 @@ class GenerateReserveLotCv(GenerateCvBase):
         :return:
         """
         ret = ''
+        manual_ret_text = ''
         for _ in range(blank_space):
             ret += '<p><br></p><figure class="img-box focused" contenteditable="false"><img ' \
                    'src="//i0.hdslb.com/bfs/article/02db465212d3c374a43c60fa2625cc1caeaab796.png" ' \
                    'class="cut-off-6"></figure> '
-
+            manual_ret_text += '\n'
         color_dict = {
             'color-purple-01': 'rgb(255, 160, 208)',
             'color-purple-02': 'rgb(234, 0, 119)',
@@ -70,6 +72,7 @@ class GenerateReserveLotCv(GenerateCvBase):
             ret += str(lottery_end_date)
             ret += '</span></strong></span></h1>'
             ret += '<ol class=" list-paddingleft-2">'
+            manual_ret_text += str(lottery_end_date) + '\n'
             for i in reserve_info_list:
                 ret += f'<li><p><span class="font-size-12">'
                 if pandas.notna(i.dynamicId):
@@ -80,8 +83,10 @@ class GenerateReserveLotCv(GenerateCvBase):
                 ret += i.text[5:] + '\t'
                 ret += datetime.datetime.fromtimestamp(i.etime).strftime(self.target_timeformat)
                 ret += '</span></p></li>'
+                manual_ret_text += f'https://space.bilibili.com/{i.upmid}/dynamic\t{i.text[5:]}\t{datetime.datetime.fromtimestamp(i.etime).strftime(self.target_timeformat)}\n'
             ret += '</ol>'
-        return ret
+            manual_ret_text += '\n'
+        return ret, manual_ret_text
 
     def zhuanlan_date_sort(self, zhuanlan_data_order_by_date: list[TUpReserveRelationInfo],
                            limit_date_switch: bool = False,
@@ -137,22 +142,26 @@ class GenerateReserveLotCv(GenerateCvBase):
         zhuanlan_data: list[
             TUpReserveRelationInfo] = await self.sqlhelper.get_all_available_reserve_lotterys()  # 获取所有有效的预约抽奖 （按照etime升序排列
         zhuanlan_data_date_sort = self.zhuanlan_date_sort(zhuanlan_data)
-        article_content = self.zhuanlan_format(zhuanlan_data_date_sort)
+        article_content, manual_article_content = self.zhuanlan_format(zhuanlan_data_date_sort)
 
         zhuanlan_data1 = [x for x in zhuanlan_data if x.reserve_round_id == last_round.round_id]
         zhuanlan_data_date_sort1 = self.zhuanlan_date_sort(zhuanlan_data1)
-        article_content1 = self.zhuanlan_format(zhuanlan_data_date_sort1)
+        article_content1, manual_article_content1 = self.zhuanlan_format(zhuanlan_data_date_sort1)
 
         if zhuanlan_data_date_sort1:
-            split_article_content = self.zhuanlan_format({"更新内容": []}, 3)
+            split_article_content, manual_split_article_content = self.zhuanlan_format({"更新内容": []}, 3)
         else:
             split_article_content = ''
+            manual_split_article_content = ''
         today = datetime.datetime.today()
         _ = datetime.timedelta(days=1)
         next_day = today + _
         title = f'{next_day.date().month}.{next_day.date().day}之后的预约抽奖'
         article_content = article_content + split_article_content + article_content1
-        self.save_article_to_local(title, article_content)
+        manual_article_content = manual_article_content + manual_split_article_content + manual_article_content1
+        self.save_article_to_local(title + '_api_ver', article_content)
+        self.save_article_to_local(title + '_手动专栏_ver', manual_article_content)
+
         banner_url = ''
         summary = ''.join(re.findall('>(.*?)<', article_content)).replace(' ', '').replace('\t', ' ')[0:500]
         words = len(
@@ -203,7 +212,6 @@ async def submit_reserve__lot_main(is_post=True):
     gc = GenerateReserveLotCv(cookie3, ua3, csrf3, buvid3)
     gc.post_flag = is_post
     await gc.reserve_lottery()
-    print(cookie3, '\n', csrf3, '\n', ua3, '\n', buvid3)
 
 
 if __name__ == '__main__':

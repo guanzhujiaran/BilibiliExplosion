@@ -9,3 +9,18 @@ class CommonResponseModel(BaseModel, Generic[T]):
     msg: str = 'success'
     data: T = None
 
+
+class ResponsePaginationItems(BaseModel, Generic[T]):
+    items: list[T]
+    total: int
+
+if __name__ == '__main__':
+    class __t(BaseModel):
+        a: int
+        b: str
+
+    a = ResponsePaginationItems[__t](
+        items=[__t(a=1, b='a'), __t(a=2, b='b')],
+        total=114514
+    )
+    print(a)

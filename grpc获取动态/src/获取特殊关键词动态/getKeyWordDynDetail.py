@@ -131,7 +131,6 @@ class SearchKeyWordDyn:
         result_list = []
         for result in result_gen:
             res_dict = self.solve_dynData(result)
-
             result_list.append(res_dict.__dict__)
         df = pd.DataFrame(result_list)
         df.to_csv('result/获取结果.csv', sep='\t', index=False)

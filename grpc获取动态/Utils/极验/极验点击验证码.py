@@ -283,10 +283,11 @@ class GeetestV3Breaker:
                                  ref: str = "",
                                  ticket: str = "",
                                  version: str = "",
+                                 session_id: str = "",
                                  use_bili_ticket_gt=True,
                                  use_jy_click_selenium=False
                                  ) -> str:
-        h5_ua = UserAgentParser.parse_h5_ua(ua, ck)
+        h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
         if self.driver is None:
@@ -361,9 +362,10 @@ class GeetestV3Breaker:
                                          ref: str = "",
                                          ticket: str = "",
                                          version: str = "",
+                                         session_id: str = "",
                                          use_bili_ticket_gt=True,
                                          use_jy_click_selenium=False):
-        h5_ua = UserAgentParser.parse_h5_ua(ua, ck)
+        h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
         if self.driver is None:
@@ -433,7 +435,7 @@ class GeetestV3Breaker:
 
 
 if __name__ == '__main__':
-    _g =GeetestV3Breaker()
+    _g = GeetestV3Breaker()
     asyncio.run(_g.a_validate_form_voucher_ua(
         v_voucher=''
     ))

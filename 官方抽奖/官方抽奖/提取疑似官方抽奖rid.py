@@ -157,7 +157,7 @@ class exctract_official_lottery:
                     'sec-fetch-dest': 'empty',
                     'sec-fetch-mode': 'cors',
                     'sec-fetch-site': 'same-site',
-                    'user-agent': random.choice(CONFIG.UA_LIST),
+                    'user-agent': CONFIG.rand_ua,
                 }
                 req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
                 print(url, req_dict)
@@ -189,7 +189,7 @@ class exctract_official_lottery:
                         'sec-fetch-dest': 'empty',
                         'sec-fetch-mode': 'cors',
                         'sec-fetch-site': 'same-site',
-                        'user-agent': random.choice(CONFIG.UA_LIST),
+                        'user-agent': CONFIG.rand_ua,
                     }
                     req_dict = self.proxy_request.sync_request_with_proxy(method='get', url=url, headers=headers)
                     print(url, req_dict)

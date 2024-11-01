@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 import datetime
-import json
 import os
 import random
 import time
 import urllib.parse
 from typing import Union
-
-from opus新版官方抽奖.Base.GenerateCvModel import CvContent, OpusType
-from utl.pushme.pushme import pushme
+from opus新版官方抽奖.Model.GenerateCvModel import CvContent, OpusType
 import requests
-import sys
 
+from utl.pushme.pushme import pushme
 from utl.加密.wbi加密 import get_wbi_params
 
 
@@ -246,7 +243,6 @@ class GenerateCvBase:
         :param spoiler:
         :param original:
         :param top_video_bvid:
-        :param csrf:
         :return:
         """
         url = 'https://api.bilibili.com/x/article/creative/draft/addupdate'
@@ -372,12 +368,19 @@ class GenerateCvBase:
 
     # endregion
 
-    def save_article_to_local(self, title, content, ):
+    def save_article_to_local(self, title: str, content, ):
         try:
+            illegal_chars = r'<>:"/\|?*'
+
+            # 逐一替换非法字符为下划线
+            for char in illegal_chars:
+                title = title.replace(char, '_')
             article_path = os.path.join(self.current_dir, f'../PubArticle/')
+            print(f'保存文章【{title}】')
             if not os.path.exists(article_path):
                 os.mkdir(article_path)
             with open(os.path.join(article_path, f'{title}.txt'), 'w', encoding='utf-8') as f:
                 f.write(content)
         except Exception as e:
+            print(f'保存文章【{title}】失败！\n{str(e)}')
             pushme(f'保存文章【{title}】失败！', str(e))

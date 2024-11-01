@@ -11,3 +11,4 @@ class VoucherInfo:
     referer: str
     ticket: str
     version: str
+    session_id:str

@@ -9,14 +9,16 @@ import datetime
 import random
 import time
 import traceback
+import uuid
 from typing import Union
 import grpc
 from curl_cffi import CurlError
 from grpc import aio
 import json
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
-    Response, WriteError
+    Response, WriteError, NetworkError
 
+from bilibili.api.ticket.v1 import ticket_pb2
 from bilibili.app.dynamic.v2.dynamic_pb2 import Config, AdParam
 from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
@@ -24,10 +26,11 @@ from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
 from grpc获取动态.Models.GrpcApiBaseModel import MetaDataWrapper
 from grpc获取动态.Utils.MQServer.VoucherMQServer import VoucherRabbitMQ
 from grpc获取动态.Utils.极验.极验点击验证码 import GeetestV3Breaker
-from grpc获取动态.grpc.bapi.biliapi import get_latest_version_builds
+from grpc获取动态.grpc.bapi.biliapi import get_latest_version_builds, resource_abtest_abserver
 from grpc获取动态.grpc.bapi.models import LatestVersionBuild
 from grpc获取动态.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
 from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, APIExClimbWuzhi
+from grpc获取动态.log.base_log import grpc_api_any_log
 from utl.designMode.asyncPool import BaseAsyncPool
 from utl.代理.request_with_proxy import request_with_proxy
 from CONFIG import CONFIG
@@ -36,17 +39,6 @@ from utl.代理.SealedRequests import MYASYNCHTTPX
 from loguru import logger
 from urllib.parse import urlparse
 
-
-# @TODO 添加一个cookie池？？仿造web端的，赌b站后端的网关web和app都是复用的？
-# grpc_err_log.add(
-#     CONFIG.root_dir + 'grpc获取动态/src/' + "log/grpc_err.log",
-#     encoding="utf-8",
-#     enqueue=True,
-#     rotation="500MB",
-#     compression="zip",
-#     retention="15 days",
-#     filter=lambda record: record["extra"].get('user') == "grpc_err"
-# )
 
 # Handle gRPC errors
 def grpc_error(err):
@@ -66,16 +58,7 @@ class BiliGrpc:
         self.metadata_list = []  # 元数据（headers）池大小列表
         self.queue_num = 0
         self.my_proxy_addr = CONFIG.my_ipv6_addr
-        self.grpc_api_any_log = logger.bind(user=__name__ + "AnyElse")
-        self.grpc_api_any_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_grpc_api_log.log"),
-                                  level="ERROR",
-                                  encoding="utf-8",
-                                  enqueue=True,
-                                  rotation="500MB",
-                                  compression="zip",
-                                  retention="15 days",
-                                  filter=lambda record: record["extra"].get('user') == __name__ + "AnyElse",
-                                  )
+        self.grpc_api_any_log = grpc_api_any_log
         self.s = MYASYNCHTTPX()
         self.GrpcProxyTools = GrpcProxyTools()  # 实例化
         # 版本号根据 ```https://app.bilibili.com/x/v2/version?mobi_app=android```这个api获取
@@ -156,7 +139,7 @@ class BiliGrpc:
         self.lock_prepare_proxy = asyncio.Lock()
         self.latest_352_ts = 0
         self._352MQServer = VoucherRabbitMQ.Instance()
-        self.GeetestV3BreakerPool = BaseAsyncPool(10, GeetestV3Breaker, 'a_validate_form_voucher_ua')
+        self.GeetestV3BreakerPool = BaseAsyncPool(3, GeetestV3Breaker, 'a_validate_form_voucher_ua')
 
     # region 准备工作
     async def _prepare_ck_proxy(self):
@@ -208,17 +191,20 @@ class BiliGrpc:
             if not proxy:
                 proxy = await self.__req.get_one_rand_grpc_proxy()
             if proxy:
-                options = [
-                    ("grpc.http_proxy", proxy['proxy']['http']),
-                ]
+                if 'http' in proxy['proxy']['http']:
+                    options = [
+                        ("grpc.http_proxy", proxy['proxy']['http']),
+                    ]
+                else:
+                    options = []
                 channel = aio.secure_channel('grpc.biliapi.net:443', grpc.ssl_channel_credentials(),
                                              options=options,
                                              compression=grpc.Compression.NoCompression
                                              )  # Connect to the gRPC server
                 return proxy, channel
             else:
-                logger.critical('无可用代理状态！')
-                await asyncio.sleep(3)
+                logger.error('无可用代理状态！')
+                await asyncio.sleep(30)
 
     # endregion
 
@@ -262,24 +248,63 @@ class BiliGrpc:
                 channel = random.choice(self.channel_list)
                 # logger.debug(
                 #     f'当前metadata池数量：{len(self.metadata_list)}，总共{self.queue_num}个meta信息，前往获取新的metadata')
-                md: tuple = await make_metadata("",
-                                                brand=brand,
-                                                Dalvik=Dalvik,
-                                                version_name=version_name,
-                                                build=build,
-                                                channel=channel,
-                                                proxy=proxy
-                                                )
-                if not dict(md).get('x-bili-ticket'):
+                md, ticket_resp, metadat_basic_info = await make_metadata(
+                    "",
+                    brand=brand,
+                    Dalvik=Dalvik,
+                    version_name=version_name,
+                    build=build,
+                    channel=channel,
+                    proxy=proxy
+                )
+                session_id = uuid.uuid4().hex[0:8]
+                md_dict = dict(md)
+                ck = f'Buvid={md_dict.get("buvid")}'
+                cfg = APIExClimbWuzhi()
+                if not md_dict.get('x-bili-ticket'):
                     logger.error(f'bili-ticket获取失败！{md}')
                     await asyncio.sleep(30)
                     continue
                 else:
+                    cfg = APIExClimbWuzhi(
+                        ua=md_dict.get('user-agent'),
+                        Buvid=md_dict.get('buvid'),
+                        bili_ticket=ticket_resp.ticket,
+                        bili_ticket_expires=ticket_resp.created_at + ticket_resp.ttl,
+                    )
+                    try:
+                        ck = await ExClimbWuzhi.verifyExClimbWuzhi(
+                            url="https://www.bilibili.com/",
+                            my_cfg=cfg,
+                            _from="h5"
+                        )
+                        await resource_abtest_abserver(
+                            buvid=metadat_basic_info.buvid,
+                            fp_local=metadat_basic_info.fp_local,
+                            fp_remote=metadat_basic_info.fp_remote,
+                            session_id=session_id,
+                            guestid=metadat_basic_info.guestid,
+                            app_version_name=metadat_basic_info.app_version_name,
+                            model=metadat_basic_info.model,
+                            app_build=metadat_basic_info.app_build,
+                            channel=metadat_basic_info.channel,
+                            osver=metadat_basic_info.osver,
+                            ticket=metadat_basic_info.ticket,
+                            brand=metadat_basic_info.brand,
+                        )
+                    except Exception as e:
+                        self.grpc_api_any_log.exception(f'激活cookie失败！')
+                    finally:
+                        pass
                     break
             metadata = MetaDataWrapper(
                 md=md,
-                expire_ts=int(time.time() + 0.5 * 3600),
-                version_name=version_name
+                expire_ts=ticket_resp.created_at + ticket_resp.ttl,
+                version_name=version_name,
+                cookie=ck,
+                session_id=session_id,
+                guestid=metadat_basic_info.guestid,
+                exclimb_wuzhi_cfg=cfg
             )
             self.metadata_list.append(metadata)
         # logger.debug(f'当前metadata池数量：{len(self.metadata_list)}')
@@ -304,17 +329,28 @@ class BiliGrpc:
         real_proxy_weights = 1000
         while 1:
             # self.grpc_api_any_log.debug(f'距离上次352时间：{int(time.time()) - self.latest_352_ts}秒')
-            if int(time.time()) - self.latest_352_ts < 15 * 60 or force_proxy:
-                proxy_flag: bool = True  # 是否使用代理
-            else:
-                proxy_flag = random.choices([True, False], weights=[
-                    real_proxy_weights if real_proxy_weights >= 0 else 0,
-                    ipv6_proxy_weights if ipv6_proxy_weights >= 0 else 0
-                ], k=1)[0]
-            if self.debug_mode:
-                proxy_flag = False
-            ip_status = None
-            cookies = None
+            async with (self.lock_prepare_proxy):
+                if int(time.time()) - self.latest_352_ts > 30 * 60:
+                    proxy_flag = random.choices([True, False], weights=[
+                        real_proxy_weights if real_proxy_weights >= 0 else 0,
+                        ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
+                    ], k=1)[0]  # 是否使用代理
+                else:
+                    proxy_flag = False
+                    # random.choices([True, False], weights=[
+                    #     real_proxy_weights if real_proxy_weights >= 0 else 0,
+                    #     ipv6_proxy_weights if ipv6_proxy_weights >= 0 else 0
+                    # ], k=1)[0]
+                if validate_token and int(time.time()) - self.latest_352_ts > 30 * 60:
+                    proxy_flag = False
+                if force_proxy:
+                    proxy_flag = True
+                if self.debug_mode:
+                    proxy_flag = False
+                if int(time.time()) - self.latest_352_ts <= 30 * 60:
+                    proxy_flag = True
+                ip_status = None
+                cookies = None
             if proxy_flag:
                 proxy, channel = await self.__get_random_channel()
                 if cookie_flag:
@@ -331,8 +367,7 @@ class BiliGrpc:
                     ))
                     cookies = self.cookies
             msg = grpc_req_message
-            proto = msg.SerializeToString()
-            data = b"\0" + len(proto).to_bytes(4, "big") + proto
+            proto_bytes = msg.SerializeToString()
             headers = {
                 "content-type": "application/grpc",
                 # 'Connection': 'close',
@@ -343,9 +378,9 @@ class BiliGrpc:
                 headers.update({
                     "cookie": cookies
                 })
-            if not md or not md.able():
-                md = await self.metadata_productor({'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr}})
-                validate_token = ""
+            if (not md or not md.able(num_add=False)) and not validate_token:
+                md: MetaDataWrapper = await self.metadata_productor(
+                    {'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr}})
             md_dict = dict(md.md)
             headers.update(md_dict)
             if not headers.get('x-bili-ticket'):
@@ -359,13 +394,22 @@ class BiliGrpc:
                     new_headers.append((k, gen_trace_id()))
                     continue
                 if k == 'x-bili-gaia-vtoken':
-                    new_headers.append((k, validate_token if validate_token else ''))
+                    # if validate_token:
+                    #     self.grpc_api_any_log.debug(f'x-bili-gaia-vtoken被覆盖！{validate_token}')
+                    new_headers.append((k, validate_token))
                     continue
                 new_headers.append((k, v))
             headers.update(dict(new_headers))
+            # for i in md.cookie.split(';'):
+            #     new_headers += (('cookie', i.strip(),),)
             resp = Response(status_code=114514)
             try:
                 # self.grpc_api_any_log.debug(f'使用ip:{ip_status.to_dict() if ip_status else proxy}进行请求，url:{url}')
+                if 'gzip' in headers.get('grpc-encoding'):
+                    compressed_proto_bytes = gzip.compress(proto_bytes, compresslevel=6)
+                    data = b"\01" + len(compressed_proto_bytes).to_bytes(4, "big") + compressed_proto_bytes
+                else:
+                    data = b"\01" + len(proto_bytes).to_bytes(4, "big") + proto_bytes
                 resp = await self.s.request(method="post",
                                             url=url,
                                             data=data,
@@ -378,6 +422,7 @@ class BiliGrpc:
                                                 'proxy'),
                                             )
                 resp.raise_for_status()
+                md.able(num_add=True)
                 if type(resp.headers.get('grpc-status')) is not str and type(
                         resp.headers.get('grpc-status')) is not bytes:
                     raise MY_Error(resp.text.replace('\n', ''))
@@ -385,9 +430,7 @@ class BiliGrpc:
                         '-352' in str(resp.headers.get('grpc-Message')) or \
                         '-412' in str(resp.headers.get('bili-status-code')) or \
                         '-412' in str(resp.headers.get('grpc-Message')):  # -352的话尝试把这个metadata丢弃
-                    self.grpc_api_any_log.warning(
-                        f'{func_name}\t{url} -352报错-{proxy}\n{str(resp.headers)}\n{str(new_headers)}\n{str(data)}')
-                    parsed_url = urlparse(url)
+
                     # self._352MQServer.push_voucher_info(
                     #     voucher=resp.headers.get('x-bili-gaia-vvoucher'),
                     #     ua=headers.get('user-agent'),
@@ -398,18 +441,38 @@ class BiliGrpc:
                     #     version=md.version_name
                     # )
                     if not validate_token:
-                        validate_token = await self.GeetestV3BreakerPool.do(
-                            v_voucher=resp.headers.get('x-bili-gaia-vvoucher'),
-                            ua=headers.get('user-agent'),
-                            ck=headers.get('buvid'),
-                            ori=f"https://{parsed_url.netloc}",
-                            ref=url,
-                            ticket=headers.get('x-bili-ticket'),
-                            version=md.version_name
+                        self.grpc_api_any_log.debug(f'未携带validate_token报错-352')
+                        parsed_url = urlparse(url)
+                        validate_token, _ = await asyncio.gather(
+                            *[self.GeetestV3BreakerPool.do(
+                                v_voucher=resp.headers.get('x-bili-gaia-vvoucher'),
+                                ua=headers.get('user-agent'),
+                                ck=headers.get('buvid'),
+                                ori=f"https://{parsed_url.netloc}",
+                                ref=url,
+                                ticket=headers.get('x-bili-ticket'),
+                                version=md.version_name,
+                                session_id=md.session_id,
+                            ),
+                                ExClimbWuzhi.verifyExClimbWuzhi(
+                                    url="https://www.bilibili.com/",
+                                    my_cfg=md.exclimb_wuzhi_cfg,
+                                    _from="h5"
+                                )
+                            ]
                         )
-                        continue
-                    raise MY_Error(
-                        f'{func_name}\t-352报错-{proxy}\n{str(resp.headers)}\n{str(headers)}\n{proxy}\n{str(data)}\n{grpc_req_message}')
+                        if validate_token:
+                            self.grpc_api_any_log.debug(f'获取到-352验证token:{validate_token}')
+                            continue
+                        else:
+                            self.grpc_api_any_log.error(f'未获取到-352验证token:{validate_token}')
+                            raise MY_Error(
+                                f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，遇到-352，未获取到-352验证token'
+                            )
+                    else:
+                        raise MY_Error(
+                            f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，携带validate_token{validate_token}请求依旧 -352报错-{proxy}\n{str(resp.headers)}\n{str(new_headers)}\n{str(data)}'
+                        )
 
                 gresp = grpc_resp_msg
                 if 'gzip' in headers.get('grpc-encoding'):
@@ -427,14 +490,14 @@ class BiliGrpc:
                     ip_status.latest_used_ts = int(time.time())
                     await self.GrpcProxyTools.set_ip_status(ip_status)
                 self.grpc_api_any_log.info(
-                    f'{func_name}\t{url} 获取grpc动态请求成功代理：{proxy.get("proxy")} {grpc_req_message}\n{headers}'
+                    f'{func_name}\t{url} 获取grpc动态请求成功代理：{proxy.get("proxy")} {grpc_req_message}\n{new_headers}'
                     f'\n当前可用代理数量：{self.GrpcProxyTools.avalibleNum}/{self.GrpcProxyTools.allNum}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
                 md.times_352 = 0
                 return resp_dict
             except (
                     ConnectionError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,
                     ReadError, WriteError,
-                    InvalidURL, CurlError,
+                    InvalidURL,NetworkError
             ) as httpx_err:
                 # self.grpc_api_any_log.debug(
                 #     f'请求失败！{traceback.format_exc(0)}ip:{ip_status.to_dict() if ip_status else proxy}进行请求，url:{url}')
@@ -470,7 +533,7 @@ class BiliGrpc:
                 score_change = -10
                 self.grpc_api_any_log.warning(
                     f"{func_name}\t{url} grpc_get_dynamic_detail_by_type_and_rid\nBiliGRPC error: {err}\n"
-                    f"{proxy['proxy'] if proxy_flag else proxy.get('proxy')}\n{traceback.format_exc(1)}")
+                    f"{proxy['proxy'] if proxy_flag else proxy.get('proxy')}")
 
                 if '352' in str(err) or '412' in str(err):
                     score_change = 10
@@ -490,7 +553,8 @@ class BiliGrpc:
                         ip_status.latest_352_ts = int(time.time())
                     else:
                         self.latest_352_ts = int(time.time())
-                        await asyncio.sleep(2)  # 本地ipv6状态-352的情况下，等待一段时间，破解验证码之后再执行
+                        self.grpc_api_any_log.debug(f'设置本地代理最后-352时间为：{self.latest_352_ts}')
+                        await asyncio.sleep(10)  # 本地ipv6状态-352的情况下，等待一段时间，破解验证码之后再执行
                     ipv6_proxy_weights -= 10
                 if proxy_flag:
                     if proxy == self.proxy:
@@ -532,7 +596,7 @@ class BiliGrpc:
                 # print(dyn_details_req.SerializeToString())
                 # ack = gen_random_access_key()
                 ack = ''
-                md = await make_metadata(ack, proxy=proxy)
+                md, ticket, metadat_basic_info = await make_metadata(ack, proxy=proxy)
 
                 dyn_all_resp = await dynamic_client.DynDetails(dyn_details_req,
                                                                metadata=md,
@@ -586,15 +650,15 @@ class BiliGrpc:
             raise TypeError(f'rid must be number! rid:{rid}')
         url = "https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail"
         data_dict = {
-            'uid': random.randint(1, 3537105317792299),
+            # 'uid': random.randint(1, 3537105317792299),
             'dyn_type': dynamic_type,
             'rid': rid,
-            "ad_param": AdParam(
-                # ad_extra='E86F4CFF1F8FA890A75155EEAA51E6AE4FA9DBE62FCE708186D0CE5EF37B86948620D8BA1D991685B1288E2EDE09C6D52F8C2D33D59872EAE1EB776D11F71523CE1AF2112D8A950B98F6A1A48F848BC65E3D1B2687A17E44CDDEF6F0174F5E6548175C99B236CB32EBBE9DD7819D2DA0E272638B4DD5D4B27AD4119C056FA5362A495A2A482E35BBDD264A1829624B4446583ACCDDC6F867B3B7D0A53A7E6863D8425D19899FF591BAF3205F2A2051DDF7D60C649D9DE5221DFC48D8F592FB31DB4A72ABD8960A8DA289EAFE1C5E61334854717F0627A8DD6A897240F3847F517ED311FDCC904D4A2B4183944BEB5C9E4080BD059A3B56D25219D4115F8861E8745D65144C4A7D906CE3A4C1BAD79D9F2E80D86CA43052937843D6A841FCE72295389B8428B90743BA06685D3880D342A51B8CCEF21C5D7BF64BB1917A245E8CBB20F79B40A08D4380CCD603179D6AD77F9ED906CE0007A3F1AEF1CD6703B739A245A81820550CE06FCA780D3F0A9C098FFAB6BEF2AC1C8D3448ACB27079E623C50AE141DEE943F26DCA8E8EDF32299A7BF8935E496CD3708ACA16114149C85C99E8A7B9B1EB5188620F531EB13A89254E0AC941706CC14F31C776DFB7D329F6DA649A425E058B4187D5EA0117C2107D518D10ADE56CA721DCFA53CD8688D4ADC151C338A2C74CA8DE46CB736D0743F7706C7D273CFB847FA3CE51BE6D976EF4739A6C3488199E15A4463DD7522DF5A43E8207BE32906748A59EF28AB065961B4D69AD1E000D2601C58EA27126A5A7A7D3E3DBCA9E743F75657FB53FED2391244D3A7331C8D08CA712D9E73BFBB45F41FA0DA2A4087C6148C0D78731EE9BBE877227EFC2633FC5D113ED7EF3300335151B5E65C5D493A9A6BDFEB8D317BDBE4DA1A2B433B3CDE87FFE40B3B2C1DCB316'
-                ad_extra=''.join(random.choices(string.ascii_uppercase + string.digits,
-                                                k=random.choice([x for x in range(1300, 1350)])))
-            ),
-            'player_args': PlayerArgs(qn=32, fnval=272, voice_balance=1),
+            # "ad_param": AdParam(
+            #     # ad_extra='E86F4CFF1F8FA890A75155EEAA51E6AE4FA9DBE62FCE708186D0CE5EF37B86948620D8BA1D991685B1288E2EDE09C6D52F8C2D33D59872EAE1EB776D11F71523CE1AF2112D8A950B98F6A1A48F848BC65E3D1B2687A17E44CDDEF6F0174F5E6548175C99B236CB32EBBE9DD7819D2DA0E272638B4DD5D4B27AD4119C056FA5362A495A2A482E35BBDD264A1829624B4446583ACCDDC6F867B3B7D0A53A7E6863D8425D19899FF591BAF3205F2A2051DDF7D60C649D9DE5221DFC48D8F592FB31DB4A72ABD8960A8DA289EAFE1C5E61334854717F0627A8DD6A897240F3847F517ED311FDCC904D4A2B4183944BEB5C9E4080BD059A3B56D25219D4115F8861E8745D65144C4A7D906CE3A4C1BAD79D9F2E80D86CA43052937843D6A841FCE72295389B8428B90743BA06685D3880D342A51B8CCEF21C5D7BF64BB1917A245E8CBB20F79B40A08D4380CCD603179D6AD77F9ED906CE0007A3F1AEF1CD6703B739A245A81820550CE06FCA780D3F0A9C098FFAB6BEF2AC1C8D3448ACB27079E623C50AE141DEE943F26DCA8E8EDF32299A7BF8935E496CD3708ACA16114149C85C99E8A7B9B1EB5188620F531EB13A89254E0AC941706CC14F31C776DFB7D329F6DA649A425E058B4187D5EA0117C2107D518D10ADE56CA721DCFA53CD8688D4ADC151C338A2C74CA8DE46CB736D0743F7706C7D273CFB847FA3CE51BE6D976EF4739A6C3488199E15A4463DD7522DF5A43E8207BE32906748A59EF28AB065961B4D69AD1E000D2601C58EA27126A5A7A7D3E3DBCA9E743F75657FB53FED2391244D3A7331C8D08CA712D9E73BFBB45F41FA0DA2A4087C6148C0D78731EE9BBE877227EFC2633FC5D113ED7EF3300335151B5E65C5D493A9A6BDFEB8D317BDBE4DA1A2B433B3CDE87FFE40B3B2C1DCB316'
+            #     # ad_extra=''.joi n(random.choices(string.ascii_uppercase + string.digits,
+            #     #                                 k=random.choice([x for x in range(1300, 1350)])))
+            # ),
+            'player_args': PlayerArgs(qn=32, fnval=272, voice_balance=1, voice_any=1),
             'share_id': 'dt.dt-detail.0.0.pv',
             'share_mode': 3,
             'local_time': 8,
@@ -639,8 +703,6 @@ class MY_Error(ValueError):
 
 async def _test():
     t = BiliGrpc()
-    t.my_proxy_addr = 'http://127.0.0.1:1919'
-    t.my_proxy_addr = 'http://192.168.1.201:3128'
     t.debug_mode = True
     result = await asyncio.gather(
         *[t.grpc_get_dynamic_detail_by_type_and_rid(rid, 2, False, force_proxy=True) for rid in

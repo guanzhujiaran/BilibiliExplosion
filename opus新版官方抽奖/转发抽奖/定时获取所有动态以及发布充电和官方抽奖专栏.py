@@ -6,9 +6,12 @@ import pydantic
 import asyncio
 import time
 from datetime import datetime, timedelta
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from CONFIG import CONFIG
 from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
-from opus新版官方抽奖.转发抽奖.获取官方抽奖信息 import ExctractOfficialLottery
+from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExctractOfficialLottery
 from grpc获取动态.src.getDynDetail import DynDetailScrapy
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -69,7 +72,7 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     if time.time() - pub_article_info.lastPubDate.timestamp() > 8 * 3600:
         d.scrapy_sem = asyncio.Semaphore(1000)
     else:
-        d.scrapy_sem = asyncio.Semaphore(900)
+        d.scrapy_sem = asyncio.Semaphore(1000)
     await d.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
@@ -86,7 +89,7 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
                   f'\n充电抽奖更新数量：{len(latest_charge_lot)}'
                   f'\n更新内容：{[x.__dict__ for x in latest_official_lot]}\n{[x.__dict__ for x in latest_charge_lot]}')
         g = LotDynSortByDate()
-        g.main([int(pub_article_info.lastPubDate.timestamp()), int(time.time())])
+        await asyncio.to_thread(g.main, [int(pub_article_info.lastPubDate.timestamp()), int(time.time())])
         pub_article_info.start_ts = int(time.time())
         pub_article_info.save_lastPubTs()
 
@@ -96,15 +99,33 @@ def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticle
         **kwargs):
     delta_hour = 3
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(main(pub_article_info, schedule_mark))
+        asyncio.run(main(pub_article_info, schedule_mark))
     except Exception as e:
         log.exception(e)
         delta_hour = 24
         pushme(f'定时发布充电和官方抽奖专栏任务出错', f'{traceback.format_exc()}')
     if schedule_mark and schedulers:
         nextjob = schedulers.add_job(run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
+                                     run_date=datetime.now() + timedelta(hours=delta_hour))
+        log.info(f"任务结束，等待下一次{nextjob.trigger}执行。")
+        """
+            每隔三个小时获取一次全部图片动态
+        """
+
+
+@async_pushme_try_catch_decorator
+async def async_run(schedulers: Union[None, AsyncIOScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool,
+                    *args,
+                    **kwargs):
+    delta_hour = 3
+    try:
+        await main(pub_article_info, schedule_mark)
+    except Exception as e:
+        log.exception(e)
+        delta_hour = 24
+        await asyncio.to_thread(pushme, f'定时发布充电和官方抽奖专栏任务出错', f'{traceback.format_exc()}')
+    if schedule_mark and schedulers:
+        nextjob = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
                                      run_date=datetime.now() + timedelta(hours=delta_hour))
         log.info(f"任务结束，等待下一次{nextjob.trigger}执行。")
         """
@@ -120,6 +141,7 @@ def schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = 
     :param show_log: 是否打印日志
     :return:
     """
+    log.info('启动获取所有B站动态以及发布充电和官方抽奖专栏程序！！！')
     if not show_log:
         log.remove()
         log.add(
@@ -145,6 +167,42 @@ def schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = 
         schedulers.start()
     else:
         run(None, pub_article_info, schedule_mark)
+
+
+@async_pushme_try_catch_decorator
+async def async_schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = True):
+    """
+    模块主入口
+    :param schedule_mark: 是否定时执行
+    :param show_log: 是否打印日志
+    :return:
+    """
+    log.info('启动获取所有B站动态以及发布充电和官方抽奖专栏程序！！！')
+    if not show_log:
+        log.remove()
+        log.add(
+            os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_official_lot_log.log"),
+            level="WARNING",
+            encoding="utf-8",
+            enqueue=True,
+            rotation="500MB",
+            compression="zip",
+            retention="15 days",
+            filter=lambda record: record["extra"].get('user') == "官方抽奖"
+        )
+    pub_article_info = pubArticleInfo()
+    if schedule_mark:
+        # from apscheduler.triggers.cron import CronTrigger
+        # cron_str = '0 20 * * *'
+        # crontrigger = CronTrigger.from_crontab(cron_str)
+        schedulers = AsyncIOScheduler()
+        job = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
+                                 run_date=datetime.now(), misfire_grace_time=360)
+        log.info(
+            f'使用内置定时器,开启定时任务,等待时间（{job.trigger}）到达后执行')
+        schedulers.start()
+    else:
+        await async_run(None, pub_article_info, schedule_mark)
 
 
 if __name__ == '__main__':

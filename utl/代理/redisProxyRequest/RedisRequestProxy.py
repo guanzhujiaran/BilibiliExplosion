@@ -13,6 +13,7 @@ from enum import Enum
 from functools import reduce
 from typing import Union
 import bs4
+from httpx import NetworkError
 from loguru import logger
 from CONFIG import CONFIG
 from grpc获取动态.Utils.MQServer.VoucherMQServer import VoucherRabbitMQ
@@ -20,7 +21,7 @@ from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import
 from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.ProxyTool.ProxyObj import MyProxyData, MyProxyDataTools, TypePDict
 from utl.代理.SealedRequests import MYASYNCHTTPX
-from utl.代理.数据库操作 import async_proxy_op_alchemy_mysql_ver
+from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 
 
 @dataclass
@@ -139,7 +140,7 @@ class request_with_proxy:
         self.redis = MyRedisManager()
         self.use_p_dict_flag = False
         self.channel = 'bili'
-        self.mysql_proxy_op = async_proxy_op_alchemy_mysql_ver.SQLHelper()
+        self.mysql_proxy_op = SQLHelper
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
         self.log = logger.bind(user="MYREQ")
         self.get_proxy_sep_time = 0.5 * 3600  # 获取代理的间隔
@@ -171,25 +172,24 @@ class request_with_proxy:
         :param ua:
         :return:
         """
-        await self.cookie_lock.acquire()
-        if self.cookie_queue_num < 20:
-            self.cookie_queue_num += 1
-            cookie_data: Union[CookieWrapper, None] = None
-        else:
-            while 1:
-                if len(self.fake_cookie_list) > 0:
-                    cookie_data = random.choice(self.fake_cookie_list)
-                    if cookie_data.expire_ts < time.time() or cookie_data.able == False:
-                        self.cookie_queue_num -= 1
-                        self.fake_cookie_list.remove(cookie_data)
-                        continue
-                    break
-                if len(self.fake_cookie_list) == 0 and self.cookie_queue_num == 0:
-                    self.cookie_queue_num += 1
-                    cookie_data = None
-                    break
-                await asyncio.sleep(1)
-        self.cookie_lock.release()
+        async with self.cookie_lock:
+            if self.cookie_queue_num < 20:
+                self.cookie_queue_num += 1
+                cookie_data: Union[CookieWrapper, None] = None
+            else:
+                while 1:
+                    if len(self.fake_cookie_list) > 0:
+                        cookie_data = random.choice(self.fake_cookie_list)
+                        if cookie_data.expire_ts < time.time() or cookie_data.able == False:
+                            self.cookie_queue_num -= 1
+                            self.fake_cookie_list.remove(cookie_data)
+                            continue
+                        break
+                    if len(self.fake_cookie_list) == 0 and self.cookie_queue_num == 0:
+                        self.cookie_queue_num += 1
+                        cookie_data = None
+                        break
+                    await asyncio.sleep(1)
         if not cookie_data:
             while 1:
                 logger.debug(
@@ -261,16 +261,15 @@ class request_with_proxy:
         mode = self.mode
         hybrid: bool = False
         hybrid_flag = False
-        _hybrid_t_w = 1
-        _hybrid_f_w = 9
+        real_proxy_weights = 1
+        ipv6_proxy_weights = 1000
         if 'mode' in kwargs.keys():
             mode = kwargs.pop('mode')
         if 'hybrid' in kwargs.keys():
             hybrid_flag = True
         status = 0
         ua = kwargs.get('headers', {}).get('user-agent', '') or kwargs.get('headers', {}).get('User-Agent',
-                                                                                              '') or random.choice(
-            CONFIG.UA_LIST)
+                                                                                              '') or CONFIG.rand_ua
         url = kwargs.get('url')
         origin = kwargs.get('headers', {}).get('origin', 'https://www.bilibili.com')
         referer = kwargs.get('headers', {}).get('referer', 'https://www.bilibili.com/')
@@ -279,7 +278,10 @@ class request_with_proxy:
         while True:
             cookie_data = await self.Get_Bili_Cookie(ua)
             if hybrid_flag:
-                hybrid: bool = random.choices([True, False], weights=[_hybrid_t_w, _hybrid_f_w], k=1)[0]
+                hybrid: bool = random.choices([True, False], weights=[
+                    real_proxy_weights if real_proxy_weights >= 0 else 0,
+                    ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
+                ], k=1)[0]
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
                 'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
@@ -293,7 +295,7 @@ class request_with_proxy:
                 continue
             # if not hybrid or status != 0:
             if not hybrid or status == -352:
-                _hybrid_t_w += 1
+                real_proxy_weights += 1
                 p_dict: Union[TypePDict, dict] = await self._prepare_proxy_from_using_p_dict()
                 if not p_dict:
                     p_dict = await self._set_new_proxy(mode)
@@ -303,7 +305,7 @@ class request_with_proxy:
                         temp.is_available(True)
                 p = p_dict.get('proxy', {})
             else:
-                _hybrid_f_w += 1
+                ipv6_proxy_weights += 20
                 p_dict: Union[TypePDict, dict] = {
                     'proxy_id': -1,
                     'proxy': {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr},
@@ -319,7 +321,7 @@ class request_with_proxy:
                 self.log.debug('刷新全局-412代理')
                 await self._refresh_412_proxy()
                 continue
-            req_dict = False
+            req_dict = {}
             req_text = ''
             try:
                 # self.log.info(f'正在发起请求中！\t{p}\n{args}\n{kwargs}\n')
@@ -393,7 +395,9 @@ class request_with_proxy:
                     p_dict['score'] += 100
                     p_dict['status'] = 0
                     self.log.debug(f'更新数据库中的代理status:{status}')
-
+            except (ValueError, AttributeError) as common_err:
+                self.log.exception(f'请求时出错，一般错误：{common_err}')
+                continue
             except Exception as e:
                 # if p not in self.ban_proxy_pool:
                 #     self.ban_proxy_pool.append(p)
@@ -436,7 +440,7 @@ class request_with_proxy:
         headers = {
             'cookie': "Hm_lvt_7ed65b1cc4b810e9fd37959c9bb51b31=1680258680; Hm_lvt_e0cc8b6627fae1b9867ddfe65b85c079=1682493581; channelid=0; sid=1688887169922522; _gcl_au=1.1.1132663223.1688887171; __51vcke__K3h4gFH3WOf3aJqX=6c6a659f-9ac6-5a8c-abb0-bd2e2aaf2dd6; __51vuft__K3h4gFH3WOf3aJqX=1688887171061; _gid=GA1.2.1163372563.1688887171; __51uvsct__K3h4gFH3WOf3aJqX=2; _ga_DC1XM0P4JL=GS1.1.1688887171.1.1.1688889750.0.0.0; __vtins__K3h4gFH3WOf3aJqX=%7B%22sid%22%3A%20%22c86f1b8f-1e78-5ad1-86e8-f487d239c80b%22%2C%20%22vd%22%3A%202%2C%20%22stt%22%3A%20432874%2C%20%22dr%22%3A%20432874%2C%20%22expires%22%3A%201688891551028%2C%20%22ct%22%3A%201688889751028%7D; _ga=GA1.2.1430092584.1680258680; _gat=1; _ga_FWN27KSZJB=GS1.2.1688889318.2.1.1688889751.0.0.0",
             'Sec-Fetch-Site': 'same-origin',
-            'user-agent': random.choice(CONFIG.UA_LIST),
+            'user-agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -485,7 +489,7 @@ class request_with_proxy:
 
     async def get_proxy_from_zdayip(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -532,7 +536,7 @@ class request_with_proxy:
 
     async def get_proxy_from_66daili(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST),
+            'user-agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -628,7 +632,7 @@ class request_with_proxy:
 
     async def get_proxy_from_taiyangdaili(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST),
+            'user-agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -674,7 +678,7 @@ class request_with_proxy:
 
     async def get_proxy_from_kxdaili_1(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -719,7 +723,7 @@ class request_with_proxy:
 
     async def get_proxy_from_kxdaili_2(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -764,7 +768,7 @@ class request_with_proxy:
 
     async def get_proxy_from_ip3366_1(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -810,7 +814,7 @@ class request_with_proxy:
 
     async def get_proxy_from_ip3366_2(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -857,7 +861,7 @@ class request_with_proxy:
 
     async def get_proxy_from_qiyun(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -903,7 +907,7 @@ class request_with_proxy:
 
     async def get_proxy_from_ihuan(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -951,7 +955,7 @@ class request_with_proxy:
 
     async def get_proxy_from_docip(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -993,7 +997,7 @@ class request_with_proxy:
 
     async def get_proxy_from_openproxylist(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1035,7 +1039,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxyhub(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST),
+            'user-agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -1085,9 +1089,79 @@ class request_with_proxy:
     # endregion
 
     # region Github获取的text格式的代理，每行格式为ip:port
+    async def get_proxy_from_parserpp_ip_ports(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/parserpp/ip_ports/main/proxyinfo.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_api_openproxylist_xyz_https(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://api.openproxylist.xyz/http.txt'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+            proxies = []
+            for i in req.text:
+                if i.strip():
+                    append_dict = {
+                        'http': 'http://' + i.strip(),
+                        'https': 'http://' + i.strip()
+                    }
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
     async def get_proxy_from_SevenworksDev_proxy_list_https(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1122,7 +1196,7 @@ class request_with_proxy:
 
     async def get_proxy_from_SevenworksDev_proxy_list_http(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1158,7 +1232,7 @@ class request_with_proxy:
     async def get_proxy_from_monosans_proxy_list(self) -> tuple[list, bool]:
 
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1194,7 +1268,7 @@ class request_with_proxy:
     async def get_proxy_from_r00tee_Proxy_List(self) -> tuple[list, bool]:
 
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1230,7 +1304,7 @@ class request_with_proxy:
     async def get_proxy_from_themiralay_Proxy_List_World(self) -> tuple[list, bool]:
 
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1265,7 +1339,7 @@ class request_with_proxy:
 
     async def get_proxy_from_lalifeier_proxy_scraper_https(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1300,7 +1374,7 @@ class request_with_proxy:
 
     async def get_proxy_from_lalifeier_proxy_scraper_http(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1335,7 +1409,7 @@ class request_with_proxy:
 
     async def get_proxy_from_claude89757_free_https_proxies(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1370,7 +1444,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Simatwa_free_proxies_http(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1405,7 +1479,7 @@ class request_with_proxy:
 
     async def get_proxy_from_zloi_user_hideipme(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1440,7 +1514,7 @@ class request_with_proxy:
 
     async def get_proxy_from_elliottophellia_proxylist_http(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1475,7 +1549,7 @@ class request_with_proxy:
 
     async def get_proxy_from_elliottophellia_proxylist_socks5(self) -> tuple[list, bool]:
         headers = {
-            'user-agent': random.choice(CONFIG.UA_LIST)
+            'user-agent': CONFIG.rand_ua
         }
         Get_proxy_success = True
         req = ''
@@ -1509,7 +1583,7 @@ class request_with_proxy:
 
     async def get_proxy_from_officialputuid_KangProxy_KangProxy_https(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -1546,7 +1620,7 @@ class request_with_proxy:
 
     async def get_proxy_from_officialputuid_KangProxy_KangProxy_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -1583,7 +1657,7 @@ class request_with_proxy:
 
     async def get_proxy_from_MuRongPIG_Proxy_Master(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -1620,7 +1694,7 @@ class request_with_proxy:
 
     async def get_proxy_from_roosterkid_openproxylist_main_HTTPS_RAW(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1660,7 +1734,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxy_casals_ar_main_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1700,7 +1774,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Zaeem20_FREE_PROXIES_LIST_master_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1739,7 +1813,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Zaeem20_FREE_PROXIES_LIST_master_https(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1778,7 +1852,7 @@ class request_with_proxy:
 
     async def get_proxy_from_TheSpeedX_PROXY_List_master_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1818,7 +1892,7 @@ class request_with_proxy:
 
     async def get_proxy_from_yemixzy_proxy_list_main_proxies_http(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1858,7 +1932,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Free_Proxies_blob_main_proxy_files_http_proxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1897,7 +1971,7 @@ class request_with_proxy:
 
     async def get_proxy_from_Free_Proxies_blob_main_proxy_files_https_proxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1937,7 +2011,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxifly_free_proxy_list_main_proxies_protocols_http_data(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -1978,7 +2052,7 @@ class request_with_proxy:
 
     async def get_proxy_from_sarperavci_freeCheckedHttpProxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -2018,7 +2092,7 @@ class request_with_proxy:
 
     async def get_proxy_from_prxchk_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -2058,7 +2132,7 @@ class request_with_proxy:
 
     async def get_proxy_from_andigwandi_free_proxy(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
 
         Get_proxy_success = True
@@ -2098,7 +2172,7 @@ class request_with_proxy:
 
     async def get_proxy_from_elliottophellia_yakumo(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -2135,7 +2209,7 @@ class request_with_proxy:
 
     async def get_proxy_from_im_razvan_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -2172,7 +2246,7 @@ class request_with_proxy:
 
     async def get_proxy_from_proxy4parsing_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -2209,7 +2283,7 @@ class request_with_proxy:
 
     async def get_proxy_from_mmpx12_proxy_list(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -2247,9 +2321,82 @@ class request_with_proxy:
     # endregion
 
     # region json格式代理（每个函数的json响应可能都不一样，要换里面解析json的方式）
+    async def get_proxy_from_proxy_953959_xyz(self) -> tuple[list, bool]:
+        headers = {
+            'User-Agent': CONFIG.rand_ua,
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://proxy.953959.xyz/all/'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+
+            req_dict = req.json()
+            http_p = req_dict
+            for da in http_p:
+                if proxy := da.get('proxy'):
+                    proxy_queue.append({
+                        'http': f'http://{proxy}',
+                        'https': f'http://{proxy}'
+                    })
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_proxyshare(self) -> tuple[list, bool]:
+        headers = {
+            'User-Agent': CONFIG.rand_ua,
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://www.proxyshare.com/detection/proxyList?limit=500&page=1&sort_by=lastChecked&sort_type=desc&protocols=http'
+        try:
+            req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        except:
+            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            traceback.print_exc()
+            await asyncio.sleep(10)
+            # self.GetProxy_Flag = False
+            Get_proxy_success = False
+            return proxy_queue, Get_proxy_success
+        if req:
+
+            req_dict = req.json()
+            http_p = req_dict.get('data')
+            for da in http_p:
+                if ip := da.get('ip'):
+                    if port := da.get('port'):
+                        proxy_queue.append({
+                            'http': f'http://{ip}:{port}',
+                            'https': f'http://{ip}:{port}'
+                        })
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            Get_proxy_success = False
+        return proxy_queue, Get_proxy_success
+
     async def get_proxy_from_t0mer_free_proxies(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -2284,7 +2431,7 @@ class request_with_proxy:
 
     async def get_proxy_from_omegaproxy(self) -> tuple[list, bool]:
         headers = {
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
         }
         Get_proxy_success = True
         req = ''
@@ -2642,6 +2789,35 @@ class request_with_proxy:
         except Exception as e:
             traceback.print_exc()
             self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_api_openproxylist_xyz_https())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_proxyshare())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_proxy_953959_xyz())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
+
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_parserpp_ip_ports())
+            task_list.append(task)
+        except Exception as e:
+            traceback.print_exc()
+            self.log.critical(e)
         results: Union[tuple[list[str], bool] or Exception] = await asyncio.gather(*task_list,
                                                                                    return_exceptions=True)
         for result in results:
@@ -2651,9 +2827,15 @@ class request_with_proxy:
             _, Get_proxy_success = result
             proxy_queue.extend(_)
         self.log.info(f'最终共有{len(proxy_queue)}个代理需要检查')
-        for _ in range(len(proxy_queue)):
-            await self._check_ip_by_bili_zone(proxy_queue.pop())
+
+        sem = asyncio.Semaphore(10)
+        all_tasks = []
+        for i in range(len(proxy_queue)):
+            all_tasks.append(self._check_ip_by_bili_zone(proxy_queue.pop(), sem=sem))
+        await asyncio.gather(*all_tasks)
+        self.log.info(f'代理已经检查完毕，并添加至数据库！')
         await self.mysql_proxy_op.remove_list_dict_data_by_proxy()
+        self.log.info(f'移除重复代理')
         Get_proxy_success = True
         return
 
@@ -2678,30 +2860,31 @@ class request_with_proxy:
         run_function = lambda x, y: x if y in x else x + [y]
         return reduce(run_function, [[], ] + list_dict_data)
 
-    async def _check_ip_by_bili_zone(self, proxy: dict, status=0, score=50) -> bool:
+    async def _check_ip_by_bili_zone(self, proxy: dict, status=0, score=50, sem=None) -> bool:
         '''
         使用zone检测代理ip，没问题就追加回队首，返回True为可用代理
         :param status:
         :param proxy:
         :return:
         '''
-        if self.check_proxy_flag:
-            try:
-                _url = 'http://api.bilibili.com/x/web-interface/zone'
-                _req = await self.s.get(url=_url, proxies=proxy, timeout=self.timeout)
-                if _req.json().get('code') == 0:
-                    # self.log.info(f'代理检测成功，添加回代理列表：{_req.json()}')
-                    await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
-                    return True
-                else:
-                    # self.log.info(f'代理失效：{_req.text}')
+        async with sem:
+            if self.check_proxy_flag:
+                try:
+                    _url = 'http://api.bilibili.com/x/web-interface/zone'
+                    _req = await self.s.get(url=_url, proxies=proxy, timeout=self.timeout)
+                    if _req.json().get('code') == 0:
+                        # self.log.info(f'代理检测成功，添加回代理列表：{_req.json()}')
+                        await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
+                        return True
+                    else:
+                        # self.log.info(f'代理失效：{_req.text}')
+                        return False
+                except Exception as e:
+                    # self.log.info(f'代理检测失败：{proxy}')
                     return False
-            except Exception as e:
-                # self.log.info(f'代理检测失败：{proxy}')
-                return False
-        else:
-            await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
-            return True
+            else:
+                await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
+                return True
 
     def _proxy_warrper(self, proxy, status=0, score=50):
         return {"proxy": proxy, "status": status, "update_ts": int(time.time()), 'score': score}

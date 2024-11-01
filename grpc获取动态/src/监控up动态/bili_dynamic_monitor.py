@@ -108,6 +108,7 @@ class monitor:
 
     @async_pushme_try_catch_decorator
     async def main(self, show_log=True):
+        log.info('启动B站动态监控程序！！！')
         if not show_log:
             log.remove()
         log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_space_monitor_log.log"),

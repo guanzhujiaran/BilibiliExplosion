@@ -45,7 +45,7 @@ class TopicRobot:
         }
 
         resp = await self.req.request_with_proxy(url=self.baseurl, method='get', params=params,
-                                                 headers={'user-agent': random.choice(CONFIG.UA_LIST)},
+                                                 headers={'user-agent': CONFIG.rand_ua},
                                                  hybrid="1"
                                                  )
         return resp
@@ -165,7 +165,7 @@ class TopicRobot:
 
     async def main(self, start_topic_id=0):
         # region 重新获取获取失败的数据
-        get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(self._max_stop_count + self.sem_limit)
+        get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(self._max_stop_count + self.sem_limit + 5000)
         _task_list = set()
         for i in get_failed_topic_ids:
             await self.sem.acquire()
@@ -199,6 +199,10 @@ def run():
     loop = asyncio.get_event_loop()
     loop.run_until_complete(a.main())
 
+async def _test_get_topic_info():
+    topic_id = 1234331
+    _a = TopicRobot()
+    await _a.pipeline(topic_id)
 
 if __name__ == "__main__":
-    run()
+    asyncio.run(_test_get_topic_info())

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Union, List
 
+from grpc获取动态.log.base_log import grpc_api_any_log
 from utl.redisTool.RedisManager import RedisManagerBase
 
 _max_use_count_before_352 = 20
@@ -139,9 +140,8 @@ class myRedisManager(RedisManagerBase):
 
     async def del_ip(self, ip: str):
         async with self.lock_ip:
-            if self._z_exist(self.RedisMap.accessible_ip_zset.value, ip):
-                await self._zdel_elements(self.RedisMap.accessible_ip_zset.value, ip)
-                await self._hmdel(ip)
+            await self._zdel_elements(self.RedisMap.accessible_ip_zset.value, ip)
+            await self._hmdel(ip)
 
     async def change_ip_score(self, ip: str, score: int = -1):
         async with self.lock_ip:
@@ -194,7 +194,7 @@ class GrpcProxyTools:
 
     @property
     def avalibleNum(self):
-        return len([x for x in self.ip_list if x.available and x.is_usable])
+        return len([x for x in self.ip_list if x.available])
 
     @property
     def allNum(self):
@@ -269,9 +269,10 @@ class GrpcProxyTools:
                 self.ip_list = await self.r.get_all_ip_status()
                 self._redis_data_sync_flag = True
             if len(self.ip_list) >= 2000:
+                grpc_api_any_log.debug(f'代理列表达到2000，清理无效代理（x.available is False）')
                 self.ip_list = [x for x in self.ip_list if x.available]
             avalibleNum = self.avalibleNum
-            if avalibleNum > 100 and self.use_good_proxy_flag:
+            if avalibleNum > 5 and self.use_good_proxy_flag:
                 while 1:
                     _ = await self.r.get_accessible_ips(start=0, num=5)
                     if len(_) == 5:
@@ -285,9 +286,9 @@ class GrpcProxyTools:
                     else:
                         return None
             else:
-                if avalibleNum > 300:
+                if avalibleNum > 10:
                     self.use_good_proxy_flag = True
-                if avalibleNum < 100:
+                if avalibleNum < 5:
                     self.use_good_proxy_flag = False
                 return None
 
@@ -296,6 +297,6 @@ class GrpcProxyTools:
 
 
 if __name__ == '__main__':
-    a = GrpcProxyTools()
-    result = asyncio.run(a.get_all_ip())
-    print(len(result))
+    a = myRedisManager()
+    result = asyncio.run(a.get_accessible_ips())
+    print(result)

@@ -663,13 +663,13 @@ class renew:
         if _cookie == '':
             headers = {
                 'Referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
-                'User-Agent': random.choice(CONFIG.UA_LIST),
+                'User-Agent': CONFIG.rand_ua,
                 'cookie': '1'
             }
         else:
             headers = {
                 'Referer': f'https://t.bilibili.com/{dynamic_id}', 'Connection': 'close',
-                'User-Agent': random.choice(CONFIG.UA_LIST),
+                'User-Agent': CONFIG.rand_ua,
                 'cookie': _cookie
                 # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
                 #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
@@ -938,7 +938,7 @@ class renew:
         pinglunheader = {
             'Referer': f'https://t.bilibili.com/{rid}?type={_type}',
             'Connection': 'close',
-            'User-Agent': random.choice(CONFIG.UA_LIST),
+            'User-Agent': CONFIG.rand_ua,
             'cookie': '1'
         }
         pinglunurl = 'http://api.bilibili.com/x/v2/reply/main?next=' + str(pn) + '&type=' + str(ctype) + '&oid=' + str(
@@ -1052,7 +1052,7 @@ class renew:
                     for k, v in fake_cookie.items():
                         fake_cookie_str += f'{k}={v}; '
                 dynamic_detail = await self.get_dynamic_detail_with_proxy(dynamic_id, fake_cookie_str,
-                                                                          random.choice(CONFIG.UA_LIST),
+                                                                          CONFIG.rand_ua,
                                                                           dynamic_type=dynamic_type)  # 需要增加假的cookie
                 break
             except:
@@ -1220,7 +1220,7 @@ class renew:
         :param offset:
         :return:reqtext
         '''
-        ua = random.choice(CONFIG.UA_LIST)
+        ua = CONFIG.rand_ua
         headers = {
             'user-agent': ua,
             'cookie': '1'

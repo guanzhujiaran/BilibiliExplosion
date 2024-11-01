@@ -8,12 +8,12 @@ import time
 from typing import List, Union
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import joinedload
-import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import CONFIG
-from sqlalchemy import select, update, func, and_
+from sqlalchemy.sql.expression import text
+from sqlalchemy import select, update, func, and_, cast, DateTime
 from opus新版官方抽奖.Base.generate_cv import GenerateCvBase
-from opus新版官方抽奖.Base.GenerateCvModel import CvItem, LotType, CvContent, Color, CvContentOps, \
+from opus新版官方抽奖.Model.GenerateCvModel import CvItem, LotType, CvContent, Color, CvContentOps, \
     CvContentAttr, CutOff
 from opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import sqlHelper, lock_wrapper
 from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficCard, TActivityLottery, TActivityMatchLottery, \
@@ -29,6 +29,34 @@ from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
 class TopicLotInfoSqlHelper(sqlHelper):
     def __init__(self):
         super().__init__()
+
+    @lock_wrapper
+    async def get_all_available_traffic_info_by_page(self, page_num: int = 0, page_size: int = 0) -> tuple[
+        List[TTrafficCard], int]:
+        sql = select(TTrafficCard).where(
+            cast(func.date_format(TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")), DateTime) > func.now()
+        ).order_by(
+            cast(func.date_format(TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")), DateTime).asc()
+        ).options(
+            joinedload(TTrafficCard.t_activity_lottery),
+            joinedload(TTrafficCard.t_activity_match_lottery),
+            joinedload(TTrafficCard.t_activity_match_task),
+            joinedload(TTrafficCard.t_era_jika),
+            joinedload(TTrafficCard.t_era_lottery),
+            joinedload(TTrafficCard.t_era_task),
+            joinedload(TTrafficCard.t_era_video),
+        )
+        if page_num and page_size:
+            offset_value = (page_num - 1) * page_size
+            sql = sql.offset(offset_value).limit(page_size)
+        count_sql = select(func.count(TTrafficCard.id)).where(
+            cast(func.date_format(TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")), DateTime) > func.now()
+        )
+        async with (self._session() as session):
+            result = await session.execute(sql)
+            data = result.scalars().unique().all()
+            count_result = await session.execute(count_sql)
+        return data, count_result.scalars().first()
 
     @lock_wrapper
     async def get_all_available_traffic_info(self) -> List[TTrafficCard]:
@@ -175,7 +203,7 @@ class GenerateTopicLotCv(GenerateCvBase):
         self.post_flag = True  # 是否直接发布
         self.sql = TopicLotInfoSqlHelper()
 
-    def zhuanlan_format(self, lottery_infos: [List[CvItem], List[CvItem], List[CvItem], List[CvItem]],
+    def zhuanlan_format(self, lottery_infos: dict[str, List[CvItem]],
                         blank_space: int = 1, sep_str: str = ' ') -> (CvContent, int):
         """
 
@@ -188,7 +216,21 @@ class GenerateTopicLotCv(GenerateCvBase):
 
         ret: CvContent = CvContent(ops=[])
         words = 0
-        for section in lottery_infos:
+        for key_name, section in lottery_infos.items():
+            selected_color_class_key = random.choice(list(Color))
+            ops_list = []
+            ops = CvContentOps(
+                insert=key_name,
+                attributes=CvContentAttr(color=selected_color_class_key)
+            )
+            words += len(key_name)
+            ops_list.append(ops)
+            ret.ops.extend(ops_list)
+            ret.ops.append(
+                CvContentOps(
+                    insert="\n"
+                )
+            )
             for cv_item in section:
                 selected_color_class_key = random.choice(list(Color))
                 ops_list = []
@@ -219,6 +261,14 @@ class GenerateTopicLotCv(GenerateCvBase):
                     ops = CvContentOps(
                         insert=_str,
                         attributes=CvContentAttr(color=selected_color_class_key)
+                    )
+                    words += len(_str)
+                    ops_list.append(ops)
+                if cv_item.lottery_sid:
+                    _str = cv_item.lottery_sid + sep_str
+                    ops = CvContentOps(
+                        insert=_str,
+                        attributes=CvContentAttr(link=cv_item.jumpUrl)
                     )
                     words += len(_str)
                     ops_list.append(ops)
@@ -271,45 +321,51 @@ class GenerateTopicLotCv(GenerateCvBase):
         unknown.sort(key=lambda x: len(x.lot_type_list), reverse=True)
         return activity, dynamic, era, unknown
 
+    @staticmethod
+    def gen_cv_item(x) -> CvItem:
+        cv_item = CvItem(
+            jumpUrl=x.jump_url,
+            title=x.name,
+            end_date_str=x.card_desc
+        )
+        try:
+            if x.t_activity_lottery:
+                cv_item.lot_type_list.append(LotType.activity_lottery)
+                cv_item.lottery_sid = ' | '.join(
+                    [t_activity_lottery.activity_id for t_activity_lottery in x.t_activity_lottery])
+                for t_activity_lottery in x.t_activity_lottery:
+                    cv_item.lottery_pool.extend([json.loads(y).get('name', '') for y in t_activity_lottery.list])
+                    cv_item.lottery_sid += t_activity_lottery.lotteryId
+            if x.t_activity_match_lottery:
+                cv_item.lot_type_list.append(LotType.activity_match_lottery)
+            if x.t_activity_match_task:
+                cv_item.lot_type_list.append(LotType.activity_match_task)
+            if x.t_era_jika:
+                cv_item.lot_type_list.append(LotType.era_jika)
+            if x.t_era_lottery:
+                cv_item.lot_type_list.append(LotType.era_lottery)
+                cv_item.lottery_sid = ' | '.join([t_era_lottery.activity_id for t_era_lottery in x.t_era_lottery])
+                for t_era_lottery in x.t_era_lottery:
+                    cv_item.lottery_pool.extend([json.loads(y).get('name', '') for y in t_era_lottery.gifts])
+            if x.t_era_task:
+                cv_item.lot_type_list.append(LotType.era_task)
+            if x.t_era_video:
+                for t_era_video in x.t_era_video:
+                    if t_era_video.poolList:
+                        cv_item.lot_type_list.append(LotType.era_video)
+            if not cv_item.lot_type_list:
+                cv_item.lot_type_list.append(LotType.unknown)
+
+        except Exception as e:
+            topic_lot_log.exception(f'解析话题失败！{e}')
+        return cv_item
+
     async def get_topic_lottery(self) -> List[CvItem]:
-        def gen_cv_item(x) -> CvItem:
-            cv_item = CvItem(
-                jumpUrl=x.jump_url,
-                title=x.name,
-                end_date_str=x.card_desc
-            )
-            try:
-                if x.t_activity_lottery:
-                    cv_item.lot_type_list.append(LotType.activity_lottery)
-                    for t_activity_lottery in x.t_activity_lottery:
-                        cv_item.lottery_pool.extend([json.loads(y).get('name', '') for y in t_activity_lottery.list])
-                if x.t_activity_match_lottery:
-                    cv_item.lot_type_list.append(LotType.activity_match_lottery)
-                if x.t_activity_match_task:
-                    cv_item.lot_type_list.append(LotType.activity_match_task)
-                if x.t_era_jika:
-                    cv_item.lot_type_list.append(LotType.era_jika)
-                if x.t_era_lottery:
-                    cv_item.lot_type_list.append(LotType.era_lottery)
-                    for t_activity_lottery in x.t_activity_lottery:
-                        cv_item.lottery_pool.extend([json.loads(y).get('name', '') for y in t_activity_lottery.list])
-                if x.t_era_task:
-                    cv_item.lot_type_list.append(LotType.era_task)
-                if x.t_era_video:
-                    for t_era_video in x.t_era_video:
-                        if t_era_video.poolList:
-                            cv_item.lot_type_list.append(LotType.era_video)
-                if not cv_item.lot_type_list:
-                    cv_item.lot_type_list.append(LotType.unknown)
 
-            except Exception as e:
-                topic_lot_log.exception(f'解析话题失败！{e}')
-            return cv_item
-
-        all_traffic_card = await  self.sql.get_all_available_traffic_info()
+        all_traffic_card = await self.sql.get_all_available_traffic_info()
         ret_list = []
         for __x in all_traffic_card:
-            ret_list.append(gen_cv_item(__x))
+            ret_list.append(GenerateTopicLotCv.gen_cv_item(__x))
         return ret_list
 
     async def main(self, pub_cv: bool = True):
@@ -321,19 +377,29 @@ class GenerateTopicLotCv(GenerateCvBase):
         topic_lottery_list = await self.get_topic_lottery()
         activity, dynamic, era, unknown = self.zhuanlan_date_sort(topic_lottery_list)
         print(activity, dynamic, era, unknown)
-        cv_content, words = self.zhuanlan_format([activity, dynamic, era, unknown])
+        cv_content, words = self.zhuanlan_format({'activity网址': activity,
+                                                  'dynamic网址': dynamic,
+                                                  'era网址': era,
+                                                  '未知网址': unknown
+                                                  })
         today = datetime.datetime.today()
         # _ = datetime.timedelta(days=1)
         # next_day = today + _
         title = f'{today.date().month}.{today.date().day}为止的话题抽奖信息'
         if pub_cv:
-            self.save_article_to_local(title, cv_content.rawContent)
-        aid = await self.article_creative_draft_addupdate(
-            title=title,
-            banner_url="",
-            article_content=cv_content,
-            words=words,
-        )
+            local_title = title + '_需要提交'
+        else:
+            local_title = title
+        self.save_article_to_local(local_title + '_api_ver', cv_content.rawContent)
+        self.save_article_to_local(local_title + '_手动专栏_ver', cv_content.manualSubmitContent)
+        aid = 0
+        if pub_cv:
+            aid = await self.article_creative_draft_addupdate(
+                title=title,
+                banner_url="",
+                article_content=cv_content,
+                words=words,
+            )
         if aid and pub_cv:
             await self.dynamic_feed_create_opus(draft_id_str=aid, title=title, article_content=cv_content)
 
@@ -382,7 +448,7 @@ class ExtractTopicLottery:
                 headers = copy.deepcopy(self.headers)
                 headers.update({
                     'referer': url,
-                    "user-agent": random.choice(CONFIG.CONFIG.UA_LIST)
+                    "user-agent": CONFIG.rand_ua
                 })
                 resp = await self.s.get(url=url, headers=headers, proxies={
                     'http': proxy,
@@ -606,32 +672,26 @@ class ExtractTopicLottery:
         :return:
         """
         is_need_post, num = await self.spider_all_unread_traffic_card()
-        if is_need_post or force_push:
-            ua3 = gl.get_value('ua3')
-            csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
-            cookie3 = gl.get_value('cookie3')
-            buvid3 = gl.get_value('buvid3_3')
-            if cookie3 and csrf3 and ua3 and buvid3:
-                gc = GenerateTopicLotCv(cookie3, ua3, csrf3, buvid3)
-                # gc.post_flag = False  # 不直接发布
-                await gc.main()
-                topic_lot_log.error('话题抽奖已更新')
-                pushme('话题抽奖已更新',
-                       f'话题抽奖：更新{num}条数据')
-            else:
-                topic_lot_log.error(f"获取登陆信息失败！{cookie3, csrf3, ua3, buvid3}")
-                pushme('话题抽奖更新失败！', f"获取登陆信息失败！{cookie3, csrf3, ua3, buvid3}")
+        ua3 = gl.get_value('ua3')
+        csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
+        cookie3 = gl.get_value('cookie3')
+        buvid3 = gl.get_value('buvid3_3')
+        gc = GenerateTopicLotCv(cookie3, ua3, csrf3, buvid3)
+        # gc.post_flag = False  # 不直接发布
+        await gc.main(pub_cv=is_need_post)
+        topic_lot_log.error('话题抽奖已更新')
+        pushme('话题抽奖已更新', f'话题抽奖：更新{num}条数据')
 
 
 async def _test():
-    _a = ExtractTopicLottery()
-    print(await _a.main(force_push=True))
+    _a = TopicLotInfoSqlHelper()
+    print(await _a.get_all_available_traffic_info_by_page(1,10))
 
 
 async def _test_generate_cv():
     gc = GenerateTopicLotCv(
         cookie="buvid3=434282F4-E364-7403-51C6-038E401B27F052974infoc; b_nut=1716813352; _uuid=5AC6FF4A-855E-55ED-51042-7E37D8753E2B57600infoc; enable_web_push=DISABLE; buvid4=68D497D9-DFB7-2DD5-EFBD-2640CA8327F167277-024052712-bkFP%2BfBKxK1jqmu4RNRApvMLVSVZSoxPLJw6dSJ1uURlMto45X0VJk1NHJXI5NTX; DedeUserID=4237378; DedeUserID__ckMd5=94093e21fe6687f9; hit-dyn-v2=1; rpdid=0zbfAHGGaN|BL7JC6EG|1za|3w1SbA29; buvid_fp_plain=undefined; header_theme_version=CLOSE; LIVE_BUVID=AUTO5417169088699210; CURRENT_BLACKGAP=0; PVID=1; home_feed_column=5; fingerprint=3c0395c5734f117c8547ff054c538ef7; CURRENT_FNVAL=4048; CURRENT_QUALITY=116; browser_resolution=1463-754; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjUyNDU3OTcsImlhdCI6MTcyNDk4NjUzNywicGx0IjotMX0.v7ZUi1Cj18rBWbYy6hsDFjI09ny1nd8SZWZ1iDuKc-w; bili_ticket_expires=1725245737; b_lsid=F5B37A103_191A38FEF3E; SESSDATA=213503be%2C1740578775%2C2cfb8%2A82CjBBtuR1OtNFGOyuCaOPH5WDmz4WVtQvqPXzTUdeZGLHUFxcj53LLZfP77LdfBWMo9YSVjcwTzlReGw4d2lKQVpnRzdJNFdHSm02SERyWENSUlVTbDg4azRVajlVVlNnWk9BOU9IQllxNEU3TXZlSlEyT0VySEVWa0ptWFRsalhxWFdpMEtwODR3IIEC; bili_jct=38d76480d1837d76e6c7c84d86511d06; sid=6w71b423; buvid_fp=3c0395c5734f117c8547ff054c538ef7; bp_t_offset_4237378=971489059387998208",
-        ua=random.choice(CONFIG.CONFIG.UA_LIST),
+        ua=CONFIG.rand_ua,
         csrf='38d76480d1837d76e6c7c84d86511d06',
         buvid="434282F4-E364-7403-51C6-038E401B27F052974infoc"
     )

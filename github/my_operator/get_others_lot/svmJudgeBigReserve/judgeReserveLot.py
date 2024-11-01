@@ -12,9 +12,11 @@ from CONFIG import CONFIG
 # 或者使用pickle加载模型
 def preprocess_text(text):
     text.replace('预约有奖：', '')
-    words = jieba.cut(text.strip())
-    return ' '.join(words)
-
+    try:
+        words = jieba.cut(text.strip())
+        return ' '.join(words)
+    except Exception as e:
+        return text
 
 def big_reserve_predict(da_list: list[str]) -> list[int]:
     if len(da_list) == 0:

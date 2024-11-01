@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import copy
 import gzip
+import json
 import secrets
 import string
 import hmac
@@ -14,6 +15,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from loguru import logger
 
+from grpc获取动态.Models.GrpcApiBaseModel import MetaDataBasicInfo
+from grpc获取动态.Utils.CONST import MemSizes, CPUFreqs, ProductDevices, Languages, Countries, NetworkTypes, UsbStates, \
+    CPUAbiLists, CPUHardwares, ANDROID_VERSIONS, BatteryStates, ANDROID_KERNELS, ScreenDPIs
 from grpc获取动态.grpc.bapi.biliapi import appsign
 from utl.代理.SealedRequests import MYASYNCHTTPX
 
@@ -182,7 +186,7 @@ async def make_metadata(
         channel='bili',
         proxy=None,
         mid=0
-) -> tuple:
+) -> tuple[tuple, ticket_pb2.GetTicketResponse | None, MetaDataBasicInfo]:
     '''
     根据ua自动生成包含ua信息的MetaData
     :param mid:
@@ -196,13 +200,15 @@ async def make_metadata(
     :param ua:
     :return:
     '''
+    proxy = None
     metaDataNeedInfo = MetaDataNeedInfo()
     metaDataNeedInfo.generate_ua_from_Dalvik_appVer(Dalvik, version_name, build, channel, brand)
     BUVID = fake_buvid()
     device_model = metaDataNeedInfo.device_model
     fp_generator = Fp(BUVID, device_model, "")
-    gen_ts = int(time.time())
-    fp = fp_generator.gen(gen_ts)
+    gen_ts = int(time.time()) - random.randint(600, 60000)
+    fp_remote = fp_generator.gen(gen_ts)
+    fp_local = fp_generator.gen(gen_ts - random.randint(1000, 60000))
     device_params = {
         "app_id": 1,
         "build": metaDataNeedInfo.build,
@@ -214,10 +220,10 @@ async def make_metadata(
         "model": device_model,
         # "device": "phone",
         "osver": metaDataNeedInfo.osver,
-        "fp_local": fp_generator.gen(gen_ts + random.randint(10, 60)),
-        "fp_remote": fp,
+        "fp_local": fp_local,
+        "fp_remote": fp_remote,
         "version_name": metaDataNeedInfo.version_name,
-        "fp": fp,
+        "fp": fp_remote,
         "fts": gen_ts
     }
 
@@ -276,7 +282,23 @@ async def make_metadata(
         ('content-type', "application/grpc"),
         # "x-bili-ticket":gen_random_x_bili_ticket(BUVID), # ticket没有搞明白怎么获取，应该是发一个请求，然后将这个请求的string作为参数，不变
     )
-    bili_ticket = await get_bili_ticket(
+    try:
+        await active_buvid(
+            brand=brand,
+            build=16180799,
+            buvid=BUVID,
+            channel=channel,
+            app_version_build=metaDataNeedInfo.build,
+            app_version_name=metaDataNeedInfo.version_name,
+            model=metaDataNeedInfo.device_model,
+            ua=metaDataNeedInfo.ua,
+            proxy=proxy
+        )
+    except:
+        pass
+    finally:
+        pass
+    bili_ticket_resp = await get_bili_ticket(
         device_info=device_info_bytes,
         app_version=metaDataNeedInfo.version_name,
         app_version_code=str(metaDataNeedInfo.build),
@@ -284,20 +306,35 @@ async def make_metadata(
         osver=metaDataNeedInfo.osver,
         model=metaDataNeedInfo.device_model,
         brand=metaDataNeedInfo.brand,
+        fp_local=fp_local,
         md=metadata,
         proxy=proxy
     )
-    if bili_ticket:
+    if bili_ticket_resp:
         new_metadata = []
         for k, v in metadata:
             if k == 'x-bili-ticket':
-                new_metadata.append((k, bili_ticket))
+                new_metadata.append((k, bili_ticket_resp.ticket))
                 continue
             new_metadata.append((k, v))
         metadata = tuple(new_metadata)
     if access_key:
         metadata.__add__(("authorization", f"identify_v1 {access_key}"))
-    return metadata
+
+    metadata_basic_info = MetaDataBasicInfo(
+        buvid=BUVID,
+        fp_local=fp_local,
+        fp_remote=fp_remote,
+        guestid=random.randint(1000000000000, 9999999999999),
+        app_version_name=version_name,
+        model=device_model,
+        app_build=build,
+        channel=channel,
+        osver=metaDataNeedInfo.osver,
+        ticket=bili_ticket_resp.ticket if bili_ticket_resp else "",
+        brand=brand
+    )
+    return metadata, bili_ticket_resp, metadata_basic_info
 
 
 def is_useable_Dalvik(Dalvik: str):
@@ -314,6 +351,181 @@ def is_useable_Dalvik(Dalvik: str):
         return False
 
 
+def generate_app_info(android_version: str, is_sys_app: bool = True, app_ver_name: str = '8.15.0') -> str:
+    sdk_ver = ANDROID_VERSIONS.get(android_version, )
+    if is_sys_app:
+        apps = ["com.android.settings", "com.android.phone", "com.android.contacts", "com.android.messaging",
+                "com.android.documentsui", "com.android.dreams.phototable", "com.android.calendar",
+                "com.android.browser",
+                "com.android.gallery", "com.android.music", "com.android.launcher", "com.android.camera"]
+        data_list = []
+    else:
+        apps = [
+            "com.android.chrome",
+            "com.android.contacts",
+            "com.android.dialer",
+            "com.android.gallery",
+            "com.android.messaging",
+            "com.android.settings",
+            "com.android.calendar",
+            "com.android.calculator2",
+            "com.android.music",
+            "com.facebook.katana",
+            "com.instagram.android",
+            "com.snapchat.android",
+            "com.twitter.android",
+            "com.linkedin.android",
+            "com.tinder",
+            "com.spotify.music",
+            "com.netflix.mediaclient",
+            "com.hulu.plus",
+            "com.amazon.mShop.android.shopping",
+            "com.ebay.mobile",
+            "com.walmart.android",
+            "com.target",
+            "com.kroger.mobile",
+            "com.alibaba.aliexpresshd",
+            "com.booking",
+            "com.airbnb",
+            "com.expedia",
+            "com.tripadvisor",
+            "com.yelp.android",
+            "com.zomato",
+            "com.ubereats",
+            "com.doordash",
+            "com.postmates",
+            "com.swiggy",
+            "com.dunzo",
+            "com.fitbit.FitbitMobile",
+            "com.strava",
+            "com.myfitnesspal.android",
+            "com.headspace",
+            "com.calm.android",
+            "com.duolingo",
+            "com.memrise",
+            "com.babbel.mobile",
+            "com.khanacademy.android",
+            "com.coursera",
+            "com.edx.mobile",
+            "com.udemy",
+            "com.quora",
+            "com.reddit",
+            "com.stackoverflow",
+            "com.discord",
+            "com.zoom.us",
+            "com.microsoft.teams",
+            "com.skype",
+            "com.googleclassroom",
+            "com.schoology",
+            "com.blackboard",
+            "com.canva",
+            "com.adobe.psmobile",
+            "com.pinterest",
+            "com.etsy.android",
+            "com.zillow",
+            "com.trulia",
+            "com.realtor.com",
+            "com.indeed.android.jobsearch",
+            "com.linkedin.jobs",
+            "com.glassdoor",
+            "com.monster.android",
+            "com.simplyhired",
+            "com.trello",
+            "com.asana",
+            "com.jira.mobile",
+            "com.evernote",
+            "com.microsoft.onenote",
+            "com.dropbox.android",
+            "com.box.android",
+            "com.google.docs",
+            "com.google.sheets",
+            "com.google.slides",
+            "com.microsoft.word",
+            "com.microsoft.excel",
+            "com.microsoft.powerpoint",
+            "com.adobe.acrobat.reader",
+            "com.kindle",
+            "com.nook.android",
+            "com.scribd",
+            "com.pandora.android",
+            "com.spotify.music",
+            "com.apple.music",
+            "com.tidal",
+            "com.deezer",
+            "com.soundcloud",
+            "com.shazam",
+            "com.spotify.tuner",
+            "com.netflix.mediaclient",
+            "com.hulu.plus",
+            "com.amazon.avod.thirdpartyclient",
+            "com.hbo.max",
+            "com.disneyplus",
+            "com.paramountplus",
+            "com.peacocktv",
+            "com.appletv.app",
+            "com.fandango",
+            "com.movietickets",
+            "com.atomtickets",
+            "com.stubhub",
+            "com.eventbrite",
+            "com.meetup",
+            "com.ticketmaster",
+            "com.lyft",
+            "com.taxify",
+            "com.ola.cabs",
+            "com.uber",
+            "com.didi",
+            "com.grab",
+            "com.gojek",
+            "com.bolt",
+            "com.inshorts",
+            "com.flipboard.android",
+            "com.pulse",
+            "com.news360",
+            "com.feedly",
+            "com.smule",
+            "com.yokee",
+            "com.singplay",
+            "com.soundhound",
+            "com.shazam.en",
+            "com.spotify.tuner.en",
+            "com.netflix.mediaclient.en",
+            "com.hulu.plus.en",
+            "com.amazon.avod.thirdpartyclient.en",
+            "com.hbo.max.en",
+            "com.disneyplus.en",
+            "com.paramountplus.en",
+            "com.peacocktv.en",
+            "com.appletv.app.en",
+            "com.fandango.en",
+            "com.movietickets.en",
+            "com.atomtickets.en",
+            "com.stubhub.en",
+            "com.eventbrite.en",
+            "com.meetup.en",
+            "com.ticketmaster.en"
+        ]
+        random_time_delta = random.randint(1000000000, 5000000000)
+        timestamp = int(time.time() * 1000) - random_time_delta
+        data_list = [
+            f"{timestamp},tv.danmaku.bili,{1 if is_sys_app else app_ver_name},{android_version},{sdk_ver},{timestamp}"]
+
+    max_data_len = 20 if is_sys_app else random.choice(
+        [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+    while len(data_list) < max_data_len:
+        random_app = random.choice(apps)
+        existing_data_with_app = [data for data in data_list if random_app in data]
+        if existing_data_with_app:
+            generated_data = existing_data_with_app[0]
+        else:
+            # 生成几个月或者几年前的时间戳
+            random_time_delta = random.randint(1000000000, 5000000000)
+            timestamp = int(time.time() * 1000) - random_time_delta
+            generated_data = f"{timestamp},{random_app},{1 if is_sys_app else app_ver_name},{android_version},{sdk_ver},{timestamp}"
+        data_list.append(generated_data)
+    return json.dumps(data_list, separators=(',', ' '))
+
+
 async def get_bili_ticket(device_info: bytes,
                           app_version: str,
                           app_version_code: str,
@@ -321,120 +533,162 @@ async def get_bili_ticket(device_info: bytes,
                           osver: str,
                           model: str,
                           brand: str,
+                          fp_local: str,
                           md,
                           proxy=None
-                          ):
-    rand_model = ''.join(random.choices(string.ascii_uppercase + string.digits, k=11))  # 随机模型名
+                          ) -> ticket_pb2.GetTicketResponse | None:
     android_build_id_moc = f"{''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))}.{(datetime.now() - timedelta(days=random.randint(365, 365 * 5))).strftime('%y%m%d')}.{str(random.randint(10000000, 99999999))}"
-    android_product_name_moc = ''.join(random.choices(string.ascii_uppercase + string.digits, k=13))
-    x_fingerprint = android_device_info_pb2.AndroidDeviceInfo(
-        sdkver='0.2.4',
-        app_id='1',
-        app_version=app_version,
-        app_version_code=app_version_code,
-        chid=chid,
-        fts=1712822061,
-        # buvid_local='b2cdb0059fb390966b4431ff9f90433d2024041115542486b4448a7cffdabe3b',
-        proc='tv.danmaku.bili',
-        osver=osver,
-        t=int(time.time() * 1000),
-        cpu_count=8,
-        model=model,
-        brand=brand,
-        screen='1440,3200,480',
-        boot=4740001,
-        emu='000',
-        oid=random.choice(['46000',
-                           '46002',
-                           '46007',
-                           '46008'
-                           ]),
-        network='WIFI',
-        mem=random.randint(10 ** 10, 10 ** 12),
-        sensor='[]',
-        cpu_freq=random.randint(10 ** 6, 10 ** 8),
-        cpu_vendor='Qualcomm',
-        sim='1',
-        brightness=102,
-        props={
-            'net.hostname': '',
-            'ro.boot.hardware': 'qcom',
-            'gsm.sim.state': 'LOADED',
-            'ro.build.date.utc': f'{int(time.time())}',
-            'ro.product.device': rand_model,
-            'persist.sys.language': 'en',
-            'ro.debuggable': '1',
-            'net.gprs.local-ip': '',
-            'ro.build.tags': 'release-keys',
-            'http.proxy': '',
-            'ro.serialno': '00536fe6',
-            'persist.sys.country': 'JP',
-            'ro.boot.serialno': '00536fe6',
-            'gsm.network.type': "LTE",
-            'net.eth0.gw': '',
-            'net.dns1': f'192.168.{random.randint(0, 100)}.1',
-            'sys.usb.state': '',
-            'http.agent': ''
-        },
-        sys={
-            'product': model,
-            'cpu_model_name': 'Qualcomm Technologies, Inc MSM8998',
-            'display': f'{android_build_id_moc} release-keys',
-            'cpu_abi_list': 'arm64-v8a,armeabi-v7a',
-            'cpu_abi_libc': 'ARM',
-            'manufacturer': brand,
-            'cpu_hardware': 'Qualcomm Technologies, Inc MSM8998',
-            'cpu_processor': 'AArch64 Processor rev 256 (aarch64)',
-            'cpu_abi_libc64': 'ARM64-V8A',
-            'cpu_abi': 'arm64-v8a',
-            'serial': 'unknown',
-            'cpu_features': 'fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics',
-            'fingerprint': f'{brand}/{rand_model}/{rand_model}:{random.randint(5, 9)}/{android_build_id_moc}/{android_product_name_moc}:user/release-keys',
-            'device': rand_model,
-            'hardware': 'qcom'
-        },
-        adid=hashlib.md5(str(time.time()).encode()).hexdigest()[:16],
-        os='android',
-        total_space=random.randint(10 ** 8, 10 ** 10),
-        axposed='false',
-        files='/data/user/0/tv.danmaku.bili/files',
-        virtual='0',
-        virtualproc='[]',
-        apps='[]',
-        uid=str(random.randint(10 ** 3, 10 ** 5)),
-        androidapp20='[]',
-        androidsysapp20='[]',
-        battery=100,
-        battery_state='BATTERY_STATUS_CHARGING',
-        build_id=f'{android_build_id_moc} release-keys',
-        country_iso='JP',
-        free_memory=random.randint(10 ** 8, 10 ** 10),
-        fstorage=f'{random.randint(10 ** 8, 10 ** 10)}',
-        kernel_version='4.4.146',
-        languages='en',
-        systemvolume=5,
-        memory=random.randint(10 ** 8, 10 ** 10),
-        str_battery='100',
-        str_brightness='102',
-        str_app_id='1',
-        light_intensity='301.514',
-        gps_sensor=1,
-        speed_sensor=1,
-        linear_speed_sensor=1,
-        gyroscope_sensor=1,
-        biometric=1,
-        biometrics=['touchid'],
-        ui_version=f'{android_build_id_moc} release-keys',
-        sensors_info=[],
-        battery_present=1,
-        battery_technology='Li-ion',
-        battery_temperature=322,
-        battery_voltage=random.choice(
-            [3000, 3150, 3250, 3450, 3550, 3650, 3750, 3850, 3950, 4050, 4150, 4250, 4350, 4450, 4650, 4550, 4660,
-             5000]),
-        battery_plugged=1,
-        battery_health=2,
-    )
+    rand_memory = MemSizes[random.choice(list(MemSizes.keys()))]
+    rand_boot_id = random.randint(100000, 948576)
+    rand_cpu_freq = CPUFreqs[random.choice(list(CPUFreqs.keys()))]
+    rand_brightness = random.randint(30, 255)
+    rand_ro_build_date_utc = int((datetime.now() - timedelta(days=random.randint(int(0.3 * 365), 5 * 365))).timestamp())
+    rand_ro_product_device = random.choice(ProductDevices)
+    rand_persist_sys_language = random.choice(Languages)
+    rand_serial_no = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+    rand_country = random.choice(Countries)
+    rand_network_type = random.choice(NetworkTypes)
+    rand_usb_state = random.choice(UsbStates)
+    rand_cpu_abi_list = random.choice(CPUAbiLists)
+    rand_cpu_headrware = random.choice(CPUHardwares)
+    sys_apps = generate_app_info(osver, is_sys_app=True)
+    android_apps = generate_app_info(osver, is_sys_app=False, app_ver_name=app_version)
+    rand_battery_state = random.choice(BatteryStates)
+    rand_kernel = random.choice(ANDROID_KERNELS.get(
+        random.choice(list(ANDROID_KERNELS.keys())),
+        ["4.4.146"]
+    ))
+    rand_battery = random.randint(30, 100)
+    rand_screen = random.choice(ScreenDPIs)
+    rand_light_intensity = str(round(random.uniform(50.0, 600.0), 3))
+    x_fingerprint = android_device_info_pb2.AndroidDeviceInfo()
+    x_fingerprint.sdkver = '0.2.4'
+    x_fingerprint.app_id = '1'
+    x_fingerprint.app_version = app_version
+    x_fingerprint.app_version_code = app_version_code
+    x_fingerprint.chid = chid
+    x_fingerprint.fts = 1712822061
+    x_fingerprint.buvid_local = fp_local
+    x_fingerprint.proc = 'tv.danmaku.bili'
+    x_fingerprint.osver = osver
+    x_fingerprint.t = int(time.time() * 1000)
+    x_fingerprint.cpu_count = random.choice([4, 6, 8, 10, 12])
+    x_fingerprint.model = model
+    x_fingerprint.brand = brand
+    x_fingerprint.screen = rand_screen
+    x_fingerprint.boot = rand_boot_id
+    x_fingerprint.emu = random.choice(['000', '001', '010', '011', '100', '101', '110', '111'])
+    x_fingerprint.oid = random.choice(['46000',
+                                       '46002',
+                                       '46007',
+                                       '46008'
+                                       ])
+    x_fingerprint.network = 'WIFI'
+    x_fingerprint.mem = rand_memory
+    x_fingerprint.sensor = '["LSM330 Accelerometer,STMicroelectronics", "Linear Acceleration,QTI", "Magnetometer,AKM", "Orientation,Yamaha", "Gravity,QTI", "Gyroscope,STMicroelectronics", "Proximity sensor,AMS TAOS", "Light sensor,AMS TAOS", "Game Rotation Vector Sensor,AOSP", "GeoMag Rotation Vector Sensor,AOSP", "Rotation Vector Sensor,AOSP", "Orientation Sensor,AOSP"]'
+    x_fingerprint.cpu_freq = rand_cpu_freq
+    x_fingerprint.cpu_vendor = 'ARM'
+    x_fingerprint.brightness = rand_brightness
+    x_fingerprint.props.update({
+        'net.hostname': '',
+        'ro.boot.hardware': 'qcom',
+        'gsm.sim.state': 'LOADED',
+        'ro.build.date.utc': f'{rand_ro_build_date_utc}',
+        'ro.product.device': rand_ro_product_device,
+        'persist.sys.language': rand_persist_sys_language,
+        'ro.debuggable': '1',
+        'net.gprs.local-ip': '',
+        'ro.build.tags': 'release-keys',
+        'http.proxy': '',
+        'ro.serialno': rand_serial_no,
+        'persist.sys.country': rand_country,
+        'ro.boot.serialno': rand_serial_no,
+        'gsm.network.type': rand_network_type,
+        'net.eth0.gw': '',
+        'net.dns1': f'192.168.{random.randint(0, 255)}.{random.randint(0, 255)}',
+        'sys.usb.state': rand_usb_state,
+        'http.agent': '',
+        'product': model,
+        'cpu_model_name': '',
+        'display': f'{android_build_id_moc} release-keys',
+        'cpu_abi_list': rand_cpu_abi_list,
+        'cpu_abi_libc': 'X86_64',
+        'manufacturer': brand,
+        'cpu_hardware': rand_cpu_headrware,
+        'cpu_processor': 'AArch64 Processor rev 12 (aarch64)',
+        'cpu_abi_libc64': 'arm64-v8a',
+        'cpu_abi': 'arm64-v8a',
+        'serial': 'unknown',
+        'cpu_features': 'fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp',
+        'fingerprint': f'{brand}/{model}/{rand_ro_product_device}:{osver}/{android_build_id_moc}/{random.randint(100000, 9999999999)}:user/release-keys',
+        'cpu_abi2': '',
+        'device': rand_ro_product_device,
+        'hardware': 'qcom'
+    })
+    x_fingerprint.adid = hashlib.md5(str(time.time()).encode()).hexdigest()[:16]
+    x_fingerprint.os = 'android'
+    x_fingerprint.total_space = random.randint(10 ** 8, 10 ** 10)
+    x_fingerprint.axposed = 'false'
+    x_fingerprint.files = '/data/user/0/tv.danmaku.bili/files'
+    x_fingerprint.virtual = '0'
+    x_fingerprint.virtualproc = '[]'
+    x_fingerprint.apps = sys_apps
+    x_fingerprint.guid = str(uuid.uuid4())
+    x_fingerprint.uid = str(random.randint(10000, 10053))
+    x_fingerprint.root = 0
+    x_fingerprint.androidapp20 = android_apps
+    x_fingerprint.androidappcnt = random.randint(20, 70)
+    x_fingerprint.androidsysapp20 = sys_apps
+    x_fingerprint.battery = rand_battery  # 63
+    x_fingerprint.battery_state = rand_battery_state  # 64
+    x_fingerprint.build_id = f'{android_build_id_moc} release-keys'  # 67
+    x_fingerprint.country_iso = rand_country  # 68
+    x_fingerprint.free_memory = random.randint(10 ** 8, 10 ** 10)  # 70
+    x_fingerprint.fstorage = f'{random.randint(10 ** 8, 10 ** 10)}'  # 71
+    x_fingerprint.kernel_version = rand_kernel  # 74
+    x_fingerprint.languages = rand_persist_sys_language  # 75
+    x_fingerprint.systemvolume = random.choice([0, 1, 2, 3, 4, 5, 6, 7])  # 80
+    x_fingerprint.memory = rand_memory  # 82
+    x_fingerprint.str_battery = str(rand_battery)  # 83
+    x_fingerprint.is_root = False  # 84
+    x_fingerprint.str_brightness = str(rand_brightness)  # 85
+    x_fingerprint.str_app_id = '1'  # 86
+    x_fingerprint.light_intensity = rand_light_intensity  # 89
+    x_fingerprint.device_angle.extend([round(random.uniform(-180.0, 180.0), 3) for _ in range(3)])  # 90
+    x_fingerprint.gps_sensor = 1  # 91
+    x_fingerprint.speed_sensor = 1  # 92
+    x_fingerprint.linear_speed_sensor = 1  # 93
+    x_fingerprint.gyroscope_sensor = 1  # 94
+    x_fingerprint.biometric = 1  # 95
+    x_fingerprint.biometrics.extend(['touchid']),  # 96
+    x_fingerprint.last_dump_ts = int(time.time() * 1000) - random.randint(3 * 3600 * 1000, 5000000000)  #
+    x_fingerprint.ui_version = f'{android_build_id_moc} release-keys'  # 108
+    x_fingerprint.sensors_info.extend([])  # 110
+    x_fingerprint.battery_present = True  # 112
+    x_fingerprint.battery_technology = 'Li-ion'  # 113
+    x_fingerprint.battery_temperature = random.choice([322, 323, 324, 325, 326, 327, 328, 329, 330])  # 114
+    x_fingerprint.battery_voltage = random.choice(
+        [3000, 3150, 3250, 3450, 3550, 3650, 3750, 3850, 3950, 4050, 4150, 4250, 4350, 4450, 4650, 4550, 4660,
+         5000])  # 115
+    x_fingerprint.battery_plugged = 1  # 116
+    x_fingerprint.battery_health = 2  # 117
+    x_fingerprint.adb_info = json.dumps({
+        "ro.product.model": model,
+        "ro.bootmode": "unknown",
+        "qemu.sf.lcd_density": "",
+        "qemu.hw.mainkeys": "",
+        "init.svc.qemu-props": "",
+        "ro.hardware": "qcom",
+        "ro.product.device": rand_ro_product_device,
+        "init.svc.qemud": "",
+        "ro.kernel.android.qemud": "",
+        "ro.kernel.qemu.gles": "",
+        "ro.serialno": rand_serial_no,
+        "ro.kernel.qemu": "",
+        "ro.product.name": model,
+        "qemu.sf.fake_camera": "",
+        "ro.bootloader": "unknown"
+    })
 
     sign = gen_x_bili_ticket(
         device_info=device_info,
@@ -458,8 +712,9 @@ async def get_bili_ticket(device_info: bytes,
             new_headers.append((k, gen_trace_id()))
             continue
         new_headers.append((k, v))
-    proto = reqdata.SerializeToString()
-    data = b"\0" + len(proto).to_bytes(4, "big") + proto
+    proto_bytes = reqdata.SerializeToString()
+    compressed_proto_bytes = gzip.compress(proto_bytes, compresslevel=6)
+    data = b"\01" + len(compressed_proto_bytes).to_bytes(4, "big") + compressed_proto_bytes
     try:
         resp = await myreq.request(
             url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',
@@ -475,14 +730,14 @@ async def get_bili_ticket(device_info: bytes,
             gresp.ParseFromString(gzip.decompress(resp.content[5:]))
         else:
             gresp.ParseFromString(resp.content[5:])
-        return gresp.ticket
+        return gresp
     except Exception as e:
-        logger.error(f'使用代理 {proxy} 获取bili_ticket失败！\t{type(e)}')
+        logger.error(f'使用代理 {proxy} 获取bili_ticket失败！\n{type(e)}\t{e}')
 
 
-async def active_buvid(brand, build, buvid, channel, app_version_build, app_version_name, model, ua):
+async def active_buvid(brand, build, buvid, channel, app_version_build, app_version_name, model, ua, proxy):
     """
-    激活buvid????
+    激活buvid???? 顺序在 get_bili_ticket 之前
     :return:
     """
     url = 'https://app.bilibili.com/x/polymer/buvid/get'
@@ -522,5 +777,14 @@ async def active_buvid(brand, build, buvid, channel, app_version_build, app_vers
         ('content-type', 'application/x-www-form-urlencoded; charset=utf-8'),
     )
 
-    req = await myreq.post(url=url, method='post', data=signed_data, headers=headers)
-    print(req.text)
+    req = await myreq.request(url=url, method='post', data=signed_data, headers=headers, proxies={
+        'http': proxy['proxy']['http'],
+        'https': proxy['proxy']['https']} if proxy else None, verify=False)
+    logger.debug(f' {url} 激活buvid：{req.text}')
+
+
+if __name__ == '__main__':
+    import asyncio
+
+    __ = asyncio.run(make_metadata(""))
+    print(__)

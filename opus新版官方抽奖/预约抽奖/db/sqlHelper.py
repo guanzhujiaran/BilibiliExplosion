@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
 from typing import Callable, Union
-from sqlalchemy import create_engine, inspect, select, and_
+from sqlalchemy import create_engine, inspect, select, and_, func
 import CONFIG
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from opus新版官方抽奖.预约抽奖.etc.log.base_log import reserve_lot_log
@@ -208,38 +208,69 @@ class SqlHelper:
             return result.scalars().all()
 
     @lock_wrapper
-    async def get_all_available_reserve_lotterys_by_time(self, limit_time: int) -> list[TUpReserveRelationInfo]:
+    async def get_all_available_reserve_lotterys_by_time(self, limit_time: int, page_number: int = 0, page_size: int = 0) -> \
+            tuple[list[TUpReserveRelationInfo], int]:
         """
         获取所有有效的预约抽奖 （按照etime升序排列
         :return:
         """
+        if not limit_time:
+            and_clause = and_(
+                TUpReserveRelationInfo.lotteryType == 1,
+                TUpReserveRelationInfo.etime >= int(time.time()),
+                TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
+                TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
+                TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
+                TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
+            )
+        else:
+            and_clause = and_(
+                TUpReserveRelationInfo.lotteryType == 1,
+                TUpReserveRelationInfo.etime >= int(time.time()),
+                TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
+                TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
+                TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
+                TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
+                TUpReserveRelationInfo.etime <= int(time.time()) + limit_time
+            )
+        sql = select(TUpReserveRelationInfo).filter(
+            and_clause
+        ).order_by(TUpReserveRelationInfo.etime.asc())
+        if page_number and page_size:
+            offset_value = (page_number - 1) * page_size
+            sql = sql.offset(offset_value).limit(page_size)
+        count_sql = select(func.count(TUpReserveRelationInfo.ids)).filter(and_clause)
         async with self._session() as session:
-            sql = select(TUpReserveRelationInfo).filter(
-                and_(
-                    TUpReserveRelationInfo.lotteryType == 1,
-                    TUpReserveRelationInfo.etime >= int(time.time()),
-                    TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
-                    TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
-                    TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
-                    TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
-                    TUpReserveRelationInfo.etime <= int(time.time()) + limit_time
-                )
-            ).order_by(TUpReserveRelationInfo.etime.asc())
             result = await session.execute(sql)
-            return result.scalars().all()
+            count_result = await session.execute(count_sql)
+            print(sql.compile(compile_kwargs={'literal_binds': True}))
+        return result.scalars().all(), count_result.scalars().first()
+
+    @lock_wrapper
+    async def get_available_reserve_lottery_total_num(self) -> int:
+        """
+        获取所有有效的预约抽奖总数
+        :return:
+        """
+        and_clause = and_(
+            TUpReserveRelationInfo.lotteryType == 1,
+            TUpReserveRelationInfo.etime >= int(time.time()),
+            TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
+            TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
+            TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
+            TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
+        )
+        sql = select(func.count(TUpReserveRelationInfo.ids)).filter(and_clause)
+        async with self._session() as session:
+            result = await session.execute(sql)
+            return result.scalars().first()
 
 
 # region 测试用代码
 
 async def _test_solve_reserve_resp():
-    a = [
-
-
-    ]
     b = SqlHelper()
-    for i in a:
-
-        print(await b.add_reserve_info_by_resp_dict(i, 122))
+    print(await b.get_all_available_reserve_lotterys_by_time(0))
 
 
 # endregion

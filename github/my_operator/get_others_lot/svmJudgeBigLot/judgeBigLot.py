@@ -6,8 +6,12 @@ import pickle
 
 # 或者使用pickle加载模型
 def preprocess_text(text):
-    words = jieba.cut(text.strip())
-    return ' '.join(words)
+    try:
+        words = jieba.cut(text.strip())
+        return ' '.join(words)
+    except Exception as e:
+        print(f"Error processing text: {text}")
+        return text
 
 def big_lot_predict(da_list: list[str])->list[int]:
     if len(da_list)==0:
@@ -19,9 +23,7 @@ def big_lot_predict(da_list: list[str])->list[int]:
         loaded_vector = pickle.load(file)
     x_list=[]
     for i in da_list:
-        # 预处理文本
         processed_text = preprocess_text(i)
-        print(processed_text)
         x_list.append(processed_text)
     x = loaded_vector.transform(x_list)
     predictions = loaded_model.predict(x)
@@ -32,9 +34,9 @@ def big_lot_predict(da_list: list[str])->list[int]:
 if __name__ == '__main__':
     rest = big_lot_predict(
         [
-            """《明日方舟》五周年生日快乐！🎉🎉🎉 
-
-◆关注并转发本条动态，我们将抽取20位博士每人赠送【阿米娅 庆典时光手办】一份。"""
+            """#互动抽奖#影石旗舰影像运动相机Ace Pro 2正式发布！
+ AI双芯出动，画质更出众；4K60fps夜景录像，暗光画质「天花板」；全新一代徕卡SUMMARIT镜头，树立旗舰运动影像新标杆！
+【关注@影石Insta360 】转发+评论此动态，11月22日抽送一台Ace Pro 2 （中奖规则见置顶评论）"""
 
         ]
     )

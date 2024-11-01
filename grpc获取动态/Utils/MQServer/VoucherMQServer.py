@@ -24,7 +24,8 @@ class VoucherRabbitMQ(BasicMQServer):
             assert type(ticket) is str, "ticket必须为字符串"
             # 推送数据至MQ
             voucher_info: VoucherInfo = VoucherInfo(voucher=voucher, ua=ua, generate_ts=int(time.time()), ck=ck,
-                                                    origin=origin, referer=referer, ticket=ticket, version=version)
+                                                    origin=origin, referer=referer, ticket=ticket, version=version,
+                                                    session_id="")
             voucher_info_dict = asdict(voucher_info)
             self.log.info(f"推送voucher_info_dict数据至MQ: {voucher_info_dict}")
             self._queue_push(json.dumps(voucher_info_dict), self.q_name)

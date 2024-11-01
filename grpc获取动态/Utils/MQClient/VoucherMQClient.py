@@ -47,8 +47,10 @@ class VoucherMQClient(BasicMQServer):
                     voucher_info.referer,
                     voucher_info.ticket,
                     voucher_info.version,
+                    voucher_info.session_id,
                     False,
-                    True)
+                    True
+                )
             except Exception as e:
                 # pushme('-352Voucher出错', traceback.format_exc())
                 log.exception(f'-352Voucher出错\n{e}')
@@ -58,7 +60,7 @@ class VoucherMQClient(BasicMQServer):
 
 if __name__ == '__main__':
     threads = set()
-    for i in range(10):
+    for i in range(3):
         __ = VoucherMQClient()
         thread = Thread(target=__.start_voucher_break_consumer)
         thread.start()

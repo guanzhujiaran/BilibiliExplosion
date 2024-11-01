@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n0bilibili/app/archive/middleware/v1/preload.proto\x12\"bilibili.app.archive.middleware.v1\"a\n\nPlayerArgs\x12\n\n\x02qn\x18\x01 \x01(\x03\x12\r\n\x05\x66nver\x18\x02 \x01(\x03\x12\r\n\x05\x66nval\x18\x03 \x01(\x03\x12\x12\n\nforce_host\x18\x04 \x01(\x03\x12\x15\n\rvoice_balance\x18\x05 \x01(\x03\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n0bilibili/app/archive/middleware/v1/preload.proto\x12\"bilibili.app.archive.middleware.v1\"t\n\nPlayerArgs\x12\n\n\x02qn\x18\x01 \x01(\x03\x12\r\n\x05\x66nver\x18\x02 \x01(\x03\x12\r\n\x05\x66nval\x18\x03 \x01(\x03\x12\x12\n\nforce_host\x18\x04 \x01(\x03\x12\x15\n\rvoice_balance\x18\x05 \x01(\x03\x12\x11\n\tvoice_any\x18\x06 \x01(\x03\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -22,5 +22,5 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'bilibili.app.archive.middle
 if _descriptor._USE_C_DESCRIPTORS == False:
   DESCRIPTOR._options = None
   _globals['_PLAYERARGS']._serialized_start=88
-  _globals['_PLAYERARGS']._serialized_end=185
+  _globals['_PLAYERARGS']._serialized_end=204
 # @@protoc_insertion_point(module_scope)

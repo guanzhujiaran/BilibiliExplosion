@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from functools import reduce
 import random
 import sys
-import CONFIG
+from CONFIG import CONFIG
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from opus新版官方抽奖.预约抽奖.etc.log.base_log import reserve_lot_log
 from utl.代理.request_with_proxy import request_with_proxy
@@ -17,8 +17,8 @@ import requests
 import os
 import Bilibili_methods.all_methods
 from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper
-BAPI = Bilibili_methods.all_methods.methods()
 
+BAPI = Bilibili_methods.all_methods.methods()
 
 
 @dataclass
@@ -42,7 +42,7 @@ class rid_get_dynamic:
         self.proxy_request = request_with_proxy()
         self.proxy_request.mode = 'rand'
         # {"proxy":{"http":1.1.1.1},"status":"可用|-412|失效","update_ts":time.time(), }
-        self.EndTimeSeconds = 7 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
+        self.EndTimeSeconds = 3 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
         self.null_time_quit = 150  # 遇到连续100条data为None的sid 则退出
         self.sem_max_val = 50  # 最大同时运行的线程数
         self.sem = asyncio.Semaphore(self.sem_max_val)
@@ -115,7 +115,7 @@ class rid_get_dynamic:
         :return:
         '''
         has_reserve_relation_ids = await self.sqlHlper.get_reserve_by_ids(rid)
-        if has_reserve_relation_ids and has_reserve_relation_ids.code == 0:
+        if has_reserve_relation_ids and has_reserve_relation_ids.code == 0 and has_reserve_relation_ids.sid != None:
             req1_dict = has_reserve_relation_ids.raw_JSON
         else:
             req1_dict = await self.reserve_relation_with_proxy(rid)
@@ -147,13 +147,16 @@ class rid_get_dynamic:
                     async with self.null_timer_lock:
                         async with self.dynamic_ts_lock:
                             if int(time.time()) - self.dynamic_timestamp.dynamic_timestamp <= self.EndTimeSeconds:  # 如果超过了最大data
-                                if self.null_timer > 30:
+                                if self.null_timer > 1000:
                                     await self.quit()
                             else:
                                 reserve_lot_log.debug(
                                     f"当前null_timer（{self.null_timer}）没满{self.null_time_quit}或最近的预约时间间隔过长{self.dynamic_timestamp.get_time_str_until_now()}")
-                        if self.null_timer > 1000:  # 太多的data为None的数据了
+                        if self.null_timer > 1000 and self.ids and self.ids < 3000000:  # 太多的data为None的数据了
                             await self.quit()
+                        elif self.null_timer > 10000:
+                            await self.quit()
+
             else:
                 async with self.null_timer_lock:
                     self.null_timer = 0
@@ -189,11 +192,12 @@ class rid_get_dynamic:
                     #         self.quit()
                 except:
                     # self.dynamic_timestamp = 0
-                    reserve_lot_log.info(f'\n\t\t\t\t第{self.times}次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
-                                                                                         time.localtime()) +
-                             '\t\t\t\trid:{}'.format(rid) + '\n' +
-                             f'直播预约失效，被删除:{req1_dict}\n当前已经有{self.null_timer}条data为None的sid'
-                             )
+                    reserve_lot_log.info(
+                        f'\n\t\t\t\t第{self.times}次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
+                                                                                    time.localtime()) +
+                        '\t\t\t\trid:{}'.format(rid) + '\n' +
+                        f'直播预约失效，被删除:{req1_dict}\n当前已经有{self.null_timer}条data为None的sid'
+                    )
                 self.code_check(dycode)
                 return
             if dycode == -412:
@@ -266,7 +270,8 @@ class rid_get_dynamic:
     async def reserve_relation_with_proxy(self, ids, _type=2):
         while 1:
             try:
-                reserve_lot_log.info(f'reserve_relation_with_proxy\t当前ids:{ids}\t当前剩余可启用线程数：{self.sem._value}')
+                reserve_lot_log.info(
+                    f'reserve_relation_with_proxy\t当前ids:{ids}\t当前剩余可启用线程数：{self.sem._value}')
                 url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
                 # ua = random.choice(BAPI.User_Agent_List)
                 headers = {
@@ -280,7 +285,7 @@ class rid_get_dynamic:
                     'sec-fetch-dest': 'empty',
                     'sec-fetch-mode': 'cors',
                     'sec-fetch-site': 'same-site',
-                    'user-agent': random.choice(CONFIG.CONFIG.UA_LIST),
+                    'user-agent': CONFIG.rand_ua,
                     'cookie': '1'
                     # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
                     #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
@@ -404,7 +409,6 @@ class rid_get_dynamic:
         newly_updated_reserve_file_name = os.path.join(self.current_dir, 'result/最后一次更新的直播预约抽奖.csv')
         if len(newly_updated_reserve_list) == 0:
             reserve_lot_log.error('更新抽奖数量为0，检查代码！')
-            exit('更新抽奖数量为0，检查代码！')
         df = pandas.DataFrame(newly_updated_reserve_list)
         open(newly_updated_reserve_file_name, 'w').close()
         df.to_csv(newly_updated_reserve_file_name, header=True, encoding='utf-8', index=False, sep='\t')

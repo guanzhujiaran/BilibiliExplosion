@@ -6,6 +6,8 @@ import pydantic
 import asyncio
 import time
 from datetime import datetime, timedelta
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 from CONFIG import CONFIG
 from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
@@ -112,16 +114,33 @@ def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticle
         """
             每隔三个小时获取一次全部图片动态
         """
+@async_pushme_try_catch_decorator
+async def async_run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool,*args, **kwargs):
+    delta_hour = 8
+    try:
+        await main(pub_article_info, schedule_mark)
+    except Exception as e:
+        log.exception(e)
+        delta_hour = 24
+        pushme(f'定时发布话题抽奖专栏任务出错', f'{traceback.format_exc()}')
+    if schedule_mark and schedulers:
+        next_job = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
+                                     run_date=datetime.now() + timedelta(hours=delta_hour))
+        log.info(f"任务结束，等待下一次{next_job.trigger}执行。")
+        """
+            每隔三个小时获取一次全部图片动态
+        """
 
 
 @pushme_try_catch_decorator
-def schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = True):
+def schedule_get_topic_lot_main(schedule_mark: bool = True, show_log: bool = True):
     """
     模块主入口
     :param schedule_mark: 是否定时执行
     :param show_log: 是否打印日志
     :return:
     """
+    log.info('启动获取B站话题抽奖程序！！！')
     if not show_log:
         log.remove()
         topic_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_topic_lot_log.log"),
@@ -149,5 +168,39 @@ def schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = 
         run(None, pub_article_info, schedule_mark)
 
 
+async def async_schedule_get_topic_lot_main(schedule_mark: bool = True, show_log: bool = True):
+    """
+    模块主入口
+    :param schedule_mark: 是否定时执行
+    :param show_log: 是否打印日志
+    :return:
+    """
+    log.info('启动获取B站话题抽奖程序！！！')
+    if not show_log:
+        log.remove()
+        topic_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_topic_lot_log.log"),
+                          level="WARNING",
+                          encoding="utf-8",
+                          enqueue=True,
+                          rotation="500MB",
+                          compression="zip",
+                          retention="15 days",
+                          filter=lambda record: record["extra"].get('user') == "话题抽奖",
+                          )
+    pub_article_info = pubArticleInfo()
+    if schedule_mark:
+        # from apscheduler.triggers.cron import CronTrigger
+        # cron_str = '0 20 * * *'
+        # crontrigger = CronTrigger.from_crontab(cron_str)
+        schedulers = AsyncIOScheduler()
+        job = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
+                                 run_date=datetime.now(), misfire_grace_time=360)
+        log.info(
+            f'使用内置定时器,开启定时任务,等待时间（{job.trigger}）到达后执行')
+        schedulers.start()
+    else:
+        await async_run(None, pub_article_info, schedule_mark)
+
+
 if __name__ == '__main__':
-    schedule_get_official_lot_main()
+    schedule_get_topic_lot_main()

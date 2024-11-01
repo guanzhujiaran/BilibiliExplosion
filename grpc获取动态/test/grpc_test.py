@@ -42,7 +42,7 @@ headers = {
     # 'user-agent': random.choice(CONFIG.UA_LIST),
 }
 headers.update(dict(
-    event_loop.run_until_complete(make_metadata(""))
+    event_loop.run_until_complete(make_metadata(""))[0]
 ))
 for k, v in list(headers.items()):
     if k == 'user-agent':
@@ -54,13 +54,14 @@ resp = httpx.post(url,
                   data=data,
                   headers=headers,
                   proxies={
-                      'https://': "http://127.0.0.1:10809",
-                      'http://': "http://127.0.0.1:10809"
+                      'https://': "socks5://194.195.122.51:1080",
+                      'http://': "socks5://194.195.122.51:1080"
                   }
                   )
 print(headers)
 print(resp)
 print(resp.content)
+print(resp.headers)
 gresp = grpc_resp_msg
 gresp.ParseFromString(resp.content[5:])
 resp_dict = MessageToDict(gresp)

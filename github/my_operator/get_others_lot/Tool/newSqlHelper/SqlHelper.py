@@ -29,10 +29,12 @@ def lock_wrapper(func: Callable) -> Callable:
 
 class SqlHelper:
     __instance = None
+
     def __new__(cls, *args, **kwargs):
         if not cls.__instance:
             cls.__instance = super().__new__(cls)
         return cls.__instance
+
     def __init__(self):
         SQLITE_URI = CONFIG.database.MYSQL.get_other_lot_URI
         self.op_db_lock = asyncio.Lock()
@@ -102,20 +104,23 @@ class SqlHelper:
                 return ret
 
     @lock_wrapper
-    async def getAllLotDynByLotRoundNum(self, LotRoundNum: int) -> list[TLotdyninfo]:
+    async def getAllLotDynByLotRoundNum(self, LotRoundNum: int, offset: int = 0, page_size=0) -> list[TLotdyninfo]:
         """
         根据轮次数量获取最新的抽奖信息
         :param LotRoundNum:
         :return:
         """
+
         last_round = await self.getLatestRound()
         if last_round:
             async with self.op_db_lock:
                 async with self._session() as session:
                     last_round_id = last_round.lotRound_id if last_round.isRoundFinished else last_round.lotRound_id - 1
                     sql = select(TLotdyninfo).filter(and_(TLotdyninfo.dynLotRound_id > (last_round_id - LotRoundNum),
-                                                     TLotdyninfo.isLot == 1)).order_by(
+                                                          TLotdyninfo.isLot == 1)).order_by(
                         TLotdyninfo.dynId.desc())
+                    if offset and page_size:
+                        sql = sql.offset(offset).limit(page_size)
                     res = await session.execute(sql)
                     ret = res.scalars().all()
                     return ret
@@ -265,7 +270,7 @@ async def __test__():
     a = SqlHelper()
 
     result = await a.getAllLotDynByLotRoundNum(
-        1
+        1,1000,10
     )
     print([x.__dict__ for x in result])
 

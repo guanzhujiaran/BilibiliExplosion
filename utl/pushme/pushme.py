@@ -96,7 +96,7 @@ def _pushpush(title: str, content: str, __type='txt') -> Response:
         url = CONFIG.pushnotify.pushplus.url
         data = {
             "token": CONFIG.pushnotify.pushplus.token,
-            "title": title,
+            "title": title[0:100],
             "content": push_content,
             "template": __type
         }
@@ -121,7 +121,6 @@ def pushme_try_catch_decorator(func: callable) -> callable:
             pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
             pushme_log.exception(e)
             raise e
-
     return wrapper
 
 

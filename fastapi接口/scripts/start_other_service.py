@@ -3,7 +3,8 @@ import io
 import os
 import sys
 import time
-import multiprocessing as mp
+# import multiprocessing as mp
+from functools import partial
 from threading import Thread
 from types import MethodType
 from loguru import logger
@@ -30,13 +31,13 @@ class OtherService:
         a = monitor()
         asyncio.run(a.main(show_log=self.show_log))
 
-    # def schedule_get_charge_and_official_lot(self):
-    #     """
-    #     定时获取up主充电和官方抽奖
-    #     :return:
-    #     """
-    #     from opus新版官方抽奖.转发抽奖.定时获取所有动态以及发布充电和官方抽奖专栏 import schedule_get_official_lot_main
-    #     schedule_get_official_lot_main(show_log=self.show_log)
+    def schedule_get_charge_and_official_lot(self):
+        """
+        定时获取up主充电和官方抽奖
+        :return:
+        """
+        from opus新版官方抽奖.转发抽奖.定时获取所有动态以及发布充电和官方抽奖专栏 import schedule_get_official_lot_main
+        schedule_get_official_lot_main(show_log=self.show_log)
 
     def schedule_get_reserve_lot(self):
         """
@@ -51,11 +52,11 @@ class OtherService:
         定时获取话题抽奖
         :return:
         """
-        from opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import schedule_get_official_lot_main
-        schedule_get_official_lot_main(show_log=self.show_log)
+        from opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import schedule_get_topic_lot_main
+        schedule_get_topic_lot_main(show_log=self.show_log)
 
     def monitor_ipv6_change(self):
-        from 光猫测试.监控本地ip地址变化 import monitor_ipv6_address_changes
+        from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import monitor_ipv6_address_changes
         monitor_ipv6_address_changes()
 
     def bili_live_monitor(self):
@@ -74,9 +75,9 @@ class OtherService:
         """
         from grpc获取动态.Utils.MQClient.VoucherMQClient import VoucherMQClient
         t_set = set()
-        for i in range(10):
+        for i in range(5):
             __ = VoucherMQClient()
-            thread = Thread(target=__.start_voucher_break_consumer)
+            thread = Thread(target=partial(__.start_voucher_break_consumer))
             thread.start()
             t_set.add(thread)
         for i in t_set:
@@ -89,14 +90,19 @@ def start_scripts():
     for i in ots.__dir__():
         m = getattr(ots, i)
         if type(m) is MethodType:
-            p = mp.Process(target=m, name=i, daemon=False)
+            p = Thread(
+                target=m,
+                name=i,
+                daemon=False
+            )
             logger.info(f'执行方法：{i}')
             p.start()
             p_set.add(p)
     while 1:
         info_text = ''
         for p in p_set:
-            info_text += f'\n进程【{p.name}】状态：is_alive:{p.is_alive()}'
+            is_alive = p.is_alive()
+            info_text += f'\n进程【{p.name}】状态：is_alive:{is_alive}'
         logger.info(info_text)
         time.sleep(30)
 

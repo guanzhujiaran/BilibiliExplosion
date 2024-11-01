@@ -245,6 +245,8 @@ message AndroidDeviceInfo {
     string cpu_hardware = 123;
     // 留空即可
     string cpu_features = 124;
+    // 类似{"ro.product.model":"PCRT00", "ro.bootmode":"unknown", "qemu.sf.lcd_density":"", "qemu.hw.mainkeys":"", "init.svc.qemu-props":"", "ro.hardware":"qcom", "ro.product.device":"marlin", "init.svc.qemud":"", "ro.kernel.android.qemud":"", "ro.kernel.qemu.gles":"", "ro.serialno":"00536fe6", "ro.kernel.qemu":"", "ro.product.name":"PCRT00", "qemu.sf.fake_camera":"", "ro.bootloader":"unknown"}
+    string adb_info = 125;
 }
 
 // 传感器信息

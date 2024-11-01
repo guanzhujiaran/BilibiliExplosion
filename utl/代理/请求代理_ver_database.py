@@ -35,7 +35,7 @@ class request_with_proxy:
         self.cookie_lock = asyncio.Lock()
         self.use_p_dict_flag = False
         self.channel = 'bili'
-        self.sqlite3_proxy_op = sqlite3_proxy_op.SQLHelper()
+        self.sqlite3_proxy_op = sqlite3_proxy_op.SQLHelper
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
         self.log = logger
         # self.log.remove()
@@ -158,14 +158,15 @@ class request_with_proxy:
                     req_text = req.text.replace("\n", "")
                     self.log.warning(f'解析为dict时失败，响应内容为：\n{req_text}\n{args}\n{kwargs}\n')
                 if type(req_dict) is list:
-                    p_dict['score'] += 10   
+                    p_dict['score'] += 10
                     p_dict['status'] = status
                     self.log.debug(f'更新数据库中的代理status:{status}')
                     await self._update_to_proxy_dict(p_dict, 50)
                     return req_dict
                 if type(req_dict) is not dict:
                     self.log.warning(f'请求获取的req_dict类型出错！{req_dict}')
-                if (req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict=={'code': 5, 'message': 'Not Found'}) and 'bili' in req.url.host:
+                if (req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict == {'code': 5,
+                                                                                                          'message': 'Not Found'}) and 'bili' in req.url.host:
                     self.log.warning(f'获取bili真实响应失败！\n{req.text}\n{args}\n{kwargs}\n')
                     p_dict['score'] -= 10
                     p_dict['status'] = -412
@@ -1960,7 +1961,7 @@ class request_with_proxy:
     async def _set_new_proxy(self, mode=None):
         if not mode:
             mode = self.mode
-        ret_p_dict={}
+        ret_p_dict = {}
         while 1:
             try:
                 p_dict = await self.sqlite3_proxy_op.select_one_proxy(mode, channel=self.channel)

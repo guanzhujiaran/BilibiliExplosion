@@ -5,10 +5,9 @@ import random
 import time
 import urllib.parse
 import uuid
-
 from curl_cffi import requests
 from curl_cffi.requests import BrowserType
-import CONFIG
+from CONFIG import CONFIG
 from grpc获取动态.Utils.UserAgentParser import UserAgentParser
 from grpc获取动态.Utils.极验.models.captcha_models import GeetestRegInfo
 from grpc获取动态.grpc.bapi.base_log import bapi_log
@@ -19,10 +18,25 @@ from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
 
 proxy_req = request_with_proxy()
 _my_sealed_req = MYASYNCHTTPX()
-_custom_proxy = {'http': CONFIG.CONFIG.my_ipv6_addr, 'https': CONFIG.CONFIG.my_ipv6_addr}
+_custom_proxy = {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr}
+black_code_list = [-412, -352]  # 异常代码，需要重试的
 
 
-# _custom_proxy = {'http': 'http://127.0.0.1:1919', 'https': 'http://127.0.0.1:1919'}
+def _request_wrapper(func):
+    async def wrapper(*args, **kwargs):
+        while 1:
+            try:
+                resp_dict = await func(*args, **kwargs)
+                if resp_dict.get('code') is None or resp_dict.get('code') in black_code_list:
+                    if kwargs.get('use_custom_proxy') is True:
+                        kwargs.update({'use_custom_proxy': False})
+                    raise ValueError(f'请求失败！检查响应：{resp_dict}')
+                return resp_dict
+            except Exception as e:
+                bapi_log.exception(f'请求失败！{e}')
+                await asyncio.sleep(10)
+
+    return wrapper
 
 
 def gen_trace_id() -> str:
@@ -34,13 +48,13 @@ def gen_trace_id() -> str:
 
 def get_request_func(use_custom_proxy=False) -> callable:
     if use_custom_proxy:
-        return _my_sealed_req.request
+        return _my_sealed_req.request # 自己的ipv6发起请求
     else:
-        return proxy_req.request_with_proxy
+        return proxy_req.request_with_proxy # 代理池里面的ip发起请求
 
 
 def _gen_headers(*extra_headers) -> dict:
-    ua = random.choice(CONFIG.CONFIG.UA_LIST)
+    ua = CONFIG.rand_ua
     ua_parser = UserAgentParser(ua, is_mobile=False, fetch_dest='empty', fetch_mode='cors',
                                 fetch_site='same-site')
     return ua_parser.get_headers_dict(*extra_headers)
@@ -63,12 +77,12 @@ def appsign(params, appkey='1d8b6e7d45233436', appsec='560c52ccd288fed045859ed18
 
 
 def get_latest_version_builds() -> [LatestVersionBuild]:
-    url = "https://app.bilibili.com/x/v2/version?mobi_app=android"
+    url = "https://app.bilibili.com/x/v2/version"
     resp = requests.get(url, impersonate=random.choice(list(BrowserType)).value)
     resp_dict = resp.json()
     return [LatestVersionBuild(**item) for item in resp_dict['data']]
 
-
+@_request_wrapper
 async def get_lot_notice(bussiness_type: int, business_id: str, use_custom_proxy=False):
     """
     获取抽奖notice
@@ -89,6 +103,7 @@ async def get_lot_notice(bussiness_type: int, business_id: str, use_custom_proxy
                                                                              hybrid='1',
                                                                              proxies=_custom_proxy
                                                                              )
+            resp = await resp.json()
         else:
             resp = await get_request_func(use_custom_proxy=use_custom_proxy)(url=url, method='get', params=params,
                                                                              headers=_gen_headers(),
@@ -96,19 +111,19 @@ async def get_lot_notice(bussiness_type: int, business_id: str, use_custom_proxy
                                                                              )
         if resp.get('code') != 0:
             bapi_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
-            await asyncio.sleep(10)
             if resp.get('code') == -9999:
                 return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
+            await asyncio.sleep(10)
             continue
         return resp
 
-
+@_request_wrapper
 async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_custom_proxy=False):
     while 1:
         url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
         headers = _gen_headers({
             "origin": "https://space.bilibili.com",
-            'referer': f"https://space.bilibili.com/{hostuid}/dynamic?spm_id_from=333.1368.list.card_avatar.click",
+            'referer': f"https://space.bilibili.com/{hostuid}/dynamic",
             'cookie': '1'
         })
         dongtaidata = {
@@ -149,14 +164,13 @@ async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_
                                                                             )
         return req
 
-
+@_request_wrapper
 async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, rid: str | int | None = None,
                                          dynamic_type: str | int | None = None, use_custom_proxy=False):
     url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail'
     headers = _gen_headers({
         "origin": "https://t.bilibili.com",
         'referer': f"https://t.bilibili.com/{dynamic_id}" if dynamic_id else f"https://t.bilibili.com/{rid}?type={dynamic_type}",
-        'priority': 'u=4',
         'te': 'trailers',
         'cookie': '1'
     })
@@ -252,9 +266,10 @@ async def get_geetest_reg_info(v_voucher: str,
         proxies=_custom_proxy
     )
     resp_json = response.json()
-    if resp_json.get('code') == 0:
+    if resp_json.get('code') == 0:  # gt=ac597a4506fee079629df5d8b66dd4fe 这个是web端的，目标是获取到app端的gt
         if resp_json.get('data').get('geetest') is None:
-            bapi_log.error(f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
+            bapi_log.error(
+                f"\n该风控无法通过 captcha 解除！！！获取极验信息失败: {data}\n{resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
             return False
         bapi_log.debug(f"\n成功获取极验challenge：{resp_json}")
         return GeetestRegInfo(
@@ -338,12 +353,117 @@ async def validate_geetest(challenge, token, validate,
         bapi_log.error(
             f"\n发请求 {url} 验证validate极验失败:{challenge, token, validate}\n {resp_json}\n{data}\n{headers_raw}")
         return ''
-    bapi_log.debug(f'\n发请求验证成功：{resp_json}')
+    bapi_log.debug(f'\n发请求 {url} 验证validate极验成功：{resp_json}')
     return token
 
 
+
+async def resource_abtest_abserver(
+        buvid,
+        fp_local,
+        fp_remote,
+        session_id,
+        guestid,
+        app_version_name,
+        model,
+        app_build,
+        channel,
+        osver,
+        ticket,
+        brand
+):
+    url = 'https://app.bilibili.com/x/resource/abtest/abserver'
+    ua = f'Mozilla/5.0 BiliDroid/{app_version_name} (bbcallen@gmail.com) os/android model/{model} mobi_app/android build/{app_build} channel/{channel} innerVer/{app_build} osVer/{osver} network/2'
+    headers_raw = [
+        ('buvid', buvid),
+        ("fp_local", fp_local),
+        ('fp_remote', fp_remote),
+        ('session_id', session_id),
+        ("guestid", str(guestid)),
+        ('user-agent', ua),
+        ('x-bili-trace-id', gen_trace_id()),
+        ('x-bili-aurora-eid', ''),
+        ('x-bili-mid', ''),
+        ("x-bili-aurora-zone", ''),
+        ('x-bili-gaia-vtoken', ''),
+        ("x-bili-ticket", ticket),
+        ('accept-encoding', 'gzip'),
+    ]
+    params = {
+        'brand': brand,
+        'build': app_build,
+        'buvid': buvid,
+        'c_locale': 'zh_CN',
+        "channel": channel,
+        'device': 'phone',
+        'disable_rcmd': 0,
+        'mobi_app': 'android',
+        'model': model,
+        'osver': osver,
+        'platform': 'android',
+        's_locale': 'zh_CN',
+        'statistics': json.dumps({"appId": 1, "platform": 3, "version": app_version_name, "abtest": ""},
+                                 separators=(',', ':')),
+        'ts': int(time.time()),
+    }
+    signed_params = appsign(params)
+    response = await get_request_func(use_custom_proxy=True)(url=url, method='get', params=signed_params,
+                                                             headers=headers_raw)
+    bapi_log.debug(f'\n{url}\t发请求验证成功：{response.json()}')
+    return response
+
+
+# async def get_guest_id():
+#     """
+#     获取metadata生成时的guest_id，一直会使用下去
+#     :return:
+#     """
+#     url = 'https://passport.bilibili.com/x/passport-user/guest/reg'
+#     ua = f'Mozilla/5.0 BiliDroid/{app_version_name} (bbcallen@gmail.com) os/android model/{model} mobi_app/android build/{app_build} channel/{channel} innerVer/{app_build} osVer/{osver} network/2'
+#     headers_raw = [
+#         ('fp_local', fp_local),
+#         ("fp_remote", fp_remote),
+#         ('session_id', session_id),
+#         ('buvid', buvid),
+#         ("env", 'prod'),
+#         ('app-key', 'android'),
+#         ('env', 'prod'),
+#         ('app-key', 'android'),
+#         ('user-agent', ua),
+#         ("x-bili-trace-id", gen_trace_id()),
+#         ('x-bili-aurora-eid', ''),
+#         ("x-bili-mid", ''),
+#         ('x-bili-aurora-zone', ''),
+#         ("x-bili-gaia-vtoken", ""),
+#         ("x-bili-ticket", ticket),
+#         ('content-type', 'application/x-www-form-urlencoded; charset=utf-8'),
+#         ('accept-encoding', 'gzip')
+#     ]
+#     params = {
+#         'build': brand,
+#         'buvid': app_build,
+#         'buvid': buvid,
+#         'c_locale': 'zh_CN',
+#         "channel": channel,
+#         'device_info': 'phone',
+#         'disable_rcmd': 0,
+#         'dt': '',
+#         'local_id': buvid,
+#         'mobi_app': 'android',
+#         'platform': 'android',
+#         's_locale': 'zh_CN',
+#         'statistics': json.dumps({"appId": 1, "platform": 3, "version": app_version_name, "abtest": ""},
+#                                  separators=(',', ':')),
+#         'ts': int(time.time()),
+#     }
+#     signed_params = appsign(params)
+#     response = await get_request_func(use_custom_proxy=True)(url=url, method='get', params=signed_params, )
+#     bapi_log.debug(f'\n{url}\t发请求验证成功：{response.json()}')
+#     return response
+
+
 if __name__ == "__main__":
-    _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
+    # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
     _____x = asyncio.run(get_space_dynamic_req_with_proxy(hostuid=95309300, offset='',
-                                                          use_custom_proxy=True))
-    print(_____x.json())
+                                                          use_custom_proxy=False))
+    print(_____x)

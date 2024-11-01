@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi_cache.backends.inmemory import InMemoryBackend
 import uvicorn
 from fastapi import FastAPI
-from fastapi.exceptions import RequestValidationError, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
 from fastapi接口.controller.v1.lotttery_database.bili import GetLotteryData
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
@@ -15,7 +15,6 @@ from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
 import fastapi_cdn_host
 from fastapi接口.models.common import CommonResponseModel
 from starlette.requests import Request
-from starlette.responses import Response
 from pydantic import BaseModel as PydanticBaseModel
 from fastapi.responses import JSONResponse
 from loguru import logger

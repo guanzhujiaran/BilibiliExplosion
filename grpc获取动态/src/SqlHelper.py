@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
-import traceback
-from typing import Generator
+from typing import Generator, Tuple
 from grpc获取动态.src.DynObjectClass import *  # 导入自定义对象
 import time
 
@@ -13,6 +12,7 @@ from CONFIG import CONFIG
 
 op_db_lock = threading.Lock()
 sql_log = logger.bind(user='fastapi')
+
 
 @sql_log.catch
 def lock_wrapper(func: callable) -> callable:
@@ -279,6 +279,76 @@ ORDER BY x;
                 "target_ts": target_ts
             })
 
+    @lock_wrapper
+    def query_official_lottery_by_timelimit_page_offset(self, time_limit: int = 24 * 3600, page_number: int = 0,
+                                                        page_size: int = 0) -> tuple[Generator[dict, None, None], int]:
+        """
+        通过日期查询需要的动态，默认查询当天
+        :param between_ts:
+        :param RegExp:
+        :return:
+        """
+        now_ts = int(time.time())
+        base_where = 'status=0 and business_type=1 and lottery_time>=:now_ts'
+        if not time_limit:
+            where = base_where + " order by lottery_time asc"
+            where_args = {
+                "now_ts": now_ts,
+            }
+        else:
+            target_ts = now_ts + time_limit
+            where = base_where + " and lottery_time<=:target_ts order by lottery_time asc"
+            where_args = {
+                "now_ts": now_ts,
+                "target_ts": target_ts
+            }
+        if page_number and page_size:
+            offset_value = (page_number - 1) * page_size
+            where += " limit :page_size offset :offset_value"
+            where_args.update({
+                "page_size": page_size,
+                "offset_value": offset_value
+            })
+        return (
+            self.op_lot_table.rows_where(where=where, where_args=where_args),
+            self.op_lot_table.count_where(base_where, where_args)
+        )
+
+    @lock_wrapper
+    def query_charge_lottery_by_timelimit_page_offset(self, time_limit: int = 24 * 3600, page_number: int = 0,
+                                                        page_size: int = 0) -> tuple[Generator[dict, None, None], int]:
+        """
+        通过日期查询需要的动态，默认查询当天
+        :param between_ts:
+        :param RegExp:
+        :return:
+        """
+        now_ts = int(time.time())
+        base_where = 'status=0 and business_type=12 and lottery_time>=:now_ts'
+        if not time_limit:
+            where = base_where + " order by lottery_time asc"
+            where_args = {
+                "now_ts": now_ts,
+            }
+        else:
+            target_ts = now_ts + time_limit
+            where = base_where + " and lottery_time<=:target_ts order by lottery_time asc"
+            where_args = {
+                "now_ts": now_ts,
+                "target_ts": target_ts
+            }
+        if page_number and page_size:
+            offset_value = (page_number - 1) * page_size
+            where += " limit :page_size offset :offset_value"
+            where_args.update({
+                "page_size": page_size,
+                "offset_value": offset_value
+            })
+        return (
+            self.op_lot_table.rows_where(where=where, where_args=where_args),
+            self.op_lot_table.count_where(base_where, where_args)
+        )
+
     # endregion
 
     # region 更新和新增内容
@@ -337,5 +407,5 @@ ORDER BY x;
 
 if __name__ == '__main__':
     test_sql = SQLHelper()
-    resp = test_sql.get_all_dynamic_detail_by_dynamic_id('940628499647954947')
-    print(resp)
+    result,total = test_sql.query_charge_lottery_by_timelimit_page_offset()
+    print(list(result))

@@ -3,6 +3,7 @@
 import io
 import os
 import sys
+from threading import Thread
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
@@ -23,6 +24,7 @@ args = parser.parse_args()
 print(f'args:{args}')
 if not args.logger:
     logger.remove()
+    logger.add(level="ERROR",sink=print)
 myfastapi_logger = logger.bind(user='fastapi')
 myfastapi_logger.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_fastapi_log.log"),
                      level="WARNING",
@@ -34,13 +36,14 @@ myfastapi_logger.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/er
                      filter=lambda record: record["extra"].get('user') == 'fastapi',
                      )
 # logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
-
+from fastapi接口.dao.redisConn import r, r1
 from contextlib import asynccontextmanager
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
 from fastapi接口.controller.v1.lotttery_database.bili import GetLotteryData
 from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
+from fastapi接口.controller.v1.ip_info import get_ip_info
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserveInfo
 from src.monitor import BiliLiveLotRedisManager
 from starlette.requests import Request
@@ -50,7 +53,6 @@ import json
 import time
 import traceback
 from typing import Union
-import redis
 import uvicorn
 from fastapi import Query, Body, FastAPI, HTTPException
 from pydantic import BaseModel
@@ -71,8 +73,6 @@ grpc_sql_helper = SQLHelper()
 grpc_api = BiliGrpc()
 toutiaoSpaceFeedLotService = ToutiaoSpaceFeedLotService()
 req = request_with_proxy()
-r = redis.Redis(host='localhost', port=11451, db=0)  # 直播抽奖数据
-r1 = redis.Redis(host='localhost', port=11451, db=1)  # 情感分析数据
 
 
 @asynccontextmanager
@@ -81,14 +81,46 @@ async def lifespan(_app: FastAPI):
     # from apscheduler.schedulers.background import BackgroundScheduler
     # scheduler = BackgroundScheduler()
     # from fastapi接口.scripts.start_other_service import start_scripts
-    #
-    # myfastapi_logger.info("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
-    # # __t = threading.Thread(target=start_scripts, daemon=False)
-    # # __t.start()
+    myfastapi_logger.info("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
+    # __t = Thread(target=start_scripts, daemon=False)
+    # __t.start()
     # scheduler.add_job(func=start_scripts, )
     # scheduler.start()
     # myfastapi_logger.info("其他服务已启动")
+
+    ### 异步
+    show_log = False
+    back_ground_tasks = []
+
+    from grpc获取动态.src.监控up动态.bili_dynamic_monitor import monitor
+    _ = monitor()
+    back_ground_tasks.append(asyncio.create_task(_.main(show_log=show_log)))
+
+    from opus新版官方抽奖.转发抽奖.定时获取所有动态以及发布充电和官方抽奖专栏 import \
+        async_schedule_get_official_lot_main
+    back_ground_tasks.append(asyncio.create_task(async_schedule_get_official_lot_main(show_log=show_log)))
+
+    from opus新版官方抽奖.预约抽奖.etc.schedule_get_reserve_lot import async_schedule_get_reserve_lot_main
+    back_ground_tasks.append(asyncio.create_task(async_schedule_get_reserve_lot_main(show_log=show_log)))
+
+    from opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import async_schedule_get_topic_lot_main
+    back_ground_tasks.append(asyncio.create_task(async_schedule_get_topic_lot_main(show_log=show_log)))
+
+    from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
+    back_ground_tasks.append(asyncio.create_task(async_monitor_ipv6_address_changes()))
+
+    from src.monitor import AsyncMonitor
+    m = AsyncMonitor()
+    back_ground_tasks.append(asyncio.create_task(m.async_main(ShowLog=show_log)))
+
+    from grpc获取动态.Utils.MQClient.VoucherMQClient import VoucherMQClient
+    back_ground_tasks.extend([
+        asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer)) for _ in range(5)
+    ])
+
     yield
+
+    await asyncio.gather(*back_ground_tasks)
 
 
 app = FastAPI(lifespan=lifespan)
@@ -96,22 +128,25 @@ fastapi_cdn_host.patch_docs(app)
 
 
 @app.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息', )
-def v1_get_live_lots(
+async def v1_get_live_lots(
         get_all: bool = False
 ):
-    ret_list = []
-    if get_all:
-        return json.loads(r.get(BiliLiveLotRedisManager.RedisMap.all_live_lot.value))
-    for k in r.keys():
-        if k == BiliLiveLotRedisManager.RedisMap.all_live_lot.value.encode('utf-8'):
-            continue
-        if b'Lock' in k:
-            continue
-        res = r.get(k)
-        myfastapi_logger.info(f'获取到直播抽奖信息：【{k}:{res}】')
-        if res:
-            ret_list.append(json.loads(res))
-    return ret_list
+    def _():
+        ret_list = []
+        if get_all:
+            return json.loads(r.get(BiliLiveLotRedisManager.RedisMap.all_live_lot.value))
+        for k in r.keys():
+            if k == BiliLiveLotRedisManager.RedisMap.all_live_lot.value.encode('utf-8'):
+                continue
+            if b'Lock' in k:
+                continue
+            res = r.get(k)
+            myfastapi_logger.info(f'获取到直播抽奖信息：【{k}:{res}】')
+            if res:
+                ret_list.append(json.loads(res))
+        return ret_list
+
+    return await asyncio.to_thread(_)
 
 
 # region 测试类
@@ -126,21 +161,24 @@ async def app_avaliable_api():
 
 # region 魔搭社区的各种ai模型
 @app.get('/damo/semantic')
-def semantic(data=Query(default=None)):
-    timeout = 0
-    while 1:
-        if timeout > 11:
-            return True
-        if data:
-            res = json.loads(r1.get(data)).get(data, None) if r1.get(data) else None
-            if res != None:
-                return res
+async def semantic(data=Query(default=None)):
+    def _():
+        timeout = 0
+        while 1:
+            if timeout > 11:
+                return True
+            if data:
+                res = json.loads(r1.get(data)).get(data, None) if r1.get(data) else None
+                if res != None:
+                    return res
+                else:
+                    r1.setex(data, 180, json.dumps({data: None}))
             else:
-                r1.setex(data, 180, json.dumps({data: None}))
-        else:
-            return False
-        time.sleep(1)
-        timeout += 1
+                return False
+            time.sleep(1)
+            timeout += 1
+
+    return await asyncio.to_thread(_)
 
 
 # endregion
@@ -236,8 +274,8 @@ async def v1_post_rm_following_list(data: list[Union[int, str]]):
 
 # region 获取抽奖内容接口
 @app.post('/lot/upsert_lot_detail')
-def upsert_lot_detail(request_body: dict):
-    result = grpc_sql_helper.upsert_lot_detail(request_body)
+async def upsert_lot_detail(request_body: dict):
+    result = await asyncio.to_thread(grpc_sql_helper.upsert_lot_detail, request_body)
     return result
 
 
@@ -250,18 +288,21 @@ async def api_get_others_lot_dyn():
 
 
 @app.get('/get_others_official_lot_dyn')
-def api_get_others_official_lot_dyn():
-    myfastapi_logger.error('get_others_lot_dyn 开始获取别人的官方动态抽奖！')
-    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
-    result = get_other_lot_dyn.get_official_lot_dyn()
-    return result
+async def api_get_others_official_lot_dyn():
+    def _():
+        myfastapi_logger.error('get_others_lot_dyn 开始获取别人的官方动态抽奖！')
+        get_other_lot_dyn = GET_OTHERS_LOT_DYN()
+        result = get_other_lot_dyn.get_official_lot_dyn()
+        return result
+
+    return await asyncio.to_thread(_)
 
 
 @app.get('/get_others_big_lot')
-def api_get_others_big_lot():
+async def api_get_others_big_lot():
     myfastapi_logger.error('get_others_lot_dyn 开始获取别人的大奖！')
     get_other_lot_dyn = GET_OTHERS_LOT_DYN()
-    result = get_other_lot_dyn.get_unignore_Big_lot_dyn()
+    result = await asyncio.to_thread(get_other_lot_dyn.get_unignore_Big_lot_dyn)
     return result
 
 
@@ -305,6 +346,7 @@ async def toutiao_get_others_lot_ids():
 app.include_router(ReplySingle.router)
 app.include_router(GetLotteryData.router)
 app.include_router(GetV3ClickTarget.router)
+app.include_router(get_ip_info.router)
 
 
 @app.middleware("http")
@@ -320,8 +362,8 @@ async def some_middleware(request: Request, call_next):
                         headers=dict(response.headers), media_type=response.media_type)
     except Exception as e:
         myfastapi_logger.exception(e)
-        if e.__str__() != 'No OpenAiClient is available' and e.__str__()!="Error code: 429 - {'error': {'message': '免费API限制每日200次请求，请00:00后再试，如有更多需求，请访问 https://buyca.shop 购买付费API。The free account is limited to 200 requests per day. Please try again after 00:00 the next day. If you have additional requirements, please visit https://buyca.shop to purchase a premium key.', 'type': 'chatanywhere_error', 'param': None, 'code': '429 TOO_MANY_REQUESTS'}}":
-            pushme('fastapi请求异常', traceback.format_exc())
+        if e.__str__() != 'No OpenAiClient is available' and e.__str__() != "Error code: 429 - {'error': {'message': '免费API限制每日200次请求，请00:00后再试，如有更多需求，请访问 https://buyca.shop 购买付费API。The free account is limited to 200 requests per day. Please try again after 00:00 the next day. If you have additional requirements, please visit https://buyca.shop to purchase a premium key.', 'type': 'chatanywhere_error', 'param': None, 'code': '429 TOO_MANY_REQUESTS'}}":
+            pushme(f'fastapi请求异常！{str(e)}', traceback.format_exc())
         raise HTTPException(
             status_code=500,
             # detail 可以传递任何可以转换成JSON格式的数据

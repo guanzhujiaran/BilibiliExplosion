@@ -9,9 +9,8 @@ module.exports = {
 		exec_mode: "fork",
 		autorestart: true,
 		watch: false,
-		error_file:"NUL",
-		out_file:"NUL",
-			
+		out_file: "/dev/null",
+   		error_file: "/dev/null"
   },
 	{
 		name: 'fastapi-bili-other-scripts',
@@ -23,8 +22,8 @@ module.exports = {
 		exec_mode: "fork",
 		autorestart: true,
 		watch: false,
-		error_file:"NUL",
-		out_file:"NUL",
+		out_file: "/dev/null",
+   		error_file: "/dev/null"
 	}
   		]
 };

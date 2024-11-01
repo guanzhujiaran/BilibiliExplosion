@@ -6,7 +6,7 @@ from CONFIG import CONFIG
 from opus新版官方抽奖.预约抽奖.etc.log.base_log import reserve_lot_log
 from opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import rid_get_dynamic
 from opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import submit_reserve__lot_main
-from utl.pushme.pushme import pushme_try_catch_decorator
+from utl.pushme.pushme import pushme_try_catch_decorator, async_pushme_try_catch_decorator
 
 
 async def main():
@@ -29,6 +29,7 @@ def sync_main():
 
 @pushme_try_catch_decorator
 def schedule_get_reserve_lot_main(schedule_mark: bool = True, show_log: bool = True):
+    reserve_lot_log.info('启动获取预约抽奖程序！！！')
     if not show_log:
         reserve_lot_log.remove()
         reserve_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_reserve_lot_log.log"),
@@ -54,5 +55,34 @@ def schedule_get_reserve_lot_main(schedule_mark: bool = True, show_log: bool = T
     else:
         sync_main()
 
+@async_pushme_try_catch_decorator
+async def async_schedule_get_reserve_lot_main(schedule_mark: bool = True, show_log: bool = True):
+    reserve_lot_log.info('启动获取预约抽奖程序！！！')
+    if not show_log:
+        reserve_lot_log.remove()
+        reserve_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_reserve_lot_log.log"),
+                            level="WARNING",
+                            encoding="utf-8",
+                            enqueue=True,
+                            rotation="500MB",
+                            compression="zip",
+                            retention="15 days",
+                            filter=lambda record: record["extra"].get('user') == "预约抽奖",
+                            )
+    if schedule_mark:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+
+        cron_str = '0 20 * * *'
+        crontrigger = CronTrigger.from_crontab(cron_str)
+        schedulers = AsyncIOScheduler()
+        job = schedulers.add_job(main, crontrigger, misfire_grace_time=3600)
+        reserve_lot_log.info(
+            f'使用内置定时器,开启定时任务,等待时间（{crontrigger.get_next_fire_time(datetime.now(), datetime.now())}）到达后执行')
+        schedulers.start()
+    else:
+        await main()
+
 if __name__ == '__main__':
-    asyncio.run(main())
+    schedule_get_reserve_lot_main()
+    # asyncio.run(main())

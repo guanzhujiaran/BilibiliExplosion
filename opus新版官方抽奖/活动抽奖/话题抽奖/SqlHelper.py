@@ -103,8 +103,8 @@ class sqlHelper:
 
 async def _test():
     a = sqlHelper()
-    b = await a.get_functional_card_by_jump_url("https://www.bilibili.com/blackboard/era/WGzl8l4LJUO1cA4y.html")
-    print(b.dict())
+    b = await a.get_recent_failed_topic_id()
+    print(b)
 
 
 if __name__ == '__main__':

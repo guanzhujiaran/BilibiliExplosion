@@ -3,6 +3,8 @@ import copy
 from dataclasses import dataclass
 from enum import Enum
 
+from fake_useragent import UserAgent
+
 
 @dataclass
 class DBINFO:
@@ -106,19 +108,13 @@ class ProjectPath(str, Enum):
 # endregion
 
 
-class CONFIG:
+class _CONFIG:
     root_dir = 'K:/python test/'  # b站代码的根目录
-    V2ray_proxy = 'http://127.0.0.1:10809' # socket端口+1
+    V2ray_proxy = 'http://127.0.0.1:10809' # socks端口+1
     project_path = ProjectPath
     pushnotify = pushnotify()  # 推送设置
     zhihu_CONFIG = zhihu_CONFIG()  # 知乎设置
     database = database()
-    UA_LIST = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/125.0.0.0",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/126.0.0.0",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0",
-    ]  # UA列表
     chat_gpt_configs = [
         ChatGptSettings(
             baseurl= "https://api.chatanywhere.tech/v1",
@@ -146,4 +142,19 @@ class CONFIG:
         ),
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
+    # my_ipv6_addr = 'http://127.0.0.1:1919'
+    # my_ipv6_addr=None
     RabbitMQConfig = RabbitMQConfig()
+
+    _pc_ua = UserAgent(platforms=["pc", "tablet"])
+    _mobile_ua = UserAgent(platforms=["mobile"])
+
+    @property
+    def rand_ua(self):
+        return CONFIG._pc_ua.random
+
+    @property
+    def rand_ua_mobile(self):
+        return self._mobile_ua.random
+
+CONFIG=_CONFIG()
