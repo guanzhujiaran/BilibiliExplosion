@@ -6,9 +6,9 @@ from dataclasses import asdict
 from enum import Enum
 import random
 
-from loguru import logger
 
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import BiliGrpcUtils_logger
 from grpc获取动态.Models.GrpcApiBaseModel import MetaDataWrapper
 from grpc获取动态.Utils.metadata.makeMetaData import is_useable_Dalvik, make_metadata
 from grpc获取动态.grpc.bapi.biliapi import get_latest_version_builds
@@ -92,7 +92,7 @@ class MetaDataRedisManagerPool(RedisManagerBase):
         try:
             self.version_name_build_list: [LatestVersionBuild] = get_latest_version_builds()[:10]  # 获取最新的build
         except Exception as e:
-            logger.exception(e)
+            BiliGrpcUtils_logger.exception(e)
 
         loop = asyncio.get_event_loop()
         loop.create_task(self._start_periodic_task())
@@ -114,7 +114,7 @@ class MetaDataRedisManagerPool(RedisManagerBase):
             all_metadata = [MetaDataWrapper(**pickle.loads(x)) for x in await self._sget_all(self.RedisMap.metaData)]
             to_remove_hash_ids = [x.hash_id for x in all_metadata if x.expire_ts > time.time() or x.able == False]
             if to_remove_hash_ids:
-                logger.debug(f"to_remove_hash_ids: {to_remove_hash_ids}")
+                BiliGrpcUtils_logger.debug(f"to_remove_hash_ids: {to_remove_hash_ids}")
                 await self._remove_metadata_by_hash_id(to_remove_hash_ids)
 
     async def _remove_metadata_by_hash_id(self, hash_ids: [str]):
@@ -148,7 +148,7 @@ class MetaDataRedisManagerPool(RedisManagerBase):
                                             proxy=proxy
                                             )
             if not dict(md).get('x-bili-ticket'):
-                logger.error(f'bili-ticket获取失败！{md}')
+                BiliGrpcUtils_logger.error(f'bili-ticket获取失败！{md}')
                 await asyncio.sleep(30)
                 continue
             else:

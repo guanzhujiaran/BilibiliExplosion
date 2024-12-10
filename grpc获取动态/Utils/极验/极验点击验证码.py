@@ -5,7 +5,6 @@ import time
 from typing import Union
 import requests
 import httpx
-from loguru import logger
 from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
@@ -13,20 +12,20 @@ from selenium.webdriver import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from CONFIG import CONFIG
+from fastapi接口.log.base_log import Voucher352_logger
 from fastapi接口.service.geetest_captcha.jy_click_captcha import jy_click
 from grpc获取动态.Utils.UserAgentParser import UserAgentParser
 from grpc获取动态.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, GeetestSuccessTimeCalc
 from grpc获取动态.Utils.极验.util.utils_get_target_center_position import CaptchaDetector
 import bili_ticket_gt_python
-
 from grpc获取动态.grpc.bapi.biliapi import appsign, get_geetest_reg_info, validate_geetest
 from grpc获取动态.Utils.metadata.makeMetaData import gen_trace_id
-from utl.代理.SealedRequests import MYASYNCHTTPX
 
 
 class GeetestV3Breaker:
     def __init__(self):
-        self.log = logger.bind(user='-352Voucher')
+        self.log = Voucher352_logger
         self.current_file_root_dir = os.path.dirname(os.path.abspath(__file__))  # 就是当前文件的路径目录
         self.driver = None
         self.wait = None
@@ -46,7 +45,7 @@ class GeetestV3Breaker:
         options = Options()
         options.add_argument('--headless')
         # options.binary_location = 'C:/WebDriver/chrome.exe'
-        self.driver = webdriver.Edge(service=Service('C:/WebDriver/bin/msedgedriver.exe'), options=options)
+        self.driver = webdriver.Edge(service=Service(CONFIG.selenium_config.edge_path), options=options)
         self.wait = WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5)
 
     def _step1_input_gt_challenge(self, gt, challenge):
@@ -190,9 +189,9 @@ class GeetestV3Breaker:
         resp_json = response.json()
         if resp_json.get('code') == 0:
             if resp_json.get('data').get('geetest') is None:
-                logger.error(f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
+                Voucher352_logger.error(f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
                 return False
-            logger.debug(f"\n成功获取极验challenge：{resp_json}")
+            Voucher352_logger.debug(f"\n成功获取极验challenge：{resp_json}")
             return GeetestRegInfo(
                 type=resp_json.get('data').get('type'),
                 token=resp_json.get('data').get('token'),
@@ -200,7 +199,7 @@ class GeetestV3Breaker:
                 geetest_gt=resp_json.get('data').get('geetest').get('gt')
             )
         else:
-            logger.error(f"\n获取极验信息失败: {resp_json}")
+            Voucher352_logger.error(f"\n获取极验信息失败: {resp_json}")
             return False
 
     @staticmethod
@@ -267,10 +266,10 @@ class GeetestV3Breaker:
         )
         resp_json = req.json()
         if resp_json.get('code') != 0:
-            logger.error(
+            Voucher352_logger.error(
                 f"\n发请求 {url} 验证validate极验失败:{challenge, token, validate}\n {resp_json}\n{data}\n{headers_raw}")
             return ''
-        logger.debug(f'\n发请求验证成功：{resp_json}')
+        Voucher352_logger.debug(f'\n发请求验证成功：{resp_json}')
         return token
 
     # endregion
@@ -347,7 +346,7 @@ class GeetestV3Breaker:
         except Exception as e:
             if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
                 return ''
-            self.log.exception(e)
+            self.log.error(f'极验验证失败！{e}')
             self.succ_stats.total_time -= 1
         finally:
             if use_bili_ticket_gt:
@@ -425,7 +424,7 @@ class GeetestV3Breaker:
         except Exception as e:
             if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
                 return ''
-            self.log.exception(e)
+            self.log.debug(e)
             self.succ_stats.total_time -= 1
         finally:
             if use_bili_ticket_gt:

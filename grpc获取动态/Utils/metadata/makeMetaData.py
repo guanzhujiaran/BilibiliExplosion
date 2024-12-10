@@ -13,8 +13,8 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from loguru import logger
 
+import CONFIG
 from grpc获取动态.Models.GrpcApiBaseModel import MetaDataBasicInfo
 from grpc获取动态.Utils.CONST import MemSizes, CPUFreqs, ProductDevices, Languages, Countries, NetworkTypes, UsbStates, \
     CPUAbiLists, CPUHardwares, ANDROID_VERSIONS, BatteryStates, ANDROID_KERNELS, ScreenDPIs
@@ -31,7 +31,7 @@ from bilibili.metadata.network.network_pb2 import Network, NetworkType
 from bilibili.metadata.parabox.parabox_pb2 import Exps
 from bilibili.metadata.restriction.restriction_pb2 import Restriction
 from datacenter.hakase.protobuf import android_device_info_pb2
-
+from fastapi接口.log.base_log import BiliGrpcApi_logger
 
 class Fp:
     def __init__(self, buvid_auth, device_model, device_radio_ver):
@@ -155,8 +155,8 @@ class MetaDataNeedInfo:
             self.channel = channel
             self.brand = brand
         else:
-            logger.error('解析Dalvik失败！')
-            logger.error(f'{Dalvik}\n{build, device_model, osver, version_name, brand, channel}')
+            BiliGrpcApi_logger.error('解析Dalvik失败！')
+            BiliGrpcApi_logger.error(f'{Dalvik}\n{build, device_model, osver, version_name, brand, channel}')
         self.ua = f'{Dalvik} {self.version_name} os/android model/{self.device_model} mobi_app/android build/{self.build} channel/{self.channel} innerVer/{self.build} osVer/{self.osver} network/2'
 
     def init_from_ua(self, ua: str, brand: str):
@@ -173,8 +173,8 @@ class MetaDataNeedInfo:
         if build and device_model and osver and version_name and brand and channel:
             self.build, self.device_model, self.osver, self.version_name, self.brand, self.channel = build, device_model, osver, version_name, brand, channel
         else:
-            logger.error('解析ua失败！')
-            logger.error(f'{build, device_model, osver, version_name, brand, channel}')
+            BiliGrpcApi_logger.error('解析ua失败！')
+            BiliGrpcApi_logger.error(f'{build, device_model, osver, version_name, brand, channel}')
 
 
 async def make_metadata(
@@ -190,17 +190,21 @@ async def make_metadata(
     '''
     根据ua自动生成包含ua信息的MetaData
     :param mid:
-    :param proxy:
     :param brand:
     :param Dalvik:
     :param version_name:
     :param build:
     :param channel:
     :param access_key:
-    :param ua:
+    :param proxy:
     :return:
     '''
-    proxy = None
+    proxy = {'proxy':
+        {
+            'http': CONFIG.CONFIG.my_ipv6_addr,
+            'https': CONFIG.CONFIG.my_ipv6_addr
+        }
+    }
     metaDataNeedInfo = MetaDataNeedInfo()
     metaDataNeedInfo.generate_ua_from_Dalvik_appVer(Dalvik, version_name, build, channel, brand)
     BUVID = fake_buvid()
@@ -723,16 +727,19 @@ async def get_bili_ticket(device_info: bytes,
             headers=tuple(new_headers),
             proxies={
                 'http': proxy['proxy']['http'],
-                'https': proxy['proxy']['https']} if proxy else None, verify=False
+                'https': proxy['proxy']['https']
+            } if proxy else None, verify=False
         )
         gresp = ticket_pb2.GetTicketResponse()
         if 'gzip' in dict(new_headers).get('grpc-encoding'):
             gresp.ParseFromString(gzip.decompress(resp.content[5:]))
         else:
             gresp.ParseFromString(resp.content[5:])
+        if not gresp.ticket:
+            BiliGrpcApi_logger.error(f'获取ticket失败！\n{resp.content}\n{resp.headers}')
         return gresp
     except Exception as e:
-        logger.error(f'使用代理 {proxy} 获取bili_ticket失败！\n{type(e)}\t{e}')
+        BiliGrpcApi_logger.exception(f'使用代理 {proxy} 获取bili_ticket失败！\n{type(e)}\t{e}')
 
 
 async def active_buvid(brand, build, buvid, channel, app_version_build, app_version_name, model, ua, proxy):
@@ -780,7 +787,7 @@ async def active_buvid(brand, build, buvid, channel, app_version_build, app_vers
     req = await myreq.request(url=url, method='post', data=signed_data, headers=headers, proxies={
         'http': proxy['proxy']['http'],
         'https': proxy['proxy']['https']} if proxy else None, verify=False)
-    logger.debug(f' {url} 激活buvid：{req.text}')
+    BiliGrpcApi_logger.debug(f' {url} 激活buvid：{req.text}')
 
 
 if __name__ == '__main__':

@@ -1,20 +1,19 @@
 from typing import List
 
+from fastapi接口.log.base_log import official_lot_logger
+from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from grpc获取动态.grpc.bapi.biliapi import get_lot_notice
 from utl.代理 import grpc_api
 from utl.pushme.pushme import pushme
-import random
 import time
 from opus新版官方抽奖.Model.OfficialLotModel import LotDetail
 from opus新版官方抽奖.转发抽奖.生成专栏信息 import GenerateOfficialLotCv
-from loguru import logger
 import pandas as pd
 import threading
 import os
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import json
-from CONFIG import CONFIG
 import asyncio
 from grpc获取动态.src.DynObjectClass import dynAllDetail
 from utl.代理.request_with_proxy import request_with_proxy
@@ -61,7 +60,7 @@ class ExctractOfficialLottery:
 
         self.sql = LOTSqlHelper()
         self.proxy_request = request_with_proxy()
-        self.log = logger.bind(user="官方抽奖")
+        self.log = official_lot_logger
         self.__no_lot_timer = 0
         self.__no_lot_timer_lock = threading.Lock()
         self.limit_no_lot_times = 3000  # 3000个rid没有得到抽奖信息就退出
@@ -119,11 +118,18 @@ class ExctractOfficialLottery:
 
             :param lot_data:
             """
-            newly_lot_resp = await get_lot_notice(lot_data['business_type'], lot_data['business_id'])
+            newly_lot_resp = await get_lot_notice(
+                business_type=lot_data['business_type'],
+                business_id=lot_data['business_id'],
+                origin_dynamic_id=lot_data['business_id'],
+            )
             newly_lotData = newly_lot_resp.get('data', {})
 
             if newly_lotData:
-                await self.proxy_request.upsert_lot_detail(newly_lotData)
+                await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
+                    newly_lotData,
+                    extra_routing_key="ExctractOfficialLottery.update_lot_notice.solve_lot_data"
+                )
 
                 async with data_lock:
                     newly_updated_lot_data.append(newly_lotData)
@@ -193,7 +199,8 @@ class ExctractOfficialLottery:
                 if descNode.get('type') == 'desc_type_lottery':
                     lot_id = descNode.get('rid')
                     lot_rid = dynData.get('extend').get('businessId')
-                    lot_notice_res = await get_lot_notice(2, lot_rid)
+                    lot_notice_res = await get_lot_notice(business_type=2, business_id=lot_rid,
+                                                          origin_dynamic_id=dynamic_id)
                     lot_data = lot_notice_res.get('data')
                     if lot_data:
                         lot_id = lot_data.get('lottery_id')

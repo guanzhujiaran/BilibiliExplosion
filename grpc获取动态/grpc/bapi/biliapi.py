@@ -8,13 +8,14 @@ import uuid
 from curl_cffi import requests
 from curl_cffi.requests import BrowserType
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import bapi_log
 from grpc获取动态.Utils.UserAgentParser import UserAgentParser
 from grpc获取动态.Utils.极验.models.captcha_models import GeetestRegInfo
-from grpc获取动态.grpc.bapi.base_log import bapi_log
 from grpc获取动态.grpc.bapi.models import LatestVersionBuild
 from utl.代理.SealedRequests import MYASYNCHTTPX
 from utl.代理.request_with_proxy import request_with_proxy
 from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
+from utl.pushme.pushme import pushme
 
 proxy_req = request_with_proxy()
 _my_sealed_req = MYASYNCHTTPX()
@@ -48,9 +49,9 @@ def gen_trace_id() -> str:
 
 def get_request_func(use_custom_proxy=False) -> callable:
     if use_custom_proxy:
-        return _my_sealed_req.request # 自己的ipv6发起请求
+        return _my_sealed_req.request  # 自己的ipv6发起请求
     else:
-        return proxy_req.request_with_proxy # 代理池里面的ip发起请求
+        return proxy_req.request_with_proxy  # 代理池里面的ip发起请求
 
 
 def _gen_headers(*extra_headers) -> dict:
@@ -82,19 +83,22 @@ def get_latest_version_builds() -> [LatestVersionBuild]:
     resp_dict = resp.json()
     return [LatestVersionBuild(**item) for item in resp_dict['data']]
 
+
 @_request_wrapper
-async def get_lot_notice(bussiness_type: int, business_id: str, use_custom_proxy=False):
+async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id: str | int | None = None,
+                         use_custom_proxy=False):
     """
     获取抽奖notice
+    :param origin_dynamic_id:
     :param use_custom_proxy:
-    :param bussiness_type: 抽奖类型  12:充电 1：转发抽奖 10：预约抽奖
+    :param business_type: 抽奖类型  12:充电 1：转发抽奖 10：预约抽奖
     :param business_id:
     :return:
     """
     while 1:
-        url = 'http://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice'
+        url = 'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice'
         params = {
-            'business_type': bussiness_type,
+            'business_type': business_type,
             'business_id': business_id,
         }
         if use_custom_proxy:
@@ -110,12 +114,50 @@ async def get_lot_notice(bussiness_type: int, business_id: str, use_custom_proxy
                                                                              hybrid='1',
                                                                              )
         if resp.get('code') != 0:
-            bapi_log.error(f'get_lot_notice Error:\t{resp}\t{bussiness_type, business_id}')
+            pushme('get_lot_notice',
+                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type={business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            bapi_log.error(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             if resp.get('code') == -9999:
                 return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
             await asyncio.sleep(10)
             continue
         return resp
+
+
+@_request_wrapper
+async def reserve_relation_info(ids: int | str, use_custom_proxy=False) -> dict:
+    url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
+    # ua = random.choice(BAPI.User_Agent_List)
+    headers = {
+        'accept': 'text/html,application/json',
+        'accept-encoding': 'gzip, deflate',
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+        'cache-control': 'no-cache',
+        'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': "\"Windows\"",
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-site',
+        'user-agent': CONFIG.rand_ua,
+        'cookie': '1'
+        # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
+        #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
+        # 'X-Real-IP': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
+        #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
+        # 'From': 'bingbot(at)microsoft.com',
+    }
+    if use_custom_proxy:
+        req_dict = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
+                                                                             headers=headers, hybrid='1',
+                                                                             proxies=_custom_proxy
+                                                                             )
+    else:
+        req_dict = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
+                                                                             headers=headers, hybrid='1',
+                                                                             )
+    return req_dict
+
 
 @_request_wrapper
 async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_custom_proxy=False):
@@ -163,6 +205,7 @@ async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_
                                                                             hybrid='1',
                                                                             )
         return req
+
 
 @_request_wrapper
 async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, rid: str | int | None = None,
@@ -357,7 +400,6 @@ async def validate_geetest(challenge, token, validate,
     return token
 
 
-
 async def resource_abtest_abserver(
         buvid,
         fp_local,
@@ -464,6 +506,5 @@ async def resource_abtest_abserver(
 
 if __name__ == "__main__":
     # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
-    _____x = asyncio.run(get_space_dynamic_req_with_proxy(hostuid=95309300, offset='',
-                                                          use_custom_proxy=False))
+    _____x = asyncio.run(get_lot_notice(1, '1002115152638640195', True))
     print(_____x)

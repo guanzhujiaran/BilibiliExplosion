@@ -3,11 +3,11 @@ import asyncio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log as log
 import CONFIG
+from fastapi接口.log.base_log import topic_lot_logger
 from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic, TCapsule
-
+log = topic_lot_logger
 
 def lock_wrapper(func):
     async def wrapper(*args, **kwargs):

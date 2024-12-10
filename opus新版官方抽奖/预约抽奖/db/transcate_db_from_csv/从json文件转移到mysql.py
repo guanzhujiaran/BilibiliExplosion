@@ -2,7 +2,7 @@ import asyncio
 
 import time
 import ast
-from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper
+from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 
 async def main():
     ret_list = []
@@ -10,7 +10,7 @@ async def main():
         for i in f.readlines():
             ret_list.append(ast.literal_eval(i))
 
-    sql_helper = SqlHelper()
+    sql_helper = bili_reserve_sqlhelper
     nowRound = await sql_helper.get_latest_reserve_round()
     for idx, contents in enumerate(ret_list):
         await sql_helper.add_reserve_info_by_resp_dict(

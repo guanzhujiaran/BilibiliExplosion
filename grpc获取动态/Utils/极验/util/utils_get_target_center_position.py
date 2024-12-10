@@ -7,11 +7,11 @@ import re
 import threading
 import time
 from io import BytesIO
-
 import cv2
 import ddddocr
 import subprocess
 from functools import partial
+from fastapi接口.log.base_log import Voucher352_logger
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 import numpy as np
@@ -20,7 +20,6 @@ import pandas as pd
 import torch
 from PIL import Image
 from curl_cffi import requests
-from loguru import logger
 from matplotlib import pyplot as plt
 from scipy.optimize import linear_sum_assignment
 from grpc获取动态.Utils.极验.models.captcha_models import CaptchaInfo, CaptchaResultInfo
@@ -78,12 +77,12 @@ class CaptchaDetector:
         if self.inited:
             return
         self.inited = True
-        logger.debug('初始化一个CLIP模型实例')
+        Voucher352_logger.debug('初始化一个CLIP模型实例')
         self.model, _, self.preprocess = open_clip.create_model_and_transforms('ViT-B-16-SigLIP',
                                                                                pretrained='webli',
                                                                                device=self.__device,
                                                                                )
-        logger.debug('CLIP模型实例初始化完成')
+        Voucher352_logger.debug('CLIP模型实例初始化完成')
 
     def gen_cost_matrix(self, origin_matrix):
         """
@@ -148,7 +147,7 @@ class CaptchaDetector:
         # print(captcha_info1.embeddings)
         # print(captcha_info2.embeddings)
         sim_score = self.PluginChoose.similarity_func(captcha_info1.embeddings, captcha_info2.embeddings)
-        logger.debug(f'【{self.PluginChoose.similarity_func.__name__}】相似度得分：{sim_score}')
+        Voucher352_logger.debug(f'【{self.PluginChoose.similarity_func.__name__}】相似度得分：{sim_score}')
         return sim_score  # 因为匈牙利算法需要的是成本矩阵，与相似度得分成逆相关
 
     def _get_preprocessed_pic(self, im: np.ndarray) -> np.ndarray:
@@ -191,7 +190,7 @@ class CaptchaDetector:
         im = cv2.imdecode(img_buffer_numpy, flags=1)
         bboxes = self.det.detection(image_bytes)
 
-        logger.debug(f'\n检测图框：{bboxes}')
+        Voucher352_logger.debug(f'\n检测图框：{bboxes}')
 
         target_img_list = []
         src_img_list = []
@@ -212,7 +211,7 @@ class CaptchaDetector:
                         )
                     )
         if len(target_img_list) < len(src_img_list):
-            logger.error(f'ddddocr识别失败！图像识别数量不足\n{bboxes}')
+            Voucher352_logger.error(f'ddddocr识别失败！图像识别数量不足\n{bboxes}')
             self.save_draw_rectangle(im, bboxes, self.log_path.detect_failed_pic + f'ddddocr_det_fail_{img_name}')
             captcha_result_info = CaptchaResultInfo(None, img_name, im, bboxes)
             return captcha_result_info
@@ -232,7 +231,7 @@ class CaptchaDetector:
         pairings = [(row, col) for row, col in zip(row_indices, col_indices)]
         spend_ts = int(time.time()) - start_ts
 
-        logger.debug(
+        Voucher352_logger.debug(
             f"\n图片【{img_name}】 \n图像配对情况：\n{pairings}\n原矩阵：{origin_cost_match_matrix}\n构成图像配对成本矩阵({cost_match_matrix.shape})：\n{cost_match_matrix}\n"
             f"本次识别耗时：{spend_ts}秒")
         for row, col in pairings:

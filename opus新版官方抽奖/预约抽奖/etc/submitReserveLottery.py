@@ -8,7 +8,7 @@ import sys
 
 from opus新版官方抽奖.Base.generate_cv import GenerateCvBase
 from opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
-from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper
+from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 
 sys.path.append('C:/pythontest/')
 import random
@@ -24,7 +24,7 @@ class GenerateReserveLotCv(GenerateCvBase):
         super().__init__(cookie, ua, csrf, buvid)
         self.target_timeformat = '%m-%d %H:%M'  # 专栏的最终时间格式
         self.post_flag = True  # 是否直接发布
-        self.sqlhelper = SqlHelper()
+        self.sqlhelper = bili_reserve_sqlhelper
 
     def zhuanlan_format(self, zhuanlan_dict: Dict[str, list[TUpReserveRelationInfo]], blank_space: int = 0) -> tuple[
         str, str]:

@@ -3,7 +3,6 @@
 import io
 import os
 import sys
-from threading import Thread
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
@@ -21,43 +20,34 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument('-l', '--logger', type=int, default=1, choices=[0, 1])
 args = parser.parse_args()
-print(f'args:{args}')
+print(f'运行 args:{args}')
 if not args.logger:
     logger.remove()
-    logger.add(level="ERROR",sink=print)
-myfastapi_logger = logger.bind(user='fastapi')
-myfastapi_logger.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_fastapi_log.log"),
-                     level="WARNING",
-                     encoding="utf-8",
-                     enqueue=True,
-                     rotation="500MB",
-                     compression="zip",
-                     retention="15 days",
-                     filter=lambda record: record["extra"].get('user') == 'fastapi',
-                     )
-# logger.add(sys.stderr, level="ERROR", filter=lambda record: record["extra"].get('user') =="MYREQ")
-from fastapi接口.dao.redisConn import r, r1
+    logger.add(sink=sys.stdout, level="ERROR", colorize=True)
+import asyncio
+from fastapi接口.log.base_log import myfastapi_logger
+from fastapi接口.dao.redisConn import r
 from contextlib import asynccontextmanager
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi接口.controller.damo import DamoML
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
-from fastapi接口.controller.v1.lotttery_database.bili import GetLotteryData
+from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
 from fastapi接口.controller.v1.ip_info import get_ip_info
+from fastapi接口.controller.v1.background_service import BackgroundService
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserveInfo
 from src.monitor import BiliLiveLotRedisManager
 from starlette.requests import Request
 from starlette.responses import Response
-import asyncio
 import json
-import time
 import traceback
 from typing import Union
 import uvicorn
-from fastapi import Query, Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException
 from pydantic import BaseModel
 from github.my_operator.get_others_lot.new_main import GET_OTHERS_LOT_DYN
-from grpc获取动态.grpc.grpc_api import BiliGrpc
+from grpc获取动态.grpc.grpc_api import bili_grpc as grpc_api
 from grpc获取动态.src.SqlHelper import SQLHelper
 from grpc获取动态.src.获取取关对象.GetRmFollowingList import GetRmFollowingListV1
 from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy
@@ -70,13 +60,15 @@ import fastapi_cdn_host
 get_rm_following_list = GetRmFollowingListV1()
 zhihu_lotScrapy = lotScrapy()
 grpc_sql_helper = SQLHelper()
-grpc_api = BiliGrpc()
 toutiaoSpaceFeedLotService = ToutiaoSpaceFeedLotService()
 req = request_with_proxy()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if sys.platform == 'win32':
+        loop = asyncio.ProactorEventLoop()
+        asyncio.set_event_loop(loop)
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     # from apscheduler.schedulers.background import BackgroundScheduler
     # scheduler = BackgroundScheduler()
@@ -90,36 +82,14 @@ async def lifespan(_app: FastAPI):
 
     ### 异步
     show_log = False
-    back_ground_tasks = []
 
-    from grpc获取动态.src.监控up动态.bili_dynamic_monitor import monitor
-    _ = monitor()
-    back_ground_tasks.append(asyncio.create_task(_.main(show_log=show_log)))
-
-    from opus新版官方抽奖.转发抽奖.定时获取所有动态以及发布充电和官方抽奖专栏 import \
-        async_schedule_get_official_lot_main
-    back_ground_tasks.append(asyncio.create_task(async_schedule_get_official_lot_main(show_log=show_log)))
-
-    from opus新版官方抽奖.预约抽奖.etc.schedule_get_reserve_lot import async_schedule_get_reserve_lot_main
-    back_ground_tasks.append(asyncio.create_task(async_schedule_get_reserve_lot_main(show_log=show_log)))
-
-    from opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import async_schedule_get_topic_lot_main
-    back_ground_tasks.append(asyncio.create_task(async_schedule_get_topic_lot_main(show_log=show_log)))
-
-    from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
-    back_ground_tasks.append(asyncio.create_task(async_monitor_ipv6_address_changes()))
-
-    from src.monitor import AsyncMonitor
-    m = AsyncMonitor()
-    back_ground_tasks.append(asyncio.create_task(m.async_main(ShowLog=show_log)))
-
-    from grpc获取动态.Utils.MQClient.VoucherMQClient import VoucherMQClient
-    back_ground_tasks.extend([
-        asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer)) for _ in range(5)
-    ])
+    back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
 
     yield
-
+    myfastapi_logger.info("关闭其他服务")
+    [
+        x.cancel() for x in back_ground_tasks
+    ]
     await asyncio.gather(*back_ground_tasks)
 
 
@@ -155,30 +125,6 @@ async def v1_get_live_lots(
 async def app_avaliable_api():
     await asyncio.sleep(1)
     return 'Service is running!'
-
-
-# endregion
-
-# region 魔搭社区的各种ai模型
-@app.get('/damo/semantic')
-async def semantic(data=Query(default=None)):
-    def _():
-        timeout = 0
-        while 1:
-            if timeout > 11:
-                return True
-            if data:
-                res = json.loads(r1.get(data)).get(data, None) if r1.get(data) else None
-                if res != None:
-                    return res
-                else:
-                    r1.setex(data, 180, json.dumps({data: None}))
-            else:
-                return False
-            time.sleep(1)
-            timeout += 1
-
-    return await asyncio.to_thread(_)
 
 
 # endregion
@@ -342,11 +288,12 @@ async def toutiao_get_others_lot_ids():
 
 
 # endregion
-
+app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)
-app.include_router(GetLotteryData.router)
+app.include_router(LotteryData.router)
 app.include_router(GetV3ClickTarget.router)
 app.include_router(get_ip_info.router)
+app.include_router(BackgroundService.router)
 
 
 @app.middleware("http")
@@ -361,9 +308,9 @@ async def some_middleware(request: Request, call_next):
         return Response(content=response_body, status_code=response.status_code,
                         headers=dict(response.headers), media_type=response.media_type)
     except Exception as e:
+        myfastapi_logger.error(e)
         myfastapi_logger.exception(e)
-        if e.__str__() != 'No OpenAiClient is available' and e.__str__() != "Error code: 429 - {'error': {'message': '免费API限制每日200次请求，请00:00后再试，如有更多需求，请访问 https://buyca.shop 购买付费API。The free account is limited to 200 requests per day. Please try again after 00:00 the next day. If you have additional requirements, please visit https://buyca.shop to purchase a premium key.', 'type': 'chatanywhere_error', 'param': None, 'code': '429 TOO_MANY_REQUESTS'}}":
-            pushme(f'fastapi请求异常！{str(e)}', traceback.format_exc())
+        pushme(f'fastapi请求异常！{str(e)}', traceback.format_exc())
         raise HTTPException(
             status_code=500,
             # detail 可以传递任何可以转换成JSON格式的数据
@@ -373,10 +320,15 @@ async def some_middleware(request: Request, call_next):
 
 
 if __name__ == '__main__':
-    uvicorn.run(
-        # '请求代理_ver_database_fastapi:app',
-        app,
-        host="",
-        # If host is an empty string or None, all interfaces are assumed and a list of multiple sockets will be returned (most likely one for IPv4 and another one for IPv6).
-        port=23333,
-    )
+    try:
+        uvicorn.run(
+            # '请求代理_ver_database_fastapi:app',
+            app,
+            # host="",
+            # If host is an empty string or None, all interfaces are assumed and a list of multiple sockets will be returned (most likely one for IPv4 and another one for IPv6).
+            host="0.0.0.0",
+            port=23333,
+        )
+    except Exception as e:
+        myfastapi_logger.exception(e)
+        pushme(f'fastapi请求异常！{str(e)}', traceback.format_exc())

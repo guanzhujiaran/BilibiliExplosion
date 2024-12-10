@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
 import gzip
-import os
-import string
 import asyncio
 import base64
 import datetime
@@ -12,31 +10,28 @@ import traceback
 import uuid
 from typing import Union
 import grpc
-from curl_cffi import CurlError
 from grpc import aio
 import json
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
     Response, WriteError, NetworkError
 
-from bilibili.api.ticket.v1 import ticket_pb2
-from bilibili.app.dynamic.v2.dynamic_pb2 import Config, AdParam
+from bilibili.app.dynamic.v2.dynamic_pb2 import Config
 from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
 from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
+from fastapi接口.log.base_log import BiliGrpcApi_logger
 from grpc获取动态.Models.GrpcApiBaseModel import MetaDataWrapper
-from grpc获取动态.Utils.MQServer.VoucherMQServer import VoucherRabbitMQ
+from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import VoucherRabbitMQ
 from grpc获取动态.Utils.极验.极验点击验证码 import GeetestV3Breaker
 from grpc获取动态.grpc.bapi.biliapi import get_latest_version_builds, resource_abtest_abserver
 from grpc获取动态.grpc.bapi.models import LatestVersionBuild
 from grpc获取动态.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
 from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, APIExClimbWuzhi
-from grpc获取动态.log.base_log import grpc_api_any_log
 from utl.designMode.asyncPool import BaseAsyncPool
 from utl.代理.request_with_proxy import request_with_proxy
 from CONFIG import CONFIG
 from grpc获取动态.Utils.GrpcProxyUtils import GrpcProxyTools
 from utl.代理.SealedRequests import MYASYNCHTTPX
-from loguru import logger
 from urllib.parse import urlparse
 
 
@@ -58,7 +53,7 @@ class BiliGrpc:
         self.metadata_list = []  # 元数据（headers）池大小列表
         self.queue_num = 0
         self.my_proxy_addr = CONFIG.my_ipv6_addr
-        self.grpc_api_any_log = grpc_api_any_log
+        self.grpc_api_any_log = BiliGrpcApi_logger
         self.s = MYASYNCHTTPX()
         self.GrpcProxyTools = GrpcProxyTools()  # 实例化
         # 版本号根据 ```https://app.bilibili.com/x/v2/version?mobi_app=android```这个api获取
@@ -203,7 +198,7 @@ class BiliGrpc:
                                              )  # Connect to the gRPC server
                 return proxy, channel
             else:
-                logger.error('无可用代理状态！')
+                self.grpc_api_any_log.debug('无可用代理状态！')
                 await asyncio.sleep(30)
 
     # endregion
@@ -246,7 +241,7 @@ class BiliGrpc:
                 version_name = version_name_build.version
                 build = version_name_build.build
                 channel = random.choice(self.channel_list)
-                # logger.debug(
+                # self.grpc_api_any_log.debug(
                 #     f'当前metadata池数量：{len(self.metadata_list)}，总共{self.queue_num}个meta信息，前往获取新的metadata')
                 md, ticket_resp, metadat_basic_info = await make_metadata(
                     "",
@@ -262,7 +257,7 @@ class BiliGrpc:
                 ck = f'Buvid={md_dict.get("buvid")}'
                 cfg = APIExClimbWuzhi()
                 if not md_dict.get('x-bili-ticket'):
-                    logger.error(f'bili-ticket获取失败！{md}')
+                    self.grpc_api_any_log.error(f'bili-ticket获取失败！{md}')
                     await asyncio.sleep(30)
                     continue
                 else:
@@ -307,13 +302,14 @@ class BiliGrpc:
                 exclimb_wuzhi_cfg=cfg
             )
             self.metadata_list.append(metadata)
-        # logger.debug(f'当前metadata池数量：{len(self.metadata_list)}')
+        # self.grpc_api_any_log.debug(f'当前metadata池数量：{len(self.metadata_list)}')
         return metadata
 
     async def handle_grpc_request(self, url: str, grpc_req_message, grpc_resp_msg, cookie_flag: bool,
                                   func_name: str = "", force_proxy: bool = False):  # 连续请求20次出现-352
         """
         处理grpc请求
+        :param force_proxy: 强制使用真实代理
         :param func_name:
         :param url:
         :param grpc_req_message: dynamic_pb2.DynDetailReq(**data_dict)
@@ -334,7 +330,7 @@ class BiliGrpc:
                     proxy_flag = random.choices([True, False], weights=[
                         real_proxy_weights if real_proxy_weights >= 0 else 0,
                         ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
-                    ], k=1)[0]  # 是否使用代理
+                    ], k=1)[0]  # 是否使用真实代理 True用真实代理 False用ipv6代理
                 else:
                     proxy_flag = False
                     # random.choices([True, False], weights=[
@@ -497,7 +493,7 @@ class BiliGrpc:
             except (
                     ConnectionError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,
                     ReadError, WriteError,
-                    InvalidURL,NetworkError
+                    InvalidURL, NetworkError
             ) as httpx_err:
                 # self.grpc_api_any_log.debug(
                 #     f'请求失败！{traceback.format_exc(0)}ip:{ip_status.to_dict() if ip_status else proxy}进行请求，url:{url}')
@@ -668,6 +664,41 @@ class BiliGrpc:
         gresp = dynamic_pb2.DynDetailReply()
         return await self.handle_grpc_request(url, msg, gresp, cookie_flag, force_proxy=force_proxy)
 
+    async def grpc_get_dynamic_detail_by_dynamic_id(self, dynamic_id: int | str,
+                                                    proxy_flag=False, cookie_flag=False,
+                                                    force_proxy: bool = False) -> dict:
+        """
+        通过rid和动态类型特定获取一个动态详情
+        :param force_proxy:
+        :param cookie_flag: 是否使用cookie
+        :param proxy_flag:
+        :param dynamic_type:动态类型
+        :param rid:动态rid
+        :return:
+        """
+        if type(dynamic_id) is int:
+            dynamic_id = str(dynamic_id)
+        if type(dynamic_id) is not str or not str.isdigit(dynamic_id):
+            raise TypeError(f'dynamic_id must be string type number! dynamic_id:{dynamic_id}')
+        url = "https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail"
+        data_dict = {
+            # 'uid': random.randint(1, 3537105317792299),
+            'dynamic_id': dynamic_id,
+            # "ad_param": AdParam(
+            #     # ad_extra='E86F4CFF1F8FA890A75155EEAA51E6AE4FA9DBE62FCE708186D0CE5EF37B86948620D8BA1D991685B1288E2EDE09C6D52F8C2D33D59872EAE1EB776D11F71523CE1AF2112D8A950B98F6A1A48F848BC65E3D1B2687A17E44CDDEF6F0174F5E6548175C99B236CB32EBBE9DD7819D2DA0E272638B4DD5D4B27AD4119C056FA5362A495A2A482E35BBDD264A1829624B4446583ACCDDC6F867B3B7D0A53A7E6863D8425D19899FF591BAF3205F2A2051DDF7D60C649D9DE5221DFC48D8F592FB31DB4A72ABD8960A8DA289EAFE1C5E61334854717F0627A8DD6A897240F3847F517ED311FDCC904D4A2B4183944BEB5C9E4080BD059A3B56D25219D4115F8861E8745D65144C4A7D906CE3A4C1BAD79D9F2E80D86CA43052937843D6A841FCE72295389B8428B90743BA06685D3880D342A51B8CCEF21C5D7BF64BB1917A245E8CBB20F79B40A08D4380CCD603179D6AD77F9ED906CE0007A3F1AEF1CD6703B739A245A81820550CE06FCA780D3F0A9C098FFAB6BEF2AC1C8D3448ACB27079E623C50AE141DEE943F26DCA8E8EDF32299A7BF8935E496CD3708ACA16114149C85C99E8A7B9B1EB5188620F531EB13A89254E0AC941706CC14F31C776DFB7D329F6DA649A425E058B4187D5EA0117C2107D518D10ADE56CA721DCFA53CD8688D4ADC151C338A2C74CA8DE46CB736D0743F7706C7D273CFB847FA3CE51BE6D976EF4739A6C3488199E15A4463DD7522DF5A43E8207BE32906748A59EF28AB065961B4D69AD1E000D2601C58EA27126A5A7A7D3E3DBCA9E743F75657FB53FED2391244D3A7331C8D08CA712D9E73BFBB45F41FA0DA2A4087C6148C0D78731EE9BBE877227EFC2633FC5D113ED7EF3300335151B5E65C5D493A9A6BDFEB8D317BDBE4DA1A2B433B3CDE87FFE40B3B2C1DCB316'
+            #     # ad_extra=''.joi n(random.choices(string.ascii_uppercase + string.digits,
+            #     #                                 k=random.choice([x for x in range(1300, 1350)])))
+            # ),
+            'player_args': PlayerArgs(qn=32, fnval=272, voice_balance=1, voice_any=1),
+            'share_id': 'dt.dt-detail.0.0.pv',
+            'share_mode': 3,
+            'local_time': 8,
+            'config': Config()
+        }
+        msg = dynamic_pb2.DynDetailReq(**data_dict)
+        gresp = dynamic_pb2.DynDetailReply()
+        return await self.handle_grpc_request(url, msg, gresp, cookie_flag, force_proxy=force_proxy)
+
     async def grpc_get_space_dyn_by_uid(self, uid: Union[str, int], history_offset: str = '', page: int = 1,
                                         proxy_flag: bool = False) -> dict:
         """
@@ -701,14 +732,14 @@ class MY_Error(ValueError):
     pass
 
 
-async def _test():
-    t = BiliGrpc()
-    t.debug_mode = True
-    result = await asyncio.gather(
-        *[t.grpc_get_dynamic_detail_by_type_and_rid(rid, 2, False, force_proxy=True) for rid in
-          range(326834723, 326834723 + 1)])
-    print(result)
-
+bili_grpc = BiliGrpc()
 
 if __name__ == '__main__':
+    async def _test():
+        t = BiliGrpc()
+        t.debug_mode = True
+        result = await t.grpc_get_dynamic_detail_by_dynamic_id('1002245912906432529')
+        print(result)
+
+
     asyncio.run(_test())

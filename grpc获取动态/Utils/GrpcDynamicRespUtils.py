@@ -3,7 +3,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from loguru import logger
+from fastapi接口.log.base_log import BiliGrpcUtils_logger
 
 
 # region 描述动态数据类
@@ -468,7 +468,7 @@ class DynTool:
                     for i in origDesc:
                         dynamicContent += i.get('text', '')
         if not dynamicContent.strip():
-            logger.critical(f'动态内容获取为空！检查一下解析响应的函数！\n{dynamic_item}')
+            BiliGrpcUtils_logger.critical(f'动态内容获取为空！检查一下解析响应的函数！\n{dynamic_item}')
         return ObjDynCard(
             uid=uid,
             uname=uname,

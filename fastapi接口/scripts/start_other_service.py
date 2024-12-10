@@ -1,3 +1,6 @@
+"""
+现在不需要单独执行这个脚本了
+"""
 import asyncio
 import io
 import os

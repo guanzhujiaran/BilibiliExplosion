@@ -5,61 +5,45 @@
 import ast
 import asyncio
 import datetime
-import os
 import random
 import time
 from copy import deepcopy
 from typing import Union
-from loguru import logger
-from sqlalchemy import select, func, update, and_, or_, delete
+from sqlalchemy import select, func, update, and_, or_
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import sql_log
 from utl.代理.ProxyTool.ProxyObj import TypePDict
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, SDGrpcStat
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-sql_log = logger.bind(user='MysqlProxy')
-sql_log.add(
-    os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_proxy_db_log.log"),
-    level="WARNING",
-    encoding="utf-8",
-    enqueue=True,
-    rotation="500MB",
-    compression="zip",
-    retention="15 days",
-    filter=lambda record: record["extra"].get('user') == "MysqlProxy"
-)
 
-
-# 写一个redis锁
-
-
-def lock_wrapper(func: callable) -> callable:
+def lock_wrapper(_func: callable) -> callable:
     async def wrapper(*args, **kwargs):
         while True:
             try:
-                res = await func(*args, **kwargs)
+                async with SQLHelper.async_sem:
+                    res = await _func(*args, **kwargs)
                 return res
             except Exception as e:
                 sql_log.exception(e)
                 await asyncio.sleep(random.choice([5, 6, 7]))
                 continue
-
     return wrapper
 
 
 class SQLHelperClass:
     def __init__(self):
-        # self.async_lock = asyncio.Lock()
+        self.async_sem = asyncio.Semaphore(100)
         self._underscore_spe_time = 5 * 3600  # 0分以下的无响应代理休眠时间
         self._412_sep_time = 2 * 3600  # 0分以上但是"-412"风控的代理休眠时间
         self.async_egn = create_async_engine(
             CONFIG.database.MYSQL.proxy_db_URI,
             echo=False,
             poolclass=AsyncAdaptedQueuePool,
-            pool_size=50,
+            pool_size=1000,
             max_overflow=100,
             pool_recycle=3600,
             pool_timeout=30,
@@ -76,31 +60,7 @@ class SQLHelperClass:
         self.sched = AsyncIOScheduler()
         self.sched.add_job(self.fresh_proxy, 'interval', seconds=600, next_run_time=datetime.datetime.now(),
                            misfire_grace_time=600)
-        # t = Thread(target=asyncio.run,args=(self._start_periodic_task(),),daemon=True)
-        # t.start()
 
-    def __preprocess_list_dict(self, orig_list_dict: list[dict]) -> list[dict]:
-        '''
-        对存入数据预处理，将dict转化为str(dict)
-        :param orig_list_dict:
-        :return:
-        '''
-        for _dic in orig_list_dict:
-            for k, v in _dic.items():
-                if type(v) == dict:
-                    _dic[k] = str(v).replace('"', "'")
-        return orig_list_dict
-
-    def __preprocess_ret_list_dict(self, ret_dict: dict) -> dict:
-        '''
-        对从数据库取出的数据处理，将str的dict转换回dict
-        :param ret_dict:
-        :return:
-        '''
-        for k, v in ret_dict.items():
-            if type(v) == str:
-                ret_dict[k] = ast.literal_eval(v)
-        return ret_dict
 
     @lock_wrapper
     async def select_score_top_proxy(self) -> dict:
@@ -283,6 +243,7 @@ class SQLHelperClass:
             #     await session.delete(original)
         return 1
 
+    @lock_wrapper
     async def update_to_proxy_list(self, proxy_dict: dict, change_score_num=10) -> bool:
         '''
         更新数据 update 最好只用update，upsert会导致主键增长异常
@@ -540,6 +501,7 @@ class SQLHelperClass:
         else:
             return {}
 
+    @lock_wrapper
     async def upsert_grpc_proxy_status(self, proxy_id: int, status: int, score_change: int = 0):
         '''
 
@@ -593,6 +555,28 @@ class SQLHelperClass:
                 #     await session.flush()
 
     # endregion
+    def __preprocess_list_dict(self, orig_list_dict: list[dict]) -> list[dict]:
+        '''
+        对存入数据预处理，将dict转化为str(dict)
+        :param orig_list_dict:
+        :return:
+        '''
+        for _dic in orig_list_dict:
+            for k, v in _dic.items():
+                if type(v) == dict:
+                    _dic[k] = str(v).replace('"', "'")
+        return orig_list_dict
+
+    def __preprocess_ret_list_dict(self, ret_dict: dict) -> dict:
+        '''
+        对从数据库取出的数据处理，将str的dict转换回dict
+        :param ret_dict:
+        :return:
+        '''
+        for k, v in ret_dict.items():
+            if type(v) == str:
+                ret_dict[k] = ast.literal_eval(v)
+        return ret_dict
 
 
 SQLHelper = SQLHelperClass()

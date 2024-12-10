@@ -3,11 +3,11 @@ import asyncio
 from typing import Union, List
 import random
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import topic_lot_logger
 from opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import sqlHelper
 from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic, TCapsule
 from utl.代理.request_with_proxy import request_with_proxy
-from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
 
 
 class TopicRobot:
@@ -73,20 +73,20 @@ class TopicRobot:
             da = resp.get('data')
             da_common_keys = ['click_area_card', 'functional_card', 'top_details']
             if extra_info := set(da_common_keys) & set(da.keys()) ^ set(da.keys()):
-                topic_lot_log.error(
+                topic_lot_logger.error(
                     f'data字段不匹配，topic_id:{topic_id}\ndata:{da}\n不匹配字段：{extra_info}')
             top_details = da.get('top_details')
             if top_details:
                 allowed_keys = TTopDetails.__table__.columns.keys()
                 allowed_keys.extend(['topic_item', 'topic_creator', 'operation_content'])
                 if extra_info := set(allowed_keys) & set(top_details.keys()) ^ set(top_details.keys()):
-                    topic_lot_log.error(
+                    topic_lot_logger.error(
                         f'top_details字段不匹配，topic_id:{topic_id}\ntop_details:{top_details}\n不匹配字段：{extra_info}')
                 topic_creator = top_details.get('topic_creator')
                 if topic_creator:
                     allowed_keys = TTopicCreator.__table__.columns.keys()
                     if extra_info := set(allowed_keys) & set(topic_creator.keys()) ^ set(topic_creator.keys()):
-                        topic_lot_log.error(
+                        topic_lot_logger.error(
                             f'topic_creator字段不匹配，topic_id:{topic_id}\ntopic_creator:{topic_creator}\n不匹配字段：{extra_info}')
                     filtered_topic_creator = {key: value for key, value in topic_creator.items() if key in allowed_keys}
                     tTopicCreator = TTopicCreator(**filtered_topic_creator)
@@ -94,14 +94,14 @@ class TopicRobot:
                 if topic_item:
                     allowed_keys = TTopicItem.__table__.columns.keys()
                     if extra_info := set(allowed_keys) & set(topic_item.keys()) ^ set(topic_item.keys()):
-                        topic_lot_log.error(
+                        topic_lot_logger.error(
                             f'topic_item字段不匹配，topic_id:{topic_id}\ntopic_item:{topic_item}\n不匹配字段：{extra_info}')
                     filtered_topic_item = {key: value for key, value in topic_item.items() if key in allowed_keys}
                     tTopicItem = TTopicItem(**filtered_topic_item)
                     if type(topic_item.get('ctime')) is int:
                         if int(time.time()) - topic_item.get('ctime') <= self.min_sep_ts:
                             self._cur_stop_times += 1
-                            topic_lot_log.info('到达最近时间，stop_times+=1！')
+                            topic_lot_logger.info('到达最近时间，stop_times+=1！')
                 tTopDetails = TTopDetails(
                     close_pub_layer_entry=top_details.get('close_pub_layer_entry'),
                     has_create_jurisdiction=top_details.get('has_create_jurisdiction'),
@@ -113,7 +113,7 @@ class TopicRobot:
                 allowed_keys = TFunctionalCard.__table__.columns.keys()
                 allowed_keys.extend(['traffic_card', 'capsules'])
                 if extra_info := set(allowed_keys) & set(functional_card.keys()) ^ set(functional_card.keys()):
-                    topic_lot_log.error(
+                    topic_lot_logger.error(
                         f'functional_card字段不匹配，topic_id:{topic_id}\nfunctional_card:{functional_card}\n不匹配字段：{extra_info}')
                 tFunctionalCard = TFunctionalCard(
                     json_data=functional_card
@@ -122,7 +122,7 @@ class TopicRobot:
                 if traffic_card:
                     allowed_keys = TTrafficCard.__table__.columns.keys()
                     if extra_info := set(allowed_keys) & set(traffic_card.keys()) ^ set(traffic_card.keys()):
-                        topic_lot_log.error(
+                        topic_lot_logger.error(
                             f'traffic_card字段不匹配，topic_id:{topic_id}\ntraffic_card:{traffic_card}\n不匹配字段：{extra_info}')
                     filtered_traffic_card = {key: value for key, value in traffic_card.items() if key in allowed_keys}
                     tTrafficCard = TTrafficCard(**filtered_traffic_card)
@@ -133,7 +133,7 @@ class TopicRobot:
                     tCapsules = []
                     for capsule in capsules:
                         if extra_info := set(allowed_keys) & set(capsule.keys()) ^ set(capsule.keys()):
-                            topic_lot_log.error(
+                            topic_lot_logger.error(
                                 f'capsules字段不匹配，topic_id:{topic_id}\ncapsule:{capsule}\n不匹配字段：{extra_info}')
                         tCapsules.append(TCapsule(**capsule))
             click_area_card = da.get('click_area_card')
@@ -155,10 +155,10 @@ class TopicRobot:
 
     async def pipeline(self, topic_id, is_get_recent_failed_topic=False):
         resp_dict = await self.scrapy_topic_dict(topic_id)
-        topic_lot_log.debug(f'topic_id 【{topic_id}】 {resp_dict}')
+        topic_lot_logger.debug(f'topic_id 【{topic_id}】 {resp_dict}')
         if self._stop_counter >= self._max_stop_count and not is_get_recent_failed_topic:
             self._cur_stop_times += 1
-            topic_lot_log.info('到达最大无效值，stop_times+1！')
+            topic_lot_logger.info('到达最大无效值，stop_times+1！')
         async with self._traffic_card_lock:
             await self.save_resp(topic_id, resp_dict, is_get_recent_failed_topic)
         self.sem.release()
@@ -178,7 +178,7 @@ class TopicRobot:
         else:
             self.start_topic_id = await self.sql.get_max_topic_id()
         # endregion
-        topic_lot_log.info(f'开始从{self.start_topic_id + 1}开始获取话题！')
+        topic_lot_logger.info(f'开始从{self.start_topic_id + 1}开始获取话题！')
         task_list = set()
         while not self.stop_flag:
             self.start_topic_id += 1
@@ -190,7 +190,7 @@ class TopicRobot:
             while [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]:
                 await asyncio.sleep(1)
             # await asyncio.gather(*last_sem_list)
-        topic_lot_log.info(f'获取完成！等待任务列表剩余【{len([x for x in task_list if not x.done()])}】个任务！')
+        topic_lot_logger.info(f'获取完成！等待任务列表剩余【{len([x for x in task_list if not x.done()])}】个任务！')
         await asyncio.gather(*task_list)
 
 

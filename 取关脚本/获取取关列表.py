@@ -5,16 +5,14 @@ import threading
 import time
 # noinspection PyUnresolvedReferences
 import traceback
-
 import Bilibili_methods.all_methods
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import numpy
 import requests
 import Bilibili_methods.all_methods as m
+from fastapi接口.log.base_log import get_rm_following_list_logger as logger
 from utl.代理.request_with_proxy import request_with_proxy
-from loguru import logger
-
 mapi = m.methods()
 
 

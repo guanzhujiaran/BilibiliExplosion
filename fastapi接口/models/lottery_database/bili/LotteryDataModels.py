@@ -89,3 +89,5 @@ class AllLotteryResp(BaseModel):
     reserve_lottery: list[reserveInfo]= Field(..., description="必抽的预约抽奖")
     official_lottery: list[OfficialLotteryResp]= Field(..., description="必抽的官方抽奖")
 
+class AddDynamicLotteryReq(BaseModel):
+    dynamic_id_or_url:str

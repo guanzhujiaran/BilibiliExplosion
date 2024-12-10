@@ -2,10 +2,9 @@ import json
 import time
 from dataclasses import asdict
 
-from loguru import logger
-
+from fastapi接口.log.base_log import MQ_logger
 from grpc获取动态.Models.RabbitmqModel import VoucherInfo
-from grpc获取动态.Utils.MQServer.BasicMQ import BasicMQServer
+from fastapi接口.service.MQ.base.BasicMQ import BasicMQServer
 from utl.designMode.singleton import Singleton
 
 
@@ -15,7 +14,7 @@ class VoucherRabbitMQ(BasicMQServer):
     def __init__(self):
         super().__init__()
         self.q_name = self.CONFIG.RabbitMQConfig.QueueName.bili_352_voucher.value
-        self.log = logger.bind(user='VoucherRabbitMQServer')
+        self.log = MQ_logger
 
     def push_voucher_info(self, voucher: str, ua: str, ck: str, origin: str, referer: str, ticket: str, version: str):
         try:

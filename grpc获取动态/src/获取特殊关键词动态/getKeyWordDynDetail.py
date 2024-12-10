@@ -2,8 +2,6 @@
 import json
 import time
 import pandas as pd
-from loguru import logger
-
 import Bilibili_methods.all_methods
 from grpc获取动态.src.DynObjectClass import lotDynData
 from grpc获取动态.src.SqlHelper import SQLHelper
@@ -126,7 +124,6 @@ class SearchKeyWordDyn:
     def main(self, key_word_list: [str], between_ts=None):
         if between_ts is None:
             between_ts = [int(time.time()) - 7 * 24 * 3600, int(time.time())]
-        logger.info(f'key_word_list: {key_word_list}\t间隔时间：{between_ts}开始查询动态')
         result_gen = self.sql.query_dynData_by_key_word(key_word_list, between_ts)
         result_list = []
         for result in result_gen:

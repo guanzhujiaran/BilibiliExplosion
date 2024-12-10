@@ -9,7 +9,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
-from fastapi接口.controller.v1.lotttery_database.bili import GetLotteryData
+from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
 from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
 import fastapi_cdn_host
@@ -34,7 +34,7 @@ app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
 
 app.include_router(ReplySingle.router)
-app.include_router(GetLotteryData.router)
+app.include_router(LotteryData.router)
 app.include_router(GetV3ClickTarget.router)
 # @app.middleware("http")
 # async def some_middleware(request: Request, call_next):
@@ -61,16 +61,16 @@ async def general_exception_handler(request: Request, e: Exception):
         code=500,
         data=str(e),
         msg="服务器错误，请联系管理员"
-    ).dict())
+    ).model_dump())
 
 
 @app.exception_handler(RequestValidationError)
 def validation_exception_handler(request: Request, e: RequestValidationError):
     return JSONResponse(CommonResponseModel(
         code=400,
-        data=json.dumps(e.errors()),
+        data=str(e),
         msg='参数错误'
-    ).dict())
+    ).model_dump())
 
 
 

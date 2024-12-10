@@ -2,12 +2,10 @@ import asyncio
 import base64
 import random
 import time
-
 import requests
-from langchain_community.utilities.pebblo import get_ip
-from loguru import logger
-
 from fastapi接口.dao.IpInfoRedisObj import ip_info_redis
+from fastapi接口.log.base_log import ipv6_monitor_logger
+
 
 class ipv6Obj:
     def __init__(self):
@@ -131,7 +129,7 @@ class ipv6Obj:
                 allwan_info = self.get_allwan_info()
                 return next(filter(lambda x: x.get('IPv6Prefix') != 'NULL', allwan_info.get('wan'))).get('IPv6Prefix')
             except Exception as e:
-                logger.exception(e)
+                ipv6_monitor_logger.exception(e)
                 time.sleep(30)
 
 
@@ -144,7 +142,8 @@ async def get_ipv6()->str:
     else:
         ipv6 = await asyncio.get_event_loop().run_in_executor(
             None,
-            ipv6_obj.get_ipv6_prefix)
+            ipv6_obj.get_ipv6_prefix,
+        )
         await set_ipv6(ipv6)
         return ipv6
 

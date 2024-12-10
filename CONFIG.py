@@ -1,5 +1,4 @@
 import copy
-
 from dataclasses import dataclass
 from enum import Enum
 
@@ -14,7 +13,7 @@ class DBINFO:
 
 @dataclass
 class REDISINFO:
-    host: str = 'localhost'
+    host: str = '127.0.0.1'
     port: int = 11451
     db: int = 15
 
@@ -27,10 +26,10 @@ class ChatGptSettings:
 
 @dataclass
 class MYSQL:
-    proxy_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/proxy_db?charset=utf8mb4&autocommit=true'
-    bili_db_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/bilidb?charset=utf8mb4&autocommit=true'
-    bili_reserve_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/bili_reserve?charset=utf8mb4&autocommit=true'
-    get_other_lot_URI: str = 'mysql+aiomysql://root:114514@localhost:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
+    proxy_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/proxy_db?charset=utf8mb4&autocommit=true'
+    bili_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bilidb?charset=utf8mb4&autocommit=true'
+    bili_reserve_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bili_reserve?charset=utf8mb4&autocommit=true'
+    get_other_lot_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
 
 
 # region 基本配置
@@ -103,33 +102,38 @@ class ProjectPath(str, Enum):
     bili_lottery = 'K:/python test'
     py_test = 'K:/python测试专用'
     zhihu = 'K:/zhihu'
-    grpc_api_proto="K:/python test/grpc获取动态/grpc/grpc_proto"
+    grpc_api_proto = "K:/python test/grpc获取动态/grpc/grpc_proto"
+
+
+class _SeleniumConfig:
+    edge_path = 'C:/WebDriver/bin/msedgedriver.exe'
+
 
 # endregion
 
 
 class _CONFIG:
     root_dir = 'K:/python test/'  # b站代码的根目录
-    V2ray_proxy = 'http://127.0.0.1:10809' # socks端口+1
+    V2ray_proxy = 'http://127.0.0.1:10809'  # socks端口+1
     project_path = ProjectPath
     pushnotify = pushnotify()  # 推送设置
     zhihu_CONFIG = zhihu_CONFIG()  # 知乎设置
     database = database()
     chat_gpt_configs = [
         ChatGptSettings(
-            baseurl= "https://api.chatanywhere.tech/v1",
-            open_ai_api_key= 'sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
+            baseurl="https://api.chatanywhere.tech/v1",
+            open_ai_api_key='sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
         ),
         ChatGptSettings(
             baseurl="https://api.chatanywhere.tech/v1",
             open_ai_api_key='sk-15uefwaxlC3ik3Rzc6olDUUJ9pzDl8fFiesHJvTEXdz66Gba'
         ),
         ChatGptSettings(
-            baseurl='https://free.gpt.ge/v1',
+            baseurl='https://happyapi.org/v1',
             open_ai_api_key='sk-B0JwJwpkzqhlwh3qC2638d73De5042C3Aa02951313Bd1e39'
         ),
         ChatGptSettings(
-            baseurl='https://free.gpt.ge/v1',
+            baseurl='https://happyapi.org/v1',
             open_ai_api_key='sk-rooVNOUA9Xs2AqtpE9445cC879F3467b9f6a97B6De2219C1'
         ),
         ChatGptSettings(
@@ -145,6 +149,7 @@ class _CONFIG:
     # my_ipv6_addr = 'http://127.0.0.1:1919'
     # my_ipv6_addr=None
     RabbitMQConfig = RabbitMQConfig()
+    selenium_config = _SeleniumConfig()
 
     _pc_ua = UserAgent(platforms=["pc", "tablet"])
     _mobile_ua = UserAgent(platforms=["mobile"])
@@ -157,4 +162,5 @@ class _CONFIG:
     def rand_ua_mobile(self):
         return self._mobile_ua.random
 
-CONFIG=_CONFIG()
+
+CONFIG = _CONFIG()

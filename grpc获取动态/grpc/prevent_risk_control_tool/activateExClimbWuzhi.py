@@ -8,8 +8,8 @@ import struct
 from dataclasses import dataclass
 from typing import Optional, Literal
 from urllib.parse import quote
-from loguru import logger
 import CONFIG
+from fastapi接口.log.base_log import activeExclimbWuzhi_logger
 from utl.加密 import utils
 import random
 import time
@@ -138,7 +138,7 @@ class BuvidFp:
     def gen_payload(my_cfg: APIExClimbWuzhi = APIExClimbWuzhi()) -> str:
         content = {
             "3064": 1,  # ptype, mobile => 2, others => 1
-            "5062": get_time_milli(),  # timestamp
+            "5062": str(get_time_milli()),  # timestamp
             "03bf": quote(my_cfg.request_url, safe=''),  # url accessed
             "39c8": "333.1007.fp.risk",  # spm_id,
             "34f1": "",  # target_url, default empty now
@@ -327,56 +327,40 @@ class BuvidFp:
                     0  # "ontouchstart" in window ? 1 : 0
                 ],  # touch support
                 "a658": [
-                    "Arial",
-                    "Arial Black",
-                    "Arial Narrow",
-                    "Book Antiqua",
-                    "Bookman Old Style",
-                    "Calibri",
-                    "Cambria",
-                    "Cambria Math",
-                    "Century",
-                    "Century Gothic",
-                    "Century Schoolbook",
-                    "Comic Sans MS",
-                    "Consolas",
-                    "Courier",
-                    "Courier New",
-                    "Georgia",
-                    "Helvetica",
-                    "Helvetica Neue",
-                    "Impact",
-                    "Lucida Bright",
-                    "Lucida Calligraphy",
-                    "Lucida Console",
-                    "Lucida Fax",
-                    "Lucida Handwriting",
-                    "Lucida Sans",
-                    "Lucida Sans Typewriter",
-                    "Lucida Sans Unicode",
-                    "Microsoft Sans Serif",
-                    "Monotype Corsiva",
-                    "MS Gothic",
-                    "MS PGothic",
-                    "MS Reference Sans Serif",
-                    "MS Sans Serif",
-                    "MS Serif",
-                    "Palatino Linotype",
-                    "Segoe Print",
-                    "Segoe Script",
-                    "Segoe UI",
-                    "Segoe UI Light",
-                    "Segoe UI Semibold",
-                    "Segoe UI Symbol",
-                    "Tahoma",
-                    "Times",
-                    "Times New Roman",
-                    "Trebuchet MS",
-                    "Verdana",
-                    "Wingdings",
-                    "Wingdings 2",
-                    "Wingdings 3"
-                ],  # font details. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
+    "Arial",
+    "Arial Black",
+    "Arial Narrow",
+    "Calibri",
+    "Cambria",
+    "Cambria Math",
+    "Comic Sans MS",
+    "Consolas",
+    "Courier",
+    "Courier New",
+    "Georgia",
+    "Helvetica",
+    "Impact",
+    "Lucida Console",
+    "Lucida Sans Unicode",
+    "Microsoft Sans Serif",
+    "MS Gothic",
+    "MS PGothic",
+    "MS Sans Serif",
+    "MS Serif",
+    "Palatino Linotype",
+    "Segoe Print",
+    "Segoe Script",
+    "Segoe UI",
+    "Segoe UI Light",
+    "Segoe UI Semibold",
+    "Segoe UI Symbol",
+    "Tahoma",
+    "Times",
+    "Times New Roman",
+    "Trebuchet MS",
+    "Verdana",
+    "Wingdings"
+],  # font details. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
                 "d02f": "124.04347527516074"  # str(124 + random.random())
                 # audio fingerprint. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
             },
@@ -486,8 +470,8 @@ def hmac_sha256(key, message):
 
 
 class ExClimbWuzhi:
-    # proxy_ip = CONFIG.CONFIG.my_ipv6_addr
-    proxy_ip = None
+    proxy_ip = CONFIG.CONFIG.my_ipv6_addr
+    # proxy_ip = None
     @staticmethod
     async def _get_b3_b4_buvidfp_ticket_Cookie(payload: str, apiExClimbWuzhi: APIExClimbWuzhi = APIExClimbWuzhi(),
                                                useProxy=True,
@@ -524,7 +508,7 @@ class ExClimbWuzhi:
             cookie.append("=".join(['buvid3', quote(response['data']['b_3'], safe='')]))
             cookie.append("=".join(['buvid4', quote(response['data']['b_4'], safe='')]))
         except Exception as e:
-            logger.exception("获取buvid3和buvid4失败: %s", e)
+            activeExclimbWuzhi_logger.error("获取buvid3和buvid4失败: %s", e)
         try:
             if apiExClimbWuzhi.bili_ticket and apiExClimbWuzhi.bili_ticket_expires:
                 cookie.append("=".join(['bili_ticket', apiExClimbWuzhi.bili_ticket]))
@@ -534,7 +518,7 @@ class ExClimbWuzhi:
                 for k, v in bili_ticket.items():
                     cookie.append("=".join([k, str(v)]))
         except Exception as e:
-            logger.exception("获取bili_ticket失败: %s", e)
+            activeExclimbWuzhi_logger.error("获取bili_ticket失败: %s", e)
 
         return "; ".join(cookie)
 
@@ -617,19 +601,22 @@ class ExClimbWuzhi:
             headers = tuple(headers.items())
             for i in cookie.split(';'):
                 headers += (('cookie', i.strip(),),)
-        resp_json = await MyAsyncReq.request(url=my_cfg.giaGateWayExClimbWuzhi,
-                                             method='post',
-                                             data=payload,
-                                             headers=headers,
-                                             proxies={
-                                                 'https': ExClimbWuzhi.proxy_ip,
-                                                 'http': ExClimbWuzhi.proxy_ip,
-                                             }
-                                             )
-        resp = resp_json.json()
-        logger.debug(f'ExClimbWuzhi提交响应：{resp}')
-        if resp.get('code') != 0:
-            logger.error(f'ExClimbWuzhi提交失败！参数：\n{payload}')
+        try:
+            resp_json = await MyAsyncReq.request(url=my_cfg.giaGateWayExClimbWuzhi,
+                                                 method='post',
+                                                 data=payload,
+                                                 headers=headers,
+                                                 proxies={
+                                                     'https': ExClimbWuzhi.proxy_ip,
+                                                     'http': ExClimbWuzhi.proxy_ip,
+                                                 }
+                                                 )
+            resp = resp_json.json()
+            activeExclimbWuzhi_logger.debug(f'ExClimbWuzhi提交响应：{resp}')
+            if resp.get('code') != 0:
+                activeExclimbWuzhi_logger.error(f'{resp} ExClimbWuzhi提交失败！参数：\n{payload}')
+        except Exception as e:
+            activeExclimbWuzhi_logger.exception(f'ExClimbWuzhi提交失败！参数：\n{payload}\n错误信息：{type(e)}{e}')
         return cookie
 
 

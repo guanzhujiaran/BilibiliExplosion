@@ -4,13 +4,12 @@ import time
 import threading
 import json
 import os
-
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import space_monitor_logger
 from utl.代理.grpc_api import BiliGrpc
 from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
-from loguru import logger
 
-log = logger.bind(user='space_monitor')
+log = space_monitor_logger
 
 
 class monitor:
@@ -48,7 +47,7 @@ class monitor:
         return realtime
 
     def save_monitor_uid_list(self):
-        with open(os.path.join(self.dir_path ,'data/monitor_uid_list.json'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(self.dir_path, 'data/monitor_uid_list.json'), 'w', encoding='utf-8') as f:
             f.write(json.dumps(self.monitor_uid_list, indent='\t'))
 
     def push_dyn_notify(self, dynamic_item):
@@ -110,7 +109,7 @@ class monitor:
     async def main(self, show_log=True):
         log.info('启动B站动态监控程序！！！')
         if not show_log:
-            log.remove()
+            pass
         log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_space_monitor_log.log"),
                 level="WARNING",
                 encoding="utf-8",
@@ -126,7 +125,7 @@ class monitor:
             task_list.append(task)
         await asyncio.gather(*task_list)
 
-
+bili_space_monitor = monitor()
 if __name__ == '__main__':
     a = monitor()
     asyncio.run(a.main())

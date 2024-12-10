@@ -3,7 +3,7 @@ from fastapi import APIRouter
 
 def new_router(dependencies=None):
     router = APIRouter()
-    router.tags = ['V1']
+    router.tags = ['V1Geetest']
     router.prefix = '/api/v1/GeetestDet'
     # 将认证依赖项应用于所有路由
     if dependencies:

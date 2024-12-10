@@ -8,15 +8,13 @@ import time
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from loguru import logger
-from CONFIG import CONFIG
-from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
+
+from fastapi接口.log.base_log import topic_lot_logger
 from opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import ExtractTopicLottery
 from opus新版官方抽奖.活动抽奖.话题抽奖.robot import TopicRobot
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
-
-log = logger.bind(user="话题抽奖")
+log = topic_lot_logger
 
 
 class pubArticleInfo(pydantic.BaseModel):
@@ -141,17 +139,6 @@ def schedule_get_topic_lot_main(schedule_mark: bool = True, show_log: bool = Tru
     :return:
     """
     log.info('启动获取B站话题抽奖程序！！！')
-    if not show_log:
-        log.remove()
-        topic_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_topic_lot_log.log"),
-                          level="WARNING",
-                          encoding="utf-8",
-                          enqueue=True,
-                          rotation="500MB",
-                          compression="zip",
-                          retention="15 days",
-                          filter=lambda record: record["extra"].get('user') == "话题抽奖",
-                          )
 
     pub_article_info = pubArticleInfo()
     if schedule_mark:
@@ -176,17 +163,6 @@ async def async_schedule_get_topic_lot_main(schedule_mark: bool = True, show_log
     :return:
     """
     log.info('启动获取B站话题抽奖程序！！！')
-    if not show_log:
-        log.remove()
-        topic_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_topic_lot_log.log"),
-                          level="WARNING",
-                          encoding="utf-8",
-                          enqueue=True,
-                          rotation="500MB",
-                          compression="zip",
-                          retention="15 days",
-                          filter=lambda record: record["extra"].get('user') == "话题抽奖",
-                          )
     pub_article_info = pubArticleInfo()
     if schedule_mark:
         # from apscheduler.triggers.cron import CronTrigger

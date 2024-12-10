@@ -12,8 +12,8 @@ from datetime import datetime
 from functools import reduce
 from typing import Union
 import bs4
-from loguru import logger
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import request_with_proxy_logger
 from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, APIExClimbWuzhi
 # from utl.代理.数据库操作 import sqlite3_proxy_op as sqlite3_proxy_op
 # from utl.代理.数据库操作 import async_proxy_op_alchemy_ver as sqlite3_proxy_op
@@ -37,9 +37,7 @@ class request_with_proxy:
         self.channel = 'bili'
         self.sqlite3_proxy_op = sqlite3_proxy_op.SQLHelper
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
-        self.log = logger
-        # self.log.remove()
-        # self.log.add(sys.stdout, level='ERROR')
+        self.log = request_with_proxy_logger
         self.get_proxy_sep_time = 0.5 * 3600  # 获取代理的间隔
         self.get_proxy_timestamp = 0
         self.check_proxy_time = {

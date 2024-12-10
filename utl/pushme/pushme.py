@@ -1,25 +1,12 @@
 # -*- coding: utf-8 -*-
 import datetime
 import json
-import os
 import traceback
 from functools import wraps
-from loguru import logger
 import requests
 from requests import Response
-
 from CONFIG import CONFIG
-
-pushme_log = logger.bind(user='pushme')
-pushme_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_pushme_log.log"),
-               level="WARNING",
-               encoding="utf-8",
-               enqueue=True,
-               rotation="500MB",
-               compression="zip",
-               retention="15 days",
-               filter=lambda record: record["extra"].get('user') == "pushme",
-               )
+from fastapi接口.log.base_log import pushme_logger
 
 
 def __preprocess_content(content: str) -> str:
@@ -33,7 +20,7 @@ def __preprocess_content(content: str) -> str:
         ipv6 = f'http://[{ipv6}]:23333/docs'
         content += f'\n{datetime.datetime.now()}当前服务器ip信息：\n{ipv4}\n{ipv6}'
     except Exception as e:
-        pushme_log.exception(e)
+        pushme_logger.exception(e)
     return content
 
 
@@ -45,8 +32,8 @@ def pushme(title: str, content: str, __type='text') -> Response:
         push_content = __preprocess_content(content)
         data = {
             "push_key": token,
-            "title": title,
-            "content": push_content,
+            "title": title[0:100],
+            "content": push_content[0:500],
             'type': __type
         }
         resp = requests.post(url=url, data=data, proxies={
@@ -55,14 +42,14 @@ def pushme(title: str, content: str, __type='text') -> Response:
         }, timeout=10)
         return resp
     except Exception as e:
-        pushme_log.info(f'推送pushme失败！{e}\n开始尝试微信pushpush推送！')
+        pushme_logger.info(f'推送pushme失败！{e}\n开始尝试微信pushpush推送！')
         resp = _pushpush(title, content, __type)
         return resp
     finally:
         try:
-            pushme_log.error(f'请求响应：{resp.text}\n{title}\n{content}')
+            pushme_logger.error(f'请求响应：{resp.text}\n{title}\n{content}')
         except Exception as e:
-            pushme_log.exception(f'推送失败！{e}')
+            pushme_logger.exception(f'推送失败！{e}')
 
 
 def _pushpush(title: str, content: str, __type='txt') -> Response:
@@ -97,7 +84,7 @@ def _pushpush(title: str, content: str, __type='txt') -> Response:
         data = {
             "token": CONFIG.pushnotify.pushplus.token,
             "title": title[0:100],
-            "content": push_content,
+            "content": push_content[0:500],
             "template": __type
         }
         resp = requests.post(url=url, data=json.dumps(data), headers={
@@ -108,7 +95,7 @@ def _pushpush(title: str, content: str, __type='txt') -> Response:
             raise SyntaxError(f'推送请求失败！{resp.text}')
         return resp
     except Exception as e:
-        pushme_log.exception(f'推送失败！\n{e}')
+        pushme_logger.exception(f'推送失败！\n{e}')
         return resp
 
 
@@ -119,7 +106,7 @@ def pushme_try_catch_decorator(func: callable) -> callable:
             func(*args, **kwargs)
         except Exception as e:
             pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
-            pushme_log.exception(e)
+            pushme_logger.exception(e)
             raise e
     return wrapper
 
@@ -131,7 +118,7 @@ def async_pushme_try_catch_decorator(func):
             await func(*args, **kwargs)
         except Exception as e:
             pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
-            pushme_log.exception(e)
+            pushme_logger.exception(e)
             raise e
 
     return wrapper

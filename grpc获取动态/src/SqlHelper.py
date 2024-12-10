@@ -1,17 +1,16 @@
 # -*- coding: utf-8 -*-
 import datetime
-from typing import Generator, Tuple
+from typing import Generator
+from fastapi接口.log.base_log import myfastapi_logger
 from grpc获取动态.src.DynObjectClass import *  # 导入自定义对象
 import time
-
 import ast
 import sqlite_utils
 import threading
-from loguru import logger
 from CONFIG import CONFIG
 
 op_db_lock = threading.Lock()
-sql_log = logger.bind(user='fastapi')
+sql_log = myfastapi_logger
 
 
 @sql_log.catch
@@ -122,14 +121,13 @@ LIMIT 300000;
         """
         ret_row = []
         for row in self.op_db.query(
-                """
-   SELECT DISTINCT (t1.rid + 1) AS x
+                """SELECT DISTINCT (t1.rid + 1) AS x
 FROM (SELECT * FROM biliDynDetail ORDER BY rid DESC LIMIT 300000) t1
 WHERE NOT EXISTS (
     SELECT 1 FROM biliDynDetail t2 WHERE t2.rid = t1.rid + 1
-)
-ORDER BY x;
-    """
+) and x>0 and Length(x)<18
+ORDER BY x
+"""
         ):
             ret_row.append(row.get('x'))
         return ret_row
@@ -194,13 +192,24 @@ ORDER BY x;
             return lotDetail({}).__dict__
 
     @lock_wrapper
-    def get_latest_rid(self) -> int or None:
-        where = "dynamic_id is not null and dynamic_id is not ''"
-        select = 'max(rid)'
-
-        res = self.op_db_table.rows_where(where=where, select=select)
+    def get_latest_rid(self) -> int | None:
+        # where = "dynamic_id is not null and dynamic_id is not ''"
+        # select = 'max(rid)'
+        sql = """WITH TopRIDs AS (
+    SELECT rid
+    FROM biliDynDetail
+    WHERE LENGTH(rid) < 18
+    ORDER BY rid DESC
+    LIMIT 1000
+)
+SELECT MAX(t1.rid) AS max_consecutive_id
+FROM TopRIDs t1
+INNER JOIN biliDynDetail t2 ON t1.rid = t2.rid + 1;"""
+        # res = self.op_db_table.rows_where(where=where, select=select)
+        res = self.op_db.query(sql)
         try:
-            max_rid = next(res).get('max(rid)')
+            # max_rid = next(res).get('max(rid)')
+            max_rid = next(res).get('max_consecutive_id')
         except:
             max_rid = None
         return max_rid
@@ -263,6 +272,17 @@ ORDER BY x;
             where=where, where_args=where_args)
 
     @lock_wrapper
+    def query_lot_data_by_business_id(self, business_id: int | str):
+        where = "business_id=:business_id limit 1"
+        if ret := list(self.op_lot_table.rows_where(
+                where=where, where_args={
+                    "business_id": business_id,
+                })):
+            return ret[0]
+        else:
+            return None
+
+    @lock_wrapper
     def query_official_lottery_by_timelimit(self, time_limit: int = 24 * 3600) -> Generator:
         """
         通过日期查询需要的动态，默认查询当天
@@ -316,7 +336,7 @@ ORDER BY x;
 
     @lock_wrapper
     def query_charge_lottery_by_timelimit_page_offset(self, time_limit: int = 24 * 3600, page_number: int = 0,
-                                                        page_size: int = 0) -> tuple[Generator[dict, None, None], int]:
+                                                      page_size: int = 0) -> tuple[Generator[dict, None, None], int]:
         """
         通过日期查询需要的动态，默认查询当天
         :param between_ts:
@@ -370,13 +390,15 @@ ORDER BY x;
     @lock_wrapper
     def upsert_DynDetail(self, doc_id: str, dynamic_id: str, dynData: str, lot_id: int, dynamic_created_time: str):
         if len(list(self.op_db_table.rows_where(where='rid=:doc_id', where_args={'doc_id': doc_id}))) >= 1:
-            return self.op_db_table.update(pk_values=doc_id, updates={
-                'dynamic_id': dynamic_id,
-                'dynData': dynData,
-                'lot_id': lot_id,
-                'dynamic_created_time': dynamic_created_time
-            }
-                                           )
+            return self.op_db_table.update(
+                pk_values=doc_id,
+                updates={
+                    'dynamic_id': dynamic_id,
+                    'dynData': dynData,
+                    'lot_id': lot_id,
+                    'dynamic_created_time': dynamic_created_time
+                }
+            )
         else:
             return self.op_db_table.insert({
                 'rid': doc_id,
@@ -384,17 +406,20 @@ ORDER BY x;
                 'dynData': dynData,
                 'lot_id': lot_id,
                 'dynamic_created_time': dynamic_created_time
-            },
-                pk='rid', )
+            }, pk='rid',
+            )
 
     @lock_wrapper
     def upsert_lot_detail(self, lot_data_dict: dict):
         '''
-        如果是更新就返回{'mode':'update'}
-        如果是插入就返回{'mode':'insert'}
+
         :param lot_data_dict: lottery_notice的响应的data
-        :return:
+        :return:更新 返回{'mode':'update'}
+                插入 返回{'mode':'insert'}
+                失败 返回{'mode': 'error'}
         '''
+        if lot_data_dict.get('lottery_id') is None:
+            return {'mode': 'error'}
         lot_id = lot_data_dict['lottery_id']
         if len(list(self.op_lot_table.rows_where(where='lottery_id=:lot_id', where_args={'lot_id': lot_id}))) >= 1:
             self.op_lot_table.update(pk_values=lot_id, updates=lot_data_dict)
@@ -405,7 +430,8 @@ ORDER BY x;
     # endregion
 
 
+grpc_sql_helper = SQLHelper()
+
 if __name__ == '__main__':
-    test_sql = SQLHelper()
-    result,total = test_sql.query_charge_lottery_by_timelimit_page_offset()
-    print(list(result))
+    result = grpc_sql_helper.get_latest_rid()
+    print(result)

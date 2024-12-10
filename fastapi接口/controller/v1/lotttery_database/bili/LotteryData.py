@@ -1,20 +1,20 @@
 """
 单轮回复
 """
-from typing import Any
-from fastapi import Query
+from fastapi import Query, Body
 from fastapi接口.models.common import CommonResponseModel, ResponsePaginationItems
-from fastapi接口.models.lottery_database.redisModel.biliRedisModel import bili_live_lottery_redis
 from .base import new_router
-from fastapi接口.models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, reserveInfo, \
-    OfficialLotteryResp, AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp
+from fastapi接口.models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, OfficialLotteryResp, \
+    AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp, AddDynamicLotteryReq
 from fastapi_cache.decorator import cache
 from fastapi接口.service.lottery_database.bili_lotterty import GetCommonLottery, GetMustReserveLottery, \
-    GetMustOfficialLottery, GetAllLottery, GetChargeLottery, GetTopicLottery, GetLiveLottery
+    GetMustOfficialLottery, GetAllLottery, GetChargeLottery, GetTopicLottery, GetLiveLottery, \
+    AddDynamicLotteryByDynamicId
 
 router = new_router()
 
 
+# region get方法
 @router.get('/GetCommonLottery', summary='获取数据库里存放的一般抽奖',
             response_model=CommonResponseModel[list[CommonLotteryResp]])
 @cache(8 * 3600)
@@ -23,11 +23,6 @@ async def api_GetCommonLottery(round_num: int = Query(
     le=10,
     default=2
 )):
-    """
-    获取极验点击中心
-    :param round_num:
-    :return:
-    """
     result = await GetCommonLottery(round_num)
     return CommonResponseModel(data=result)
 
@@ -41,7 +36,6 @@ async def api_GetCommonLottery(round_num: int = Query(
             description="""获取必抽的预约抽奖数据
 当page_num和page_size任一为0时，返回svm判断过的必抽的数据
 否则返回分页了的全部数据""")
-@cache(1 * 3600)
 async def api_GetMustReserveLottery(
         limit_time: int = Query(
             ge=0,
@@ -78,7 +72,6 @@ async def api_GetMustReserveLottery(
 当page_num和page_size任一为0时，返回svm判断过的必抽的数据
 否则返回分页了的全部数据"""
             )
-@cache(1 * 3600)
 async def api_GetMustOfficialLottery(
         limit_time: int = Query(
             ge=0,
@@ -113,7 +106,6 @@ async def api_GetMustOfficialLottery(
 当page_num和page_size任一为0时，返回svm判断过的必抽的数据
 否则返回分页了的全部数据"""
             )
-@cache(1 * 3600)
 async def api_GetChargeLottery(
         limit_time: int = Query(
             ge=0,
@@ -170,7 +162,6 @@ async def api_GetTopicLottery(
             """
 获取svm判断过的必抽的预约抽奖数据和官方抽奖数据    
         """)
-@cache(8 * 3600)
 async def api_GetAllLottery(
         limit_time: int = Query(
             ge=8 * 3600,
@@ -185,3 +176,15 @@ async def api_GetAllLottery(
 ):
     result = await GetAllLottery(limit_time, round_num)
     return CommonResponseModel(data=result)
+
+
+# endregion
+
+@router.post('/AddDynamicLottery', summary='提交抽奖动态(官抽，预约，充电)，自动解析抽奖信息',
+             response_model=CommonResponseModel[str])
+@cache(8 * 3600)
+async def api_AddLottery(
+        data: AddDynamicLotteryReq = Body(...),
+):
+    msg, is_succ = await AddDynamicLotteryByDynamicId(data.dynamic_id_or_url)
+    return CommonResponseModel(code=400 if not is_succ else 0, data=msg,msg=msg)

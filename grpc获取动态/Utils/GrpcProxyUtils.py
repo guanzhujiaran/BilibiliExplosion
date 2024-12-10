@@ -1,14 +1,12 @@
 import ast
 import asyncio
-import pickle
 import random
 import time
 import traceback
 from dataclasses import dataclass
 from enum import Enum
 from typing import Union, List
-
-from grpc获取动态.log.base_log import grpc_api_any_log
+from fastapi接口.log.base_log import BiliGrpcUtils_logger
 from utl.redisTool.RedisManager import RedisManagerBase
 
 _max_use_count_before_352 = 20
@@ -96,6 +94,9 @@ class myRedisManager(RedisManagerBase):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         task = loop.create_task(self.background_task())
+        self.running_tasks = set()
+        self.running_tasks.add(task)
+        task.add_done_callback(lambda t: self.running_tasks.remove(t))
 
     async def get_score_refresh_ts(self) -> int:
         if _ := await self._get(self.RedisMap.score_refresh_ts.value):
@@ -186,11 +187,12 @@ class GrpcProxyTools:
     """
     ip_list: list[GrpcProxyStatus] = []  # 所有的ip列表
     r = myRedisManager()
-    lock_change_ip_data = asyncio.Lock()
     _redis_data_sync_flag = False  # 只需要同步一次，剩下都是同步的
 
     def __init__(self):
         self.use_good_proxy_flag = False
+        self.lock_change_ip_data = asyncio.Lock()
+
 
     @property
     def avalibleNum(self):
@@ -269,7 +271,7 @@ class GrpcProxyTools:
                 self.ip_list = await self.r.get_all_ip_status()
                 self._redis_data_sync_flag = True
             if len(self.ip_list) >= 2000:
-                grpc_api_any_log.debug(f'代理列表达到2000，清理无效代理（x.available is False）')
+                BiliGrpcUtils_logger.debug(f'代理列表达到2000，清理无效代理（x.available is False）')
                 self.ip_list = [x for x in self.ip_list if x.available]
             avalibleNum = self.avalibleNum
             if avalibleNum > 5 and self.use_good_proxy_flag:

@@ -12,11 +12,14 @@ from enum import Enum
 from typing import Dict, Any, Union
 import subprocess
 from functools import partial
-from grpc获取动态.grpc.bapi.biliapi import get_lot_notice, proxy_req, get_space_dynamic_req_with_proxy, \
+
+from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
+from grpc获取动态.grpc.bapi.biliapi import proxy_req, get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail
+
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
-from loguru import logger
+from fastapi接口.log.base_log import get_others_lot_logger as get_others_lot_log
 from CONFIG import CONFIG
 from github.my_operator.get_others_lot.Tool.newSqlHelper.models import TLotuserspaceresp, TLotdyninfo, TLotuserinfo, \
     TLotmaininfo
@@ -28,20 +31,6 @@ import Bilibili_methods.all_methods
 from github.my_operator.get_others_lot.Tool.newSqlHelper.SqlHelper import SqlHelper
 from github.my_operator.get_others_lot.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from github.my_operator.get_others_lot.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
-get_others_lot_log = logger.bind(user='get_others_lot')
-get_others_lot_log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_get_others_lot_log.log"),
-                       level="WARNING",
-                       encoding="utf-8",
-                       enqueue=True,
-                       rotation="500MB",
-                       compression="zip",
-                       retention="15 days",
-                       filter=lambda record: record["extra"].get('user') == "get_others_lot",
-                       )
-
-
-# get_others_lot_log.add(sys.stderr, level="DEBUG",
-#                        filter=lambda record: record["extra"].get('user') == "get_others_lot")
 
 
 @dataclass
@@ -160,8 +149,6 @@ class FileMap(str, Enum):
     获取过动态的b站用户 = os.path.join(current_file_path, '获取过动态的b站用户.json')
     get_dyn_ts = os.path.join(current_file_path, 'get_dyn_ts.txt')
 
-    loguru日志 = os.path.join(_log_path, 'loguru日志.log')
-
 
 class OfficialLotType(str, Enum):
     预约抽奖 = '预约抽奖'
@@ -180,20 +167,6 @@ def writeIntoFile(write_in_list: list[Any], filePath, write_mode='w', sep=','):
             f.writelines(sep.join(write_in_list))
     except Exception as e:
         get_others_lot_log.critical(f'写入文件失败！\n{e}')
-
-
-# get_others_lot_log.add(
-#     sink=FileMap.loguru日志.value,
-#     level="INFO",
-#     filter=lambda x: 'ERROR' in str(x['level']).upper() or 'CRITICAL' in str(x['level']),
-#     enqueue=True,
-#     rotation="300 MB",
-#     format="{time} | {level} | {message}",
-#     encoding="utf-8",
-#     backtrace=True,
-#     diagnose=True,
-#     compression="zip",
-# )
 
 
 class GetOthersLotDyn:
@@ -1646,9 +1619,9 @@ class GetOthersLotDyn:
                                 lot_rid = str(v.get('upower_lottery').get('rid'))
                                 is_charge_lot = True
                                 break
-                            if v.get('reserve'):
-                                if lot_rid := v.get('reserve').get('rid'):
-                                    lot_rid = str(lot_rid)
+                            if _reserve := v.get('reserve'):
+                                if 'lottery/result' in json.dumps(_reserve):
+                                    lot_rid = _reserve.get('rid')
                                     is_reserve_lot = True
                                     break
                     if k == 'major':
@@ -1697,14 +1670,22 @@ class GetOthersLotDyn:
                 for i in self.highlight_word_list:
                     if i in dynamic_content:
                         high_lights_list.append(i)
-                format_list = [ret_url, author_name, str(official_verify_type), str(pub_time), repr(dynamic_content),
-                               str(comment_count), str(forward_count), Manual_judge,
-                               ';'.join(high_lights_list),
-                               OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else '',
-                               lot_rid, suffix,
-                               premsg,
-                               str(deadline)
-                               ]
+                format_list = [
+                    ret_url,
+                    author_name,
+                    str(official_verify_type),
+                    str(pub_time),
+                    repr(dynamic_content),
+                    str(comment_count),
+                    str(forward_count),
+                    Manual_judge,
+                    ';'.join(high_lights_list),
+                    OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else '',
+                    lot_rid,
+                    suffix,
+                    str(premsg).replace('\t', '').replace('\n', ''),
+                    str(deadline)
+                ]
                 format_str = '\t'.join(map(str, format_list))
                 if re.match(r'.*//@.*', str(dynamic_content), re.DOTALL) is not None:
                     dynamic_content = re.findall(r'(.*?)//@', dynamic_content, re.DOTALL)[0]
@@ -1721,7 +1702,7 @@ class GetOthersLotDyn:
                     else:
                         self.useless_info.append(format_str)
                 self.queryingData.dyidList.append(str(dynamic_detail_dynamic_id))
-                officialLotType = OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else '',
+                official_lot_type = OfficialLotType.官方抽奖.value if is_official_lot else OfficialLotType.充电抽奖.value if is_charge_lot else OfficialLotType.预约抽奖.value if is_reserve_lot else ''
                 await self.sqlHlper.addDynInfo(
                     TLotdyninfo(
                         dynId=str(dynamic_detail_dynamic_id),
@@ -1733,7 +1714,7 @@ class GetOthersLotDyn:
                         commentCount=comment_count,
                         repostCount=forward_count,
                         highlightWords=';'.join(high_lights_list),
-                        officialLotType=officialLotType,
+                        officialLotType=official_lot_type,
                         officialLotId=str(lot_rid),
                         isOfficialAccount=int(official_verify_type if official_verify_type else 0),
                         isManualReply=Manual_judge,
@@ -1746,8 +1727,8 @@ class GetOthersLotDyn:
                 )
 
                 try:
-                    if is_official_lot or is_reserve_lot or is_reserve_lot:
-                        await self.solve_official_lot_data(str(dynamic_detail_dynamic_id), officialLotType, lot_rid)
+                    if is_official_lot or is_reserve_lot or is_charge_lot:
+                        await self.solve_official_lot_data(str(dynamic_detail_dynamic_id), official_lot_type, lot_rid)
                 except Exception as e:
                     get_others_lot_log.exception(f'上传官方抽奖失败！{e}')
                 if dynamic_detail['orig_dynamic_id']:
@@ -1776,17 +1757,22 @@ class GetOthersLotDyn:
                         orig_ret_url += '?tab=2'
                     elif self.BAPI.zhuanfapanduan(orig_dynamic_content):
                         orig_ret_url += '?tab=2'
-                    format_list = [orig_ret_url, orig_name, str(orig_official_verify),
-                                   str(time.strftime("%Y年%m月%d日 %H:%M", time.localtime(orig_pub_ts))),
-                                   repr(orig_dynamic_content),
-                                   str(orig_comment_count), str(orig_forward_count), Manual_judge,
-                                   ';'.join(high_lights_list),
-                                   OfficialLotType.抽奖动态的源动态.value,
-                                   lot_rid,
-                                   suffix,
-                                   premsg,
-                                   str(deadline)
-                                   ]
+                    format_list = [
+                        orig_ret_url,
+                        orig_name,
+                        str(orig_official_verify),
+                        str(time.strftime("%Y年%m月%d日 %H:%M", time.localtime(orig_pub_ts))),
+                        repr(orig_dynamic_content),
+                        str(orig_comment_count),
+                        str(orig_forward_count),
+                        Manual_judge,
+                        ';'.join(high_lights_list),
+                        OfficialLotType.抽奖动态的源动态.value,
+                        lot_rid,
+                        suffix,
+                        str(premsg).replace('\t', '').replace('\n', ''),
+                        str(deadline)
+                    ]
                     format_str = '\t'.join(map(str, format_list))
 
                     async with self.lock:  # 这个地方一定要加锁保证数据的一致性！！！
@@ -1880,20 +1866,37 @@ class GetOthersLotDyn:
             get_others_lot_log.exception(f'解析动态失败！！！{e}\n{dynamic_detail}')
 
     # endregion
-    async def solve_official_lot_data(self, dyn_id: Union[str, int], lot_type: OfficialLotType, official_lot_id: str):
+    async def solve_official_lot_data(self,
+                                      dyn_id: Union[str, int],
+                                      lot_type: OfficialLotType | str,
+                                      official_lot_id: str):
         """
         将官方抽奖数据爬取并上传到数据库
+        :param official_lot_id:
+        :param lot_type:
         :param dyn_id:
         :return:
         """
         try:
-            newly_lot_resp = await get_lot_notice(
-                1 if lot_type == OfficialLotType.官方抽奖 else 10 if lot_type == OfficialLotType.预约抽奖 else 12,
-                dyn_id if lot_type == OfficialLotType.官方抽奖 or lot_type == OfficialLotType.充电抽奖 else official_lot_id, )
-            newly_lotData = newly_lot_resp.get('data')
-            get_others_lot_log.debug(f'获取到官方抽奖响应：{newly_lotData}')
-            if newly_lotData:
-                await proxy_req.upsert_lot_detail(newly_lotData)
+            business_type = 0
+            business_id = 0
+            if lot_type == OfficialLotType.官方抽奖:
+                business_type = 1
+                business_id = dyn_id
+            elif lot_type == OfficialLotType.预约抽奖:
+                business_type = 10
+                business_id = official_lot_id
+            elif lot_type == OfficialLotType.充电抽奖:
+                business_type = 12
+                business_id = dyn_id
+            if business_type == 0 or business_id == 0:
+                raise ValueError(f'未知的官方抽奖类型：{lot_type}！！！')
+            await BiliLotDataPublisher.pub_official_reserve_charge_lot(
+                business_type=business_type,
+                business_id=business_id,
+                origin_dynamic_id=dyn_id,
+                extra_routing_key='GetOthersLotDyn.solve_official_lot_data'
+            )
         except Exception as e:
             get_others_lot_log.exception(f'官方抽奖数据提取失败！！！\n{e}')
 
@@ -2028,8 +2031,6 @@ class GET_OTHERS_LOT_DYN:
     """
 
     def __init__(self):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
         self.is_getting_dyn_flag_lock = asyncio.Lock()
         self.save_lock = asyncio.Lock()
         if os.path.exists(FileMap.get_dyn_ts):
@@ -2171,8 +2172,7 @@ class GET_OTHERS_LOT_DYN:
         return ret_list
 
     async def get_unignore_reserve_lot_space(self) -> list[TUpReserveRelationInfo]:
-        from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper as sqh
-        mysq = sqh()
+        from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper as mysq
         all_lots = await mysq.get_all_available_reserve_lotterys()
         recent_lots: list[TUpReserveRelationInfo] = [x for x in all_lots if
                                                      x.etime and x.etime - int(time.time()) < 2 * 3600 * 24]

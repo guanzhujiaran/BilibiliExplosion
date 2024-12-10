@@ -3,12 +3,29 @@ import random
 import time
 import requests
 import base64
-from loguru import logger
+from selenium.webdriver.common.by import By
+from selenium.webdriver.edge import webdriver, options
+from selenium.webdriver.edge.service import Service
+
+from CONFIG import CONFIG
+from fastapi接口.log.base_log import ipv6_monitor_logger
 
 
 class ipv6Obj:
     def __init__(self):
         self.ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0'
+        self.edge = None
+
+    def init_browser(self):
+        if self.edge is None or self.edge.service.process is None:
+            opts = options.Options()
+            prefs = {
+                "profile.default_content_setting_values.notifications": 2  # 2 表示关闭通知
+            }
+            opts.add_argument("--headless")
+            opts.add_experimental_option("prefs", prefs)
+            self.edge = webdriver.WebDriver(service=Service(CONFIG.selenium_config.edge_path), options=opts)
+            self.edge.implicitly_wait(30)
 
     def _get_register_result(self) -> dict:
         '''
@@ -144,19 +161,63 @@ class ipv6Obj:
                 allwan_info = self.get_allwan_info()
                 return next(filter(lambda x: x.get('IPv6Prefix') != 'NULL', allwan_info.get('wan'))).get('IPv6Prefix')
             except Exception as e:
-                logger.exception(e)
+                ipv6_monitor_logger.exception(e)
                 time.sleep(30)
 
     async def async_get_ipv6_prefix(self) -> str:
+        """
+
+        :return: # 2409:8a1e:2a62:69a0::/60
+        """
         while 1:
             try:
                 allwan_info = await self.async_get_allwan_info()
                 return next(filter(lambda x: x.get('IPv6Prefix') != 'NULL', allwan_info.get('wan'))).get('IPv6Prefix')
             except Exception as e:
-                logger.exception(e)
+                ipv6_monitor_logger.exception(e)
                 await asyncio.sleep(30)
+
+    async def async_get_ipv6_prefix_selenium(self):
+        """
+
+        :return: # 2409:8a1e:2a62:69a0::/60
+        """
+        while 1:
+            try:
+                ipv6_prefix = await asyncio.to_thread(self.get_ipv6_prefix_from_selenium)
+                return ipv6_prefix
+            except Exception as e:
+                self.edge.close()
+                ipv6_monitor_logger.exception(e)
+                await asyncio.sleep(30)
+
+    def get_ipv6_prefix_from_selenium(self):
+        def login():
+            driver.get('http://192.168.1.1/')
+            driver.find_element(By.CLASS_NAME, 'username').send_keys('user')
+            driver.find_element(By.CLASS_NAME, 'password').send_keys('tAP9d#e3')
+            driver.find_element(By.CLASS_NAME, 'login').click()
+
+        def get_ipv6_prefix():
+            driver.switch_to.frame('mainFrame')
+            driver.find_element(By.ID, 'smWanStatu').click()
+            driver.find_element(By.ID, 'ssmIPv6WANSta').click()
+            Tbl_WANstauts1 = driver.find_element(By.ID, 'Tbl_WANstauts1')
+            Tbl_WANstauts1_text = Tbl_WANstauts1.text
+            driver.switch_to.default_content()
+            return Tbl_WANstauts1_text.split('\n')[9].replace("前缀 ", "")
+
+
+        self.init_browser()
+        driver = self.edge
+
+        self.edge.refresh()
+        if driver.current_url != 'http://192.168.1.1/':
+            login()
+        return get_ipv6_prefix()
+
 
 
 if __name__ == '__main__':
     myapp = ipv6Obj()
-    print(myapp.get_ipv6_prefix())
+    print(asyncio.run(myapp.async_get_ipv6_prefix_selenium()))

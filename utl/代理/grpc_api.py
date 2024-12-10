@@ -1,23 +1,19 @@
 # 最终将请求grpc_api的方法全部放到这里面，里面就是一个class
 # 相当于一个客户端
-import sys
-
 import asyncio
 import traceback
 import json
 import httpx
-from httpx import Limits
-from loguru import logger
-from grpc获取动态.grpc.grpc_api import BiliGrpc as mygrpc_api
+from fastapi接口.log.base_log import BiliGrpcClient_logger
+from grpc获取动态.grpc.grpc_api import bili_grpc
 
 
 class BiliGrpc:
     def __init__(self):
         self.post_localhost_timeout = None
         self.base_url = 'http://127.0.0.1:23333'
-        self.log = logger.bind(user="BiliGrpcClient")
-        # logger.add(sys.stderr, level="INFO", filter=lambda record: record["extra"].get('user') == "BiliGrpcClient")
-        self.mygrpc_api = mygrpc_api()
+        self.log = BiliGrpcClient_logger
+        self.mygrpc_api = bili_grpc
         # 不能设置self.client这种东西，存在一个最大的连接数，超过会报错！
 
     async def grpc_api_get_DynDetails(self, dyn_ids: [int]) -> dict:

@@ -1,8 +1,6 @@
 import pickle
 from typing import Callable
-
 import pika
-
 from CONFIG import CONFIG
 
 
@@ -18,7 +16,6 @@ class BasicMQServer:
                                                 heartbeat=0
                                                 )
         connection = pika.BlockingConnection(pika_params)
-
         channel = connection.channel()
         channel.basic_qos(prefetch_count=1)
         for q_name in self.CONFIG.RabbitMQConfig.queue_name_list:
@@ -46,3 +43,4 @@ class BasicMQServer:
         """
         self.channel.basic_consume(queue=queue_name, on_message_callback=callback, auto_ack=True, )
         self.channel.start_consuming()
+

@@ -2,23 +2,25 @@
 import os.path
 import traceback
 from typing import Union
-import pydantic
+from pydantic import BaseModel
 import asyncio
 import time
 from datetime import datetime, timedelta
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import official_lot_logger
 from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
 from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExctractOfficialLottery
 from grpc获取动态.src.getDynDetail import DynDetailScrapy
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
-from opus新版官方抽奖.转发抽奖.log.base_log import official_lot_log as log
+
+log = official_lot_logger
+
+dyn_detail_scrapy: DynDetailScrapy | None = None
 
 
-class pubArticleInfo(pydantic.BaseModel):
+class pubArticleInfo(BaseModel):
     lastPubDate: Union[datetime, None] = None
     shouldPubHour: int = 20  # 每天发布的专栏的事件
     start_ts: int = int(time.time())
@@ -68,12 +70,13 @@ class pubArticleInfo(pydantic.BaseModel):
 
 @async_pushme_try_catch_decorator
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
-    d = DynDetailScrapy()
+    global dyn_detail_scrapy
+    dyn_detail_scrapy = DynDetailScrapy()
     if time.time() - pub_article_info.lastPubDate.timestamp() > 8 * 3600:
-        d.scrapy_sem = asyncio.Semaphore(1000)
+        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(300)
     else:
-        d.scrapy_sem = asyncio.Semaphore(1000)
-    await d.main()
+        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(500)
+    await dyn_detail_scrapy.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
         e = ExctractOfficialLottery()
@@ -142,18 +145,6 @@ def schedule_get_official_lot_main(schedule_mark: bool = True, show_log: bool = 
     :return:
     """
     log.info('启动获取所有B站动态以及发布充电和官方抽奖专栏程序！！！')
-    if not show_log:
-        log.remove()
-        log.add(
-            os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_official_lot_log.log"),
-            level="WARNING",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "官方抽奖"
-        )
     pub_article_info = pubArticleInfo()
     if schedule_mark:
         # from apscheduler.triggers.cron import CronTrigger
@@ -178,18 +169,16 @@ async def async_schedule_get_official_lot_main(schedule_mark: bool = True, show_
     :return:
     """
     log.info('启动获取所有B站动态以及发布充电和官方抽奖专栏程序！！！')
-    if not show_log:
-        log.remove()
-        log.add(
-            os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_official_lot_log.log"),
-            level="WARNING",
-            encoding="utf-8",
-            enqueue=True,
-            rotation="500MB",
-            compression="zip",
-            retention="15 days",
-            filter=lambda record: record["extra"].get('user') == "官方抽奖"
-        )
+    log.add(
+        os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_official_lot_log.log"),
+        level="WARNING",
+        encoding="utf-8",
+        enqueue=True,
+        rotation="500MB",
+        compression="zip",
+        retention="15 days",
+        filter=lambda record: record["extra"].get('user') == "官方抽奖"
+    )
     pub_article_info = pubArticleInfo()
     if schedule_mark:
         # from apscheduler.triggers.cron import CronTrigger

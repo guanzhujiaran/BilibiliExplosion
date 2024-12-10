@@ -5,15 +5,12 @@ import asyncio
 import os
 import time
 from typing import Union
-
 from fastapi import Query
+from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.ChatGpt3_5.ReplySingleModel import ReplyReq, ReplyRes
 from fastapi接口.service.handleLLMReplySingle import ChatGpt3_5
-from loguru import logger
 from .base import new_router
-myfastapi_logger = logger.bind(user='fastapi')
-
 chatgpt = ChatGpt3_5()
 router = new_router()
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -40,7 +37,7 @@ async def reply_single(reply_req: ReplyReq):
                 f.write(f'|{reply_req.question}|\n|{reply_res.answer}|\n-----')
             return CommonResponseModel(data=reply_res)
         except Exception as e:
-            myfastapi_logger.exception(f'写入日志失败\n{e} ')
+            myfastapi_logger.error(f'AI回复失败！{e} ')
             return CommonResponseModel(code=500,data=None, msg=f'获取消息错误\n{e}')
 
 

@@ -4,7 +4,7 @@ import json
 import random
 import traceback
 from typing import Union, Callable
-from loguru import logger
+from fastapi接口.log.base_log import get_others_lot_logger
 from sqlalchemy import AsyncAdaptedQueuePool, select, and_, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -20,7 +20,7 @@ def lock_wrapper(func: Callable) -> Callable:
                 res = await func(*args, **kwargs)
                 return res
             except Exception as e:
-                logger.exception(e)
+                get_others_lot_logger.exception(e)
                 await asyncio.sleep(random.choice([5, 6, 7]))
                 continue
 

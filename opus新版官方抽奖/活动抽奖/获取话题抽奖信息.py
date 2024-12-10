@@ -7,9 +7,16 @@ import random
 import time
 from typing import List, Union
 from bs4 import BeautifulSoup
+import subprocess
+from functools import partial
+
+from fastapi接口.log.base_log import topic_lot_logger
+
+subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
+import execjs
 from sqlalchemy.orm import joinedload
 import b站cookie.globalvar as gl
-import CONFIG
+from CONFIG import CONFIG
 from sqlalchemy.sql.expression import text
 from sqlalchemy import select, update, func, and_, cast, DateTime
 from opus新版官方抽奖.Base.generate_cv import GenerateCvBase
@@ -21,9 +28,9 @@ from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficC
 from opus新版官方抽奖.活动抽奖.model.EraBlackBoard import EraTask, EraLotteryConfig, EraVideoSourceCONFIG, \
     H5ActivityLottery, H5ActivityLotteryGiftSource, MatchLotteryTask, MatchLottery, EvaContainerTruck
 from utl.pushme.pushme import pushme
-
+import asyncio
 from utl.代理.SealedRequests import MYASYNCHTTPX
-from opus新版官方抽奖.活动抽奖.log.base_log import topic_lot_log
+
 
 
 class TopicLotInfoSqlHelper(sqlHelper):
@@ -322,7 +329,7 @@ class GenerateTopicLotCv(GenerateCvBase):
         return activity, dynamic, era, unknown
 
     @staticmethod
-    def gen_cv_item(x) -> CvItem:
+    def gen_cv_item(x: TTrafficCard) -> CvItem:
         cv_item = CvItem(
             jumpUrl=x.jump_url,
             title=x.name,
@@ -332,7 +339,7 @@ class GenerateTopicLotCv(GenerateCvBase):
             if x.t_activity_lottery:
                 cv_item.lot_type_list.append(LotType.activity_lottery)
                 cv_item.lottery_sid = ' | '.join(
-                    [t_activity_lottery.activity_id for t_activity_lottery in x.t_activity_lottery])
+                    [t_activity_lottery.lotteryId for t_activity_lottery in x.t_activity_lottery])
                 for t_activity_lottery in x.t_activity_lottery:
                     cv_item.lottery_pool.extend([json.loads(y).get('name', '') for y in t_activity_lottery.list])
                     cv_item.lottery_sid += t_activity_lottery.lotteryId
@@ -357,7 +364,7 @@ class GenerateTopicLotCv(GenerateCvBase):
                 cv_item.lot_type_list.append(LotType.unknown)
 
         except Exception as e:
-            topic_lot_log.exception(f'解析话题失败！{e}')
+            topic_lot_logger.exception(f'解析话题失败！{e}')
         return cv_item
 
     async def get_topic_lottery(self) -> List[CvItem]:
@@ -376,7 +383,6 @@ class GenerateTopicLotCv(GenerateCvBase):
         """
         topic_lottery_list = await self.get_topic_lottery()
         activity, dynamic, era, unknown = self.zhuanlan_date_sort(topic_lottery_list)
-        print(activity, dynamic, era, unknown)
         cv_content, words = self.zhuanlan_format({'activity网址': activity,
                                                   'dynamic网址': dynamic,
                                                   'era网址': era,
@@ -442,7 +448,7 @@ class ExtractTopicLottery:
         return realtime
 
     async def get_resp(self, url: str):
-        proxy = CONFIG.CONFIG.my_ipv6_addr
+        proxy = CONFIG.my_ipv6_addr
         while 1:
             try:
                 headers = copy.deepcopy(self.headers)
@@ -454,10 +460,10 @@ class ExtractTopicLottery:
                     'http': proxy,
                     'https': proxy
                 })
-                assert resp.status_code == 200, resp.text
+                assert resp.status_code == 200 or resp.status_code == 404, resp.text
                 return resp
             except Exception as e:
-                topic_lot_log.exception(f"获取{url}请求失败！{e}")
+                topic_lot_logger.exception(f"获取{url}请求失败！{e}")
                 await asyncio.sleep(10)
                 proxy = None
 
@@ -488,11 +494,9 @@ class ExtractTopicLottery:
             for tag in script_tags:
                 if '__initialState' in tag.text:
                     # 尝试从字符串中提取 JSON 数据
-                    start_index = tag.string.find('__initialState = ')
-                    end_index = tag.string.find(';\n', start_index)
-                    data_str = tag.string[start_index + len('__initialState = '):end_index].strip()
+                    js_env = execjs.compile('let window = {};' + tag.string)
                     # 将字符串转换为字典
-                    data = json.loads(data_str)
+                    data = js_env.eval('window.__initialState')
                     for x in data.get('EraTasklist', data.get('EraTasklistPc', [])):
                         for y in x.get('tasklist', []):
                             era_tasks.append(EraTask.model_validate(y))
@@ -547,12 +551,12 @@ class ExtractTopicLottery:
                 x.topName
             ) for x in era_jika
             ])
-            topic_lot_log.info(f'{url}\t抽奖任务：{era_tasks}')
-            topic_lot_log.info(f'{url}\t抽奖内容：{era_lottery_configs}')
-            topic_lot_log.info(f'{url}\t视频活动：{era_video_configs}')
-            topic_lot_log.info(f'{url}\t集卡活动：{era_jika}')
+            topic_lot_logger.info(f'{url}\t抽奖任务：{era_tasks}')
+            topic_lot_logger.info(f'{url}\t抽奖内容：{era_lottery_configs}')
+            topic_lot_logger.info(f'{url}\t视频活动：{era_video_configs}')
+            topic_lot_logger.info(f'{url}\t集卡活动：{era_jika}')
             if len(era_tasks) + len(era_lottery_configs) + len(era_video_configs) + len(era_jika) == 0:
-                topic_lot_log.exception(f'{url}\t获取活动信息为空！\n{data}')
+                topic_lot_logger.exception(f'{url}\t获取活动信息为空！\n{data}')
                 return 2
             return 1
         # endregion
@@ -565,11 +569,9 @@ class ExtractTopicLottery:
             for tag in script_tags:
                 if '__initialState' in tag.text:
                     # 尝试从字符串中提取 JSON 数据
-                    start_index = tag.string.find('__initialState = ')
-                    end_index = tag.string.find(';\n', start_index)
-                    data_str = tag.string[start_index + len('__initialState = '):end_index].strip()
+                    js_env = execjs.compile('let window = {};'+tag.string)
                     # 将字符串转换为字典
-                    data = json.loads(data_str)
+                    data = js_env.eval('window.__initialState')
                     if lottery_v3 := data.get('h5-lottery-v3', data.get('pc-lottery-v3', [])):
                         h5_lottery = [H5ActivityLottery(
                             lotteryId=x.get('lotteryId'),
@@ -608,11 +610,11 @@ class ExtractTopicLottery:
             ) for x in match_lottery
             ])
 
-            topic_lot_log.info(f'{url}\th5抽奖任务：{h5_lottery}')
-            topic_lot_log.info(f'{url}\t活动抽奖任务：{match_task}')
-            topic_lot_log.info(f'{url}\t活动抽奖：{match_lottery}')
+            topic_lot_logger.info(f'{url}\th5抽奖任务：{h5_lottery}')
+            topic_lot_logger.info(f'{url}\t活动抽奖任务：{match_task}')
+            topic_lot_logger.info(f'{url}\t活动抽奖：{match_lottery}')
             if len(h5_lottery) + len(match_task) + len(match_lottery) == 0:
-                topic_lot_log.exception(f'{url}\t获取活动信息为空！\n{data}')
+                topic_lot_logger.error(f'{url}\t获取活动信息为空！\n{data}')
                 return 2
             return 1
 
@@ -624,7 +626,7 @@ class ExtractTopicLottery:
             pc_url = native_page_resp_dict.get('data').get('pc_url')
             if pc_url:
                 return await self.handle_topic_lottery_url(pc_url, traffic_card_id)
-            topic_lot_log.exception(f'{url}\t获取动态页面信息失败！\n{native_page_resp_dict}')
+            topic_lot_logger.error(f'{url}\t获取动态页面信息失败！\n{native_page_resp_dict}')
             return 3
         else:
             jump_urls = []
@@ -632,11 +634,9 @@ class ExtractTopicLottery:
             for tag in script_tags:
                 if '__initialState' in tag.text:
                     # 尝试从字符串中提取 JSON 数据
-                    start_index = tag.string.find('__initialState = ')
-                    end_index = tag.string.find(';\n', start_index)
-                    data_str = tag.string[start_index + len('__initialState = '):end_index].strip()
+                    js_env = execjs.compile('let window = {};' + tag.string)
                     # 将字符串转换为字典
-                    data = json.loads(data_str)
+                    data = js_env.eval('window.__initialState')
                     jump_urls = list(
                         set([x.get('button_jump_url') for x in data.get('h5-button', data.get('button', [])) if
                              'blackboard' in x.get('button_jump_url', '')]))
@@ -644,24 +644,27 @@ class ExtractTopicLottery:
                 for x in jump_urls:
                     await self.handle_topic_lottery_url(x, traffic_card_id)
                 return 1
-            topic_lot_log.exception(f'{url}\t未知话题类型！\n{data}')
+            topic_lot_logger.error(f'{url}\t未知话题类型！\n{data}')
             return 3
 
-    async def spider_all_unread_traffic_card(self) -> (bool, int):
+    async def spider_all_unread_traffic_card(self, status_list=[0, None]) -> (bool, int):
         """
-
+        获取所有未读的traffic_card，解析活动类型
         :return: 是否有新增的
         """
-        all_unread_traffic_card = [*await self.sql.get_all_available_traffic_info_by_status(status=0),
-                                   *await self.sql.get_all_available_traffic_info_by_status(status=None)]
+        all_unread_traffic_card = [item for l in
+                                   [await self.sql.get_all_available_traffic_info_by_status(status=x) for x in
+                                    status_list] for item in l
+                                   ]
         if all_unread_traffic_card:
             for x in all_unread_traffic_card:
                 try:
                     result = await self.handle_topic_lottery_url(x.jump_url, x.id)
                 except Exception as e:
-                    topic_lot_log.exception(f'ErrorError！！！处理话题抽奖信息失败！\n{e}')
+                    topic_lot_logger.exception(f'ErrorError！！！处理话题抽奖信息失败！\n{e}')
+                    pushme('处理话题抽奖信息失败！', f'ErrorError！！！处理话题抽奖信息失败！\n{e}')
                     result = 3
-                topic_lot_log.info(f'当前traffic_card:{x.id}，状态：{result}')
+                topic_lot_logger.info(f'{x.jump_url}\t当前traffic_card:{x.id}，状态：{result}')
                 await self.sql.update_traffic_card_status(result, x.id)
             return True, len(all_unread_traffic_card)
         return False, len(all_unread_traffic_card)
@@ -679,18 +682,19 @@ class ExtractTopicLottery:
         gc = GenerateTopicLotCv(cookie3, ua3, csrf3, buvid3)
         # gc.post_flag = False  # 不直接发布
         await gc.main(pub_cv=is_need_post)
-        topic_lot_log.error('话题抽奖已更新')
+        topic_lot_logger.error('话题抽奖已更新')
         pushme('话题抽奖已更新', f'话题抽奖：更新{num}条数据')
 
 
 async def _test():
-    _a = TopicLotInfoSqlHelper()
-    print(await _a.get_all_available_traffic_info_by_page(1,10))
+    _a = ExtractTopicLottery()
+    print(await _a.spider_all_unread_traffic_card([0, 3, None]))
 
 
 async def _test_generate_cv():
     gc = GenerateTopicLotCv(
-        cookie="buvid3=434282F4-E364-7403-51C6-038E401B27F052974infoc; b_nut=1716813352; _uuid=5AC6FF4A-855E-55ED-51042-7E37D8753E2B57600infoc; enable_web_push=DISABLE; buvid4=68D497D9-DFB7-2DD5-EFBD-2640CA8327F167277-024052712-bkFP%2BfBKxK1jqmu4RNRApvMLVSVZSoxPLJw6dSJ1uURlMto45X0VJk1NHJXI5NTX; DedeUserID=4237378; DedeUserID__ckMd5=94093e21fe6687f9; hit-dyn-v2=1; rpdid=0zbfAHGGaN|BL7JC6EG|1za|3w1SbA29; buvid_fp_plain=undefined; header_theme_version=CLOSE; LIVE_BUVID=AUTO5417169088699210; CURRENT_BLACKGAP=0; PVID=1; home_feed_column=5; fingerprint=3c0395c5734f117c8547ff054c538ef7; CURRENT_FNVAL=4048; CURRENT_QUALITY=116; browser_resolution=1463-754; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjUyNDU3OTcsImlhdCI6MTcyNDk4NjUzNywicGx0IjotMX0.v7ZUi1Cj18rBWbYy6hsDFjI09ny1nd8SZWZ1iDuKc-w; bili_ticket_expires=1725245737; b_lsid=F5B37A103_191A38FEF3E; SESSDATA=213503be%2C1740578775%2C2cfb8%2A82CjBBtuR1OtNFGOyuCaOPH5WDmz4WVtQvqPXzTUdeZGLHUFxcj53LLZfP77LdfBWMo9YSVjcwTzlReGw4d2lKQVpnRzdJNFdHSm02SERyWENSUlVTbDg4azRVajlVVlNnWk9BOU9IQllxNEU3TXZlSlEyT0VySEVWa0ptWFRsalhxWFdpMEtwODR3IIEC; bili_jct=38d76480d1837d76e6c7c84d86511d06; sid=6w71b423; buvid_fp=3c0395c5734f117c8547ff054c538ef7; bp_t_offset_4237378=971489059387998208",
+        # cookie="buvid3=434282F4-E364-7403-51C6-038E401B27F052974infoc; b_nut=1716813352; _uuid=5AC6FF4A-855E-55ED-51042-7E37D8753E2B57600infoc; enable_web_push=DISABLE; buvid4=68D497D9-DFB7-2DD5-EFBD-2640CA8327F167277-024052712-bkFP%2BfBKxK1jqmu4RNRApvMLVSVZSoxPLJw6dSJ1uURlMto45X0VJk1NHJXI5NTX; DedeUserID=4237378; DedeUserID__ckMd5=94093e21fe6687f9; hit-dyn-v2=1; rpdid=0zbfAHGGaN|BL7JC6EG|1za|3w1SbA29; buvid_fp_plain=undefined; header_theme_version=CLOSE; LIVE_BUVID=AUTO5417169088699210; CURRENT_BLACKGAP=0; PVID=1; home_feed_column=5; fingerprint=3c0395c5734f117c8547ff054c538ef7; CURRENT_FNVAL=4048; CURRENT_QUALITY=116; browser_resolution=1463-754; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjUyNDU3OTcsImlhdCI6MTcyNDk4NjUzNywicGx0IjotMX0.v7ZUi1Cj18rBWbYy6hsDFjI09ny1nd8SZWZ1iDuKc-w; bili_ticket_expires=1725245737; b_lsid=F5B37A103_191A38FEF3E; SESSDATA=213503be%2C1740578775%2C2cfb8%2A82CjBBtuR1OtNFGOyuCaOPH5WDmz4WVtQvqPXzTUdeZGLHUFxcj53LLZfP77LdfBWMo9YSVjcwTzlReGw4d2lKQVpnRzdJNFdHSm02SERyWENSUlVTbDg4azRVajlVVlNnWk9BOU9IQllxNEU3TXZlSlEyT0VySEVWa0ptWFRsalhxWFdpMEtwODR3IIEC; bili_jct=38d76480d1837d76e6c7c84d86511d06; sid=6w71b423; buvid_fp=3c0395c5734f117c8547ff054c538ef7; bp_t_offset_4237378=971489059387998208",
+        cookie="",
         ua=CONFIG.rand_ua,
         csrf='38d76480d1837d76e6c7c84d86511d06',
         buvid="434282F4-E364-7403-51C6-038E401B27F052974infoc"
@@ -699,6 +703,4 @@ async def _test_generate_cv():
 
 
 if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(_test())
+    asyncio.run(_test_generate_cv())

@@ -1,28 +1,33 @@
 import json
+import re
 import time
 from datetime import datetime
 from typing import Tuple, List
 from urllib.parse import quote
 
+from fastapi接口.dao.lotDataRedisObj import lot_data_redis
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, reserveInfo, \
     OfficialLotteryResp, AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp
 from fastapi接口.models.lottery_database.redisModel.biliRedisModel import bili_live_lottery_redis
+from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from github.my_operator.get_others_lot.Tool.newSqlHelper.SqlHelper import SqlHelper as bili_dynamic_sqlhelper
 from github.my_operator.get_others_lot.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
 from github.my_operator.get_others_lot.svmJudgeBigLot.judgeBigLot import big_lot_predict
+from grpc获取动态.src.DynObjectClass import dynAllDetail
+from grpc获取动态.src.getDynDetail import dyn_detail_scrapy
 from opus新版官方抽奖.Model.GenerateCvModel import CvItem
 from opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import TopicLotInfoSqlHelper as bili_topic_sqlhelper, GenerateTopicLotCv
 
-from opus新版官方抽奖.预约抽奖.db.sqlHelper import SqlHelper as bili_reserve_sqlhelper
+from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from grpc获取动态.src.SqlHelper import SQLHelper as bili_official_sqlhelper
 
 import asyncio
 
 bds = bili_dynamic_sqlhelper()
-brs = bili_reserve_sqlhelper()
+brs = bili_reserve_sqlhelper
 bos = bili_official_sqlhelper()
 bts = bili_topic_sqlhelper()
-
+_lock = asyncio.Lock()
 
 async def GetCommonLottery(round_num, offset: int = 0, page_size: int = 0) -> [CommonLotteryResp]:
     """
@@ -64,10 +69,8 @@ async def GetMustReserveLottery(limit_time: int, page_num: int = 0, page_size: i
 
 async def GetMustOfficialLottery(limit_time: int, page_num: int = 0, page_size: int = 0) -> tuple[
     list[OfficialLotteryResp], int]:
-    all_lots, total_num = await asyncio.get_event_loop().run_in_executor(
-        None,
-        bos.query_official_lottery_by_timelimit_page_offset,
-        limit_time, page_num, page_size)
+    all_lots, total_num = await asyncio.to_thread(bos.query_official_lottery_by_timelimit_page_offset, limit_time,
+                                                  page_num, page_size)
     all_official_lottery_resp_infos = [OfficialLotteryResp(
         dynId=str(x.get('business_id')),
         lottery_time=x.get('lottery_time'),
@@ -92,10 +95,8 @@ async def GetMustOfficialLottery(limit_time: int, page_num: int = 0, page_size: 
 
 async def GetChargeLottery(limit_time: int, page_num: int = 0, page_size: int = 0) -> tuple[
     list[ChargeLotteryResp], int]:
-    all_lots, total_num = await asyncio.get_event_loop().run_in_executor(
-        None,
-        bos.query_charge_lottery_by_timelimit_page_offset,
-        limit_time, page_num, page_size)
+    all_lots, total_num = await asyncio.to_thread(bos.query_charge_lottery_by_timelimit_page_offset, limit_time,
+                                                  page_num, page_size)
     all_charge_lottery_resp_infos = [ChargeLotteryResp(
         dynId=str(x.get('business_id')),
         lottery_time=x.get('lottery_time'),
@@ -132,7 +133,7 @@ async def GetTopicLottery(page_num: int = 0, page_size: int = 0) -> tuple[list[T
             end_date_str=x.end_date_str,
             lot_type_text=' | '.join([y.value for y in x.lot_type_list] if x.lot_type_list else []),
             lottery_pool_text=' | '.join(x.lottery_pool if x.lottery_pool else []),
-            lottery_sid = x.lottery_sid,
+            lottery_sid=x.lottery_sid,
         )
         for x in all_charge_lottery_resp_infos
     ]
@@ -182,6 +183,7 @@ async def GetLiveLottery(page_num: int = 0, page_size: int = 0) -> tuple[list[Li
         )
     return ret_list, total
 
+
 async def GetAllLottery(limit_time, round_num) -> AllLotteryResp:
     # 获取所有抽奖动态
     common_lotterys = await bds.getAllLotDynByLotRoundNum(round_num)
@@ -209,9 +211,42 @@ async def GetAllLottery(limit_time, round_num) -> AllLotteryResp:
     )
 
 
+async def AddDynamicLotteryByDynamicId(dynamic_id_or_url: str) -> tuple[str, bool]:
+    """
+    通过动态id添加抽奖信息
+    :param dynamic_id:
+    :return: True - 添加成功，False - 添加失败
+    """
+    dynamic_id_re = [x for x in re.findall(r'\d+', dynamic_id_or_url) if len(x) > 10]
+    if not dynamic_id_re:
+        return '动态格式错误', False
+    dynamic_id = dynamic_id_re[0]
+    if len(str(dynamic_id)) < 18:
+        return '动态格式错误', False
+    async with _lock:
+        if await lot_data_redis.is_exist_add_dynamic_lottery(dynamic_id):  # 查询是否正在查询中
+            return '近期已查询', True
+        await lot_data_redis.set_add_dynamic_lottery(str(dynamic_id))  # 查询过的也加入进去，省得查数据库消耗大
+    my_official_charge_lot_data = await asyncio.to_thread(bos.query_lot_data_by_business_id, dynamic_id)  # 查询充电和官方抽奖
+    if my_official_charge_lot_data:
+        return '已经存在', True
+    my_dynamic_detail: dynAllDetail.__dict__ = await asyncio.to_thread(bos.get_all_dynamic_detail_by_dynamic_id,dynamic_id)  # 查询是否是查过的动态
+    if my_dynamic_detail.get('dynData') or my_dynamic_detail.get('lot_id'):
+        return '此条动态已经查询过了', True
+    my_reserve_dyn_detail = await brs.get_reserve_by_dynamic_id(dynamic_id)  # 查询预约抽奖
+    if my_reserve_dyn_detail:
+        return '预约抽奖已经存在', True
+
+    await BiliLotDataPublisher.pub_upsert_lot_data_by_dynamic_id(
+        dynamic_id,
+        extra_routing_key='fastapi.controller.AddDynamicLotteryByDynamicId'
+    )
+    return '成功添加进后台任务队列', True
+
+
 if __name__ == '__main__':
     async def _test():
-        a= await GetAllLottery(259200,2)
+        a = await BiliLotDataPublisher.pub_upsert_lot_data_by_dynamic_id('994477347862216711')
         print(a)
 
 

@@ -37,6 +37,4 @@ def get_input_str_from_redis():
 
 
 if __name__ == '__main__':
-    while 1:
-        get_input_str_from_redis()
-        time.sleep(5)
+    print(judge_semantic_cls('你好'))

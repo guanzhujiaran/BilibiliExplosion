@@ -3,10 +3,10 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
 from typing import Callable, Union
-from sqlalchemy import create_engine, inspect, select, and_, func
+from sqlalchemy import inspect, select, and_, func
 import CONFIG
+from fastapi接口.log.base_log import reserve_lot_logger
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
-from opus新版官方抽奖.预约抽奖.etc.log.base_log import reserve_lot_log
 
 lock = asyncio.Lock()
 
@@ -17,25 +17,22 @@ def lock_wrapper(func: Callable) -> Callable:
             try:
                 return await func(*args, **kwargs)
             except Exception as e:
-                reserve_lot_log.exception(e)
+                reserve_lot_logger.exception(e)
                 await asyncio.sleep(3)
 
     return wrapper
 
 
-class SqlHelper:
-    __instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if not cls.__instance:
-            cls.__instance = super().__new__(cls)
-        return cls.__instance
-
+class _SqlHelper:
     def __init__(self):
         _SQL_URI = CONFIG.MYSQL.bili_reserve_URI
-        self._engine = create_async_engine(_SQL_URI)
+        self._engine = create_async_engine(_SQL_URI,
+                                           pool_size=50,
+                                           max_overflow=100,
+
+                                           )
         self._session = sessionmaker(
-            self._engine, expire_on_commit=False, class_=AsyncSession
+            self._engine, expire_on_commit=False, class_=AsyncSession,
         )
         self.reserve_info_column_names = [
         ]
@@ -59,7 +56,7 @@ class SqlHelper:
         ret_dict = {}
         for k, v in resp_dict.items():
             if type(v) is dict:
-                ret_dict.update(**SqlHelper.solve_reserve_resp(v))
+                ret_dict.update(**_SqlHelper.solve_reserve_resp(v))
             elif v is None:
                 pass
             else:
@@ -69,13 +66,13 @@ class SqlHelper:
     @lock_wrapper
     async def add_reserve_info_by_resp_dict(self, origin_resp_dict: dict, round_id: int):
         """
-        添加预约信息
+        merge添加预约信息，如果存在就update
         :param resp_dict:
         :return:
         """
         if not self.reserve_info_column_names:
             await self.init()
-        resp_dict = SqlHelper.solve_reserve_resp(origin_resp_dict)
+        resp_dict = _SqlHelper.solve_reserve_resp(origin_resp_dict)
         new_field = list(set(resp_dict.keys()) - set(list(self.reserve_info_column_names)))
         if new_field:
             for k in new_field:
@@ -124,6 +121,14 @@ class SqlHelper:
         async with self._session() as session:
             sql = select(TUpReserveRelationInfo).filter(TUpReserveRelationInfo.ids == ids).order_by(
                 TUpReserveRelationInfo.ids.desc()).limit(1)
+            result = await session.execute(sql)
+            result = result.scalars().first()
+            return result
+
+    @lock_wrapper
+    async def get_reserve_by_dynamic_id(self, dynamic_id) -> Union[TUpReserveRelationInfo, None]:
+        async with self._session() as session:
+            sql = select(TUpReserveRelationInfo).filter(TUpReserveRelationInfo.dynamicId == int(dynamic_id)).limit(1)
             result = await session.execute(sql)
             result = result.scalars().first()
             return result
@@ -208,7 +213,8 @@ class SqlHelper:
             return result.scalars().all()
 
     @lock_wrapper
-    async def get_all_available_reserve_lotterys_by_time(self, limit_time: int, page_number: int = 0, page_size: int = 0) -> \
+    async def get_all_available_reserve_lotterys_by_time(self, limit_time: int, page_number: int = 0,
+                                                         page_size: int = 0) -> \
             tuple[list[TUpReserveRelationInfo], int]:
         """
         获取所有有效的预约抽奖 （按照etime升序排列
@@ -266,11 +272,13 @@ class SqlHelper:
             return result.scalars().first()
 
 
+bili_reserve_sqlhelper = _SqlHelper()
+
+
 # region 测试用代码
 
 async def _test_solve_reserve_resp():
-    b = SqlHelper()
-    print(await b.get_all_available_reserve_lotterys_by_time(0))
+    pass
 
 
 # endregion

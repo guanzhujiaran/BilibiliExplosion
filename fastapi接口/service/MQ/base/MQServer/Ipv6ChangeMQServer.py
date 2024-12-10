@@ -1,6 +1,7 @@
 import json
-from loguru import logger
-from grpc获取动态.Utils.MQServer.BasicMQ import BasicMQServer
+
+from fastapi接口.log.base_log import MQ_logger
+from fastapi接口.service.MQ.base.BasicMQ import BasicMQServer
 from utl.designMode.singleton import Singleton
 
 
@@ -10,7 +11,7 @@ class Ipv6ChangeRabbitMQ(BasicMQServer):
     def __init__(self):
         super().__init__()
         self.q_name = self.CONFIG.RabbitMQConfig.QueueName.ipv6_change.value
-        self.log = logger.bind(user='Ipv6ChangeRabbitMQ')
+        self.log = MQ_logger
 
     def push_ipv6_change(self, origin_ipv6: str, now_ipv6: str):
         try:
@@ -26,6 +27,7 @@ class Ipv6ChangeRabbitMQ(BasicMQServer):
         except Exception as e:
             self.log.error(f"推送ipv6_change数据至MQ失败: {e}")
             self.log.exception(e)
+
 
 if __name__ == '__main__':
     ipv6_change_mq = Ipv6ChangeRabbitMQ.Instance()

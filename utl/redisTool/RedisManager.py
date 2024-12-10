@@ -8,14 +8,16 @@ from enum import Enum
 from CONFIG import CONFIG
 import redis as sync_redis
 
+from fastapi接口.log.base_log import redis_logger
+
 
 def retry(func: Callable) -> Callable:
     async def wrapper(*args, **kwargs):
         while 1:
             try:
                 return await func(*args, **kwargs)
-            except:
-                traceback.print_exc()
+            except Exception as e:
+                redis_logger.exception(e)
                 await asyncio.sleep(3)
 
     return wrapper
@@ -123,6 +125,7 @@ class RedisManagerBase:
             url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True')
         self.RedisTimeout = 30
 
+    # region 字符串操作
     @retry
     async def _get(self, key):
         """
@@ -167,12 +170,20 @@ class RedisManagerBase:
                 async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
                     return await r.setex(name=key, value=value, time=_time)
 
+    # endregion
+
     # region 集合Set操作
     @retry
     async def _sadd(self, set_name, val):
         async with redis.Redis(connection_pool=self.pool) as r:
             async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
                 return await r.sadd(set_name, val)
+
+    @retry
+    async def _sisexist(self, set_name, val):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
+                return await r.sismember(set_name, val)
 
     @retry
     async def _sget_rand(self, set_name):
@@ -212,7 +223,7 @@ class RedisManagerBase:
     async def _zadd(self, key, mapping: dict):
         async with redis.Redis(connection_pool=self.pool) as r:
             async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zadd(key, mapping, )
+                return await r.zadd(key, mapping,)
 
     @retry
     async def _zscore_change(self, key, element, score_change: int):
@@ -234,6 +245,8 @@ class RedisManagerBase:
 
     @retry
     async def _zdel_elements(self, key, *elements_to_remove):
+        if not elements_to_remove:
+            return
         async with redis.Redis(connection_pool=self.pool) as r:
             async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
                 return await r.zrem(key, *elements_to_remove)

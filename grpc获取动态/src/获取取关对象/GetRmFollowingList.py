@@ -5,12 +5,12 @@ import random
 import time
 from datetime import datetime
 from typing import Type, Union
-from loguru import logger
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from Bilibili_methods.all_methods import methods
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import get_rm_following_list_logger
 from grpc获取动态.Utils.GrpcDynamicRespUtils import DynTool, ObjDynInfo
 from utl.代理.grpc_api import BiliGrpc
 from grpc获取动态.src.获取取关对象.db.models import UserInfo, SpaceDyn
@@ -22,7 +22,7 @@ class GetRmFollowingListV1:
     def __init__(self, ):
         self.space_sem = asyncio.Semaphore(50)
         self.sqliteLock = asyncio.Lock()
-        self.logger = logger.bind(user=__name__, filter=lambda record: record["extra"].get('user') == __name__)
+        self.logger = get_rm_following_list_logger
         self.lucky_up_list = []
         self.max_recorded_dyn_num = 300  # 每个uid最多记录多少个动态
         SQLITE_URI = CONFIG.database.followingup_db_RUI
