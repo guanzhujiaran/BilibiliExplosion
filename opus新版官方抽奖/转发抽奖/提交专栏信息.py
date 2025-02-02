@@ -3,7 +3,7 @@ from typing import List
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from grpc获取动态.grpc.bapi.biliapi import get_lot_notice
-from utl.代理 import grpc_api
+from grpc获取动态.grpc.grpc_api import bili_grpc
 from utl.pushme.pushme import pushme
 import time
 from opus新版官方抽奖.Model.OfficialLotModel import LotDetail
@@ -17,30 +17,12 @@ import json
 import asyncio
 from grpc获取动态.src.DynObjectClass import dynAllDetail
 from utl.代理.request_with_proxy import request_with_proxy
-from grpc获取动态.src.SqlHelper import SQLHelper, sql_log
-
-
-class LOTSqlHelper(SQLHelper):
-    """
-    获取抽奖信息用的sql，继承自grpc的SQLHelper
-    """
-
-    def __init__(self):
-        super().__init__()
-
-    @sql_log.catch
-    def get_official_and_charge_lot_not_drawn(self) -> [dict]:
-        ret_list_dict = [row for row in
-                         self.op_lot_table.rows_where(
-                             where='lottery_result is Null and status=0 and business_type!=10',
-                             order_by='lottery_id'
-                         )]
-        return ret_list_dict
+from grpc获取动态.src.SqlHelper import grpc_sql_helper
 
 
 class ExctractOfficialLottery:
     def __init__(self):
-        self.BiliGrpc = grpc_api.BiliGrpc()
+        self.BiliGrpc = bili_grpc
         self.__dir = os.path.dirname(os.path.abspath(__file__))
         self.log_path = os.path.join(self.__dir, 'log')
         self.result_path = os.path.join(self.__dir, 'result')
@@ -58,7 +40,7 @@ class ExctractOfficialLottery:
         self.stop_flag = False
         self.stop_flag_lock = threading.Lock()
 
-        self.sql = LOTSqlHelper()
+        self.sql = grpc_sql_helper
         self.proxy_request = request_with_proxy()
         self.log = official_lot_logger
         self.__no_lot_timer = 0
@@ -151,8 +133,9 @@ class ExctractOfficialLottery:
 
         return newly_updated_lot_data
 
-    async def get_lot_dict(self, all_lots: [LotDetail], latest_lots_judge_ts=20 * 3600) -> tuple[
-        list[dict], list[dict], list[dict], list[dict]]:
+    async def get_lot_dict(self, all_lots: [LotDetail], latest_lots_judge_ts=20 * 3600, is_api_update: bool = True) -> \
+            tuple[
+                list[dict], list[dict], list[dict], list[dict]]:
         """
         获取最新的抽奖的dict
         :param latest_lots_judge_ts: 判断更新抽奖的间隔时间
@@ -165,9 +148,10 @@ class ExctractOfficialLottery:
         # 获取到的更新抽奖的lot_id
         if len(update_lots_lot_ids) == len(all_lots):
             update_lots_lot_ids = []
-
-        freshed_all_lot_datas = await self.update_lot_notice(all_lots)  # 更新抽奖
-
+        if is_api_update:
+            freshed_all_lot_datas = await self.update_lot_notice(all_lots)  # 更新抽奖
+        else:
+            freshed_all_lot_datas = all_lots
         self.log.info(f'更新完成，当前抽奖剩余{len(freshed_all_lot_datas)}条')
         all_lot_official_data = [x for x in freshed_all_lot_datas if
                                  x['status'] != 2 and x['status'] != -1 and x['business_type'] == 1]
@@ -313,19 +297,25 @@ class ExctractOfficialLottery:
                 task_list.append(task)
         await asyncio.gather(*task_list)
 
-    async def get_all_lots(self, latest_lots_judge_ts=20 * 3600) -> tuple[
+    async def get_all_lots(self, latest_lots_judge_ts=20 * 3600, is_api_update: bool = True) -> tuple[
         List[LotDetail], List[LotDetail], List[LotDetail], List[LotDetail]]:
         """
         已经排除了开奖了的和失效了的抽奖了
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
         all_official_lots_undrawn = self.sql.get_official_and_charge_lot_not_drawn()
-        all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data = await self.get_lot_dict(
-            all_official_lots_undrawn, latest_lots_judge_ts)  # 更新抽奖信息
+        all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data = \
+            await self.get_lot_dict(
+                all_official_lots_undrawn,
+                latest_lots_judge_ts,
+                is_api_update=is_api_update
+            )  # 更新抽奖信息
         official_lot_dynamic_ids = [x['business_id'] for x in all_lot_official_data if x['status'] != 2]
         charge_lot_dynamic_ids = [x['business_id'] for x in all_lot_charge_data if x['status'] != 2]
-        await self.get_and_update_all_details_by_dynamic_id_list(
-            [official_lot_dynamic_ids.extend(charge_lot_dynamic_ids)])  # 更新抽奖的动态
+        if is_api_update:
+            await self.get_and_update_all_details_by_dynamic_id_list(
+                [official_lot_dynamic_ids.extend(charge_lot_dynamic_ids)]
+            )  # 更新抽奖的动态
 
         all_official_lot_detail_result: list[LotDetail] = self.construct_lot_detail(all_lot_official_data, True)
         all_official_lot_detail: list[LotDetail] = [x for x in all_official_lot_detail_result]
@@ -340,8 +330,12 @@ class ExctractOfficialLottery:
 
         return all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail
 
-    async def main(self, latest_lots_judge_ts: int = 20 * 3600, force_push: bool = False, debug_mode: bool = False) -> \
-            tuple[list[LotDetail], list[LotDetail]]:
+    async def main(
+            self,
+            latest_lots_judge_ts: int = 20 * 3600,
+            force_push: bool = False,
+            debug_mode: bool = False
+    ) -> tuple[list[LotDetail], list[LotDetail]]:
         """
          函数入口
         :param debug_mode:
@@ -383,6 +377,17 @@ class ExctractOfficialLottery:
                f'\n充电抽奖：{len(all_charge_lot_detail)}个，最后更新的：{len(latest_charge_lot_detail)}个'
                f'\n更新内容：\n{[x.__dict__ for x in latest_official_lot_detail]}\n{[x.__dict__ for x in latest_charge_lot_detail]}')
 
+        return latest_official_lot_detail, latest_charge_lot_detail
+
+    async def save_article(self, latest_lots_judge_ts: int = 20 * 3600, abstract: str = ''):
+        self.log.debug(f'开始提取官方抽奖和充电抽奖专栏信息！')
+        all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail = await self.get_all_lots(
+            latest_lots_judge_ts,
+            is_api_update=False
+        )  # 获取并更新抽奖信息！
+        gc = GenerateOfficialLotCv('', '', '', '', abstract=abstract)
+        gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
+        gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
         return latest_official_lot_detail, latest_charge_lot_detail
 
 

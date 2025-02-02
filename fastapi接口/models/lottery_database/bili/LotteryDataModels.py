@@ -1,18 +1,20 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import Field
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
 
-class reserveInfo(BaseModel):
+class reserveInfo(CustomBaseModel):
     reserve_url: str  # 空间动态链接 like https://space.bilibili.com/1927279531
     lottery_prize_info: str  # 奖品名称
     etime: int  # 结束时间(秒)
     jump_url: str  # 单独抽奖的跳转链接，like https://www.bilibili.com/h5/lottery/result?business_id=3640758&business_type=10
     reserve_sid: int  # 直播预约sid
     available: bool  # 预约是否正常存在
+
 
 class ReserveInfoResp(reserveInfo):
-    app_sche:str
+    app_sche: str
     reserve_url: str  # 空间动态链接 like https://space.bilibili.com/1927279531
     lottery_prize_info: str  # 奖品名称
     etime: int  # 结束时间(秒)
@@ -20,7 +22,8 @@ class ReserveInfoResp(reserveInfo):
     reserve_sid: int  # 直播预约sid
     available: bool  # 预约是否正常存在
 
-class CommonLotteryResp(BaseModel):
+
+class CommonLotteryResp(CustomBaseModel):
     dynId: str
     dynamicUrl: str
     authorName: str
@@ -40,17 +43,7 @@ class CommonLotteryResp(BaseModel):
     hashTag: str
 
 
-class OfficialLotteryResp(BaseModel):
-    jump_url:str
-    app_sche:str
-    lottery_text: str
-    lottery_time: int
-    dynId: str
-    sender_uid: str
-    lottery_id: int
-
-
-class ChargeLotteryResp(BaseModel):
+class OfficialLotteryResp(CustomBaseModel):
     jump_url: str
     app_sche: str
     lottery_text: str
@@ -58,36 +51,63 @@ class ChargeLotteryResp(BaseModel):
     dynId: str
     sender_uid: str
     lottery_id: int
-    upower_level_str:str
 
-class TopicLotteryResp(BaseModel):
+
+class ChargeLotteryResp(CustomBaseModel):
     jump_url: str
-    app_sche:str
+    app_sche: str
+    lottery_text: str
+    lottery_time: int
+    dynId: str
+    sender_uid: str
+    lottery_id: int
+    upower_level_str: str
+
+
+class TopicLotteryResp(CustomBaseModel):
+    jump_url: str
+    app_sche: str
     title: str
     end_date_str: str
     lot_type_text: str
     lottery_pool_text: str
-    lottery_sid:Optional[str]
+    lottery_sid: Optional[str]
 
-class LiveLotteryResp(BaseModel):
+
+class LiveLotteryResp(CustomBaseModel):
     live_room_url: str
     app_schema: str
     award_name: str
     type: str
-    end_time:int
+    end_time: int
     total_price: int
-    danmu:str
+    danmu: str
     anchor_uid: int
-    room_id:int
+    room_id: int
     lot_id: int
-    require_type:int
+    require_type: int
 
 
-class AllLotteryResp(BaseModel):
+class AllLotteryResp(CustomBaseModel):
     common_lottery: list[CommonLotteryResp] = Field(..., description="一般抽奖")
     must_join_common_lottery: list[CommonLotteryResp] = Field(..., description="必抽的一般抽奖")
-    reserve_lottery: list[reserveInfo]= Field(..., description="必抽的预约抽奖")
-    official_lottery: list[OfficialLotteryResp]= Field(..., description="必抽的官方抽奖")
+    reserve_lottery: list[reserveInfo] = Field(..., description="必抽的预约抽奖")
+    official_lottery: list[OfficialLotteryResp] = Field(..., description="必抽的官方抽奖")
 
-class AddDynamicLotteryReq(BaseModel):
-    dynamic_id_or_url:str
+
+class AddDynamicLotteryReq(CustomBaseModel):
+    dynamic_id_or_url: str
+
+
+class BulkAddDynamicLotteryReq(CustomBaseModel):
+    dynamic_id_or_urls: list[str]
+
+
+class BulkAddDynamicLotteryRespItem(CustomBaseModel):
+    dynamic_id: str
+    msg: str
+    is_succ: bool
+
+
+class AddTopicLotteryReq(CustomBaseModel):
+    topic_id: int | str

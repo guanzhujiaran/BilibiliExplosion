@@ -48,7 +48,6 @@ def parse_dict(d: dict, dump_key: str = ''):
 
 
 class SQLHelper:
-
     def __init__(self, db_path: str = CONFIG.database.dynDetail,
                  main_table_name: str = 'biliDynDetail'):
         self.main_table_name = main_table_name
@@ -428,6 +427,14 @@ INNER JOIN biliDynDetail t2 ON t1.rid = t2.rid + 1;"""
             self.op_lot_table.insert(record=lot_data_dict)
             return {'mode': 'insert'}
     # endregion
+    @lock_wrapper
+    def get_official_and_charge_lot_not_drawn(self) -> [dict]:
+        ret_list_dict = [row for row in
+                         self.op_lot_table.rows_where(
+                             where='lottery_result is Null and status=0 and business_type!=10',
+                             order_by='lottery_id'
+                         )]
+        return ret_list_dict
 
 
 grpc_sql_helper = SQLHelper()

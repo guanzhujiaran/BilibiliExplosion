@@ -6,8 +6,8 @@ import json
 import os
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import space_monitor_logger
-from utl.代理.grpc_api import BiliGrpc
 from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
+from grpc获取动态.grpc.grpc_api import bili_grpc
 
 log = space_monitor_logger
 
@@ -36,8 +36,7 @@ class monitor:
                     if info.get('uid') == uid:
                         self.monitor_uid_list.remove(info)
                         break
-
-        self.grpc_api = BiliGrpc()
+        self.grpc_api = bili_grpc
         self.sep_time = 3 * 60  # 间隔时间3分钟，一天总共获取20 * 24 = 480次，间隔比较适中
         self.lock = threading.Lock()
 

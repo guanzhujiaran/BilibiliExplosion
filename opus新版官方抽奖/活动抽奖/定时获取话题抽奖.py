@@ -2,22 +2,23 @@
 import os.path
 import traceback
 from typing import Union
-import pydantic
 import asyncio
 import time
 from datetime import datetime, timedelta
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from fastapi接口.log.base_log import topic_lot_logger
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 from opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import ExtractTopicLottery
 from opus新版官方抽奖.活动抽奖.话题抽奖.robot import TopicRobot
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
+
 log = topic_lot_logger
 
+topic_robot: TopicRobot | None = None
 
-class pubArticleInfo(pydantic.BaseModel):
+
+class pubArticleInfo(CustomBaseModel):
     lastPubDate: Union[datetime, None] = None
     shouldPubHour: int = 20  # 每天发布的专栏的事件
     start_ts: int = int(time.time())
@@ -70,17 +71,17 @@ class pubArticleInfo(pydantic.BaseModel):
 @async_pushme_try_catch_decorator
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     '''
-    todo 这个地方需要修改
     :param pub_article_info:
     :param schedule_mark:
     :return:
     '''
-    d = TopicRobot()
+    global topic_robot
+    topic_robot = TopicRobot()
     if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
-        d.sem = asyncio.Semaphore(30)
+        topic_robot.sem = asyncio.Semaphore(30)
     else:
-        d.sem = asyncio.Semaphore(15)
-    await d.main()
+        topic_robot.sem = asyncio.Semaphore(15)
+    await topic_robot.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
         e = ExtractTopicLottery()
@@ -112,8 +113,11 @@ def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticle
         """
             每隔三个小时获取一次全部图片动态
         """
+
+
 @async_pushme_try_catch_decorator
-async def async_run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool,*args, **kwargs):
+async def async_run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool,
+                    *args, **kwargs):
     delta_hour = 8
     try:
         await main(pub_article_info, schedule_mark)
@@ -123,7 +127,7 @@ async def async_run(schedulers: Union[None, BlockingScheduler], pub_article_info
         pushme(f'定时发布话题抽奖专栏任务出错', f'{traceback.format_exc()}')
     if schedule_mark and schedulers:
         next_job = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
-                                     run_date=datetime.now() + timedelta(hours=delta_hour))
+                                      run_date=datetime.now() + timedelta(hours=delta_hour))
         log.info(f"任务结束，等待下一次{next_job.trigger}执行。")
         """
             每隔三个小时获取一次全部图片动态
@@ -146,8 +150,12 @@ def schedule_get_topic_lot_main(schedule_mark: bool = True, show_log: bool = Tru
         # cron_str = '0 20 * * *'
         # crontrigger = CronTrigger.from_crontab(cron_str)
         schedulers = BlockingScheduler()
-        job = schedulers.add_job(run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
-                                 run_date=datetime.now(), misfire_grace_time=360)
+        job = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
+                                 run_date=(pub_article_info.lastPubDate + timedelta(
+                                     hours=8)) if pub_article_info.lastPubDate and (
+                                         pub_article_info.lastPubDate + timedelta(
+                                     hours=8)) > datetime.now() else datetime.now() + timedelta(hours=2),
+                                 misfire_grace_time=360)
         log.info(
             f'使用内置定时器,开启定时任务,等待时间（{job.trigger}）到达后执行')
         schedulers.start()
@@ -170,9 +178,13 @@ async def async_schedule_get_topic_lot_main(schedule_mark: bool = True, show_log
         # crontrigger = CronTrigger.from_crontab(cron_str)
         schedulers = AsyncIOScheduler()
         job = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
-                                 run_date=datetime.now(), misfire_grace_time=360)
+                                 run_date=(pub_article_info.lastPubDate + timedelta(
+                                     hours=8)) if pub_article_info.lastPubDate and (
+                                         pub_article_info.lastPubDate + timedelta(
+                                     hours=8)) > datetime.now() else datetime.now() + timedelta(minutes=1),
+                                 misfire_grace_time=360)
         log.info(
-            f'使用内置定时器,开启定时任务,等待时间（{job.trigger}）到达后执行')
+            f'【B站话题抽奖】使用内置定时器,开启定时任务,等待时间（{job.trigger}）到达后执行')
         schedulers.start()
     else:
         await async_run(None, pub_article_info, schedule_mark)

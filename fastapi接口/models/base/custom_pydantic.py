@@ -1,12 +1,13 @@
-from pydantic import BaseModel, Field, Extra
+from typing import Optional
+
+from pydantic import BaseModel, Field, Extra, ConfigDict
 
 
 class CustomBaseModel(BaseModel):
-    extra_fields: dict = Field(default_factory=dict, exclude=True)
-
-    class Config:
-        # 设置为忽略多余字段
-        extra = 'ignore'
+    extra_fields: Optional[dict] = Field(default_factory=dict, exclude=True)
+    model_config = ConfigDict(
+        extra='ignore',
+    )
 
     def __init__(self, **data):
         # 初始化模型，将多余字段存入 extra_fields 中

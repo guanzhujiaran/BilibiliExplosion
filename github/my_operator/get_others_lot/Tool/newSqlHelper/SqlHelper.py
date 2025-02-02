@@ -6,8 +6,7 @@ import traceback
 from typing import Union, Callable
 from fastapi接口.log.base_log import get_others_lot_logger
 from sqlalchemy import AsyncAdaptedQueuePool, select, and_, func
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession,async_sessionmaker
 from github.my_operator.get_others_lot.Tool.newSqlHelper.models import *
 
 from CONFIG import CONFIG
@@ -27,29 +26,15 @@ def lock_wrapper(func: Callable) -> Callable:
     return wrapper
 
 
-class SqlHelper:
-    __instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if not cls.__instance:
-            cls.__instance = super().__new__(cls)
-        return cls.__instance
-
+class __SqlHelper:
     def __init__(self):
         SQLITE_URI = CONFIG.database.MYSQL.get_other_lot_URI
         self.op_db_lock = asyncio.Lock()
         self._engine = create_async_engine(
             SQLITE_URI,
-            echo=False,
-            poolclass=AsyncAdaptedQueuePool,
-            pool_size=100,
-            max_overflow=100,
-            pool_recycle=3600,
-            future=True,
-            pool_pre_ping=True,
+            **CONFIG.sql_alchemy_config.engine_config
         )
-        self._session = sessionmaker(self._engine,
-                                     class_=AsyncSession,
+        self._session =  async_sessionmaker(self._engine,
                                      expire_on_commit=False,
                                      )
 
@@ -265,11 +250,10 @@ class SqlHelper:
                 ret = res.scalars().first()
                 return ret
 
-
+SqlHelper = __SqlHelper()
 async def __test__():
-    a = SqlHelper()
 
-    result = await a.getAllLotDynByLotRoundNum(
+    result = await SqlHelper.getAllLotDynByLotRoundNum(
         1,1000,10
     )
     print([x.__dict__ for x in result])

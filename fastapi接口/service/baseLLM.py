@@ -4,7 +4,7 @@ from datetime import datetime
 
 from CONFIG import CONFIG
 from langchain_openai import ChatOpenAI
-from fastapi接口.models.v1.ChatGpt3_5.ReplySingleModel import OpenAiClientModel
+from fastapi接口.models.v1.ChatGpt3_5.ReplySingleModel import OpenAiClientModel, LLMShowInfo
 
 
 class BaseLLM:
@@ -16,10 +16,19 @@ class BaseLLM:
         )
         for x in CONFIG.chat_gpt_configs
     ]
+
+    def show_openai_client(self):
+        available_num = 0
+        for i in self._OpenAiclients:
+            if i.isAvailable:
+                available_num += 1
+        _ = LLMShowInfo(available_num=available_num, total_num=len(self._OpenAiclients))
+        _.llm_list = self._OpenAiclients
+        return _
+
     @property
     def OpenAIClient(self) -> OpenAiClientModel:
         for i in self._OpenAiclients:
-
             if i.isAvailable:
                 i.useNum += 1
                 return i
@@ -43,8 +52,11 @@ class BaseLLM:
                 if i.get('baseurl') in u_list:
                     continue
                 self._OpenAiclients.append(OpenAiClientModel(
-                    OpenAiclient=ChatOpenAI(openai_api_key=i.get('open_ai_api_key'), openai_api_base=i.get('baseurl'),
-                                            model_name="gpt-3.5-turbo"),
+                    OpenAiclient=ChatOpenAI(
+                        openai_api_key=i.get('open_ai_api_key'),
+                        openai_api_base=i.get('baseurl'),
+                        model_name="gpt-3.5-turbo"),
+                    base_url=i.get('baseurl'),
                 ))
         else:
             with open(file_path, 'w', encoding='utf-8') as f:

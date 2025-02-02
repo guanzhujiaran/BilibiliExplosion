@@ -1,14 +1,14 @@
-from pydantic import BaseModel, Extra
 from typing import Optional, List
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
 
-class EraTaskIndicator(BaseModel):
+class EraTaskIndicator(CustomBaseModel):
     cur_value: int
     limit: int
     name: Optional[str] = ''
 
 
-class EraTaskCheckPoint(BaseModel):
+class EraTaskCheckPoint(CustomBaseModel):
     alias: str
     awardname: str
     awardsid: str
@@ -19,12 +19,12 @@ class EraTaskCheckPoint(BaseModel):
     ztasksid: str
 
 
-class EraLotteryConfigGift(BaseModel):
+class EraLotteryConfigGift(CustomBaseModel):
     id: str
     name: str
 
 
-class EraTask(BaseModel):
+class EraTask(CustomBaseModel):
     """
     话题抽奖任务
     """
@@ -53,7 +53,7 @@ class EraTask(BaseModel):
     topicName: Optional[str] = ""
 
 
-class EraLotteryConfig(BaseModel):
+class EraLotteryConfig(CustomBaseModel):
     """
     话题抽奖内容
     """
@@ -66,14 +66,14 @@ class EraLotteryConfig(BaseModel):
     point_name: str
 
 
-class EraVideoSourcePool(BaseModel):
+class EraVideoSourcePool(CustomBaseModel):
     bonus: Optional[str] = ""
     label: str
     rule: Optional[str] = ""
     value: int
 
 
-class EraVideoSourceCONFIG(BaseModel):
+class EraVideoSourceCONFIG(CustomBaseModel):
     """
     视频投稿播放量瓜分现金活动
     """
@@ -84,7 +84,7 @@ class EraVideoSourceCONFIG(BaseModel):
 
 
 # region h5抽奖类
-class H5ActivityLotteryGiftSource(BaseModel):
+class H5ActivityLotteryGiftSource(CustomBaseModel):
     id: int
     img_url: str
     least_mark: int
@@ -92,7 +92,7 @@ class H5ActivityLotteryGiftSource(BaseModel):
     type: int
 
 
-class H5ActivityLottery(BaseModel):
+class H5ActivityLottery(CustomBaseModel):
     """
     activity的转盘抽奖
     """
@@ -103,12 +103,12 @@ class H5ActivityLottery(BaseModel):
 
 # endregion
 
-class MatchLotteryTask(BaseModel):
+class MatchLotteryTask(CustomBaseModel):
     """
     赛事抽奖任务
     """
 
-    class TaskImg(BaseModel):
+    class TaskImg(CustomBaseModel):
         url: str
         height: int
         width: int
@@ -124,12 +124,12 @@ class MatchLotteryTask(BaseModel):
     url: Optional[str] = ""
 
 
-class MatchLottery(BaseModel):
+class MatchLottery(CustomBaseModel):
     lottery_id: str
     activity_id: str
 
 
-class EvaContainerTruck(BaseModel):
+class EvaContainerTruck(CustomBaseModel):
     """
     集卡活动
     """

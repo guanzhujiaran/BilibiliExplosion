@@ -1,14 +1,15 @@
 import asyncio
 
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataMQ import OfficialReserveChargeLotMQ, \
-    UpsertOfficialReserveChargeLotMQ, UpsertLotDataByDynamicIdMQ
+    UpsertOfficialReserveChargeLotMQ, UpsertLotDataByDynamicIdMQ, UpsertTopicLotMQ
 
 
 def run_mq_consumer():
     tasks = [
         asyncio.create_task(OfficialReserveChargeLotMQ.create_consumer()),
         asyncio.create_task(UpsertOfficialReserveChargeLotMQ.create_consumer()),
-        asyncio.create_task(UpsertLotDataByDynamicIdMQ.create_consumer())
+        asyncio.create_task(UpsertLotDataByDynamicIdMQ.create_consumer()),
+        asyncio.create_task(UpsertTopicLotMQ.create_consumer()),
     ]
     # 等待所有任务完成
     return tasks

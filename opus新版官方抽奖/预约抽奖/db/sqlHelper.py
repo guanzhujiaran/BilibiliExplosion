@@ -1,10 +1,10 @@
 import time
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker, InstrumentedAttribute
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine,async_sessionmaker
+from sqlalchemy.orm import InstrumentedAttribute
 from typing import Callable, Union
 from sqlalchemy import inspect, select, and_, func
-import CONFIG
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import reserve_lot_logger
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 
@@ -25,13 +25,11 @@ def lock_wrapper(func: Callable) -> Callable:
 
 class _SqlHelper:
     def __init__(self):
-        _SQL_URI = CONFIG.MYSQL.bili_reserve_URI
+        _SQL_URI = CONFIG.database.MYSQL.bili_reserve_URI
         self._engine = create_async_engine(_SQL_URI,
-                                           pool_size=50,
-                                           max_overflow=100,
-
+                                           **CONFIG.sql_alchemy_config.engine_config
                                            )
-        self._session = sessionmaker(
+        self._session = async_sessionmaker(
             self._engine, expire_on_commit=False, class_=AsyncSession,
         )
         self.reserve_info_column_names = [

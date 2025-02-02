@@ -2,13 +2,13 @@
 import os.path
 import traceback
 from typing import Union
-from pydantic import BaseModel
 import asyncio
 import time
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
 from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExctractOfficialLottery
 from grpc获取动态.src.getDynDetail import DynDetailScrapy
@@ -20,7 +20,7 @@ log = official_lot_logger
 dyn_detail_scrapy: DynDetailScrapy | None = None
 
 
-class pubArticleInfo(BaseModel):
+class pubArticleInfo(CustomBaseModel):
     lastPubDate: Union[datetime, None] = None
     shouldPubHour: int = 20  # 每天发布的专栏的事件
     start_ts: int = int(time.time())

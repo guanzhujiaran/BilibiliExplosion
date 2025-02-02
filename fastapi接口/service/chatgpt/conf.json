@@ -31,6 +31,10 @@
         {
             "baseurl": "https://ngedlktfticp.cloud.sealos.io/v1",
             "open_ai_api_key": "sk-qKvrmwYHeuYMPhepD8E48d71A4Fa4353Aa13082331243e25"
+        },
+          {
+            "baseurl": "http://127.0.0.1:1234/v1",
+            "open_ai_api_key": "114514"
         }
     ]
 }

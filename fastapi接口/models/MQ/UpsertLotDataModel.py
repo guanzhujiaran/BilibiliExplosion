@@ -2,6 +2,8 @@ from typing import Optional
 
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
+class TopicLotData(CustomBaseModel):
+    topic_id:int|str
 
 class LotDataReq(CustomBaseModel):
     business_type: int | str

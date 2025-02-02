@@ -14,6 +14,14 @@ from utl.加密.wbi加密 import get_wbi_params
 
 class GenerateCvBase:
     def __init__(self, cookie, ua, csrf, buvid):
+        """
+
+        :param cookie:
+        :param ua:
+        :param csrf:
+        :param buvid:
+        :param abstract: 摘要，放在所有的生成文章的最前面
+        """
         self.csrf = csrf
         self.buvid = buvid
         self.ua = ua

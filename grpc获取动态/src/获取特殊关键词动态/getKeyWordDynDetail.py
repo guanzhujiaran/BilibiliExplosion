@@ -4,7 +4,7 @@ import time
 import pandas as pd
 import Bilibili_methods.all_methods
 from grpc获取动态.src.DynObjectClass import lotDynData
-from grpc获取动态.src.SqlHelper import SQLHelper
+from grpc获取动态.src.SqlHelper import grpc_sql_helper
 
 """
 使用reg查询动态保存下来
@@ -17,7 +17,7 @@ class SearchKeyWordDyn:
         self.BAPI = Bilibili_methods.all_methods.methods()
         if not os.path.exists('result'):
             os.makedirs('result')
-        self.sql = SQLHelper()
+        self.sql = grpc_sql_helper
 
     def flatten_dict(self, d: dict, parent_key='', sep='.'):
         """

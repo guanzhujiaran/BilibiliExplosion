@@ -4,15 +4,17 @@ import os
 from datetime import datetime
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import reserve_lot_logger
-from opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import rid_get_dynamic
+from opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import ReserveScrapyRobot
 from opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import submit_reserve__lot_main
 from utl.pushme.pushme import pushme_try_catch_decorator, async_pushme_try_catch_decorator
 
+reserve_robot = None
+
 
 async def main():
-    rid_run = rid_get_dynamic()
-    await rid_run.init()
-    await rid_run.get_dynamic_with_thread()
+    global reserve_robot
+    reserve_robot = ReserveScrapyRobot()
+    await reserve_robot.get_dynamic_with_thread()
 
     await submit_reserve__lot_main(is_post=True)
 
@@ -53,6 +55,7 @@ def schedule_get_reserve_lot_main(schedule_mark: bool = True, show_log: bool = T
     else:
         sync_main()
 
+
 @async_pushme_try_catch_decorator
 async def async_schedule_get_reserve_lot_main(schedule_mark: bool = True, show_log: bool = True):
     reserve_lot_logger.info('启动获取预约抽奖程序！！！')
@@ -78,6 +81,7 @@ async def async_schedule_get_reserve_lot_main(schedule_mark: bool = True, show_l
         schedulers.start()
     else:
         await main()
+
 
 if __name__ == '__main__':
     schedule_get_reserve_lot_main()

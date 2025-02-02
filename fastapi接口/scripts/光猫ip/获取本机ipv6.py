@@ -6,7 +6,6 @@ import base64
 from selenium.webdriver.common.by import By
 from selenium.webdriver.edge import webdriver, options
 from selenium.webdriver.edge.service import Service
-
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import ipv6_monitor_logger
 
@@ -188,7 +187,7 @@ class ipv6Obj:
                 return ipv6_prefix
             except Exception as e:
                 self.edge.close()
-                ipv6_monitor_logger.exception(e)
+                ipv6_monitor_logger.exception(f'selenium获取ipv6失败！{e}')
                 await asyncio.sleep(30)
 
     def get_ipv6_prefix_from_selenium(self):
@@ -207,7 +206,6 @@ class ipv6Obj:
             driver.switch_to.default_content()
             return Tbl_WANstauts1_text.split('\n')[9].replace("前缀 ", "")
 
-
         self.init_browser()
         driver = self.edge
 
@@ -215,7 +213,6 @@ class ipv6Obj:
         if driver.current_url != 'http://192.168.1.1/':
             login()
         return get_ipv6_prefix()
-
 
 
 if __name__ == '__main__':

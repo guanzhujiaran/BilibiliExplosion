@@ -1,9 +1,7 @@
 from typing import List
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
-from pydantic import BaseModel
-
-
-class GeetestDetectPicReq(BaseModel):
+class GeetestDetectPicReq(CustomBaseModel):
     """
     请求内容
     """
@@ -11,7 +9,7 @@ class GeetestDetectPicReq(BaseModel):
     ts: int
 
 
-class GeetestDetectPicRes(BaseModel):
+class GeetestDetectPicRes(CustomBaseModel):
     """
     ai回复内容
     """

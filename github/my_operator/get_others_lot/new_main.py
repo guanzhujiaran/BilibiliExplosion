@@ -12,13 +12,12 @@ from enum import Enum
 from typing import Dict, Any, Union
 import subprocess
 from functools import partial
-
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from grpc获取动态.grpc.bapi.biliapi import proxy_req, get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
-import execjs
+from py_mini_racer import MiniRacer
 from fastapi接口.log.base_log import get_others_lot_logger as get_others_lot_log
 from CONFIG import CONFIG
 from github.my_operator.get_others_lot.Tool.newSqlHelper.models import TLotuserspaceresp, TLotdyninfo, TLotuserinfo, \
@@ -169,7 +168,7 @@ def writeIntoFile(write_in_list: list[Any], filePath, write_mode='w', sep=','):
         get_others_lot_log.critical(f'写入文件失败！\n{e}')
 
 
-class GetOthersLotDyn:
+class GetOthersLotDynRobot:
     """
     获取其他人的抽奖动态
     """
@@ -182,7 +181,7 @@ class GetOthersLotDyn:
         self.nowRound: TLotmaininfo = TLotmaininfo()
         self.aid_list = []
         self.fake_cookie = True
-        self.sqlHlper = SqlHelper()
+        self.sqlHlper = SqlHelper
         self.username = ''
         self.nonLotteryWords = ['分享视频', '分享动态']
         self.cookie3 = gl.get_value('cookie3')  # 斯卡蒂
@@ -194,7 +193,8 @@ class GetOthersLotDyn:
         self.username3 = gl.get_value('uname3')
         self.all_followed_uid = []
         self.SpareTime = 86400 * 5  # 多少时间以前的就不获取别人的动态了
-        self.manual_reply_judge = execjs.compile("""
+        ctx = MiniRacer()
+        self.manual_reply_judge = ctx.eval("""
                 manual_reply_judge= function (dynamic_content) {
         					//判断是否需要人工回复 返回true需要人工判断  返回null不需要人工判断
         					//64和67用作判断是否能使用关键词回复
@@ -521,7 +521,7 @@ class GetOthersLotDyn:
         						manual_re77
         					);
         				}
-                    """)
+                    """, )
         self.highlight_word_list = [
             'jd卡',
             '京东卡',
@@ -671,14 +671,13 @@ class GetOthersLotDyn:
                     })
             get_others_lot_log.info(f'上次获取的动态：{self.queriedData.queryUserInfo}')
         except Exception as e:
-            get_others_lot_log.exception(f'获取b站用户的配置失败！使用默认内容！{e}')
+            get_others_lot_log.exception(f'加载【获取过动态的b站用户】数据失败！')
 
         if os.path.exists(FileMap.uidlist_json):
             try:
                 with open(FileMap.uidlist_json) as f:
                     self.queryingData.uidlist = json.load(f).get('uidlist')
                     self.queryingData.uidlist = list(set(self.queryingData.uidlist))
-                    self.queriedData.uidlist = self.queryingData.uidlist
             except Exception as e:
                 get_others_lot_log.exception(f'获取抽奖用户uid列表失败，使用默认配置！{e}')
         else:
@@ -892,7 +891,7 @@ class GetOthersLotDyn:
         n = 0
         first_get_dynamic_falg = True
         origin_offset = 0
-        LotUserInfo: TLotuserinfo = await self.sqlHlper.getLotUserInfoByUid(uid)
+        lot_user_info: TLotuserinfo = await self.sqlHlper.getLotUserInfoByUid(uid)
 
         if secondRound:
             newest_space_offset = await self.sqlHlper.getNewestSpaceDynInfoByUid(uid)
@@ -903,15 +902,15 @@ class GetOthersLotDyn:
                 if int(time.time() - dynamic_calculated_ts) < 2 * 3600 or int(time.time() - updatetime_ts) < 2 * 3600:
                     get_others_lot_log.info(f'{uid} 距离上次获取抽奖不足2小时，跳过')
                     return
-        if LotUserInfo:
+        if lot_user_info:
             if not self.isPreviousRoundFinished:  # 如果上一轮抽奖没有完成
-                origin_offset = LotUserInfo.latestFinishedOffset
+                origin_offset = lot_user_info.latestFinishedOffset
         else:
-            LotUserInfo = TLotuserinfo(
+            lot_user_info = TLotuserinfo(
                 uid=uid,
                 isPubLotUser=isPubLotUser
             )
-            await self.sqlHlper.addLotUserInfo(LotUserInfo)
+            await self.sqlHlper.addLotUserInfo(lot_user_info)
         if uid not in self.queryingData.uidlist:
             self.queryingData.uidlist.append(uid)
         if uid not in self.queriedData.uidlist:
@@ -943,8 +942,8 @@ class GetOthersLotDyn:
                 dyreq_dict = await get_space_dynamic_req_with_proxy(uid, offset)
                 dyreq_dict = await addSpaceCardToDb(dyreq_dict)
             try:
-                if dyreq_dict.get('data').get('items'):
-                    uname = dyreq_dict.get('data').get('items')[0].get('modules').get('module_author').get('name')
+                if dynamic_items := dyreq_dict.get('data').get('items'):
+                    uname = dynamic_items[0].get('modules').get('module_author').get('name')
             except Exception as e:
                 get_others_lot_log.error(f'获取空间动态用户名失败！{dyreq_dict}')
                 get_others_lot_log.exception(e)
@@ -989,10 +988,10 @@ class GetOthersLotDyn:
                 await self.sqlHlper.addLotUserInfo(
                     TLotuserinfo(uid=uid, uname=uname,
                                  updateNum=self.queryingData.queryUserInfo.get(str(uid)).update_num,
-                                 updatetime=LotUserInfo.updatetime,
+                                 updatetime=lot_user_info.updatetime,
                                  isUserSpaceFinished=0,
                                  offset=offset,
-                                 latestFinishedOffset=LotUserInfo.latestFinishedOffset,
+                                 latestFinishedOffset=lot_user_info.latestFinishedOffset,
                                  isPubLotUser=isPubLotUser
                                  ))
                 if len(timelist) == 0:
@@ -1024,10 +1023,10 @@ class GetOthersLotDyn:
             uname=uname,
             updateNum=self.queryingData.queryUserInfo.get(str(uid)).update_num if self.queryingData.queryUserInfo.get(
                 str(uid)) else 0,
-            updatetime=datetime.datetime.now() if origin_offset == "" else LotUserInfo.updatetime,
+            updatetime=datetime.datetime.now() if origin_offset == "" else lot_user_info.updatetime,
             isUserSpaceFinished=1,
             offset=offset,
-            latestFinishedOffset=offset if not secondRound else LotUserInfo.latestFinishedOffset,
+            latestFinishedOffset=offset if not secondRound else lot_user_info.latestFinishedOffset,
             isPubLotUser=isPubLotUser
         ))
         # if 1==1:
@@ -1065,7 +1064,7 @@ class GetOthersLotDyn:
             if len(task_doing) == 0:
                 break
             else:
-                get_others_lot_log.debug(f'当前正在获取用户空间的任务数量：{len(task_doing)}/{len(tasks)}')
+                get_others_lot_log.debug(f'当前正在获取用户空间的任务数量：{len(task_doing)}（正在执行的数量）/{len(tasks)}（所有任务数量）')
             await asyncio.sleep(5)
         await asyncio.gather(*tasks, return_exceptions=False)
         return self.spaceRecordedDynamicIdList
@@ -1075,10 +1074,10 @@ class GetOthersLotDyn:
 
     async def thread_judgedynamic(self, write_in_list):
         async def judge_single_dynamic(dynamic_id):
-            new_resp = await self.get_dyn_detail_resp(dynamic_id)
-            dynamic_detail = await self.solve_dynamic_item_detail(dynamic_id, new_resp)
-            await self.judge_lottery_by_dynamic_resp_dict(dynamic_id, dynamic_detail)
-            self.sem.release()
+            async with self.sem:
+                new_resp = await self.get_dyn_detail_resp(dynamic_id)
+                dynamic_detail = await self.solve_dynamic_item_detail(dynamic_id, new_resp)
+                await self.judge_lottery_by_dynamic_resp_dict(dynamic_id, dynamic_detail)
 
         get_others_lot_log.info('多线程获取动态')
         task_list = []
@@ -1086,7 +1085,6 @@ class GetOthersLotDyn:
             if i is None:
                 get_others_lot_log.error(f'动态id获取为None:{i}')
                 continue
-            await self.sem.acquire()
             tk = asyncio.create_task(judge_single_dynamic(i))
             task_list.append(tk)
 
@@ -1664,7 +1662,7 @@ class GetOthersLotDyn:
                 if self.BAPI.zhuanfapanduan(dynamic_content):
                     ret_url += '?tab=2'
                 Manual_judge = ''
-                if self.manual_reply_judge.call("manual_reply_judge", dynamic_content):
+                if self.manual_reply_judge(dynamic_content):
                     Manual_judge = '人工判断'
                 high_lights_list = []
                 for i in self.highlight_word_list:
@@ -2074,7 +2072,7 @@ class GET_OTHERS_LOT_DYN:
         if int(time.time()) - self.get_dyn_ts >= 0.8 * 24 * 3600:
             async with self.is_getting_dyn_flag_lock:
                 self.is_getting_dyn_flag = True
-            ___ = GetOthersLotDyn()
+            ___ = GetOthersLotDynRobot()
             await ___.main()
             await self.save_now_get_dyn_ts(int(time.time()))
             async with self.is_getting_dyn_flag_lock:
@@ -2296,7 +2294,7 @@ class GET_OTHERS_LOT_DYN:
 
 
 async def __test():
-    b = GetOthersLotDyn()
+    b = GetOthersLotDynRobot()
 
     for i in range(1, 115):
         print(await b.checkDBDyn(i))

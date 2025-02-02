@@ -1,15 +1,18 @@
 """
 单轮回复
 """
+import asyncio
+
 from fastapi import Query, Body
 from fastapi接口.models.common import CommonResponseModel, ResponsePaginationItems
 from .base import new_router
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, OfficialLotteryResp, \
-    AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp, AddDynamicLotteryReq
+    AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp, AddDynamicLotteryReq, \
+    AddTopicLotteryReq, BulkAddDynamicLotteryReq, BulkAddDynamicLotteryRespItem
 from fastapi_cache.decorator import cache
 from fastapi接口.service.lottery_database.bili_lotterty import GetCommonLottery, GetMustReserveLottery, \
     GetMustOfficialLottery, GetAllLottery, GetChargeLottery, GetTopicLottery, GetLiveLottery, \
-    AddDynamicLotteryByDynamicId
+    AddDynamicLotteryByDynamicId, AddTopicLottery
 
 router = new_router()
 
@@ -187,4 +190,28 @@ async def api_AddLottery(
         data: AddDynamicLotteryReq = Body(...),
 ):
     msg, is_succ = await AddDynamicLotteryByDynamicId(data.dynamic_id_or_url)
-    return CommonResponseModel(code=400 if not is_succ else 0, data=msg,msg=msg)
+    return CommonResponseModel(code=400 if not is_succ else 0, data=msg, msg=msg)
+
+
+@router.post('/BulkAddDynamicLottery', summary='批量提交抽奖动态(官抽，预约，充电)，自动解析抽奖信息',
+             response_model=CommonResponseModel[list[BulkAddDynamicLotteryRespItem]])
+@cache(8 * 3600)
+async def api_BulkAddLottery(
+        data: BulkAddDynamicLotteryReq = Body(...),
+):
+    async def _solve_lottery(dynamic_id_or_url: str):
+        _msg, _is_succ = await AddDynamicLotteryByDynamicId(dynamic_id_or_url)
+        return BulkAddDynamicLotteryRespItem(dynamic_id=dynamic_id_or_url, msg=_msg, is_succ=_is_succ)
+
+    resp_data = await asyncio.gather(_solve_lottery(dynamic_id_or_url) for dynamic_id_or_url in data.dynamic_id_or_urls)
+
+    return CommonResponseModel(code=0, data=resp_data)
+
+
+@router.post('/AddTopicLottery', summary='提交话题抽奖', response_model=CommonResponseModel[str])
+@cache(8 * 3600)
+async def api_AddTopicLottery(
+        data: AddTopicLotteryReq = Body(...),
+):
+    msg, is_succ = await AddTopicLottery(data.topic_id)
+    return CommonResponseModel(code=400 if not is_succ else 0, data=msg, msg=msg)

@@ -21,33 +21,10 @@ class request_with_proxy:
     def __init__(self):
         self.post_localhost_timeout = None
         self.post_localhost_timeout = None
-        self.base_url = 'http://localhost:23333'
-        self.base_url1 = 'http://localhost:23333'
         self.log = request_with_proxy_logger
         self.redis_request_with_proxy = redis_request_with_proxy()
         self.session = MYASYNCHTTPX()
 
-    #
-    # async def request_with_proxy(self, *args, **kwargs) -> dict or list[dict]:
-    #     if args:
-    #         kwargs.update(*args)
-    #     data = json.dumps(kwargs)
-    #     ret_time = 0
-    #     while True:
-    #         ret_time += 1
-    #         if ret_time > 3:
-    #             # assert ret_time > 3, "超出重试次数"
-    #             # exit()  #
-    #             pass
-    #         try:
-    #             async with httpx.AsyncClient() as client:
-    #                 resp = await client.request(url=self.base_url1 + '/request_with_proxy', method='post', data=data,
-    #                                             timeout=self.post_localhost_timeout)
-    #             resp.raise_for_status()
-    #             return resp.json()
-    #         except:
-    #             traceback.print_exc()
-    #             await asyncio.sleep(10)
     async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
         """
         :param args:
@@ -64,53 +41,16 @@ class request_with_proxy:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
-    async def get_one_rand_proxy(self):
-        """
-
-        :return:
-        {
-            "proxy_id": 103494,
-            "proxy": {
-                "http": "http://120.76.137.67:3128",
-                "https": "http://120.76.137.67:3128"
-                },
-            "status": 0,
-            "update_ts": 1693397281,
-            "score": -50,
-            "add_ts": 1692975739,
-            "success_times": 192,
-            "zhihu_status": 0
-        }
-        """
+    async def get_one_rand_proxy(self) -> Union[TypePDict, None]:
         while True:
             try:
-                async with httpx.AsyncClient() as client:
-                    resp = await client.request(url=self.base_url + '/get_one_rand_proxy', method='get')
-                return resp.json()
-            except:
-                traceback.print_exc()
-                await asyncio.sleep(10)
-
-
-    async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, None]:
-        while True:
-            try:
-                resp = await self.redis_request_with_proxy.get_one_rand_grpc_proxy()
+                resp = await self.redis_request_with_proxy.get_one_rand_proxy()
                 return resp
             except:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
-    async def upsert_grpc_proxy_status(self, *args, **kwargs):
-        """
-
-        :param args:
-        :param kwargs: proxy_id: int, status: int, score_change: int = 0
-        :return:
-        """
-        if args:
-            kwargs.update(*args)
-        data = json.dumps(kwargs)
+    async def update_to_proxy_list(self, proxy_dict: dict, change_score_num=10):
         ret_time = 0
         while True:
             ret_time += 1
@@ -119,14 +59,34 @@ class request_with_proxy:
                 # exit()  #
                 pass
             try:
-                resp = await self.redis_request_with_proxy.upsert_grpc_proxy_status(*args, **kwargs)
+                resp = await self.redis_request_with_proxy.update_to_proxy_dict(proxy_dict, change_score_num)
                 return resp
-            except:
+            except Exception as e:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
+    # async def upsert_grpc_proxy_status(self, proxy_id: int, status: int, score_change: int = 0):
+    #     """
+    #
+    #     :param args:
+    #     :param kwargs: proxy_id: int, status: int, score_change: int = 0
+    #     :return:
+    #     """
+    #     ret_time = 0
+    #     while True:
+    #         ret_time += 1
+    #         if ret_time > 3:
+    #             # assert ret_time > 3, "超出重试次数"
+    #             # exit()  #
+    #             pass
+    #         try:
+    #             resp = await self.redis_request_with_proxy.upsert_grpc_proxy_status(proxy_id, status, score_change)
+    #             return resp
+    #         except:
+    #             traceback.print_exc()
+    #             await asyncio.sleep(10)
 
-    async def get_grpc_proxy_by_ip(self, ip: str):
+    async def get_proxy_by_ip(self, ip: str):
         ret_time = 0
         while True:
             ret_time += 1
@@ -135,7 +95,7 @@ class request_with_proxy:
                 # exit()  #
                 pass
             try:
-                resp = await self.redis_request_with_proxy.get_grpc_proxy_by_ip(ip)
+                resp = await self.redis_request_with_proxy.get_proxy_by_ip(ip)
                 return resp
             except:
                 traceback.print_exc()
@@ -144,4 +104,4 @@ class request_with_proxy:
 
 if __name__ == '__main__':
     test = request_with_proxy()
-    test.upsert_grpc_proxy_status(proxy_id=31178, status=114514, score_change=10)
+    # test.upsert_grpc_proxy_status(proxy_id=31178, status=114514, score_change=10)

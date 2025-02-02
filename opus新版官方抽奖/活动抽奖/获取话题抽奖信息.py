@@ -5,7 +5,7 @@ import json
 import os
 import random
 import time
-from typing import List, Union
+from typing import List, Sequence
 from bs4 import BeautifulSoup
 import subprocess
 from functools import partial
@@ -14,17 +14,14 @@ from fastapi接口.log.base_log import topic_lot_logger
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
-from sqlalchemy.orm import joinedload
 import b站cookie.globalvar as gl
 from CONFIG import CONFIG
-from sqlalchemy.sql.expression import text
-from sqlalchemy import select, update, func, and_, cast, DateTime
+
 from opus新版官方抽奖.Base.generate_cv import GenerateCvBase
 from opus新版官方抽奖.Model.GenerateCvModel import CvItem, LotType, CvContent, Color, CvContentOps, \
     CvContentAttr, CutOff
-from opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import sqlHelper, lock_wrapper
-from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficCard, TActivityLottery, TActivityMatchLottery, \
-    TActivityMatchTask, TEraJika, TEraLottery, TEraTask, TEraVideo
+from opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
+from opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficCard
 from opus新版官方抽奖.活动抽奖.model.EraBlackBoard import EraTask, EraLotteryConfig, EraVideoSourceCONFIG, \
     H5ActivityLottery, H5ActivityLotteryGiftSource, MatchLotteryTask, MatchLottery, EvaContainerTruck
 from utl.pushme.pushme import pushme
@@ -32,183 +29,13 @@ import asyncio
 from utl.代理.SealedRequests import MYASYNCHTTPX
 
 
-
-class TopicLotInfoSqlHelper(sqlHelper):
-    def __init__(self):
-        super().__init__()
-
-    @lock_wrapper
-    async def get_all_available_traffic_info_by_page(self, page_num: int = 0, page_size: int = 0) -> tuple[
-        List[TTrafficCard], int]:
-        sql = select(TTrafficCard).where(
-            cast(func.date_format(TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")), DateTime) > func.now()
-        ).order_by(
-            cast(func.date_format(TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")), DateTime).asc()
-        ).options(
-            joinedload(TTrafficCard.t_activity_lottery),
-            joinedload(TTrafficCard.t_activity_match_lottery),
-            joinedload(TTrafficCard.t_activity_match_task),
-            joinedload(TTrafficCard.t_era_jika),
-            joinedload(TTrafficCard.t_era_lottery),
-            joinedload(TTrafficCard.t_era_task),
-            joinedload(TTrafficCard.t_era_video),
-        )
-        if page_num and page_size:
-            offset_value = (page_num - 1) * page_size
-            sql = sql.offset(offset_value).limit(page_size)
-        count_sql = select(func.count(TTrafficCard.id)).where(
-            cast(func.date_format(TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")), DateTime) > func.now()
-        )
-        async with (self._session() as session):
-            result = await session.execute(sql)
-            data = result.scalars().unique().all()
-            count_result = await session.execute(count_sql)
-        return data, count_result.scalars().first()
-
-    @lock_wrapper
-    async def get_all_available_traffic_info(self) -> List[TTrafficCard]:
-        async with (self._session() as session):
-            sql = select(TTrafficCard).where(
-                func.date_format(TTrafficCard.card_desc, '%Y-%m-%d %H:%i截止') > func.now()).order_by(
-                TTrafficCard.id.desc()).options(
-                joinedload(TTrafficCard.t_activity_lottery),
-                joinedload(TTrafficCard.t_activity_match_lottery),
-                joinedload(TTrafficCard.t_activity_match_task),
-                joinedload(TTrafficCard.t_era_jika),
-                joinedload(TTrafficCard.t_era_lottery),
-                joinedload(TTrafficCard.t_era_task),
-                joinedload(TTrafficCard.t_era_video),
-            )
-            result = await session.execute(sql)
-            data = result.scalars().unique().all()
-        return data
-
-    @lock_wrapper
-    async def get_all_available_traffic_info_by_status(self, status: Union[int, None]) -> List[TTrafficCard]:
-        async with (self._session() as session):
-            sql = select(TTrafficCard).where(
-                and_(
-                    func.date_format(TTrafficCard.card_desc, '%Y-%m-%d %H:%i截止') > func.now()),
-                TTrafficCard.my_activity_status == status
-            ).order_by(
-                TTrafficCard.id.desc())
-            result = await session.execute(sql)
-            data = result.scalars().all()
-        return data
-
-    @lock_wrapper
-    async def update_traffic_card_status(self, stat: int, traffic_card_id: int):
-        """
-
-        :param stat:
-        0：已成功查询
-        1：未查询活动
-        2：查询了，但获取到的活动为空
-        3：查询出错了，去日志里查原因
-        :param traffic_card_id:
-        :return:
-        """
-        async with self._session() as session:
-            sql = update(TTrafficCard).where(TTrafficCard.id == traffic_card_id).values(my_activity_status=stat)
-            result = await session.execute(sql)
-
-    @lock_wrapper
-    async def add_activity_lottery(self, traffic_card_id, lotteryId: str, continueTimes, _list):
-        async with self._session() as session:
-            async with session.begin():
-                activity_lottery = TActivityLottery(traffic_card_id=traffic_card_id, lotteryId=lotteryId,
-                                                    continueTimes=continueTimes, list=_list)
-                await session.merge(activity_lottery)
-
-    @lock_wrapper
-    async def add_activity_match_lottery(self, traffic_card_id, lottery_id: str, activity_id: str):
-        async with self._session() as session:
-            async with session.begin():
-                activity_match_lottery = TActivityMatchLottery(traffic_card_id=traffic_card_id, lottery_id=lottery_id,
-                                                               activity_id=activity_id)
-                await session.merge(activity_match_lottery)
-
-    @lock_wrapper
-    async def add_activity_match_task(self, traffic_card_id, task_desc: str, interact_type, task_group_id,
-                                      task_name: str, url: str):
-        async with self._session() as session:
-            async with session.begin():
-                activity_match_task = TActivityMatchTask(
-                    traffic_card_id=traffic_card_id,
-                    task_desc=task_desc,
-                    interact_type=interact_type,
-                    task_group_id=task_group_id,
-                    task_name=task_name,
-                    url=url
-                )
-                await session.merge(activity_match_task)
-
-    @lock_wrapper
-    async def add_era_jika(self, traffic_card_id, activityUrl: str, jikaId: str, topId: int, topName: str):
-        async with self._session() as session:
-            async with session.begin():
-                era_jika = TEraJika(
-                    traffic_card_id=traffic_card_id,
-                    activityUrl=activityUrl,
-                    jikaId=jikaId,
-                    topId=topId,
-                    topName=topName,
-                )
-                await session.merge(era_jika)
-
-    @lock_wrapper
-    async def add_era_lottery(self, traffic_card_id, activity_id, gifts, icon, lottery_id, lottery_type, per_time,
-                              point_name):
-        async with self._session() as session:
-            async with session.begin():
-                era_lottery = TEraLottery(
-                    traffic_card_id=traffic_card_id,
-                    activity_id=activity_id,
-                    gifts=gifts,
-                    icon=icon,
-                    lottery_id=lottery_id,
-                    lottery_type=lottery_type,
-                    per_time=per_time,
-                    point_name=point_name
-                )
-                await session.merge(era_lottery)
-
-    @lock_wrapper
-    async def add_era_task(self, traffic_card_id, awardName, taskDes, taskId, taskName, taskType, topicID, topicName):
-        async with self._session() as session:
-            async with session.begin():
-                era_task = TEraTask(
-                    traffic_card_id=traffic_card_id,
-                    awardName=awardName,
-                    taskDes=taskDes,
-                    taskId=taskId,
-                    taskName=taskName,
-                    taskType=taskType,
-                    topicID=topicID,
-                    topicName=topicName
-                )
-                await session.merge(era_task)
-
-    @lock_wrapper
-    async def add_era_video(self, traffic_card_id, poolList, topic_id, topic_name, videoSource_id):
-        async with self._session() as session:
-            async with session.begin():
-                era_video = TEraVideo(
-                    traffic_card_id=traffic_card_id,
-                    poolList=poolList,
-                    topic_id=topic_id,
-                    topic_name=topic_name,
-                    videoSource_id=videoSource_id,
-                )
-                await session.merge(era_video)
-
-
 class GenerateTopicLotCv(GenerateCvBase):
 
-    def __init__(self, cookie, ua, csrf, buvid):
+    def __init__(self, cookie, ua, csrf, buvid, abstract: str = ''):
         super().__init__(cookie, ua, csrf, buvid)
         self.post_flag = True  # 是否直接发布
-        self.sql = TopicLotInfoSqlHelper()
+        self.sql = topic_sqlhelper
+        self.abstract = abstract  # 只会添加在手动发布的里面，自动的太麻烦了
 
     def zhuanlan_format(self, lottery_infos: dict[str, List[CvItem]],
                         blank_space: int = 1, sep_str: str = ' ') -> (CvContent, int):
@@ -254,6 +81,11 @@ class GenerateTopicLotCv(GenerateCvBase):
                     attributes=CvContentAttr(link=cv_item.jumpUrl)
                 )
                 words += len(_str)
+                ops_list.append(ops)
+                _str = sep_str
+                ops = CvContentOps(
+                    insert=_str,
+                )
                 ops_list.append(ops)
                 if cv_item.lot_type_list:
                     _str = '|'.join([x.value for x in cv_item.lot_type_list]) + sep_str
@@ -389,15 +221,15 @@ class GenerateTopicLotCv(GenerateCvBase):
                                                   '未知网址': unknown
                                                   })
         today = datetime.datetime.today()
-        # _ = datetime.timedelta(days=1)
-        # next_day = today + _
-        title = f'{today.date().month}.{today.date().day}为止的话题抽奖信息'
+        _ = datetime.timedelta(days=1)
+        next_day = today + _
+        title = f'【{next_day.date().month}.{next_day.date().day}】话题抽奖信息'
         if pub_cv:
             local_title = title + '_需要提交'
         else:
             local_title = title
         self.save_article_to_local(local_title + '_api_ver', cv_content.rawContent)
-        self.save_article_to_local(local_title + '_手动专栏_ver', cv_content.manualSubmitContent)
+        self.save_article_to_local(local_title + '_手动专栏_ver', self.abstract + cv_content.manualSubmitContent)
         aid = 0
         if pub_cv:
             aid = await self.article_creative_draft_addupdate(
@@ -423,7 +255,7 @@ class ExtractTopicLottery:
             os.mkdir(self.log_path)
         if not os.path.exists(self.result_path):
             os.mkdir(self.result_path)
-        self.sql = TopicLotInfoSqlHelper()
+        self.sql = topic_sqlhelper
         self.s = MYASYNCHTTPX()
         self.headers = {
             "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
@@ -569,7 +401,7 @@ class ExtractTopicLottery:
             for tag in script_tags:
                 if '__initialState' in tag.text:
                     # 尝试从字符串中提取 JSON 数据
-                    js_env = execjs.compile('let window = {};'+tag.string)
+                    js_env = execjs.compile('let window = {};' + tag.string)
                     # 将字符串转换为字典
                     data = js_env.eval('window.__initialState')
                     if lottery_v3 := data.get('h5-lottery-v3', data.get('pc-lottery-v3', [])):
@@ -647,7 +479,7 @@ class ExtractTopicLottery:
             topic_lot_logger.error(f'{url}\t未知话题类型！\n{data}')
             return 3
 
-    async def spider_all_unread_traffic_card(self, status_list=[0, None]) -> (bool, int):
+    async def spider_all_unread_traffic_card(self, status_list=[0, None]) -> (bool, int, Sequence[TTrafficCard]):
         """
         获取所有未读的traffic_card，解析活动类型
         :return: 是否有新增的
@@ -666,15 +498,15 @@ class ExtractTopicLottery:
                     result = 3
                 topic_lot_logger.info(f'{x.jump_url}\t当前traffic_card:{x.id}，状态：{result}')
                 await self.sql.update_traffic_card_status(result, x.id)
-            return True, len(all_unread_traffic_card)
-        return False, len(all_unread_traffic_card)
+            return True, len(all_unread_traffic_card), all_unread_traffic_card
+        return False, len(all_unread_traffic_card), all_unread_traffic_card
 
     async def main(self, force_push=False):
         """
          函数入口 修改成如果有新增的则推送
         :return:
         """
-        is_need_post, num = await self.spider_all_unread_traffic_card()
+        is_need_post, num, all_unread_traffic_card = await self.spider_all_unread_traffic_card()
         ua3 = gl.get_value('ua3')
         csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
         cookie3 = gl.get_value('cookie3')
@@ -683,7 +515,7 @@ class ExtractTopicLottery:
         # gc.post_flag = False  # 不直接发布
         await gc.main(pub_cv=is_need_post)
         topic_lot_logger.error('话题抽奖已更新')
-        pushme('话题抽奖已更新', f'话题抽奖：更新{num}条数据')
+        pushme('话题抽奖已更新', f'话题抽奖：更新{num}条数据\n{[x.__dict__ for x in all_unread_traffic_card]}')
 
 
 async def _test():

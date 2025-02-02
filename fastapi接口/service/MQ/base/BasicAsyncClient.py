@@ -12,7 +12,7 @@ from fastapi接口.models.MQ.BaseMQModel import RabbitMQConfig, QueueName, Excha
 from utl.pushme.pushme import pushme
 
 
-def _mq_retry_wrapper(func: Callable[[Any], Coroutine[None, None, Any]], max_retries: int = 5, delay: int = 10):
+def _mq_retry_wrapper(max_retries: int = 5, delay: int = 10):
     """
     异步重试装饰器：在函数执行异常时进行重试
 
@@ -21,25 +21,28 @@ def _mq_retry_wrapper(func: Callable[[Any], Coroutine[None, None, Any]], max_ret
     :param delay: 每次重试的延迟时间，单位秒，默认为 10 秒
     """
 
-    async def wrap(*args, **kwargs):
-        retries = 0
-        while retries < max_retries:
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
-                retries += 1
-                MQ_logger.error(
-                    f"MQ {func.__name__} 执行异常,参数：{args, kwargs}, 重试次数: {retries}/{max_retries}: {e}")
-                if retries >= max_retries:
-                    MQ_logger.exception(
-                        f"【MQ发布消息】执行{func.__name__}失败第{retries}次，彻底失败！！参数：{args, kwargs}")
-                    pushme(f'【MQ发布消息】执行{func.__name__}失败第{retries}次，彻底失败！！{e}',
-                           f'参数：{args, kwargs}\n{traceback.format_exc()}')
-                    break
-                await asyncio.sleep(delay)  # 等待后再重试
-        return None  # 如果超出了最大重试次数，返回 None 或者可以根据需求自定义错误返回值
+    def inner_wrap(func: Callable[[Any], Coroutine[None, None, Any]]):
+        async def wrap(*args, **kwargs):
+            retries = 0
+            while max_retries <= 0 or retries < max_retries:
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    retries += 1
+                    MQ_logger.error(
+                        f"MQ {func.__name__} 执行异常,参数：{args, kwargs}, 重试次数: {retries}/{max_retries}: {e}")
+                    if retries >= max_retries or max_retries <= 0:
+                        MQ_logger.exception(
+                            f"【MQ发布消息】执行{func.__name__}失败第{retries}次，彻底失败！！参数：{args, kwargs}")
+                        pushme(f'【MQ发布消息】执行{func.__name__}失败第{retries}次，彻底失败！！{e}',
+                               f'参数：{args, kwargs}\n{traceback.format_exc()}')
+                        break
+                    await asyncio.sleep(delay)  # 等待后再重试
+            return None  # 如果超出了最大重试次数，返回 None 或者可以根据需求自定义错误返回值
 
-    return wrap
+        return wrap
+
+    return inner_wrap
 
 
 def sync(f):
@@ -88,11 +91,11 @@ class BasicMessageReceiver:
         self._channel = None
         self._closing = False
         self._consumer_tag = None
-        self._url = f'{rabbit_mq_config.protocol}://{rabbit_mq_config.username}:{rabbit_mq_config.password}@{rabbit_mq_config.host}:{rabbit_mq_config.port}/?heartbeat=60'
+        self._url = f'{rabbit_mq_config.protocol}://{rabbit_mq_config.username}:{rabbit_mq_config.password}@{rabbit_mq_config.host}:{rabbit_mq_config.port}/'
         self._consuming = False
         # In production, experiment with higher prefetch values
         # for higher consumer throughput
-        self._prefetch_count = 50  # -- 设置一个最大数字，保证所有请求全部消费掉？最大65535，因为网络接口只有这么多。。。
+        self._prefetch_count = 20  # -- 设置一个最大数字，保证所有请求全部消费掉？最大65535，因为网络接口只有这么多。。。
         # 但是数字太大会导致报错file descriptor溢出，只能改成一个合理的数字了
 
     def encode_message(self, body: Dict, encoding_type: str = "bytes"):
@@ -288,10 +291,7 @@ class BasicMessageReceiver:
                 await asyncio.Future()  # Run forever until stopped
             except Exception as e:
                 MQ_logger.exception(f"RabbitMQ run Exception occurred: {e}")
-                await asyncio.sleep(5)  # Wait before retrying
-        # self._connection = self.connect()
-        # await asyncio.Future()
-        self._stopping = False
+                await asyncio.sleep(5)  # 等待一段时间再重试
 
     def stop(self):
         if not self._closing:
@@ -300,6 +300,7 @@ class BasicMessageReceiver:
             if self._consuming:
                 self.stop_consuming()
             MQ_logger.critical('Stopped')
+
         self._stopping = True
 
 
@@ -333,12 +334,13 @@ class BasicMessageSender:
     def connection(self):
         self._connection = pika.BlockingConnection(pika.URLParameters(self._url))
         self._channel = self._connection.channel()
-        self._channel.exchange_declare(exchange=self.EXCHANGE,
-                                       exchange_type=self.EXCHANGE_TYPE,
-                                       passive=False,
-                                       durable=True,
-                                       auto_delete=False
-                                       )
+        self._channel.exchange_declare(
+            exchange=self.EXCHANGE,
+            exchange_type=self.EXCHANGE_TYPE,
+            passive=False,
+            durable=True,
+            auto_delete=False
+        )
 
     def send_message(
             self,

@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-import copy
 import gzip
 import json
-import secrets
 import string
 import hmac
 import base64
@@ -22,13 +20,12 @@ from grpc获取动态.grpc.bapi.biliapi import appsign
 from utl.代理.SealedRequests import MYASYNCHTTPX
 
 myreq = MYASYNCHTTPX()
-from bilibili.api.ticket.v1 import ticket_pb2_grpc, ticket_pb2
+from bilibili.api.ticket.v1 import  ticket_pb2
 from bilibili.metadata.device.device_pb2 import Device
 from bilibili.metadata.fawkes.fawkes_pb2 import FawkesReq
 from bilibili.metadata.locale.locale_pb2 import Locale, LocaleIds
 from bilibili.metadata.metadata_pb2 import Metadata
 from bilibili.metadata.network.network_pb2 import Network, NetworkType
-from bilibili.metadata.parabox.parabox_pb2 import Exps
 from bilibili.metadata.restriction.restriction_pb2 import Restriction
 from datacenter.hakase.protobuf import android_device_info_pb2
 from fastapi接口.log.base_log import BiliGrpcApi_logger
@@ -312,7 +309,6 @@ async def make_metadata(
         brand=metaDataNeedInfo.brand,
         fp_local=fp_local,
         md=metadata,
-        proxy=proxy
     )
     if bili_ticket_resp:
         new_metadata = []

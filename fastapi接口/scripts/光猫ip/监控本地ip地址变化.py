@@ -6,7 +6,7 @@ import socket
 import time
 from typing import Literal
 from fastapi接口.log.base_log import ipv6_monitor_logger
-from fastapi接口.service.ipinfo.get_ipv6 import set_ipv6, get_ipv6
+from fastapi接口.service.ipinfo.get_ipv6 import set_ipv6_to_redis, get_ipv6_from_redis
 from fastapi接口.service.MQ.base.MQServer.Ipv6ChangeMQServer import Ipv6ChangeRabbitMQ
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from fastapi接口.scripts.光猫ip.获取本机ipv6 import ipv6Obj
@@ -109,7 +109,7 @@ ipv6_change_mq = Ipv6ChangeRabbitMQ.Instance()
 def monitor_ipv6_address_changes():
     ipv6_monitor_logger.info('启动监控本地ipv6地址程序！！！')
     my_ipv6 = ipv6Obj()
-    previous_ipv6_address = _loop.run_until_complete(get_ipv6())
+    previous_ipv6_address = _loop.run_until_complete(get_ipv6_from_redis())
     previous_ipv6_prefix = ':'.join(previous_ipv6_address.split(':')[0:4])  # 2409:8a1e:2a62:69a
     while True:
         current_ipv6_address = my_ipv6.get_ipv6_prefix()  # 2409:8a1e:2a62:69a0::/60
@@ -123,7 +123,7 @@ def monitor_ipv6_address_changes():
             try:
                 pushme(f'IPv6地址发生变化！{time.strftime("%Y-%m-%d %H:%M:%S")}',
                        f'原地址：{previous_ipv6_address}\n现地址：{current_ipv6_address}')
-                _loop.run_until_complete(set_ipv6(current_ipv6_address))
+                _loop.run_until_complete(set_ipv6_to_redis(current_ipv6_address))
             except:
                 ipv6_monitor_logger.excption('推送失败')
             previous_ipv6_address = current_ipv6_address
@@ -135,32 +135,36 @@ def monitor_ipv6_address_changes():
 async def async_monitor_ipv6_address_changes():
     ipv6_monitor_logger.info('启动监控本地ipv6地址程序！！！')
     my_ipv6 = ipv6Obj()
-    previous_ipv6_address = await get_ipv6()
+    previous_ipv6_address = await get_ipv6_from_redis()
     previous_ipv6_prefix = ':'.join(previous_ipv6_address.split(':')[0:4])  # 2409:8a1e:2a62:69a
     while True:
-        current_ipv6_address = await my_ipv6.async_get_ipv6_prefix_selenium()  # 2409:8a1e:2a62:69a0::/60
-        current_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[0:4])  # 2409:8a1e:2a62:69a
-        # print(current_ipv6_prefix)
-        ipv6_monitor_logger.info(f'当前ipv6地址：{current_ipv6_address}')
-        if current_ipv6_prefix and current_ipv6_prefix != previous_ipv6_prefix:  # 只判断前缀
-            ipv6_monitor_logger.info("IPv6地址发生变化：", current_ipv6_address, int(time.time()))
-            await asyncio.to_thread(change_ipv6_config, ':'.join(current_ipv6_address.split(':')[0:4]),
-                                    previous_ipv6_prefix)
-            # ipv6_change_mq.push_ipv6_change(previous_ipv6_address, current_ipv6_address)
-            try:
-                await asyncio.to_thread(pushme, f'IPv6地址发生变化！{time.strftime("%Y-%m-%d %H:%M:%S")}',
-                                        f'原地址：{previous_ipv6_address}\n现地址：{current_ipv6_address}')
-                await set_ipv6(current_ipv6_address)
-            except:
-                ipv6_monitor_logger.info('推送失败')
-            previous_ipv6_address = current_ipv6_address
-            previous_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[0:4])
-        await asyncio.sleep(40)  # 每隔30秒检查一次
+        try:
+            current_ipv6_address = await my_ipv6.async_get_ipv6_prefix_selenium()  # 2409:8a1e:2a62:69a0::/60
+            current_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[0:4])  # 2409:8a1e:2a62:69a
+            # print(current_ipv6_prefix)
+            ipv6_monitor_logger.info(f'当前ipv6地址：{current_ipv6_address}')
+            if current_ipv6_prefix and current_ipv6_prefix != previous_ipv6_prefix:  # 只判断前缀
+                ipv6_monitor_logger.info("IPv6地址发生变化：", current_ipv6_address, int(time.time()))
+                await asyncio.to_thread(change_ipv6_config, ':'.join(current_ipv6_address.split(':')[0:4]),
+                                        previous_ipv6_prefix)
+                # ipv6_change_mq.push_ipv6_change(previous_ipv6_address, current_ipv6_address)
+                try:
+                    await asyncio.to_thread(pushme, f'IPv6地址发生变化！{time.strftime("%Y-%m-%d %H:%M:%S")}',
+                                            f'原地址：{previous_ipv6_address}\n现地址：{current_ipv6_address}')
+                    await set_ipv6_to_redis(current_ipv6_address)
+                except:
+                    ipv6_monitor_logger.info('推送失败')
+                previous_ipv6_address = current_ipv6_address
+                previous_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[0:4])
+        except Exception as e:
+            ipv6_monitor_logger.excption(e)
+            pushme(f'IPv6地址监控程序异常！{time.strftime("%Y-%m-%d %H:%M:%S")}', f'异常信息：{e}')
+        finally:
+            await asyncio.sleep(40)  # 每隔40秒检查一次
 
 
 if __name__ == '__main__':
-    asyncio.run(async_monitor_ipv6_address_changes())
-    # now_ipv6='2409:8a1e:2a60:60d0'
-    # latest_ipv6='2409:8a1e:2a60:6520'
-    # change_ipv6_config(now_ipv6, latest_ipv6)
-    # ipv6_change_mq.push_ipv6_change(origin_ipv6=latest_ipv6, now_ipv6=f'{now_ipv6}::/60') # wsl上的客户端修改好了之后，用这段代码推送当前ip地址过去做测试！
+    # asyncio.run(async_monitor_ipv6_address_changes())
+    now_ipv6='2409:8a1e:2e94:e320'
+    latest_ipv6='2409:8a1e:2a63:3c60'
+    change_ipv6_config(now_ipv6, latest_ipv6)

@@ -182,9 +182,9 @@ class BiliGrpc:
             avaliable_ip_status = await self.GrpcProxyTools.get_rand_avaliable_ip_status()
             proxy = {}
             if avaliable_ip_status:
-                proxy = await self.__req.get_grpc_proxy_by_ip(avaliable_ip_status.ip)
+                proxy = await self.__req.get_proxy_by_ip(avaliable_ip_status.ip)
             if not proxy:
-                proxy = await self.__req.get_one_rand_grpc_proxy()
+                proxy = await self.__req.get_one_rand_proxy()
             if proxy:
                 if 'http' in proxy['proxy']['http']:
                     options = [
@@ -306,9 +306,11 @@ class BiliGrpc:
         return metadata
 
     async def handle_grpc_request(self, url: str, grpc_req_message, grpc_resp_msg, cookie_flag: bool,
-                                  func_name: str = "", force_proxy: bool = False):  # 连续请求20次出现-352
+                                  func_name: str = "", force_proxy: bool = False,
+                                  force_non_proxy: bool = False):  # 连续请求20次出现-352
         """
         处理grpc请求
+        :param force_non_proxy:  强制不使用代理，也就是直连
         :param force_proxy: 强制使用真实代理
         :param func_name:
         :param url:
@@ -352,8 +354,9 @@ class BiliGrpc:
                 if cookie_flag:
                     cookies = await self.__set_available_cookies(self.cookies)
                 if not await self.GrpcProxyTools.check_ip_status(proxy['proxy']['http']):
-                    await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
-                                                              score_change=10)
+                    proxy['status'] = -412
+                    await self.__req.update_to_proxy_list(proxy_dict=proxy,
+                                                          change_score_num=10)
                 ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
             else:
                 proxy = {'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr}}
@@ -362,6 +365,8 @@ class BiliGrpc:
                         ua=self.ua
                     ))
                     cookies = self.cookies
+            if force_non_proxy:
+                proxy_flag = False
             msg = grpc_req_message
             proto_bytes = msg.SerializeToString()
             headers = {
@@ -478,7 +483,8 @@ class BiliGrpc:
                 resp_dict = MessageToDict(gresp)
                 if proxy_flag:
                     if proxy != self.proxy:
-                        await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
+                        proxy['status'] = 0
+                        await self.__req.update_to_proxy_list(proxy, 10)
                     await self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
                 if ip_status:
                     ip_status.available = True
@@ -501,8 +507,8 @@ class BiliGrpc:
                 if proxy_flag:
                     if proxy == self.proxy:
                         await self.__set_available_channel(None, None)
-                    await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
-                                                              score_change=score_change)
+                    proxy['status'] = -412
+                    await self.__req.update_to_proxy_list(proxy, score_change)
                     if not ip_status:
                         ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
                     origin_available = ip_status.available
@@ -555,8 +561,8 @@ class BiliGrpc:
                 if proxy_flag:
                     if proxy == self.proxy:
                         await self.__set_available_channel(None, None)
-                    await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
-                                                              score_change=score_change)
+                    proxy['status'] = -412
+                    await self.__req.update_to_proxy_list(proxy, score_change)
                     await self.GrpcProxyTools.set_ip_status(ip_status)
                     ipv6_proxy_weights += 1
                 else:
@@ -599,7 +605,8 @@ class BiliGrpc:
                                                                timeout=self.timeout)
                 ret_dict = MessageToDict(dyn_all_resp)
                 if proxy != self.proxy:
-                    await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=0, score_change=10)
+                    proxy['status'] = 0
+                    await self.__req.update_to_proxy_list(proxy, 10)
                     await self.__set_available_channel(proxy, channel)
                 return ret_dict
             except grpc.RpcError as e:
@@ -622,8 +629,8 @@ class BiliGrpc:
                 else:
                     self.grpc_api_any_log.warning(
                         f"{dyn_ids} grpc_api_get_DynDetails\n BiliGRPC error: {stat} - {det}\n{dyn_details_req}\n{type(e)}")  # 重大错误！
-                await self.__req.upsert_grpc_proxy_status(proxy_id=proxy['proxy_id'], status=-412,
-                                                          score_change=score_change)
+                proxy['status'] = -412
+                await self.__req.update_to_proxy_list(proxy, score_change)
 
     # endregion
 
@@ -700,9 +707,11 @@ class BiliGrpc:
         return await self.handle_grpc_request(url, msg, gresp, cookie_flag, force_proxy=force_proxy)
 
     async def grpc_get_space_dyn_by_uid(self, uid: Union[str, int], history_offset: str = '', page: int = 1,
-                                        proxy_flag: bool = False) -> dict:
+                                        proxy_flag: bool = False, force_non_proxy: bool = False) -> dict:
         """
          获取up空间
+        :param force_non_proxy:
+        :param proxy_flag:
         :param uid:
         :param history_offset:
         :param page:
@@ -723,7 +732,8 @@ class BiliGrpc:
         }
         msg = dynamic_pb2.DynSpaceReq(**data_dict)
         gresp = dynamic_pb2.DynSpaceRsp()
-        return await self.handle_grpc_request(url, msg, gresp, False, 'grpc_get_space_dyn_by_uid')
+        return await self.handle_grpc_request(url, msg, gresp, False, 'grpc_get_space_dyn_by_uid',
+                                              force_non_proxy=force_non_proxy)
 
     # endregion
 
@@ -737,9 +747,9 @@ bili_grpc = BiliGrpc()
 if __name__ == '__main__':
     async def _test():
         t = BiliGrpc()
-        t.debug_mode = True
-        result = await t.grpc_get_dynamic_detail_by_dynamic_id('1002245912906432529')
-        print(result)
-
-
+        t.debug_mode = False
+        result1 = await t.grpc_get_space_dyn_by_uid('114519', force_non_proxy=False)
+        print(result1)
+        result2 = await t.grpc_get_space_dyn_by_uid('114520', force_non_proxy=False)
+        print(result2)
     asyncio.run(_test())

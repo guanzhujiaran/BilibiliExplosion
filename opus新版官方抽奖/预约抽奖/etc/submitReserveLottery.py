@@ -20,11 +20,12 @@ import b站cookie.globalvar as gl
 
 
 class GenerateReserveLotCv(GenerateCvBase):
-    def __init__(self, cookie, ua, csrf, buvid):
+    def __init__(self, cookie, ua, csrf, buvid, abstract: str = ''):
         super().__init__(cookie, ua, csrf, buvid)
         self.target_timeformat = '%m-%d %H:%M'  # 专栏的最终时间格式
         self.post_flag = True  # 是否直接发布
         self.sqlhelper = bili_reserve_sqlhelper
+        self.abstract = abstract
 
     def zhuanlan_format(self, zhuanlan_dict: Dict[str, list[TUpReserveRelationInfo]], blank_space: int = 0) -> tuple[
         str, str]:
@@ -156,11 +157,11 @@ class GenerateReserveLotCv(GenerateCvBase):
         today = datetime.datetime.today()
         _ = datetime.timedelta(days=1)
         next_day = today + _
-        title = f'{next_day.date().month}.{next_day.date().day}之后的预约抽奖'
+        title = f'【{next_day.date().month}.{next_day.date().day}】之后的预约抽奖'
         article_content = article_content + split_article_content + article_content1
         manual_article_content = manual_article_content + manual_split_article_content + manual_article_content1
         self.save_article_to_local(title + '_api_ver', article_content)
-        self.save_article_to_local(title + '_手动专栏_ver', manual_article_content)
+        self.save_article_to_local(title + '_手动专栏_ver', self.abstract + manual_article_content)
 
         banner_url = ''
         summary = ''.join(re.findall('>(.*?)<', article_content)).replace(' ', '').replace('\t', ' ')[0:500]

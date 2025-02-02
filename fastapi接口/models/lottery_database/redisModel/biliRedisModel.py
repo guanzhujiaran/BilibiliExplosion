@@ -1,10 +1,8 @@
 import json
 from enum import Enum
 from typing import List
-
 from utl.redisTool.RedisManager import RedisManagerBase
 from CONFIG import CONFIG
-
 _reids_port = CONFIG.database.proxyRedis.port
 _reids_host = CONFIG.database.proxyRedis.host
 

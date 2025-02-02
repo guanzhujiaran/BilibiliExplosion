@@ -14,61 +14,27 @@ import urllib.parse
 from typing import List
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
-from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from grpc获取动态.grpc.bapi.biliapi import appsign, get_lot_notice, reserve_relation_info
 from grpc获取动态.src.DynObjectClass import *
-from grpc获取动态.src.SqlHelper import SQLHelper
+from grpc获取动态.src.SqlHelper import grpc_sql_helper
 from grpc获取动态.grpc.grpc_api import bili_grpc
+from opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
 from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from utl.pushme.pushme import pushme
 from utl.代理.request_with_proxy import request_with_proxy
 
 
-class StopCounter:
-    _stop_flag: bool = False
-    _max_stop_continuous_num: int = 30  # 短时间内超过30个动态都满足条件，则将stop_flag设置为True
-    cur_stop_continuous_num: int = 0
+class StopCounter(BaseStopCounter):
+    def __init__(self):
+        super().__init__(30)
 
-    @property
-    def stop_flag(self) -> bool:
-        if self.cur_stop_continuous_num >= self._max_stop_continuous_num:
-            return True
-        return False
-
-    def set_max_stop_num(self):
-        """
-        直接设置达到最大连续次数
-        即设置_stop_flag为True
-        :return:
-        """
-        self.cur_stop_continuous_num = self._max_stop_continuous_num
-
-
-class SuccCounter:
-    start_ts = int(time.time())
-    succ_count = 0
+class SuccCounter(BaseSuccCounter):
     first_dyn_id = 0
-
     latest_rid: int = 0  # 最后的rid
     latest_succ_dyn_id: int = 0  # 最后获取成功的动态id
 
     def __init__(self):
-        self.start_ts = int(time.time())
-        self.succ_count = 0
-        self.first_dyn_id = 0
-
-    def show_pace(self) -> float:
-        """
-        获取一个动态需要花多少秒
-        :return:
-        """
-        now_ts = int(time.time())
-        spend_ts = now_ts - self.start_ts
-        if spend_ts > 0:
-            pace_per_sec = spend_ts / self.succ_count
-            return pace_per_sec
-        else:
-            return 0.0
+        super().__init__()
 
     def show_text(self) -> str:
         return f"平均获取速度：{self.show_pace():.2f} s/个动态\t最初的动态：{self.first_dyn_id}\t获取时间：{datetime.datetime.fromtimestamp(self.start_ts).strftime('%Y-%m-%d %H:%M:%S')}"
@@ -94,15 +60,25 @@ class DynDetailScrapy:
             "sec-fetch-site": "same-site",
             "user-agent": CONFIG.rand_ua,
         }
-        self.Sqlhelper = SQLHelper()
+        self.Sqlhelper = grpc_sql_helper
         self.stop_counter: StopCounter = StopCounter()  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = asyncio.Semaphore(20)  # 同时运行的协程数量
+        self.scrapy_sem = asyncio.Semaphore(200)  # 同时运行的协程数量
         # self.thread_sem = threading.Semaphore(50)
         self.stop_limit_time = 2 * 3600  # 提前多少时间停止
         self.log = official_lot_logger
 
         self.succ_counter = SuccCounter()
+
+        self._BiliLotDataPublisher = None
+        self.is_running = False
+
+    @property
+    def BiliLotDataPublisher(self):
+        if not self._BiliLotDataPublisher:
+            from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
+            self._BiliLotDataPublisher = BiliLotDataPublisher
+        return self._BiliLotDataPublisher
 
     def _timeshift(self, timestamp: int) -> str:
         '''
@@ -255,7 +231,7 @@ class DynDetailScrapy:
                             lot_id = lot_data.get('lottery_id')
             if lot_data:
                 self.log.debug(f'抽奖动态！{lot_data}')
-                await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
+                await self.BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
                     lot_data,
                     extra_routing_key='DynDetailScrapy.resolve_dynamic_details_card'
                 )
@@ -608,16 +584,23 @@ class DynDetailScrapy:
                 await asyncio.gather(*task_list)
 
     async def main(self):
-        self.succ_counter = SuccCounter()
-        self.log.info('开始重新获取失败的动态！')
-        task1 = asyncio.create_task(self.get_discontious_dynamics_by_single_detail())
-        await asyncio.sleep(30)
-        self.log.info('重新获取有lot_id，但是lotdata没存进去的抽奖！')
-        task2 = asyncio.create_task(self.get_lost_lottery_notice())
-        self.log.info('开始执行获取动态详情')
-        task3 = asyncio.create_task(self.main_get_dynamic_detail_by_rid())
-        await asyncio.gather(task1, task2, task3)
-        self.log.error('爬取任务全部完成！')
+        self.is_running = True
+        try:
+            self.succ_counter = SuccCounter()
+            self.log.info('开始重新获取失败的动态！')
+            task1 = asyncio.create_task(self.get_discontious_dynamics_by_single_detail())
+            await asyncio.sleep(30)
+            self.log.info('重新获取有lot_id，但是lotdata没存进去的抽奖！')
+            task2 = asyncio.create_task(self.get_lost_lottery_notice())
+            self.log.info('开始执行获取动态详情')
+            task3 = asyncio.create_task(self.main_get_dynamic_detail_by_rid())
+            await asyncio.gather(task1, task2, task3)
+            self.log.error('爬取动态任务全部完成！')
+        except Exception as e:
+            self.log.error(f'爬取动态任务出错：{e}')
+            pushme(title='爬取动态任务出错', content=f'爬取动态任务出错：{e}')
+        finally:
+            self.is_running = False
 
     # region 测试用
     async def get_dynamics_by_spec_rids(self, all_rids: [int]):

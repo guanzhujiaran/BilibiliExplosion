@@ -12,7 +12,7 @@ import execjs
 import pandas as pd
 import Bilibili_methods.all_methods
 from grpc获取动态.src.DynObjectClass import lotDynData
-from grpc获取动态.src.SqlHelper import SQLHelper
+from grpc获取动态.src.SqlHelper import grpc_sql_helper
 """
 使用reg查询动态保存下来
 """
@@ -24,7 +24,7 @@ class LotDynSortByDate:
         self.path = os.path.dirname(os.path.abspath(__file__))
         if not os.path.exists(os.path.join(self.path,'result')):
             os.makedirs(os.path.join(self.path,'result'))
-        self.sql = SQLHelper()
+        self.sql = grpc_sql_helper
         self.BAPI = Bilibili_methods.all_methods.methods()
         self.highlight_word_list = [
             'jd卡',

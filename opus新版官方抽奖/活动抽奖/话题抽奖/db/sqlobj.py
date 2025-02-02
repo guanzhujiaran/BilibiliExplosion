@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 
 import CONFIG
 
-SQLURI = CONFIG.MYSQL.bili_db_URI.replace('+aiomysql', '+pymysql').replace('&autocommit=true', '')
+SQLURI = CONFIG.database.MYSQL.bili_db_URI.replace('+aiomysql', '+pymysql').replace('&autocommit=true', '')
 
 engine = create_engine(SQLURI, echo=True)
 DbSession = sessionmaker(bind=engine)

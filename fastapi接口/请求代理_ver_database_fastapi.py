@@ -3,6 +3,7 @@
 import io
 import os
 import sys
+import time
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
@@ -35,7 +36,7 @@ from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
 from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
 from fastapi接口.controller.v1.ip_info import get_ip_info
-from fastapi接口.controller.v1.background_service import BackgroundService
+from fastapi接口.controller.v1.background_service import BackgroundService, MQController
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserveInfo
 from src.monitor import BiliLiveLotRedisManager
 from starlette.requests import Request
@@ -44,11 +45,9 @@ import json
 import traceback
 from typing import Union
 import uvicorn
-from fastapi import Body, FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
 from github.my_operator.get_others_lot.new_main import GET_OTHERS_LOT_DYN
-from grpc获取动态.grpc.grpc_api import bili_grpc as grpc_api
-from grpc获取动态.src.SqlHelper import SQLHelper
+from grpc获取动态.src.SqlHelper import grpc_sql_helper
 from grpc获取动态.src.获取取关对象.GetRmFollowingList import GetRmFollowingListV1
 from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy
 from 获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import lotScrapy
@@ -59,21 +58,17 @@ import fastapi_cdn_host
 # 创建自定义线程池
 get_rm_following_list = GetRmFollowingListV1()
 zhihu_lotScrapy = lotScrapy()
-grpc_sql_helper = SQLHelper()
 toutiaoSpaceFeedLotService = ToutiaoSpaceFeedLotService()
 req = request_with_proxy()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    if sys.platform == 'win32':
-        loop = asyncio.ProactorEventLoop()
-        asyncio.set_event_loop(loop)
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     # from apscheduler.schedulers.background import BackgroundScheduler
     # scheduler = BackgroundScheduler()
     # from fastapi接口.scripts.start_other_service import start_scripts
-    myfastapi_logger.info("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
+    myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
     # __t = Thread(target=start_scripts, daemon=False)
     # __t.start()
     # scheduler.add_job(func=start_scripts, )
@@ -86,11 +81,12 @@ async def lifespan(_app: FastAPI):
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
 
     yield
-    myfastapi_logger.info("关闭其他服务")
+    myfastapi_logger.critical("正在取消其他服务")
     [
         x.cancel() for x in back_ground_tasks
     ]
     await asyncio.gather(*back_ground_tasks)
+    myfastapi_logger.critical("其他服务已取消")
 
 
 app = FastAPI(lifespan=lifespan)
@@ -98,7 +94,7 @@ fastapi_cdn_host.patch_docs(app)
 
 
 @app.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息', )
-async def v1_get_live_lots(
+def v1_get_live_lots(
         get_all: bool = False
 ):
     def _():
@@ -116,7 +112,7 @@ async def v1_get_live_lots(
                 ret_list.append(json.loads(res))
         return ret_list
 
-    return await asyncio.to_thread(_)
+    return _()
 
 
 # region 测试类
@@ -125,77 +121,6 @@ async def v1_get_live_lots(
 async def app_avaliable_api():
     await asyncio.sleep(1)
     return 'Service is running!'
-
-
-# endregion
-
-# region 代理类方法的请求接口
-@app.post('/request_with_proxy')
-async def request_with_proxy_api(  # 改为了并发模式
-        # request: fastapi.Request
-        request: dict
-):
-    try:
-        result = await req.request_with_proxy(request)
-        return result
-    except Exception as e:
-        myfastapi_logger.exception(e)
-
-
-# region grpc代理数据库的操作方法
-@app.get('/get_one_rand_proxy')
-async def get_one_rand_proxy():
-    proxy = await req.get_one_rand_proxy()
-    return proxy
-
-
-@app.get('/grpc/get_one_rand_grpc_proxy')
-async def get_one_rand_grpc_proxy():
-    proxy = await req.get_one_rand_grpc_proxy()
-    return proxy
-
-
-@app.post('/grpc/upsert_grpc_proxy_status')
-async def upsert_grpc_proxy_status(request_body: dict):
-    await req.upsert_grpc_proxy_status(request_body)
-    return True
-
-
-@app.get('/grpc/get_grpc_proxy_by_ip')  # 通过ip获取grpc的代理
-async def grpc_get_grpc_proxy_by_ip(ip: str):
-    result = await req.get_grpc_proxy_by_ip(ip)
-    return result
-
-
-# endregion
-
-
-# region GRPC_API请求方法
-
-
-@app.post('/grpc/grpc_api_get_DynDetails')
-async def grpc_api_get_DynDetails(request_body: list[int]):
-    result = await grpc_api.grpc_api_get_DynDetails(request_body)
-    return result
-
-
-@app.post('/grpc/grpc_get_dynamic_detail_by_type_and_rid')
-async def grpc_get_dynamic_detail_by_type_and_rid(rid: Union[int, str] = Body(..., title='动态rid', embed=True),
-                                                  dynamic_type: int = Body(2, title='动态类型', embed=True), ):
-    result = await grpc_api.grpc_get_dynamic_detail_by_type_and_rid(rid, dynamic_type)
-    return result
-
-
-class grpcGetSpaceDynByUid(BaseModel):
-    uid: Union[str, int]
-    history_offset: str = ''
-    page: int = 1
-
-
-@app.post('/grpc/grpc_get_space_dyn_by_uid')
-async def grpc_get_space_dyn_by_uid(request: grpcGetSpaceDynByUid):
-    result = await grpc_api.grpc_get_space_dyn_by_uid(request.uid, request.history_offset, request.page)
-    return result
 
 
 # endregion
@@ -213,10 +138,6 @@ async def v1_post_rm_following_list(data: list[Union[int, str]]):
 
 
 # endregion
-
-
-# endregion
-
 
 # region 获取抽奖内容接口
 @app.post('/lot/upsert_lot_detail')
@@ -283,6 +204,7 @@ async def zhuhu_avaliable_api():
 async def toutiao_get_others_lot_ids():
     myfastapi_logger.info('开始获取toutiao抽奖内容')
     result = await toutiaoSpaceFeedLotService.main()
+    result = result if result else []
     pushme(f'获取到头条抽奖{len(result)}条', '\n'.join(result))
     return result
 
@@ -294,6 +216,7 @@ app.include_router(LotteryData.router)
 app.include_router(GetV3ClickTarget.router)
 app.include_router(get_ip_info.router)
 app.include_router(BackgroundService.router)
+app.include_router(MQController.router)
 
 
 @app.middleware("http")
@@ -310,7 +233,7 @@ async def some_middleware(request: Request, call_next):
     except Exception as e:
         myfastapi_logger.error(e)
         myfastapi_logger.exception(e)
-        pushme(f'fastapi请求异常！{str(e)}', traceback.format_exc())
+        pushme(f'fastapi请求异常！{request.url}{str(e)}', traceback.format_exc())
         raise HTTPException(
             status_code=500,
             # detail 可以传递任何可以转换成JSON格式的数据
@@ -320,6 +243,11 @@ async def some_middleware(request: Request, call_next):
 
 
 if __name__ == '__main__':
+
+    import faulthandler
+
+    file = open(os.path.join(os.path.curdir, '报错时保存的faulthandler.txt'), "w+")  # 打印线程输出文件
+    faulthandler.enable(file=file)  # 通过signal建立关系
     try:
         uvicorn.run(
             # '请求代理_ver_database_fastapi:app',
@@ -332,3 +260,4 @@ if __name__ == '__main__':
     except Exception as e:
         myfastapi_logger.exception(e)
         pushme(f'fastapi请求异常！{str(e)}', traceback.format_exc())
+        raise e

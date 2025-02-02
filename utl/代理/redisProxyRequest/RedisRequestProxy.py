@@ -205,7 +205,7 @@ class request_with_proxy:
         return realtime
 
     async def get_one_rand_proxy(self):
-        return await self.mysql_proxy_op.select_one_proxy('rand', channel=self.channel)
+        return await self.mysql_proxy_op.select_proxy('rand', channel=self.channel)
 
     def _generate_httpx_proxy_from_requests_proxy(self, request_proxy: dict) -> dict:
         return {
@@ -227,7 +227,7 @@ class request_with_proxy:
                 if ProxyData.is_available():
                     return True
                 else:
-                    task_list.append(self._update_to_proxy_dict(ProxyData.__dict__(), 0))
+                    task_list.append(self.update_to_proxy_dict(ProxyData.__dict__(), 0))
                     return False
 
             self.using_p_dict_list = list(filter(remove_unavailable_ProxyData, self.using_p_dict_list))
@@ -331,7 +331,7 @@ class request_with_proxy:
                     p_dict['score'] += 10
                     p_dict['status'] = status
                     self.log.debug(f'更新数据库中的代理status:{status}')
-                    await self._update_to_proxy_dict(p_dict, 50)
+                    await self.update_to_proxy_dict(p_dict, 50)
                     return req_dict
                 if type(req_dict) is not dict:
                     self.log.warning(f'请求获取的req_dict类型出错！{req_dict}')
@@ -343,7 +343,7 @@ class request_with_proxy:
                     self.log.warning(f'获取bili真实响应失败！\n{req.text}\n{args}\n{kwargs}\n')
                     p_dict['score'] -= 10
                     p_dict['status'] = -412
-                    await self._update_to_proxy_dict(p_dict, -10)
+                    await self.update_to_proxy_dict(p_dict, -10)
                     continue
                 if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
                     if use_cookie_flag:
@@ -379,7 +379,7 @@ class request_with_proxy:
                     p_dict['score'] += 10
                     p_dict['status'] = status
                     self.log.debug(f'更新数据库中的代理status:{status}')
-                    await self._update_to_proxy_dict(p_dict, 50)
+                    await self.update_to_proxy_dict(p_dict, 50)
                     continue
                 if req_dict.get('code') == 0 or req_dict.get('code') == 4101131 or req_dict.get('code') == -9999:
                     # self.log.info(
@@ -406,9 +406,9 @@ class request_with_proxy:
                 p_dict['score'] -= 10
                 p_dict['status'] = status
                 # self.log.warning(f'更新数据库中的代理status:{status}')
-                await self._update_to_proxy_dict(p_dict, change_score_num=-10)
-                self.log.warning(
-                    f'{mode}使用代理访问失败，代理扣分。\n{e}\t{type(e)}\n{kwargs}\n获取请求时使用的代理信息：{p_dict}\t{self._timeshift(time.time())}\t剩余{await self.mysql_proxy_op.get_available_proxy_nums()}/{await self.mysql_proxy_op.get_all_proxy_nums()}个代理')
+                await self.update_to_proxy_dict(p_dict, change_score_num=-10)
+                # self.log.warning(
+                #     f'{mode}使用代理访问失败，代理扣分。\n{e}\t{type(e)}\n{kwargs}\n获取请求时使用的代理信息：{p_dict}\t{self._timeshift(time.time())}\t剩余{await self.mysql_proxy_op.get_available_proxy_nums()}/{await self.mysql_proxy_op.get_all_proxy_nums()}个代理')
                 continue
             p_dict['score'] += 50
             p_dict['status'] = status
@@ -416,7 +416,7 @@ class request_with_proxy:
             temp = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'), self.using_p_dict_list)
             if not temp:
                 self.using_p_dict_list = await self.redis.add_using_p_dict_list(MyProxyData(**p_dict))
-            await self._update_to_proxy_dict(p_dict, 50)
+            await self.update_to_proxy_dict(p_dict, 50)
             if req_dict is False:
                 continue
             return req_dict
@@ -537,7 +537,7 @@ class request_with_proxy:
                                        )
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 self.log.info(url)
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
@@ -584,7 +584,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 self.log.info(url)
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
@@ -631,7 +631,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 self.log.info(url)
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
@@ -676,7 +676,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -721,7 +721,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -767,7 +767,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -813,7 +813,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -860,7 +860,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -907,7 +907,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -956,7 +956,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -998,7 +998,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1039,7 +1039,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 self.log.info(url)
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
@@ -1088,7 +1088,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1123,7 +1123,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1158,7 +1158,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1193,7 +1193,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1229,7 +1229,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1265,7 +1265,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1301,7 +1301,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1336,7 +1336,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1371,7 +1371,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1406,7 +1406,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1441,7 +1441,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1476,7 +1476,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1511,7 +1511,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1546,7 +1546,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1580,7 +1580,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1617,7 +1617,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1654,7 +1654,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1693,7 +1693,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1733,7 +1733,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1773,7 +1773,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1812,7 +1812,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1851,7 +1851,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1891,7 +1891,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1931,7 +1931,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -1970,7 +1970,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2010,7 +2010,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2051,7 +2051,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2091,7 +2091,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2131,7 +2131,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2169,7 +2169,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2206,7 +2206,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2243,7 +2243,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2280,7 +2280,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2320,7 +2320,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2356,7 +2356,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2393,7 +2393,7 @@ class request_with_proxy:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         except:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            
+
             await asyncio.sleep(10)
             # self.GetProxy_Flag = False
             Get_proxy_success = False
@@ -2436,7 +2436,7 @@ class request_with_proxy:
                 req = await self.s.get(url=url, headers=headers, params=params, verify=False, timeout=self.timeout)
             except:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                
+
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -2490,312 +2490,312 @@ class request_with_proxy:
             task = asyncio.create_task(self.get_proxy_from_89daili())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_taiyangdaili())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_kxdaili_1())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_kxdaili_2())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_ip3366_1())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_ip3366_2())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_qiyun())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_ihuan())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_docip())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_openproxylist())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_zdayip())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_proxy_casals_ar_main_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_Zaeem20_FREE_PROXIES_LIST_master_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_roosterkid_openproxylist_main_HTTPS_RAW())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_yemixzy_proxy_list_main_proxies_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_Free_Proxies_blob_main_proxy_files_http_proxies())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_Free_Proxies_blob_main_proxy_files_https_proxies())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(self.get_proxy_from_TheSpeedX_PROXY_List_master_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_proxifly_free_proxy_list_main_proxies_protocols_http_data())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_proxyhub())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_sarperavci_freeCheckedHttpProxies())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_prxchk_proxy_list())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_andigwandi_free_proxy())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_elliottophellia_yakumo())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_im_razvan_proxy_list())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_proxy4parsing_proxy_list())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_mmpx12_proxy_list())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_t0mer_free_proxies())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_MuRongPIG_Proxy_Master())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_officialputuid_KangProxy_KangProxy_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_officialputuid_KangProxy_KangProxy_https())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_omegaproxy())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_elliottophellia_proxylist_socks5())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_elliottophellia_proxylist_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_zloi_user_hideipme())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_Simatwa_free_proxies_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_claude89757_free_https_proxies())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_lalifeier_proxy_scraper_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_lalifeier_proxy_scraper_https())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_themiralay_Proxy_List_World())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_r00tee_Proxy_List())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_monosans_proxy_list())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_SevenworksDev_proxy_list_https())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_SevenworksDev_proxy_list_http())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_api_openproxylist_xyz_https())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_proxyshare())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_proxy_953959_xyz())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
 
         try:
@@ -2803,7 +2803,7 @@ class request_with_proxy:
                 self.get_proxy_from_parserpp_ip_ports())
             task_list.append(task)
         except Exception as e:
-            
+
             self.log.critical(e)
         results: Union[tuple[list[str], bool] or Exception] = await asyncio.gather(*task_list,
                                                                                    return_exceptions=True)
@@ -2882,7 +2882,7 @@ class request_with_proxy:
         ret_p_dict = {}
         while 1:
             try:
-                p_dict = await self.mysql_proxy_op.select_one_proxy(mode, channel=self.channel)
+                p_dict = await self.mysql_proxy_op.select_proxy(mode, channel=self.channel)
                 if p_dict == {}:
                     self.log.critical('获取代理为空')
                     await self.get_proxy()
@@ -2934,8 +2934,8 @@ class request_with_proxy:
         '''
         await self.mysql_proxy_op.remove_proxy(proxy_dict['proxy'])
 
-    async def _update_to_proxy_dict(self, proxy_dict: dict,
-                                    change_score_num=10):
+    async def update_to_proxy_dict(self, proxy_dict: dict,
+                                   change_score_num=10):
         '''
         修改所选的proxy，如果不存在则新增在第一个
         最多只记录   score: -50 ~ 100分    success_times: -10 ~ 100
@@ -2967,67 +2967,62 @@ class request_with_proxy:
             self.log.info(f'新增代理：{proxy_dict}')
             await self.mysql_proxy_op.add_to_proxy_list(proxy_dict)
 
-    async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, None]:
-        while 1:
-            ret_proxy = await self.mysql_proxy_op.get_one_rand_grpc_proxy()
-            if not ret_proxy:
-                # self.log.critical(f'没有可用的Grpc代理，尝试获取新代理！')
-                await self.get_proxy()
-                return None
-            return ret_proxy
+    # async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, None]:
+    #     while 1:
+    #         ret_proxy = await self.mysql_proxy_op.get_one_rand_grpc_proxy()
+    #         if not ret_proxy:
+    #             # self.log.critical(f'没有可用的Grpc代理，尝试获取新代理！')
+    #             await self.get_proxy()
+    #             return None
+    #         return ret_proxy
 
-    async def get_grpc_proxy_by_ip(self, ip: str) -> Union[TypePDict, None]:
+    async def get_proxy_by_ip(self, ip: str) -> Union[TypePDict, None]:
         '''
 
         :param ip:传个ip地址进去查找
         :return:
         '''
         while 1:
-            ret_proxy = await self.mysql_proxy_op.get_grpc_proxy_by_ip(ip)
+            ret_proxy = await self.mysql_proxy_op.get_proxy_by_ip(ip)
             if ret_proxy:
                 return ret_proxy
             else:
                 return None
 
-    async def upsert_grpc_proxy_status(self, *args, **kwargs) -> None:
-        if args:
-            kwargs.update(*args)
-        if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-            self.check_proxy_time = await self.redis.get_check_proxy_time()
-        if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-            grpc_412_num = await self.mysql_proxy_op.get_412_proxy_num()
-            latest_add_ts = await self.mysql_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
-            proxy_num = await self.mysql_proxy_op.grpc_get_all_proxy_nums()
-            if grpc_412_num > proxy_num * 0.8:
-                self.log.warning(
-                    f'-412风控代理过多\t{grpc_412_num, proxy_num}\t{time.strftime("%Y-%m-%d %H:%M:", time.localtime(time.time()))}')
-                await self._grpc_refresh_412_proxy()
-                await self.get_proxy()  # 如果可用代理数量太少就去获取新的代理
-            if latest_add_ts:
-                if int(time.time() - latest_add_ts) > self.max_get_proxy_sep and latest_add_ts != 0:
-                    await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
-                    await self._grpc_refresh_412_proxy()
-            else:
-                await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
-                await self._grpc_refresh_412_proxy()
-            self.check_proxy_time.last_checked_ts = int(time.time())
-            await self.redis.set_check_proxy_time(self.check_proxy_time)
-        # else:
-        #     self.check_proxy_time['last_checked_ts'] = int(time.time())
+    # async def upsert_grpc_proxy_status(self, proxy_id: int, status: int, score_change: int = 0) -> None:
+    #     if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
+    #         self.check_proxy_time = await self.redis.get_check_proxy_time()
+    #     if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
+    #         grpc_412_num = await self.mysql_proxy_op.get_412_proxy_num()
+    #         latest_add_ts = await self.mysql_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
+    #         proxy_num = await self.mysql_proxy_op.grpc_get_all_proxy_nums()
+    #         if grpc_412_num > proxy_num * 0.8:
+    #             self.log.warning(
+    #                 f'-412风控代理过多\t{grpc_412_num, proxy_num}\t{time.strftime("%Y-%m-%d %H:%M:", time.localtime(time.time()))}')
+    #             await self._grpc_refresh_412_proxy()
+    #             await self.get_proxy()  # 如果可用代理数量太少就去获取新的代理
+    #         if latest_add_ts:
+    #             if int(time.time() - latest_add_ts) > self.max_get_proxy_sep and latest_add_ts != 0:
+    #                 await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
+    #                 await self._grpc_refresh_412_proxy()
+    #         else:
+    #             await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
+    #             await self._grpc_refresh_412_proxy()
+    #         self.check_proxy_time.last_checked_ts = int(time.time())
+    #         await self.redis.set_check_proxy_time(self.check_proxy_time)
+    #     await self.mysql_proxy_op.upsert_grpc_proxy_status(proxy_id, status, score_change)
 
-        await self.mysql_proxy_op.upsert_grpc_proxy_status(**kwargs)
-
-    async def _grpc_refresh_412_proxy(self):
-        '''
-        刷新两个小时前的412代理状态
-        :return:
-        '''
-        await self.mysql_proxy_op.grpc_refresh_412_proxy()
+    # async def _grpc_refresh_412_proxy(self):
+    #     '''
+    #     刷新两个小时前的412代理状态
+    #     :return:
+    #     '''
+    #     await self.mysql_proxy_op.grpc_refresh_412_proxy()
 
 
 async def __test():
     a = request_with_proxy()
-    print(await a._prepare_proxy_from_using_p_dict())
+    print(await a.get_one_rand_proxy())
 
 
 if __name__ == "__main__":

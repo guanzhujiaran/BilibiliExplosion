@@ -7,6 +7,7 @@ from functools import reduce
 import sys
 from fastapi接口.log.base_log import reserve_lot_logger
 from grpc获取动态.grpc.bapi.biliapi import reserve_relation_info
+from opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from utl.代理.request_with_proxy import request_with_proxy
 import time
@@ -20,6 +21,12 @@ from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhel
 BAPI = Bilibili_methods.all_methods.methods()
 
 
+class SuccCounter(BaseSuccCounter):
+    first_reserve_id = 0
+    latest_reserve_id: int = 0  # 最后的rid
+    latest_succ_reserve_id: int = 0  # 最后获取成功的动态id
+
+
 @dataclass
 class dynamic_timestamp_info:
     dynamic_timestamp: int = 0
@@ -29,8 +36,10 @@ class dynamic_timestamp_info:
         return time.strftime("%H小时%M分钟%S秒", time.gmtime(int(time.time()) - self.dynamic_timestamp))
 
 
-class rid_get_dynamic:
+class ReserveScrapyRobot:
     def __init__(self):
+        self.is_running = False
+        self.succ_counter = SuccCounter()
         self.sqlHlper = bili_reserve_sqlhelper
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.now_round_id = 0
@@ -54,25 +63,6 @@ class rid_get_dynamic:
                                     '见盘', '耳机', '鼠标', '手办', '景品', 'ps5', '内存', '风扇', '散热', '水冷',
                                     '主板', '电源', '机箱', 'fgo'
             , '折现', '樱瞳', '盈通', '🧧', '键盘']  # 需要重点查看的关键词列表
-        cookie3 = gl.get_value('cookie3')  # 斯卡蒂
-        ua3 = gl.get_value('ua3')
-
-        def login_check(cookie, ua):
-            headers = {
-                'User-Agent': ua,
-                'cookie': cookie
-            }
-            url = 'https://api.bilibili.com/x/web-interface/nav'
-            res = requests.get(url=url, headers=headers).json()
-            if res['data']['isLogin'] == True:
-                name = res['data']['uname']
-                self.username = name
-                reserve_lot_logger.info('登录成功,当前账号用户名为%s' % name)
-                return 1
-            else:
-                reserve_lot_logger.info('登陆失败,请重新登录')
-                exit('登陆失败,请重新登录')
-
         self.list_type_wrong = list()  # 出错动态内容
         self.list_deleted_maybe = list()  # 可能动态内容
         self.ids = int()
@@ -113,6 +103,7 @@ class rid_get_dynamic:
         :param rid:
         :return:
         '''
+        self.succ_counter.latest_reserve_id = rid
         has_reserve_relation_ids = await self.sqlHlper.get_reserve_by_ids(rid)
         if has_reserve_relation_ids and has_reserve_relation_ids.code == 0 and has_reserve_relation_ids.sid != None:
             req1_dict = has_reserve_relation_ids.raw_JSON
@@ -175,6 +166,8 @@ class rid_get_dynamic:
                 return
             if dycode == 0:
                 self.n += 1
+                self.succ_counter.succ_count += 1
+                self.succ_counter.latest_succ_reserve_id += 1
                 try:
                     dynamic_timestamp = dynamic_data_dict.get('data').get('list').get(str(rid)).get('stime')
                     async with self.dynamic_ts_lock:
@@ -265,6 +258,7 @@ class rid_get_dynamic:
         return reduce(run_function, [[], ] + list_dict_data)
 
     async def get_dynamic_with_thread(self):
+        await self._init()
         now_round: TReserveRoundInfo = await self.sqlHlper.get_latest_reserve_round()
         round_start_ts = int(time.time()) if now_round.is_finished else now_round.round_start_ts
         self.now_round_id = now_round.round_id + 1 if now_round.is_finished else now_round.round_id
@@ -282,6 +276,7 @@ class rid_get_dynamic:
             async with self.dynamic_ts_lock:
                 self.dynamic_timestamp = dynamic_timestamp_info()
             latest_rid = None
+            self.succ_counter.first_reserve_id = self.ids_list[ids_index]
             while 1:
                 # self.resolve_dynamic(self.ids)  # 每次开启一轮多线程前先测试是否可用
                 async with self.ids_change_lock:
@@ -332,7 +327,8 @@ class rid_get_dynamic:
         None_num2 = await self._get_None_data_number()
         reserve_lot_logger.info(
             f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{self.dynamic_timestamp.get_time_str_until_now()}秒，退出！')
-        reserve_lot_logger.info(f'当前rid记录分别回滚{self.rollback_num + None_num1}和{self.rollback_num + None_num2}条')
+        reserve_lot_logger.info(
+            f'当前rid记录分别回滚{self.rollback_num + None_num1}和{self.rollback_num + None_num2}条')
         ridstartfile = open(os.path.join(self.current_dir, 'idsstart.txt'), 'w', encoding='utf-8')
         finnal_rid_list = [
             str(self.ids_list[0] - self.rollback_num - None_num1),
@@ -353,6 +349,7 @@ class rid_get_dynamic:
             round_lot_num=len(latest_reserve_lots),
         )
         await self.sqlHlper.add_reserve_round_info(new_round_info)
+        self.is_running = False
 
     async def generate_update_reserve_lotterys_by_round_id(self, round_id) -> list[TUpReserveRelationInfo]:
         """
@@ -391,11 +388,12 @@ class rid_get_dynamic:
                 for line in l:
                     f.write(line + "\n")
 
-    async def init(self):
+    async def _init(self):
         '''
         初始化信息
         :return:
         '''
+        self.is_running = True
         if not os.path.exists(os.path.join(self.current_dir, 'log')):
             os.mkdir(os.path.join(self.current_dir, 'log'))
 
@@ -450,6 +448,5 @@ class rid_get_dynamic:
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
-    rid_run = rid_get_dynamic()
-    loop.run_until_complete(rid_run.init())
+    rid_run = ReserveScrapyRobot()
     loop.run_until_complete(rid_run.get_dynamic_with_thread())

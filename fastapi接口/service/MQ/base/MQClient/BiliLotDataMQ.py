@@ -1,18 +1,14 @@
 import asyncio
-import time
 import traceback
-from functools import partial
-
 from pika.exchange_type import ExchangeType
-
 from fastapi接口.log.base_log import MQ_logger
-from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq
+from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from fastapi接口.service.MQ.base.BasicAsyncClient import BasicMessageReceiver, QueueName, ExchangeName, \
     RoutingKey, BasicMessageSender
 from grpc获取动态.src.SqlHelper import grpc_sql_helper
 from grpc获取动态.grpc.bapi.biliapi import get_lot_notice
+from opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖
 from utl.pushme.pushme import pushme
-
 
 class OfficialReserveChargeLotMQ(BasicMessageReceiver):
     e = ExchangeName.bili_data
@@ -22,7 +18,7 @@ class OfficialReserveChargeLotMQ(BasicMessageReceiver):
 
     async def consume(self, method, properties, body):
         try:
-            MQ_logger.info(
+            MQ_logger.critical(
                 f"【{OfficialReserveChargeLotMQ.__name__}】收到消息：{self.decode_message(body=body)}\n{method}")
             _body: LotDataReq = LotDataReq(**self.decode_message(body=body))
             lot_data = await get_lot_notice(
@@ -63,17 +59,16 @@ class OfficialReserveChargeLotMQ(BasicMessageReceiver):
                 MQ_logger.exception(f'【{cls.__name__}】 publish error: {e}')
                 pushme(f'【{cls.__name__}】 publish error: {e}', traceback.format_exc())
 
-
 class UpsertOfficialReserveChargeLotMQ(BasicMessageReceiver):
-    q = QueueName.UpsertOfficialReserveChargeLotMQ
-    t = ExchangeType.topic
     e = ExchangeName.bili_data
+    t = ExchangeType.topic
+    q = QueueName.UpsertOfficialReserveChargeLotMQ
     r = RoutingKey.UpsertOfficialReserveChargeLotMQ
 
     async def consume(self, method, properties, body):
         try:
             newly_lot_data = self.decode_message(body=body)
-            MQ_logger.info(f"【{UpsertOfficialReserveChargeLotMQ.__name__}】收到消息：{newly_lot_data}\n{method}")
+            MQ_logger.critical(f"【{UpsertOfficialReserveChargeLotMQ.__name__}】收到消息：{newly_lot_data}\n{method}")
             if newly_lot_data:
                 result = await asyncio.to_thread(grpc_sql_helper.upsert_lot_detail, newly_lot_data)
                 return self.acknowledge_message(delivery_tag=method.delivery_tag)
@@ -122,7 +117,7 @@ class UpsertLotDataByDynamicIdMQ(BasicMessageReceiver):
 
     async def consume(self, method, properties, body):
         try:
-            MQ_logger.info(
+            MQ_logger.critical(
                 f"【{UpsertLotDataByDynamicIdMQ.__name__}】收到消息：{self.decode_message(body=body)}\n{method}")
             lot_data_dynamic_req: LotDataDynamicReq = LotDataDynamicReq(**self.decode_message(body=body))
             if lot_data_dynamic_req.dynamic_id:
@@ -171,6 +166,46 @@ class UpsertLotDataByDynamicIdMQ(BasicMessageReceiver):
                 MQ_logger.exception(f'【{cls.__name__}】 publish error: {e}')
                 pushme(f'【{cls.__name__}】 publish error: {e}', traceback.format_exc())
 
+class UpsertTopicLotMQ(BasicMessageReceiver):
+    e = ExchangeName.bili_data
+    t = ExchangeType.topic
+    q = QueueName.UpsertTopicLotMQ
+    r = RoutingKey.UpsertTopicLotMQ
+
+    async def consume(self, method, properties, body):
+        try:
+            MQ_logger.critical(
+                f"【{UpsertTopicLotMQ.__name__}】收到消息：{self.decode_message(body=body)}\n{method}")
+            _body: TopicLotData = TopicLotData(**self.decode_message(body=body))
+            if 定时获取话题抽奖.topic_robot is None:
+                定时获取话题抽奖.topic_robot = 定时获取话题抽奖.TopicRobot()
+            lot_data = await 定时获取话题抽奖.topic_robot.pipeline(_body.topic_id,use_sem=False)
+            return self.acknowledge_message(delivery_tag=method.delivery_tag)
+        except Exception as e:
+            MQ_logger.exception(f'UpsertTopicLotMQ consume error: {e}')
+            pushme(f'UpsertTopicLotMQ consume error: {e}', traceback.format_exc())
+            self.nacknowledge_message(delivery_tag=method.delivery_tag)
+
+    @classmethod
+    async def create_consumer(cls):
+        """创建消费者"""
+        worker = cls(cls.e, cls.t, cls.q, cls.r)
+        # worker.prefetch_count = 10  # 一次处理10条消息
+        await worker.run()
+
+    @classmethod
+    def publish_message(cls, body: TopicLotData, extra_routing_key: str = ""):
+        """发布消息"""
+        body = body.model_dump()
+        MQ_logger.info(f"【{cls.__name__}】发布消息：{body}")
+        message_sender = BasicMessageSender(cls.e, cls.t, cls.q, cls.r)
+        while 1:
+            try:
+                message_sender.send_message(body, extra_routing_key=extra_routing_key)
+                break
+            except Exception as e:
+                MQ_logger.exception(f'【{cls.__name__}】 publish error: {e}')
+                pushme(f'【{cls.__name__}】 publish error: {e}', traceback.format_exc())
 
 if __name__ == "__main__":
     asyncio.new_event_loop()

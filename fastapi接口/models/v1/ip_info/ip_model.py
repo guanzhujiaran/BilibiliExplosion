@@ -1,5 +1,5 @@
-from pydantic import BaseModel
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
 
-class IpInfoResp(BaseModel):
+class IpInfoResp(CustomBaseModel):
     ipv6: str

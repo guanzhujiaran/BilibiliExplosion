@@ -7,6 +7,9 @@ import requests
 from requests import Response
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import pushme_logger
+from collections import deque
+
+push_msg_d = deque(maxlen=50)
 
 
 def __preprocess_content(content: str) -> str:
@@ -26,6 +29,9 @@ def __preprocess_content(content: str) -> str:
 
 def pushme(title: str, content: str, __type='text') -> Response:
     resp = Response()
+    if content in push_msg_d:
+        return Response()
+    push_msg_d.append(content)
     try:
         url = CONFIG.pushnotify.pushme.url
         token = CONFIG.pushnotify.pushme.token
@@ -108,6 +114,7 @@ def pushme_try_catch_decorator(func: callable) -> callable:
             pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
             pushme_logger.exception(e)
             raise e
+
     return wrapper
 
 

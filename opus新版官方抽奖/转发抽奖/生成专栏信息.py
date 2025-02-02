@@ -11,9 +11,10 @@ from opus新版官方抽奖.Model.OfficialLotModel import LotDetail
 
 
 class GenerateOfficialLotCv(GenerateCvBase):
-    def __init__(self, cookie, ua, csrf, buvid):
+    def __init__(self, cookie, ua, csrf, buvid, abstract: str = ''):
         super().__init__(cookie, ua, csrf, buvid)
         self.post_flag = True  # 是否直接发布
+        self.abstract = abstract
 
     def zhuanlan_format(self, zhuanlan_dict: dict, blank_space: int = 0) -> tuple[str, str]:
         """
@@ -81,10 +82,10 @@ class GenerateOfficialLotCv(GenerateCvBase):
                 ret += f'概率:{__lot_detail.chance}\t'
                 ret += __lot_detail.__dict__.get('etime_str')
                 manual_ret_text += f'概率:{__lot_detail.chance}\t' + __lot_detail.__dict__.get('etime_str')
-                manual_ret_text+='\n'
+                manual_ret_text += '\n'
                 ret += '</span></p></li>'
             ret += '</ol>'
-            manual_ret_text+='\n'
+            manual_ret_text += '\n'
         return ret, manual_ret_text
 
     def zhuanlan_date_sort(self, zhuanlan_data_order_by_date: [LotDetail], limit_date_switch: bool = False,
@@ -152,11 +153,11 @@ class GenerateOfficialLotCv(GenerateCvBase):
         today = datetime.datetime.today()
         _ = datetime.timedelta(days=1)
         next_day = today + _
-        title = f'{next_day.date().month}.{next_day.date().day}之后的官方抽奖'
+        title = f'【{next_day.date().month}.{next_day.date().day}】官方抽奖'
         article_content = article_content + split_article_content + article_content1
         manual_article_content = manual_article_content + manual_spilt_article_content + manual_article_content1
         self.save_article_to_local(title + '_api_ver', article_content)
-        self.save_article_to_local(title + '_手动专栏_ver', manual_article_content)
+        self.save_article_to_local(title + '_手动专栏_ver', self.abstract + manual_article_content)
         banner_url = ''
         summary = ''.join(re.findall('>(.*?)<', article_content)).replace(' ', '').replace('\t', ' ')[0:500]
         words = len(
@@ -213,11 +214,11 @@ class GenerateOfficialLotCv(GenerateCvBase):
         today = datetime.datetime.today()
         _ = datetime.timedelta(days=1)
         next_day = today + _
-        title = f'{next_day.date().month}.{next_day.date().day}之后的充电抽奖'
+        title = f'【{next_day.date().month}.{next_day.date().day}】充电抽奖'
         article_content = article_content + split_article_content + article_content1
         manual_article_content = manual_article_content + manual_split_article_content + manual_article_content1
         self.save_article_to_local(title + '_api_ver', article_content)
-        self.save_article_to_local(title + '_手动专栏_ver', manual_article_content)
+        self.save_article_to_local(title + '_手动专栏_ver', self.abstract + manual_article_content)
         banner_url = ''
         summary = ''.join(re.findall('>(.*?)<', article_content)).replace(' ', '').replace('\t', ' ')[0:500]
         words = len(
@@ -253,5 +254,3 @@ class GenerateOfficialLotCv(GenerateCvBase):
                        origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, aid,
                        up_reply_closed, comment_selected,
                        publish_time, items, platform, buvid, device, build, mobi_app, csrf)
-
-

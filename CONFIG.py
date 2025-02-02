@@ -1,8 +1,8 @@
 import copy
 from dataclasses import dataclass
 from enum import Enum
-
 from fake_useragent import UserAgent
+from sqlalchemy import AsyncAdaptedQueuePool
 
 
 @dataclass
@@ -12,24 +12,9 @@ class DBINFO:
 
 
 @dataclass
-class REDISINFO:
-    host: str = '127.0.0.1'
-    port: int = 11451
-    db: int = 15
-
-
-@dataclass
 class ChatGptSettings:
     baseurl: str = "https://api.chatanywhere.tech/v1"
     open_ai_api_key: str = 'sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
-
-
-@dataclass
-class MYSQL:
-    proxy_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/proxy_db?charset=utf8mb4&autocommit=true'
-    bili_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bilidb?charset=utf8mb4&autocommit=true'
-    bili_reserve_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bili_reserve?charset=utf8mb4&autocommit=true'
-    get_other_lot_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
 
 
 # region 基本配置
@@ -74,13 +59,42 @@ class zhihu_CONFIG:
 
 
 class database:
+    @dataclass
+    class _MYSQL:
+        proxy_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/proxy_db?charset=utf8mb4&autocommit=true'
+        bili_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
+        bili_reserve_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bili_reserve?charset=utf8mb4&autocommit=true'
+        get_other_lot_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
+
+    @dataclass
+    class _REDISINFO:
+        def __init__(self, db: int = 15):
+            self.host: str = '127.0.0.1'
+            self.port: int = 11451
+            self.db: int = db
+
     dynDetail = "H:/database/dynDetail.db"
     proxy_db = "K:/sqlite_database/proxy_database/proxy_db.db"
     proxy_db_URI = 'sqlite+aiosqlite:///K:/sqlite_database/proxy_database/proxy_db.db?check_same_thread=False'
     followingup_db_RUI = 'sqlite+aiosqlite:///G:/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
     bili_live_monitor_db_URI = fr'sqlite:///H:\liveLotMonitorDB\Bili_live_database.db''?check_same_thread=False'  # b站直播数据库
-    MYSQL = MYSQL()
-    proxyRedis = REDISINFO()
+    aiobili_live_monitor_db_URI = fr'sqlite+aiosqlite:///H:\liveLotMonitorDB\Bili_live_database.db''?check_same_thread=False'
+    MYSQL = _MYSQL()
+    proxyRedis = _REDISINFO(15)
+    proxySubRedis = _REDISINFO(6)
+
+
+class SqlAlchemyConfig:
+    engine_config = dict(
+        echo=False,
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=500,  # 默认是5
+        max_overflow=100,
+        pool_recycle=True,
+        pool_timeout=30,
+        future=True,
+        pool_pre_ping=True,
+    )
 
 
 class RabbitMQConfig:
@@ -144,12 +158,17 @@ class _CONFIG:
             baseurl='https://api.openai-hk.com/v1',
             open_ai_api_key='hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25'
         ),
+        ChatGptSettings(
+            baseurl='http://127.0.0.1:1234/v1',
+            open_ai_api_key='114514',
+        ),
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
     # my_ipv6_addr = 'http://127.0.0.1:1919'
     # my_ipv6_addr=None
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()
+    sql_alchemy_config = SqlAlchemyConfig()
 
     _pc_ua = UserAgent(platforms=["pc", "tablet"])
     _mobile_ua = UserAgent(platforms=["mobile"])

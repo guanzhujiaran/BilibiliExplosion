@@ -327,40 +327,40 @@ class BuvidFp:
                     0  # "ontouchstart" in window ? 1 : 0
                 ],  # touch support
                 "a658": [
-    "Arial",
-    "Arial Black",
-    "Arial Narrow",
-    "Calibri",
-    "Cambria",
-    "Cambria Math",
-    "Comic Sans MS",
-    "Consolas",
-    "Courier",
-    "Courier New",
-    "Georgia",
-    "Helvetica",
-    "Impact",
-    "Lucida Console",
-    "Lucida Sans Unicode",
-    "Microsoft Sans Serif",
-    "MS Gothic",
-    "MS PGothic",
-    "MS Sans Serif",
-    "MS Serif",
-    "Palatino Linotype",
-    "Segoe Print",
-    "Segoe Script",
-    "Segoe UI",
-    "Segoe UI Light",
-    "Segoe UI Semibold",
-    "Segoe UI Symbol",
-    "Tahoma",
-    "Times",
-    "Times New Roman",
-    "Trebuchet MS",
-    "Verdana",
-    "Wingdings"
-],  # font details. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
+                    "Arial",
+                    "Arial Black",
+                    "Arial Narrow",
+                    "Calibri",
+                    "Cambria",
+                    "Cambria Math",
+                    "Comic Sans MS",
+                    "Consolas",
+                    "Courier",
+                    "Courier New",
+                    "Georgia",
+                    "Helvetica",
+                    "Impact",
+                    "Lucida Console",
+                    "Lucida Sans Unicode",
+                    "Microsoft Sans Serif",
+                    "MS Gothic",
+                    "MS PGothic",
+                    "MS Sans Serif",
+                    "MS Serif",
+                    "Palatino Linotype",
+                    "Segoe Print",
+                    "Segoe Script",
+                    "Segoe UI",
+                    "Segoe UI Light",
+                    "Segoe UI Semibold",
+                    "Segoe UI Symbol",
+                    "Tahoma",
+                    "Times",
+                    "Times New Roman",
+                    "Trebuchet MS",
+                    "Verdana",
+                    "Wingdings"
+                ],  # font details. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
                 "d02f": "124.04347527516074"  # str(124 + random.random())
                 # audio fingerprint. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
             },
@@ -471,6 +471,7 @@ def hmac_sha256(key, message):
 
 class ExClimbWuzhi:
     proxy_ip = CONFIG.CONFIG.my_ipv6_addr
+
     # proxy_ip = None
     @staticmethod
     async def _get_b3_b4_buvidfp_ticket_Cookie(payload: str, apiExClimbWuzhi: APIExClimbWuzhi = APIExClimbWuzhi(),
@@ -508,7 +509,8 @@ class ExClimbWuzhi:
             cookie.append("=".join(['buvid3', quote(response['data']['b_3'], safe='')]))
             cookie.append("=".join(['buvid4', quote(response['data']['b_4'], safe='')]))
         except Exception as e:
-            activeExclimbWuzhi_logger.error("获取buvid3和buvid4失败: %s", e)
+            activeExclimbWuzhi_logger.error(f"获取buvid3和buvid4失败: {e}")
+            ExClimbWuzhi.proxy_ip = None
         try:
             if apiExClimbWuzhi.bili_ticket and apiExClimbWuzhi.bili_ticket_expires:
                 cookie.append("=".join(['bili_ticket', apiExClimbWuzhi.bili_ticket]))
