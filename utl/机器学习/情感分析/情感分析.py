@@ -1,15 +1,13 @@
 import json
 import re
-import time
 import traceback
 import redis
-
 r1 = redis.Redis(host='localhost', port=11451, db=1)
-try:
-    from modelscope.pipelines import pipeline
-    from modelscope.utils.constant import Tasks
-    from loguru import logger
+from modelscope.pipelines import pipeline
+from modelscope.utils.constant import Tasks
+from loguru import logger
 
+try:
     semantic_cls = pipeline(Tasks.text_classification,
                             'damo/nlp_structbert_sentiment-classification_chinese-large', )
 except Exception as e:

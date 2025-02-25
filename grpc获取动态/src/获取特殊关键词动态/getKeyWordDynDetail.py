@@ -4,7 +4,8 @@ import time
 import pandas as pd
 import Bilibili_methods.all_methods
 from grpc获取动态.src.DynObjectClass import lotDynData
-from grpc获取动态.src.SqlHelper import grpc_sql_helper
+from grpc获取动态.src.SQLObject.models import Bilidyndetail
+from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 
 """
 使用reg查询动态保存下来
@@ -46,9 +47,9 @@ class SearchKeyWordDyn:
                     items.append((new_key, v))
         return dict(items)
 
-    def solve_dynData(self,dyn):
-        dynData = json.loads(dyn.get('dynData'), strict=False)
-        if not dynData.get('extend').get('origDesc'):
+    def solve_dynData(self, dyn: Bilidyndetail):
+        dynData = json.loads(dyn.dynData if dyn.dynData else 'null', strict=False)
+        if not dynData or not dynData.get('extend').get('origDesc'):
             return lotDynData()
         dynamic_content = ''
         if dynData.get('extend').get('opusSummary').get('title'):
@@ -120,11 +121,10 @@ class SearchKeyWordDyn:
         LotDynData.author_space = author_space
         return LotDynData
 
-
-    def main(self, key_word_list: [str], between_ts=None):
+    async def main(self, key_word_list: [str], between_ts=None):
         if between_ts is None:
             between_ts = [int(time.time()) - 7 * 24 * 3600, int(time.time())]
-        result_gen = self.sql.query_dynData_by_key_word(key_word_list, between_ts)
+        result_gen = await self.sql.query_dynData_by_key_word(key_word_list, between_ts)
         result_list = []
         for result in result_gen:
             res_dict = self.solve_dynData(result)

@@ -16,7 +16,7 @@ async def semantic(input_str: str) -> bool:
             try:
                 semantic_cls = await asyncio.to_thread(
                     pipeline, task=Tasks.text_classification,
-                    model='damo/nlp_structbert_sentiment-classification_chinese-large',
+                    model='iic/nlp_structbert_sentiment-classification_chinese-base',
                 )
             except Exception as e:
                 myfastapi_logger.exception(f"semantic_cls error: {e}")

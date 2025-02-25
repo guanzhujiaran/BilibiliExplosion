@@ -3,7 +3,7 @@ from datetime import datetime
 import json
 import random
 import traceback
-from typing import Union, Callable
+from typing import Union, Callable, Literal
 from fastapi接口.log.base_log import get_others_lot_logger
 from sqlalchemy import AsyncAdaptedQueuePool, select, and_, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession,async_sessionmaker
@@ -249,6 +249,8 @@ class __SqlHelper:
                 res = await session.execute(sql)
                 ret = res.scalars().first()
                 return ret
+
+
 
 SqlHelper = __SqlHelper()
 async def __test__():

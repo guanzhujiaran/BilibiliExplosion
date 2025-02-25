@@ -24,14 +24,16 @@ def _mq_retry_wrapper(max_retries: int = 5, delay: int = 10):
     def inner_wrap(func: Callable[[Any], Coroutine[None, None, Any]]):
         async def wrap(*args, **kwargs):
             retries = 0
-            while max_retries <= 0 or retries < max_retries:
+            while 1:
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
                     retries += 1
                     MQ_logger.error(
                         f"MQ {func.__name__} 执行异常,参数：{args, kwargs}, 重试次数: {retries}/{max_retries}: {e}")
-                    if retries >= max_retries or max_retries <= 0:
+                    if max_retries <= 0 or retries < max_retries:
+                        pass
+                    else:
                         MQ_logger.exception(
                             f"【MQ发布消息】执行{func.__name__}失败第{retries}次，彻底失败！！参数：{args, kwargs}")
                         pushme(f'【MQ发布消息】执行{func.__name__}失败第{retries}次，彻底失败！！{e}',

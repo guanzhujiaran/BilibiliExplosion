@@ -4,6 +4,7 @@ import os
 import jieba
 import pickle
 
+
 # 或者使用pickle加载模型
 def preprocess_text(text):
     try:

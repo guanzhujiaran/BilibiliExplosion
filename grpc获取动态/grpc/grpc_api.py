@@ -134,7 +134,7 @@ class BiliGrpc:
         self.lock_prepare_proxy = asyncio.Lock()
         self.latest_352_ts = 0
         self._352MQServer = VoucherRabbitMQ.Instance()
-        self.GeetestV3BreakerPool = BaseAsyncPool(3, GeetestV3Breaker, 'a_validate_form_voucher_ua')
+        self.GeetestV3BreakerPool = BaseAsyncPool(1, GeetestV3Breaker, 'a_validate_form_voucher_ua')
 
     # region 准备工作
     async def _prepare_ck_proxy(self):
@@ -149,13 +149,13 @@ class BiliGrpc:
     async def __set_available_cookies(self, cookies, useProxy=False):
         if not cookies:
             while int(time.time()) - self.cookies_ts < 3 * 60:
-                self.grpc_api_any_log.warning(
+                self.grpc_api_any_log.debug(
                     f'上次获取cookie时间：{datetime.datetime.fromtimestamp(self.cookies_ts)} 时间过短！')
                 if self.cookies:
                     return self.cookies
                 await asyncio.sleep(10)
             self.cookies_ts = int(time.time())
-            self.grpc_api_any_log.warning(f"COOKIE:{self.cookies}失效！正在尝试获取新的认证过的cookie！")
+            self.grpc_api_any_log.debug(f"COOKIE:{self.cookies}失效！正在尝试获取新的认证过的cookie！")
             cookies = await self.__get_available_cookies(useProxy)
         self.cookies = cookies
         return cookies
@@ -748,8 +748,6 @@ if __name__ == '__main__':
     async def _test():
         t = BiliGrpc()
         t.debug_mode = False
-        result1 = await t.grpc_get_space_dyn_by_uid('114519', force_non_proxy=False)
+        result1 = await t.grpc_get_dynamic_detail_by_type_and_rid('273885938')
         print(result1)
-        result2 = await t.grpc_get_space_dyn_by_uid('114520', force_non_proxy=False)
-        print(result2)
     asyncio.run(_test())

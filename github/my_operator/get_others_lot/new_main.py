@@ -1,6 +1,8 @@
 import asyncio
 import datetime
+import gc
 import json
+import math
 import os
 import random
 import re
@@ -9,12 +11,13 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, List
 import subprocess
 from functools import partial
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from grpc获取动态.grpc.bapi.biliapi import proxy_req, get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail
+from opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 from py_mini_racer import MiniRacer
@@ -166,6 +169,28 @@ def writeIntoFile(write_in_list: list[Any], filePath, write_mode='w', sep=','):
             f.writelines(sep.join(write_in_list))
     except Exception as e:
         get_others_lot_log.critical(f'写入文件失败！\n{e}')
+
+
+class SuccCounter(BaseSuccCounter):
+    _total_num: int = 0
+    is_running: bool = False
+
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def total_num(self):
+        # 返回私有变量_total_num的值
+        return self._total_num
+
+    @total_num.setter
+    def total_num(self, value: int):
+        self.is_running = True
+        self.succ_count = 0
+        self._total_num = value
+
+    def show_pace(self):
+        return math.floor(self.succ_count / self.total_num * 100) / 100 if self.total_num else 0
 
 
 class GetOthersLotDynRobot:
@@ -579,6 +604,9 @@ class GetOthersLotDynRobot:
 
         self.pub_lot_user_info_list: list[pub_lot_user_info] = []  # 获取发布抽奖动态的用户信息
 
+        self.space_succ_counter = SuccCounter()
+        self.dyn_succ_counter = SuccCounter()
+
     def calculate_pub_ts_by_dynamic_id(self, dynamic_id: str) -> int:
         return int((int(dynamic_id) + 6437415932101782528) / 4294939971.297)
 
@@ -889,7 +917,7 @@ class GetOthersLotDynRobot:
             return dynamic_time_list
 
         n = 0
-        first_get_dynamic_falg = True
+        first_get_dynamic_flag = True
         origin_offset = 0
         lot_user_info: TLotuserinfo = await self.sqlHlper.getLotUserInfoByUid(uid)
 
@@ -924,7 +952,7 @@ class GetOthersLotDynRobot:
         get_others_lot_log.info(
             f'当前UID：https://space.bilibili.com/{uid}/dynamic\t进度：【{self.queryingData.uidlist.index(uid) + 1}/{len(self.queryingData.uidlist)}】\t初始offseet:{origin_offset}\t是否为第二轮获取动态：{secondRound}')
         while 1:
-            if origin_offset != "" and first_get_dynamic_falg:
+            if origin_offset != "" and first_get_dynamic_flag:
                 items = await self.sqlHlper.getSpaceRespTillOffset(uid, origin_offset)
                 dyreq_dict = {
                     'code': 0,
@@ -958,7 +986,7 @@ class GetOthersLotDynRobot:
                 break
             async with self.lock:
                 if repost_dynamic_id_list:
-                    if first_get_dynamic_falg:
+                    if first_get_dynamic_flag:
                         if self.queriedData.queryUserInfo.get(str(uid)):
                             update_num = len(repost_dynamic_id_list) - len(
                                 set(repost_dynamic_id_list) & set(
@@ -967,7 +995,7 @@ class GetOthersLotDynRobot:
                             update_num = len(repost_dynamic_id_list)
                         self.queryingData.queryUserInfo.update(
                             {str(uid): user_space_dyn_detail(repost_dynamic_id_list[0:10], update_num)})
-                        first_get_dynamic_falg = False
+                        first_get_dynamic_flag = False
                     else:
                         if self.queriedData.queryUserInfo.get(str(uid)):
                             update_num = len(repost_dynamic_id_list) - len(
@@ -1036,10 +1064,13 @@ class GetOthersLotDynRobot:
                 str(uid): self.queryingData.queryUserInfo.get(str(uid))
             })
             await self.get_user_space_dynamic_id(uid, secondRound=True, isPubLotUser=isPubLotUser)
-        if n <= 4 and time.time() - timelist[-1] >= self.SpareTime and secondRound == False:
-            # self.uidlist.remove(uid)
-            get_others_lot_log.critical(
-                f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
+        if uid in self.queryingData.uidlist:
+            if n <= 4 and time.time() - timelist[-1] >= self.SpareTime and secondRound == False:
+                # self.uidlist.remove(uid)
+                get_others_lot_log.critical(
+                    f'{uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{uid}\n查看详情')
+            if not secondRound:
+                self.space_succ_counter.succ_count += 1
         self.space_sem.release()
 
     async def getAllSpaceDynId(self, uidlist=None, isPubLotUser=False) -> list[str]:
@@ -1047,6 +1078,7 @@ class GetOthersLotDynRobot:
             uidlist = self.queryingData.uidlist
         uidlist = list(set(uidlist))
         tasks = []
+        self.space_succ_counter.total_num = len(uidlist)
         for i in uidlist:
             await self.space_sem.acquire()
             task = asyncio.create_task(self.get_user_space_dynamic_id(i, isPubLotUser=isPubLotUser))
@@ -1064,40 +1096,44 @@ class GetOthersLotDynRobot:
             if len(task_doing) == 0:
                 break
             else:
-                get_others_lot_log.debug(f'当前正在获取用户空间的任务数量：{len(task_doing)}（正在执行的数量）/{len(tasks)}（所有任务数量）')
+                get_others_lot_log.debug(
+                    f'当前正在获取用户空间的任务数量：{len(task_doing)}（正在执行的数量）/{len(tasks)}（所有任务数量）')
             await asyncio.sleep(5)
         await asyncio.gather(*tasks, return_exceptions=False)
+        self.space_succ_counter.is_running = False
         return self.spaceRecordedDynamicIdList
 
     # endregion
     # region 判断单个动态是否是抽奖动态
 
-    async def thread_judgedynamic(self, write_in_list):
+    async def thread_judgedynamic(self, write_in_list: List[int | str]):
         async def judge_single_dynamic(dynamic_id):
             async with self.sem:
                 new_resp = await self.get_dyn_detail_resp(dynamic_id)
                 dynamic_detail = await self.solve_dynamic_item_detail(dynamic_id, new_resp)
                 await self.judge_lottery_by_dynamic_resp_dict(dynamic_id, dynamic_detail)
+                self.dyn_succ_counter.succ_count += 1
 
+        self.dyn_succ_counter.total_num = len(write_in_list)
         get_others_lot_log.info('多线程获取动态')
         task_list = []
         for i in write_in_list:
             if i is None:
                 get_others_lot_log.error(f'动态id获取为None:{i}')
+                self.dyn_succ_counter.succ_count += 1
                 continue
             tk = asyncio.create_task(judge_single_dynamic(i))
             task_list.append(tk)
-
-        while True:
-            task_doing = [i for i in task_list if not i.done()]
-            if len(task_doing) == 0:
-                break
-            else:
-                get_others_lot_log.debug(f'当前正在获取动态的任务数量：{len(task_doing)}/{len(task_list)}')
-            await asyncio.sleep(10)
-
+        # while True:
+        #     task_doing = [i for i in task_list if not i.done()]
+        #     if len(task_doing) == 0:
+        #         break
+        #     else:
+        #         get_others_lot_log.debug(f'当前正在获取动态的任务数量：{len(task_doing)}/{len(task_list)}')
+        #     await asyncio.sleep(10)
         get_dyn_resp_result = await asyncio.gather(*task_list, return_exceptions=False)
         get_others_lot_log.info(f'获取动态报错结果：{[x for x in get_dyn_resp_result if x]}')
+        self.dyn_succ_counter.is_running = False
 
     async def get_dyn_detail_resp(self, dynamic_id, dynamic_type=2) -> dict:
         """
@@ -1803,8 +1839,7 @@ class GetOthersLotDynRobot:
                                 highlightWords=';'.join(high_lights_list),
                                 officialLotType=OfficialLotType.抽奖动态的源动态.value,
                                 officialLotId=str(None),
-                                isOfficialAccount=int(
-                                    orig_official_verify if type(orig_official_verify) is not int else 0),
+                                isOfficialAccount=orig_official_verify if type(orig_official_verify) is int else 0,
                                 isManualReply=Manual_judge,
                                 isFollowed=int(bool(suffix)),
                                 isLot=int(isLot),
@@ -2023,7 +2058,7 @@ class GetOthersLotDynRobot:
         # 抽奖获取结束 尝试将这一轮获取到的非图片抽奖添加进数据库
 
 
-class GET_OTHERS_LOT_DYN:
+class GetOthersLotDyn:
     """
         获取更新的抽奖，如果时间在1天之内，那么直接读取文件获取结果，将结果返回回去
     """
@@ -2044,6 +2079,8 @@ class GET_OTHERS_LOT_DYN:
             self.get_dyn_ts: int = 0
         self.is_getting_dyn_flag = False
 
+        self.robot: GetOthersLotDynRobot | None = None
+
     async def save_now_get_dyn_ts(self, ts: int):
         async with self.save_lock:
             with open(FileMap.get_dyn_ts, 'w', encoding='utf-8') as f:
@@ -2056,15 +2093,20 @@ class GET_OTHERS_LOT_DYN:
         主函数，获取一般最新的抽奖
         :return:
         """
-        while self.is_getting_dyn_flag:
-            await asyncio.sleep(30)
+        while 1:
+            async with self.is_getting_dyn_flag_lock:
+                is_getting_dyn_flag = self.is_getting_dyn_flag
+            if is_getting_dyn_flag:
+                await asyncio.sleep(30)
+            else:
+                break
         if os.path.exists(FileMap.get_dyn_ts):
             with open(FileMap.get_dyn_ts, 'r', encoding='utf-8') as f:
                 try:
                     self.get_dyn_ts: int = int(f.read())
                     if not isinstance(self.get_dyn_ts, int):
                         self.get_dyn_ts: int = 0
-                except:
+                except Exception as e:
                     self.get_dyn_ts: int = 0
         else:
             self.get_dyn_ts: int = 0
@@ -2072,8 +2114,10 @@ class GET_OTHERS_LOT_DYN:
         if int(time.time()) - self.get_dyn_ts >= 0.8 * 24 * 3600:
             async with self.is_getting_dyn_flag_lock:
                 self.is_getting_dyn_flag = True
-            ___ = GetOthersLotDynRobot()
-            await ___.main()
+            self.robot = None
+            gc.collect()
+            self.robot = GetOthersLotDynRobot()
+            await self.robot.main()
             await self.save_now_get_dyn_ts(int(time.time()))
             async with self.is_getting_dyn_flag_lock:
                 self.is_getting_dyn_flag = False
@@ -2293,15 +2337,17 @@ class GET_OTHERS_LOT_DYN:
     # endregion
 
 
-async def __test():
-    b = GetOthersLotDynRobot()
-
-    for i in range(1, 115):
-        print(await b.checkDBDyn(i))
-    pass
-
+get_others_lot_dyn = GetOthersLotDyn()
 
 if __name__ == '__main__':
+    async def __test():
+        b = GetOthersLotDynRobot()
+
+        for i in range(1, 115):
+            print(await b.checkDBDyn(i))
+        pass
+
+
     asyncio.run(__test())
     # loop = asyncio.get_event_loop()
     # loop.run_until_complete(b.get_new_dyn())

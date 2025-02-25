@@ -12,6 +12,9 @@ module.exports = {
 		watch: false,
 		//out_file: "/dev/null",
    		//error_file: "/dev/null"
-  }
-  		]
+   		env:{
+   			"PYTHONUNBUFFERED=1":1
+			}
+ 		}
+  	]
 };

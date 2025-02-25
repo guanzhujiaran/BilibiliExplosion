@@ -17,7 +17,6 @@ from fastapi接口.log.base_log import Voucher352_logger
 from fastapi接口.service.geetest_captcha.jy_click_captcha import jy_click
 from grpc获取动态.Utils.UserAgentParser import UserAgentParser
 from grpc获取动态.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, GeetestSuccessTimeCalc
-from grpc获取动态.Utils.极验.util.utils_get_target_center_position import CaptchaDetector
 import bili_ticket_gt_python
 from grpc获取动态.grpc.bapi.biliapi import appsign, get_geetest_reg_info, validate_geetest
 from grpc获取动态.Utils.metadata.makeMetaData import gen_trace_id
@@ -29,22 +28,23 @@ class GeetestV3Breaker:
         self.current_file_root_dir = os.path.dirname(os.path.abspath(__file__))  # 就是当前文件的路径目录
         self.driver = None
         self.wait = None
-        self.captcha_detector: CaptchaDetector = None
+        self.captcha_detector=None
         self.geetest_validator_html_path = "file://" + os.path.join(self.current_file_root_dir,
                                                                     'Geetest_html/geetest-validator/index.html')
         # 本地极验校验工具的路径
         self.succ_stats = GeetestSuccessTimeCalc()
-        self.click = bili_ticket_gt_python.ClickPy()
+        self.click = None
 
     def init_det(self):
-        self.captcha_detector = CaptchaDetector.Instance()
+        if not self.captcha_detector:
+            from grpc获取动态.Utils.极验.util.utils_get_target_center_position import captcha_detector
+            self.captcha_detector = captcha_detector
 
-    def init_browser(self):
+    def init_browser(self,headless:bool=True):
         self.log.info('初始化了一个selenium')
-
         options = Options()
-        options.add_argument('--headless')
-        # options.binary_location = 'C:/WebDriver/chrome.exe'
+        if headless:
+            options.add_argument('--headless')
         self.driver = webdriver.Edge(service=Service(CONFIG.selenium_config.edge_path), options=options)
         self.wait = WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5)
 
@@ -189,7 +189,8 @@ class GeetestV3Breaker:
         resp_json = response.json()
         if resp_json.get('code') == 0:
             if resp_json.get('data').get('geetest') is None:
-                Voucher352_logger.error(f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
+                Voucher352_logger.error(
+                    f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
                 return False
             Voucher352_logger.debug(f"\n成功获取极验challenge：{resp_json}")
             return GeetestRegInfo(
@@ -298,10 +299,12 @@ class GeetestV3Breaker:
             geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
                                                                      version=version)
             if geetest_reg_info is False:
-                return ''
+                return ""
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
             if use_bili_ticket_gt:
+                if not self.click:
+                    self.click = bili_ticket_gt_python.ClickPy()
                 if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
                                                                geetest_reg_info.geetest_challenge):
                     self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
@@ -380,6 +383,8 @@ class GeetestV3Breaker:
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
             if use_bili_ticket_gt:
+                if not self.click:
+                    self.click = bili_ticket_gt_python.ClickPy()
                 if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
                                                                geetest_reg_info.geetest_challenge):
                     self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')

@@ -17,8 +17,7 @@ from grpc获取动态.grpc.grpc_api import bili_grpc
 
 class GetRmFollowingListV1:
     def __init__(self, ):
-        self.global_sem = asyncio.Semaphore(50)
-        self.space_sem = asyncio.Semaphore(50)
+        self.space_sem = asyncio.Semaphore(300)
         self.sqliteLock = asyncio.Lock()
         self.logger = get_rm_following_list_logger
         self.lucky_up_list = []
@@ -187,14 +186,14 @@ class GetRmFollowingListV1:
                     if int(time.time()) - latest_dynamic_timestamp >= self.max_separat_time:  # 超过时间的直接跳过
                         break
                 except Exception as e:
-                    self.logger.info(f"获取取关uid:{uid} {history_offset}失败！\n{e}")
+                    self.logger.exception(f"获取取关uid:{uid} {history_offset}失败！\n{e}")
                     await asyncio.sleep(10)
             if dyn_obj:
                 self.logger.info(
                     f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间有动态")
                 await self.update_up_status(uid, dyn_obj.uname, dyn_obj.dynCard.officialVerify)
             else:
-                self.logger.info(
+                self.logger.critical(
                     f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间没有动态")
                 while 1:
                     try:
@@ -205,11 +204,12 @@ class GetRmFollowingListV1:
                                 userinfo = result.scalars().first()
                                 break
                     except Exception as e:
-                        self.logger.info(f'Exception while query userinfo by uid!{uid}\n{e}')
+                        self.logger.exception(f'Exception while query userinfo by uid!{uid}\n{e}')
                 await self.update_up_status(uid, userinfo.uname, userinfo.officialVerify)
             self.logger.info(
                 f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间动态检查完成！{'是抽奖up' if bool(is_lot_up) else '非抽奖up'}")
-            self.now_check_up.remove(uid)
+            if uid in self.now_check_up:
+                self.now_check_up.remove(uid)
 
     async def update_up_status(self, uid: int, uname: str, officialVerify: int = -2, update_ts: int = int(time.time())):
         """
@@ -257,7 +257,7 @@ class GetRmFollowingListV1:
                             await session.execute(sql)  # 更新状态！
                             break
             except Exception as e:
-                self.logger.info(f'Exception while check is lot up!{uid}\n{e}')
+                self.logger.exception(f'Exception while check is lot up!{uid}\n{e}')
 
     async def check_db_exist_up(self, uid: Union[int, str]) -> bool:
         """
@@ -265,41 +265,40 @@ class GetRmFollowingListV1:
         :param uid:
         :return: True 代表是抽奖up
         """
-        async with self.global_sem:
-            while 1:
-                try:
-                    if isinstance(uid, str):
-                        if not str.isdigit(uid):
-                            self.logger.error(f"Invalid uid! uid:{uid}")
-                            return False
-                        else:
-                            uid = int(uid)
-                    # self.logger.info(f"Checking uid: {uid}! https://space.bilibili.com/{uid}/dynamic")
-                    if uid in self.lucky_up_list:
-                        return True
-                    async with self.AsyncSession() as session:
-                        sql = select(UserInfo).where(uid == UserInfo.uid)
-                        async with self.sqliteLock:
-                            session_res = await session.execute(sql)
-                        res = session_res.scalars().first()
-                    if res:
-                        if (datetime.now() - res.upTimeStamp).days < self.check_up_sep_days:
-                            return bool(res.isLotUp)
-                        else:
-                            self.logger.info(
-                                f'uid:{uid}数据库中数据太老\t数据库中最后时间{res.upTimeStamp.strftime("%Y-%m-%d %H:%M:%S")}')
+        while 1:
+            try:
+                if isinstance(uid, str):
+                    if not str.isdigit(uid):
+                        self.logger.error(f"Invalid uid! uid:{uid}")
+                        return False
                     else:
-                        self.logger.info(f'uid:{uid}数据库中不存在')
-                        await self.create_user_info(uid)
-                    # 更新up的空间动态数据库
-                    await self.check_up_space_dyn(uid)
-                    return await self.check_db_exist_up(uid)
-                except Exception as e:
-                    self.logger.exception(f'uid:{uid} 获取取关用户空间失败！\n{e}')
-                    await asyncio.sleep(10)
+                        uid = int(uid)
+                # self.logger.info(f"Checking uid: {uid}! https://space.bilibili.com/{uid}/dynamic")
+                if uid in self.lucky_up_list:
+                    return True
+                async with self.AsyncSession() as session:
+                    sql = select(UserInfo).where(uid == UserInfo.uid)
+                    async with self.sqliteLock:
+                        session_res = await session.execute(sql)
+                    res = session_res.scalars().first()
+                if res:
+                    if (datetime.now() - res.upTimeStamp).days < self.check_up_sep_days:
+                        return bool(res.isLotUp)
+                    else:
+                        self.logger.info(
+                            f'uid:{uid}数据库中数据太老\t数据库中最后时间{res.upTimeStamp.strftime("%Y-%m-%d %H:%M:%S")}')
+                else:
+                    self.logger.info(f'uid:{uid}数据库中不存在')
+                    await self.create_user_info(uid)
+                # 更新up的空间动态数据库
+                await self.check_up_space_dyn(uid)
+                return await self.check_db_exist_up(uid)
+            except Exception as e:
+                self.logger.exception(f'uid:{uid} 获取取关用户空间失败！\n{e}')
+                await asyncio.sleep(10)
 
     async def check_lot_up(self, following_list: list) -> list:
-        self.logger.info(f'检查关注列表:{following_list}')
+        self.logger.critical(f'检查关注列表:{following_list}')
         tasks = [asyncio.create_task(self.check_db_exist_up(uid)) for uid in following_list]
         while 1:
             if running_task_num := len([x for x in tasks if x.done()]) == 0:
@@ -332,7 +331,7 @@ class GetRmFollowingListV1:
 if __name__ == '__main__':
     async def _run(*args, **kwargs):
         _____test = GetRmFollowingListV1()
-        result = await _____test.main([114518])
+        result = await _____test.main([1])
         print(result)
         return result
 

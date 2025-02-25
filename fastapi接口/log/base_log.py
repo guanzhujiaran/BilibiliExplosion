@@ -6,14 +6,13 @@ from CONFIG import CONFIG
 
 
 class UserMap(Enum):
-
+    background_task = 'background_task'
     live_monitor_logger = "live_monitor_logger"
     request_with_proxy_logger = "request_with_proxy_logger"
     pushme_logger = "pushme"
     reserve_lot_logger = "预约抽奖"
     official_lot_logger = "官方抽奖"
     topic_lot_logger = "话题抽奖"
-    
 
     Voucher352_logger = "Voucher352_logger"
     get_rm_following_list_logger = "获取取关对象列表日志"
@@ -24,7 +23,7 @@ class UserMap(Enum):
     redis_logger = "redis_logger"
     get_others_lot_logger = "get_others_lot_logger"
     MysqlProxy = "MysqlProxy"
-    
+
     BiliGrpcClient_logger = "BiliGrpcClient_logger"
     BiliGrpcUtils_logger = "BiliGrpcUtils_logger"
     BiliGrpcApi_logger = "BiliGrpcApi_logger"
@@ -33,6 +32,7 @@ class UserMap(Enum):
     toutiao_api_logger = "toutiao_api_logger"
     ipv6_monitor_logger = "ipv6_monitor_logger"
     activeExclimbWuzhi_logger = "激活cookie日志"
+
 
 def create_logger(user: UserMap):
     user_uq_value = uuid.uuid4().hex + user.value
@@ -75,3 +75,4 @@ reserve_lot_logger = create_logger(UserMap.reserve_lot_logger)
 
 pushme_logger = create_logger(UserMap.pushme_logger)
 request_with_proxy_logger = create_logger(UserMap.request_with_proxy_logger)
+background_task_logger = create_logger(UserMap.background_task)

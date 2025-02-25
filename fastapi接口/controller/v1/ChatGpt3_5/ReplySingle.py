@@ -5,7 +5,7 @@ import asyncio
 import os
 import time
 from typing import Union
-from fastapi import Query
+from fastapi import Query, Body
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.ChatGpt3_5.ReplySingleModel import ReplyReq, ReplyRes, LLMShowInfo
@@ -46,6 +46,11 @@ async def reply_single(reply_req: ReplyReq):
 async def get_llm_status():
     resp = chatgpt.show_openai_client()
     return CommonResponseModel(code=0, data=resp)
+
+
+@router.post('ResetLLMStatus', response_model=CommonResponseModel)
+async def reset_llm_status(base_url: str = Body(..., min_length=1)):
+    return CommonResponseModel(msg=chatgpt.reset_llm_status(base_url))
 
 
 @router.get('/helloWorld', response_model=CommonResponseModel)

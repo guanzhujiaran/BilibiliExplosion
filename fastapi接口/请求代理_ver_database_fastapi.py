@@ -3,7 +3,7 @@
 import io
 import os
 import sys
-import time
+import tracemalloc
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
@@ -23,6 +23,7 @@ parser.add_argument('-l', '--logger', type=int, default=1, choices=[0, 1])
 args = parser.parse_args()
 print(f'运行 args:{args}')
 if not args.logger:
+    print('关闭日志输出')
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 import asyncio
@@ -34,6 +35,7 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 from fastapi接口.controller.damo import DamoML
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
 from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
+from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
 from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
 from fastapi接口.controller.v1.ip_info import get_ip_info
 from fastapi接口.controller.v1.background_service import BackgroundService, MQController
@@ -45,9 +47,9 @@ import json
 import traceback
 from typing import Union
 import uvicorn
-from fastapi import FastAPI, HTTPException
-from github.my_operator.get_others_lot.new_main import GET_OTHERS_LOT_DYN
-from grpc获取动态.src.SqlHelper import grpc_sql_helper
+from fastapi import FastAPI, HTTPException, Query
+from github.my_operator.get_others_lot.new_main import get_others_lot_dyn
+from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from grpc获取动态.src.获取取关对象.GetRmFollowingList import GetRmFollowingListV1
 from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy
 from 获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import lotScrapy
@@ -64,23 +66,22 @@ req = request_with_proxy()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    tracemalloc.start()
+
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
-    # from apscheduler.schedulers.background import BackgroundScheduler
-    # scheduler = BackgroundScheduler()
-    # from fastapi接口.scripts.start_other_service import start_scripts
     myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
-    # __t = Thread(target=start_scripts, daemon=False)
-    # __t.start()
-    # scheduler.add_job(func=start_scripts, )
-    # scheduler.start()
-    # myfastapi_logger.info("其他服务已启动")
-
-    ### 异步
     show_log = False
-
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
-
     yield
+    # 获取快照并打印内存使用情况
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+
+    myfastapi_logger.critical("[ Top 100 ]")
+    for stat in top_stats[:100]:
+        myfastapi_logger.critical(stat)
+    # 停止 tracemalloc 并取消其他服务
+    tracemalloc.stop()
     myfastapi_logger.critical("正在取消其他服务")
     [
         x.cancel() for x in back_ground_tasks
@@ -91,6 +92,16 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
+
+
+@app.get('/v1/get/snapshot', tags=['v1', 'debug'])
+def get_snapshot(limit: int = Query(default=10, gt=0, lt=100)):
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+
+    for stat in top_stats[:100]:
+        myfastapi_logger.critical(stat)
+    return top_stats[:limit]
 
 
 @app.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息', )
@@ -142,15 +153,14 @@ async def v1_post_rm_following_list(data: list[Union[int, str]]):
 # region 获取抽奖内容接口
 @app.post('/lot/upsert_lot_detail')
 async def upsert_lot_detail(request_body: dict):
-    result = await asyncio.to_thread(grpc_sql_helper.upsert_lot_detail, request_body)
+    result = await grpc_sql_helper.upsert_lot_detail(request_body)
     return result
 
 
 @app.get('/get_others_lot_dyn')
 async def api_get_others_lot_dyn():
     myfastapi_logger.error('get_others_lot_dyn 开始获取B站其他用户的动态抽奖！')
-    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
-    result = await get_other_lot_dyn.get_new_dyn()
+    result = await get_others_lot_dyn.get_new_dyn()
     return result
 
 
@@ -158,8 +168,7 @@ async def api_get_others_lot_dyn():
 async def api_get_others_official_lot_dyn():
     def _():
         myfastapi_logger.error('get_others_lot_dyn 开始获取别人的官方动态抽奖！')
-        get_other_lot_dyn = GET_OTHERS_LOT_DYN()
-        result = get_other_lot_dyn.get_official_lot_dyn()
+        result = get_others_lot_dyn.get_official_lot_dyn()
         return result
 
     return await asyncio.to_thread(_)
@@ -168,16 +177,14 @@ async def api_get_others_official_lot_dyn():
 @app.get('/get_others_big_lot')
 async def api_get_others_big_lot():
     myfastapi_logger.error('get_others_lot_dyn 开始获取别人的大奖！')
-    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
-    result = await asyncio.to_thread(get_other_lot_dyn.get_unignore_Big_lot_dyn)
+    result = await asyncio.to_thread(get_others_lot_dyn.get_unignore_Big_lot_dyn)
     return result
 
 
 @app.get('/get_others_big_reserve')
 async def api_get_others_big_reserve() -> list[reserveInfo]:
     myfastapi_logger.error('get_others_lot_dyn 开始获取重要的预约抽奖！')
-    get_other_lot_dyn = GET_OTHERS_LOT_DYN()
-    result = await get_other_lot_dyn.get_unignore_reserve_lot_space()
+    result = await get_others_lot_dyn.get_unignore_reserve_lot_space()
     reserveInfos = []
     for i in result:  # 对df的每一行数据访问
         reserve_info = reserveInfo(
@@ -213,6 +220,7 @@ async def toutiao_get_others_lot_ids():
 app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)
 app.include_router(LotteryData.router)
+app.include_router(LotteryStatistic.router)
 app.include_router(GetV3ClickTarget.router)
 app.include_router(get_ip_info.router)
 app.include_router(BackgroundService.router)
@@ -243,11 +251,6 @@ async def some_middleware(request: Request, call_next):
 
 
 if __name__ == '__main__':
-
-    import faulthandler
-
-    file = open(os.path.join(os.path.curdir, '报错时保存的faulthandler.txt'), "w+")  # 打印线程输出文件
-    faulthandler.enable(file=file)  # 通过signal建立关系
     try:
         uvicorn.run(
             # '请求代理_ver_database_fastapi:app',

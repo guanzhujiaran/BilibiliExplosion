@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 
-class dynAllDetail(object):
+class dynAllDetail:
     """
     写入动态数据库里面的数据
     """
@@ -10,16 +10,17 @@ class dynAllDetail(object):
     dynData: dict
     lot_id: str
     dynamic_created_time: str
+    dynamic_id_int :int
 
-    def __init__(self, rid: str = '', dynamic_id: str = '', dynData=None, lot_id=None, dynamic_created_time=''):
+    def __init__(self, rid: str = '', dynamic_id: str = '', dynData=None, lot_id=None, dynamic_created_time='',*args,**kwargs):
         self.rid = rid
         self.dynamic_id = dynamic_id
         self.dynData = dynData
         self.lot_id = lot_id
         self.dynamic_created_time = dynamic_created_time
+        self.dynamic_id_int = int(dynamic_id)
 
-
-class lotDetail(object):
+class lotDetail:
     """
     官方抽奖的notice关键信息
     """
@@ -52,7 +53,7 @@ class lotDetail(object):
         self.__dict__.update(d)
 
 
-class lotDynData(object):
+class lotDynData:
     """
     普通动态抽奖信息
     """

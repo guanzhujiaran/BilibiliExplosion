@@ -13,6 +13,8 @@ async def get_ipv6_from_redis() -> str:
     :return:
     """
     ipv6_addr = await ip_info_redis.get_ip_addr()
+    if ipv6_addr is None:
+        return ""
     return ipv6_addr
 
 

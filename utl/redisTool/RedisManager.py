@@ -6,23 +6,22 @@ from typing import Union, Any, List, Callable
 from datetime import timedelta
 from redis import asyncio as redis
 from enum import Enum
-
 from redis.typing import KeyT
-
 from CONFIG import CONFIG
 import redis as sync_redis
-
 from fastapi接口.log.base_log import redis_logger
 
+_sem = asyncio.Semaphore(1024)
 
 def retry(func: Callable) -> Callable:
     async def wrapper(*args, **kwargs):
         while 1:
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
-                redis_logger.exception(e)
-                await asyncio.sleep(3)
+            async with _sem:
+                try:
+                    return await func(*args, **kwargs)
+                except Exception as e:
+                    redis_logger.exception(e)
+                    await asyncio.sleep(30)
 
     return wrapper
 
@@ -297,10 +296,17 @@ class RedisManagerBase:
                 return await r.zincrby(key, score_change, element)
 
     @retry
-    async def _zget_range(self, key, start: int, end: int, num: int = None, offset: int = None):
+    async def _zget_range(self, key, start: int = 0, end: int = -1, num: int = None, offset: int = None):
         async with redis.Redis(connection_pool=self.pool) as r:
             async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zrange(key, start, end, num=num, offset=offset)
+                return await r.zrange(key, start=start, end=end, num=num, offset=offset)
+
+    @retry
+    async def _zget_range_with_score(self, key, num: int = None, offset: int = None):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                return await r.zrevrangebyscore(name=key, min='-inf', max='inf', num=num,
+                                                start=offset, withscores=True)
 
     @retry
     async def _zget_top_score(self, key, rand=False):

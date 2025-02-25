@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 from pydantic import Field
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
@@ -111,3 +112,35 @@ class BulkAddDynamicLotteryRespItem(CustomBaseModel):
 
 class AddTopicLotteryReq(CustomBaseModel):
     topic_id: int | str
+
+
+class WinnerInfo(CustomBaseModel):
+    uid: int | str
+    count: int
+
+
+class BiliLotStatisticInfoResp(CustomBaseModel):
+    sync_ts: int
+    winners: list[WinnerInfo]
+
+
+class BiliLotStatisticLotTypeEnum(str, Enum):
+    official = "official"
+    reserve = "reserve"
+    charge = "charge"
+
+    @classmethod
+    def lot_type_2_business_type(cls, lot_type: 'BiliLotStatisticLotTypeEnum') -> int:
+        mapping = {
+            cls.official: 1,
+            cls.reserve: 12,
+            cls.charge: 10,
+        }
+        return mapping.get(lot_type, 0)
+
+
+class BiliLotStatisticRankTypeEnum(str, Enum):
+    first = "first"
+    second = "second"
+    third = "third"
+    total = "total"

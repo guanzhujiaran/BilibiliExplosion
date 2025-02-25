@@ -17,10 +17,10 @@ import json
 import asyncio
 from grpc获取动态.src.DynObjectClass import dynAllDetail
 from utl.代理.request_with_proxy import request_with_proxy
-from grpc获取动态.src.SqlHelper import grpc_sql_helper
+from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 
 
-class ExctractOfficialLottery:
+class ExtractOfficialLottery:
     def __init__(self):
         self.BiliGrpc = bili_grpc
         self.__dir = os.path.dirname(os.path.abspath(__file__))
@@ -95,7 +95,7 @@ class ExctractOfficialLottery:
         :return: 更新抽奖
         """
 
-        async def solve_lot_data(lot_data):
+        async def _solve_lot_data(lot_data, rs):
             """
 
             :param lot_data:
@@ -108,26 +108,31 @@ class ExctractOfficialLottery:
             newly_lotData = newly_lot_resp.get('data', {})
 
             if newly_lotData:
+                self.log.info(f'获取到新的抽奖数据，推送到upsert_official_reserve_charge_lot消息队列{newly_lotData}')
                 await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
                     newly_lotData,
-                    extra_routing_key="ExctractOfficialLottery.update_lot_notice.solve_lot_data"
+                    extra_routing_key="ExtractOfficialLottery.update_lot_notice.solve_lot_data"
                 )
 
-                async with data_lock:
-                    newly_updated_lot_data.append(newly_lotData)
+                newly_updated_lot_data.append(newly_lotData)
             else:
                 self.log.critical(f'获取到空数据，可能是api接口问题，请检查！使用原始抽奖数据！！！{lot_data}')
                 newly_updated_lot_data.append(lot_data)
+            rs['cur_num'] += 1
+            self.log.info(f'当前更新了【{rs["cur_num"]}/{rs["total_num"]}】条官方抽奖数据')
 
-        self.log.info(f'开始更新抽奖，共计{len(original_lot_notice)}条抽奖需要更新，开始重新通过b站api获取抽奖数据！')
-        data_lock = asyncio.Lock()
+        running_status = {
+            'total_num': len(original_lot_notice),
+            "cur_num": 0
+        }
+        self.log.info(f'开始更新抽奖，共计{running_status["total_num"]}条抽奖需要更新，开始重新通过b站api获取抽奖数据！')
         newly_updated_lot_data = []
         thread_num = 50
         task_list = []
-        for idx in range(len(original_lot_notice) // thread_num + 1):
+        for idx in range(running_status["total_num"] // thread_num + 1):
             task_data = original_lot_notice[idx * thread_num:(idx + 1) * thread_num]
             for da in task_data:
-                task = solve_lot_data(da)
+                task = _solve_lot_data(da, running_status)
                 task_list.append(task)
         await asyncio.gather(*task_list)
 
@@ -190,11 +195,11 @@ class ExctractOfficialLottery:
                         lot_id = lot_data.get('lottery_id')
         return temp_rid, lot_id, dynamic_id, dynamic_created_time
 
-    def get_repost_count(self, dynamic_id):
-        dyn_detail = self.sql.get_all_dynamic_detail_by_dynamic_id(dynamic_id)
-        if not dyn_detail.get('dynData'):
-            return 114514
-        dyn_data = json.loads(dyn_detail.get('dynData'), strict=False)
+    async def get_repost_count(self, dynamic_id):
+        dyn_detail = await self.sql.get_all_dynamic_detail_by_dynamic_id(dynamic_id)
+        if not dyn_detail.dynData:
+            return 0
+        dyn_data = json.loads(dyn_detail.dynData, strict=False)
         repost_count = 0
         for module in dyn_data.get('modules'):
             if module.get('moduleType') == 'module_stat':
@@ -206,7 +211,7 @@ class ExctractOfficialLottery:
                         repost_count = module.get('moduleButtom').get('moduleStat').get('repost')
         return repost_count
 
-    def construct_lot_detail(self, lot_data_list: [dict], get_repost_count_flag: bool) -> list[LotDetail]:
+    async def construct_lot_detail(self, lot_data_list: [dict], get_repost_count_flag: bool) -> list[LotDetail]:
         ret_list = []
         need_keys = [
             'lottery_id',
@@ -233,7 +238,7 @@ class ExctractOfficialLottery:
             second_prize_cmt = lot_data.get('second_prize_cmt', '')
             third_prize_cmt = lot_data.get('third_prize_cmt', '')
             if get_repost_count_flag:
-                participants = self.get_repost_count(dynamic_id)
+                participants = await self.get_repost_count(dynamic_id)
             else:
                 participants = lot_data.get('participants', 0)
             result = LotDetail(
@@ -273,7 +278,7 @@ class ExctractOfficialLottery:
                     )
                     ret_dict_list.append(tempdetail_dict.__dict__)
             for detail in ret_dict_list:
-                self.sql.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
+                await self.sql.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
                                           dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
                                           dynamic_created_time=detail.get('dynamic_created_time'))
 
@@ -303,7 +308,8 @@ class ExctractOfficialLottery:
         已经排除了开奖了的和失效了的抽奖了
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
-        all_official_lots_undrawn = self.sql.get_official_and_charge_lot_not_drawn()
+        all_official_lots_undrawn = await self.sql.get_all_lot_not_drawn()
+        self.log.critical(f'未开奖的官方抽奖数量:{len(all_official_lots_undrawn)}')
         all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data = \
             await self.get_lot_dict(
                 all_official_lots_undrawn,
@@ -317,13 +323,13 @@ class ExctractOfficialLottery:
                 [official_lot_dynamic_ids.extend(charge_lot_dynamic_ids)]
             )  # 更新抽奖的动态
 
-        all_official_lot_detail_result: list[LotDetail] = self.construct_lot_detail(all_lot_official_data, True)
+        all_official_lot_detail_result: list[LotDetail] = await self.construct_lot_detail(all_lot_official_data, True)
         all_official_lot_detail: list[LotDetail] = [x for x in all_official_lot_detail_result]
         latest_official_lot_dynamic_ids = [x['business_id'] for x in latest_updated_official_lot_data]
         latest_official_lot_detail: list[LotDetail] = [x for x in all_official_lot_detail if
                                                        x.dynamic_id in latest_official_lot_dynamic_ids]
 
-        all_charge_lot_detail: list[LotDetail] = self.construct_lot_detail(all_lot_charge_data, False)
+        all_charge_lot_detail: list[LotDetail] = await self.construct_lot_detail(all_lot_charge_data, False)
         latest_charge_lot_dynamic_ids = [x['business_id'] for x in latest_updated_charge_lot_data]
         latest_charge_lot_detail: list[LotDetail] = [x for x in all_charge_lot_detail if
                                                      x.dynamic_id in latest_charge_lot_dynamic_ids]
@@ -379,11 +385,19 @@ class ExctractOfficialLottery:
 
         return latest_official_lot_detail, latest_charge_lot_detail
 
-    async def save_article(self, latest_lots_judge_ts: int = 20 * 3600, abstract: str = ''):
+    async def save_article(self, latest_lots_judge_ts: int = 20 * 3600, abstract: str = '',
+                           is_api_update: bool = False):
+        """
+
+        :param latest_lots_judge_ts:
+        :param abstract:
+        :param is_api_update:  是否使用b站api更新一下数据库里的未开奖数据
+        :return:
+        """
         self.log.debug(f'开始提取官方抽奖和充电抽奖专栏信息！')
         all_official_lot_detail, latest_official_lot_detail, all_charge_lot_detail, latest_charge_lot_detail = await self.get_all_lots(
             latest_lots_judge_ts,
-            is_api_update=False
+            is_api_update=is_api_update
         )  # 获取并更新抽奖信息！
         gc = GenerateOfficialLotCv('', '', '', '', abstract=abstract)
         gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
@@ -392,5 +406,5 @@ class ExctractOfficialLottery:
 
 
 if __name__ == '__main__':
-    __e = ExctractOfficialLottery()
-    asyncio.run(__e.main())
+    __e = ExtractOfficialLottery()
+    asyncio.run(__e.save_article(is_api_update=True))

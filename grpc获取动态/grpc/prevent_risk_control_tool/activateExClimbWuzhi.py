@@ -509,7 +509,7 @@ class ExClimbWuzhi:
             cookie.append("=".join(['buvid3', quote(response['data']['b_3'], safe='')]))
             cookie.append("=".join(['buvid4', quote(response['data']['b_4'], safe='')]))
         except Exception as e:
-            activeExclimbWuzhi_logger.error(f"获取buvid3和buvid4失败: {e}")
+            activeExclimbWuzhi_logger.exception(f"获取buvid3和buvid4失败: {e}")
             ExClimbWuzhi.proxy_ip = None
         try:
             if apiExClimbWuzhi.bili_ticket and apiExClimbWuzhi.bili_ticket_expires:

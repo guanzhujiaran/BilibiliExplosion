@@ -17,6 +17,15 @@ class BaseLLM:
         for x in CONFIG.chat_gpt_configs
     ]
 
+    def reset_llm_status(self, url):
+        nums = 0
+        for i in self._OpenAiclients:
+            if i.base_url == url:
+                i.isAvailable = True
+                i.latestUseDate = datetime.now()
+                nums += 1
+        return f"重置了{nums}个大模型客户端状态！"
+
     def show_openai_client(self):
         available_num = 0
         for i in self._OpenAiclients:

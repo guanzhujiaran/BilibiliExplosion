@@ -449,8 +449,11 @@ async def resource_abtest_abserver(
         'ts': int(time.time()),
     }
     signed_params = appsign(params)
-    response = await get_request_func(use_custom_proxy=True)(url=url, method='get', params=signed_params,
-                                                             headers=headers_raw)
+    response = await get_request_func(use_custom_proxy=True)(
+        url=url,
+        method='get',
+        params=signed_params,
+        headers=headers_raw)
     bapi_log.debug(f'\n{url}\t发请求验证成功：{response.json()}')
     return response
 

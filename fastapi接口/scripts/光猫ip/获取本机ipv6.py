@@ -186,9 +186,10 @@ class ipv6Obj:
                 ipv6_prefix = await asyncio.to_thread(self.get_ipv6_prefix_from_selenium)
                 return ipv6_prefix
             except Exception as e:
-                self.edge.close()
                 ipv6_monitor_logger.exception(f'selenium获取ipv6失败！{e}')
-                await asyncio.sleep(30)
+                if self.edge:
+                    self.edge.close()
+                self.edge = None
 
     def get_ipv6_prefix_from_selenium(self):
         def login():
@@ -199,22 +200,30 @@ class ipv6Obj:
 
         def get_ipv6_prefix():
             driver.switch_to.frame('mainFrame')
-            driver.find_element(By.ID, 'smWanStatu').click()
-            driver.find_element(By.ID, 'ssmIPv6WANSta').click()
+            if not is_logined:
+                driver.find_element(By.ID, 'smWanStatu').click()
+                driver.implicitly_wait(2)
+                driver.find_element(By.ID, 'ssmIPv6WANSta').click()
+                driver.implicitly_wait(2)
             Tbl_WANstauts1 = driver.find_element(By.ID, 'Tbl_WANstauts1')
             Tbl_WANstauts1_text = Tbl_WANstauts1.text
             driver.switch_to.default_content()
             return Tbl_WANstauts1_text.split('\n')[9].replace("前缀 ", "")
 
         self.init_browser()
-        driver = self.edge
-
         self.edge.refresh()
-        if driver.current_url != 'http://192.168.1.1/':
+        driver = self.edge
+        is_logined = False
+        if driver.current_url != 'http://192.168.1.1/' and driver.current_url != 'http://192.168.1.1/start.ghtml':
             login()
-        return get_ipv6_prefix()
+        else:
+            is_logined = True
+        ipv6_prefix = get_ipv6_prefix()
+        return ipv6_prefix
 
 
 if __name__ == '__main__':
     myapp = ipv6Obj()
-    print(asyncio.run(myapp.async_get_ipv6_prefix_selenium()))
+    while 1:
+        print(asyncio.run(myapp.async_get_ipv6_prefix_selenium()))
+        time.sleep(10)

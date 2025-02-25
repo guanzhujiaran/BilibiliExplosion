@@ -1,7 +1,7 @@
 import asyncio
 import time
 from enum import Enum
-
+from CONFIG import CONFIG
 from utl.redisTool.RedisManager import RedisManagerBase
 
 
@@ -10,7 +10,11 @@ class LotDataRedisObj(RedisManagerBase):
         add_dynamic_lottery_queue = "add_dynamic_lottery_queue"
 
     def __init__(self):
-        super().__init__(db=2)
+        super().__init__(
+            db=CONFIG.database.lotDataRedisObj.db,
+            host=CONFIG.database.lotDataRedisObj.host,
+            port=CONFIG.database.lotDataRedisObj.port,
+        )
 
     async def set_add_dynamic_lottery(self, dynamic_id: str):
         return await self._zadd(self.RedisMap.add_dynamic_lottery_queue.value,

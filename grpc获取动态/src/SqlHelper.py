@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 import datetime
-from typing import Generator
+from typing import Generator, Literal
 from fastapi接口.log.base_log import myfastapi_logger
+from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
+    BiliLotStatisticRankTypeEnum
+from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 from grpc获取动态.src.DynObjectClass import *  # 导入自定义对象
 import time
 import ast
@@ -93,21 +96,24 @@ class SQLHelper:
 
     # region 查询相关信息
     @lock_wrapper
-    def get_lost_lots(self) -> [dict]:
+    def get_lost_lots(self, limit_ts: int = 7 * 3600 * 24) -> [dict]:
         """
         获取主表中lot_id存在，但抽奖信息表中不存在数据的lot_id和rid信息
         :return:
         """
         ret_row = []
+        target_ts = int(time.time()) - limit_ts
+        fake_dynamic_id = ts_2_fake_dynamic_id(int(target_ts))
         for row in self.op_db.query(
                 """
-SELECT b.*
-FROM (select * from biliDynDetail limit 300000) AS b
-left JOIN lotData AS l ON b.lot_id = l.lottery_id
-WHERE b.lot_id IS NOT NULL AND TRIM(b.lot_id) != '' AND l.lottery_id IS NULL
-ORDER BY b.rid DESC
-LIMIT 300000;
-    """
+                select * from biliDynDetail as a
+                left join lotData as b 
+                on a.lot_id = b.lottery_id
+                where a.lot_id is not null
+                and b.lottery_id is null
+                and a.dynamic_id > :fake_dynamic_id
+                order by a.dynamic_id desc
+                """, {"fake_dynamic_id": fake_dynamic_id}
         ):
             ret_row.append(row)
         return ret_row
@@ -214,11 +220,11 @@ INNER JOIN biliDynDetail t2 ON t1.rid = t2.rid + 1;"""
         return max_rid
 
     @lock_wrapper
-    def query_dynData_by_key_word(self, key_word_list: [str], between_ts: list = []) -> Generator:
+    def query_dynData_by_key_word(self, key_word_list: [str], between_ts: [int, int]) -> Generator:
         """
         通过like查询需要的动态
+        :param key_word_list:
         :param between_ts:
-        :param RegExp:
         :return:
         """
         where = ""
@@ -232,10 +238,14 @@ INNER JOIN biliDynDetail t2 ON t1.rid = t2.rid + 1;"""
         }
         if len(between_ts) == 2:
             between_ts.sort()
-            where += "and dynamic_created_time between datetime(:start_ts,'unixepoch','localtime') and datetime(:end_ts,'unixepoch','localtime')"
+            if where:
+                where += "and "
+            where += "dynamic_created_time between datetime(:start_ts,'unixepoch','localtime') and datetime(:end_ts,'unixepoch','localtime')"
             where_args.update(
-                {'start_ts': between_ts[0],
-                 'end_ts': between_ts[1]}
+                {
+                    'start_ts': between_ts[0],
+                    'end_ts': between_ts[1]
+                }
             )
         return self.op_db_table.rows_where(
             where=where, where_args=where_args)
@@ -393,6 +403,7 @@ INNER JOIN biliDynDetail t2 ON t1.rid = t2.rid + 1;"""
                 pk_values=doc_id,
                 updates={
                     'dynamic_id': dynamic_id,
+                    'dynamic_id_int':int(dynamic_id),
                     'dynData': dynData,
                     'lot_id': lot_id,
                     'dynamic_created_time': dynamic_created_time
@@ -402,6 +413,7 @@ INNER JOIN biliDynDetail t2 ON t1.rid = t2.rid + 1;"""
             return self.op_db_table.insert({
                 'rid': doc_id,
                 'dynamic_id': dynamic_id,
+                'dynamic_id_int':int(dynamic_id),
                 'dynData': dynData,
                 'lot_id': lot_id,
                 'dynamic_created_time': dynamic_created_time
@@ -426,19 +438,51 @@ INNER JOIN biliDynDetail t2 ON t1.rid = t2.rid + 1;"""
         else:
             self.op_lot_table.insert(record=lot_data_dict)
             return {'mode': 'insert'}
+
     # endregion
     @lock_wrapper
-    def get_official_and_charge_lot_not_drawn(self) -> [dict]:
+    def get_all_lot_not_drawn(self) -> [dict]:
         ret_list_dict = [row for row in
                          self.op_lot_table.rows_where(
-                             where='lottery_result is Null and status=0 and business_type!=10',
+                             where='lottery_result is null and status!=-1',
                              order_by='lottery_id'
                          )]
         return ret_list_dict
 
+    @lock_wrapper
+    def get_all_lottery_result_rank(self, business_type: Literal[1, 10, 12],
+                                    rank_type: BiliLotStatisticRankTypeEnum) -> list[
+        tuple[int, int]]:
+        if rank_type == BiliLotStatisticRankTypeEnum.total:
+            ret_list_dict = self.op_db.execute(f"""
+SELECT uid,
+COUNT(*) AS total_count
+FROM (
+SELECT json_extract(value, '$.uid') AS uid
+FROM lotData, json_each(lotData.lottery_result, '$.first_prize_result')
+where lotData.business_type={business_type}
+UNION ALL
+SELECT json_extract(value, '$.uid') AS uid
+FROM lotData, json_each(lotData.lottery_result, '$.second_prize_result')
+where lotData.business_type={business_type}
+UNION ALL
+SELECT json_extract(value, '$.uid') AS uid
+FROM lotData, json_each(lotData.lottery_result, '$.third_prize_result')
+where lotData.business_type={business_type}
+)
+GROUP BY uid
+ORDER BY total_count DESC;""")
+        else:
+            ret_list_dict = self.op_db.execute(f"""
+SELECT 
+json_extract(value, '$.uid') AS uid,
+COUNT(1) AS count
+FROM lotData, json_each(lotData.lottery_result, '$.{rank_type}_prize_result')
+where lotData.business_type={business_type}
+GROUP BY uid
+ORDER BY count DESC , uid DESC;""")
+        return ret_list_dict.fetchall()
+
 
 grpc_sql_helper = SQLHelper()
 
-if __name__ == '__main__':
-    result = grpc_sql_helper.get_latest_rid()
-    print(result)

@@ -1,12 +1,17 @@
+import json
 import time
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine,async_sessionmaker
+from urllib import parse
+from urllib.parse import urlparse
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import InstrumentedAttribute
-from typing import Callable, Union
+from typing import Callable, Union, Sequence
 from sqlalchemy import inspect, select, and_, func
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import reserve_lot_logger
 from opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
+from utl.pushme.pushme import pushme
+from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 
 lock = asyncio.Lock()
 
@@ -62,10 +67,16 @@ class _SqlHelper:
         return ret_dict
 
     @lock_wrapper
-    async def add_reserve_info_by_resp_dict(self, origin_resp_dict: dict, round_id: int):
+    async def _add_reserve_info_by_resp_dict(self, reserve_info: TUpReserveRelationInfo):
+        async with self._session() as session:
+            async with session.begin():
+                await session.merge(reserve_info)
+
+    async def add_reserve_info_by_resp_dict(self, origin_resp_dict: dict, round_id: int | None):
         """
         merge添加预约信息，如果存在就update
-        :param resp_dict:
+        :param origin_resp_dict:
+        :param round_id:
         :return:
         """
         if not self.reserve_info_column_names:
@@ -76,13 +87,25 @@ class _SqlHelper:
             for k in new_field:
                 resp_dict.update({"new_field": {k: resp_dict.pop(k)}})
         reserve_info = TUpReserveRelationInfo(**resp_dict)
+        if reserve_info.jumpUrl:
+            u = urlparse(reserve_info.jumpUrl)
+            query_dict = dict(parse.parse_qsl(u.query))
+            if query_dict.get('business_id') and query_dict.get('business_type'):
+                await BiliLotDataPublisher.pub_official_reserve_charge_lot(
+                    business_id=query_dict.get('business_id'),
+                    business_type=query_dict.get('business_type'),
+                    origin_dynamic_id=str(reserve_info.dynamicId),
+                )
+            else:
+                await asyncio.to_thread(pushme, '预约信息抽奖jumpUrl有问题', f'{json.dumps(origin_resp_dict)}')
         reserve_info.raw_JSON = origin_resp_dict
-        reserve_info.reserve_round_id = round_id
+        if round_id:
+            reserve_info.reserve_round_id = round_id
+        else:
+            reserve_info.reserve_round_id = None
         if new_field:
             reserve_info.new_field = str(new_field)
-        async with self._session() as session:
-            async with session.begin():
-                await session.merge(reserve_info)
+        await self._add_reserve_info_by_resp_dict(reserve_info)
 
     @lock_wrapper
     async def get_latest_reserve_round(self, readonly=False) -> TReserveRoundInfo:
@@ -154,7 +177,7 @@ class _SqlHelper:
                     return tReserveRoundInfo
 
     @lock_wrapper
-    async def get_all_reserve_lottery(self) -> list[TUpReserveRelationInfo]:
+    async def get_all_reserve_lottery(self) -> Sequence[TUpReserveRelationInfo]:
         async with self._session() as session:
             sql = select(TUpReserveRelationInfo).filter(TUpReserveRelationInfo.lotteryType == 1).order_by(
                 TUpReserveRelationInfo.dynamicId.desc())
@@ -162,7 +185,7 @@ class _SqlHelper:
             return result.scalars().all()
 
     @lock_wrapper
-    async def get_reserve_lotterys_by_round_id(self, round_id: int) -> list[TUpReserveRelationInfo]:
+    async def get_reserve_lotterys_by_round_id(self, round_id: int) -> Sequence[TUpReserveRelationInfo]:
         async with self._session() as session:
             sql = select(TUpReserveRelationInfo).filter(
                 and_(
@@ -190,9 +213,25 @@ class _SqlHelper:
         return ret_list
 
     @lock_wrapper
-    async def get_all_available_reserve_lotterys(self) -> list[TUpReserveRelationInfo]:
+    async def get_all_undrawn_reserve_lottery(self) -> Sequence[TUpReserveRelationInfo]:
+        async with self._session() as session:
+            sql = select(TUpReserveRelationInfo).filter(
+                and_(
+                    TUpReserveRelationInfo.lotteryType == 1,
+                    TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
+                    TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
+                    TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
+                    TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
+                )
+            ).order_by(TUpReserveRelationInfo.etime.asc())
+            result = await session.execute(sql)
+            return result.scalars().all()
+
+    @lock_wrapper
+    async def get_all_available_reserve_lotterys(self) -> Sequence[TUpReserveRelationInfo]:
         """
-        获取所有有效的预约抽奖 （按照etime升序排列
+        获取所有有效的预约抽奖信息 （按照etime升序排列
+        未超时的
         只抽两天之内的
         :return:
         """
@@ -276,7 +315,8 @@ bili_reserve_sqlhelper = _SqlHelper()
 # region 测试用代码
 
 async def _test_solve_reserve_resp():
-    pass
+    a = await bili_reserve_sqlhelper.get_all_undrawn_reserve_lottery()
+    print(a)
 
 
 # endregion

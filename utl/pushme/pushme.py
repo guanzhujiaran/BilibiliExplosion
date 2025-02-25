@@ -3,6 +3,8 @@ import datetime
 import json
 import traceback
 from functools import wraps
+from typing import Literal, Optional
+
 import requests
 from requests import Response
 from CONFIG import CONFIG
@@ -27,7 +29,8 @@ def __preprocess_content(content: str) -> str:
     return content
 
 
-def pushme(title: str, content: str, __type='text') -> Response:
+def pushme(title: str, content: str, __type: Optional[Literal[
+    "text", "data", "markdata", "html", "txt", "json", "markdown", "cloudMonitor", "jenkins", "route", "pay"]] = 'text') -> Response:
     resp = Response()
     if content in push_msg_d:
         return Response()

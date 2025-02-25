@@ -1,22 +1,16 @@
 import asyncio
-import os.path
 from typing import Dict
 import time
 import pandas
 import re
-import sys
-
 from opus新版官方抽奖.Base.generate_cv import GenerateCvBase
 from opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
-
-sys.path.append('C:/pythontest/')
 import random
-import requests
-import urllib.parse
 import datetime
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
+from opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import ReserveScrapyRobot
 
 
 class GenerateReserveLotCv(GenerateCvBase):
@@ -129,7 +123,7 @@ class GenerateReserveLotCv(GenerateCvBase):
         '''
         return sorted(zhuanlan_data, key=lambda x: x['etime'])
 
-    async def reserve_lottery(self):
+    async def reserve_lottery(self,is_api_update:bool=False):
         '''
         state含义：
             -100 ：失效
@@ -142,6 +136,9 @@ class GenerateReserveLotCv(GenerateCvBase):
         last_round = await self.sqlhelper.get_latest_reserve_round(readonly=True)
         zhuanlan_data: list[
             TUpReserveRelationInfo] = await self.sqlhelper.get_all_available_reserve_lotterys()  # 获取所有有效的预约抽奖 （按照etime升序排列
+        if is_api_update:
+            reserve_robot = ReserveScrapyRobot()
+            await reserve_robot.refresh_not_drawn_lottery()
         zhuanlan_data_date_sort = self.zhuanlan_date_sort(zhuanlan_data)
         article_content, manual_article_content = self.zhuanlan_format(zhuanlan_data_date_sort)
 

@@ -98,10 +98,13 @@ async def _test_pub_official_reserve_charge_lot():
         business_type=1,
         business_id=994361504012697606,
         origin_dynamic_id=994361504012697606,
-        extra_routing_key='mannual_publish'
+        extra_routing_key='manual_publish'
+    )
+async def _test_pub_upsert_official_reserve_charge_lot():
+    return await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
+        da={'lottery_id': 211752, 'sender_uid': 3493258283977582, 'business_type': 10, 'business_id': 3313301, 'status': 2, 'lottery_time': 1699672260, 'lottery_at_num': 0, 'lottery_feed_limit': 0, 'need_post': 0, 'pay_status': 0, 'first_prize': 1, 'second_prize': 0, 'third_prize': 0, 'ts': 1739982760, 'participants': 2775, 'has_charge_right': False, 'participated': False, 'followed': False, 'reposted': False, 'lottery_detail_url': 'https://www.bilibili.com/h5/lottery/result?business_id=3313301&business_type=10&lottery_id=211752', 'first_prize_cmt': '红包52R', 'third_prize_cmt': '', 'first_prize_pic': 'https://i0.hdslb.com/bfs/album/708b3604ff2fdd48db610e1767cfae7760932d23.gif', 'second_prize_pic': '', 'third_prize_pic': '', 'vip_batch_sign': '', 'prize_type_first': {'type': 0, 'value': {'stype': 0}}, 'lottery_result': {'first_prize_result': [{'uid': 319222045, 'name': '夏日尽头的小岛', 'face': 'https://i1.hdslb.com/bfs/face/a890e7184f569a44138647f5d67847c36b3fddc6.jpg', 'hongbao_money': 0}]}},
+        extra_routing_key= 'ExtractOfficialLottery.update_lot_notice.solve_lot_data'
     )
 
-
 if __name__ == "__main__":
-    asyncio.new_event_loop()
-    asyncio.run(_test_pub_official_reserve_charge_lot())
+    asyncio.run(_test_pub_upsert_official_reserve_charge_lot())

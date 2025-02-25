@@ -10,7 +10,7 @@ from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
-from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExctractOfficialLottery
+from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
 from grpc获取动态.src.getDynDetail import DynDetailScrapy
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -79,7 +79,7 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     await dyn_detail_scrapy.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
-        e = ExctractOfficialLottery()
+        e = ExtractOfficialLottery()
         update_time: int = int(time.time()) - int(
             pub_article_info.lastPubDate.timestamp())  # 这段逻辑关乎更新抽奖的数量！！！
         # 空闲中间的半个小时就是上一次发布之后休息的事件，可以往小调，但决不能是+一个时间段！！！
@@ -91,8 +91,8 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
                   f'\n官方抽奖更新数量：{len(latest_official_lot)}'
                   f'\n充电抽奖更新数量：{len(latest_charge_lot)}'
                   f'\n更新内容：{[x.__dict__ for x in latest_official_lot]}\n{[x.__dict__ for x in latest_charge_lot]}')
-        g = LotDynSortByDate()
-        await asyncio.to_thread(g.main, [int(pub_article_info.lastPubDate.timestamp()), int(time.time())])
+        lot_dyn_sort_by_date = LotDynSortByDate()
+        await lot_dyn_sort_by_date.main([int(pub_article_info.lastPubDate.timestamp()), int(time.time())])
         pub_article_info.start_ts = int(time.time())
         pub_article_info.save_lastPubTs()
 

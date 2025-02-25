@@ -3,16 +3,20 @@ import datetime
 # -*- coding: utf-8 -*-
 import json
 import time
-from typing import Generator
+from typing import Generator, Sequence
 import subprocess
 from functools import partial
+
+from grpc获取动态.src.SQLObject.models import Bilidyndetail
+
 subprocess.Popen = partial(subprocess.Popen, encoding='utf-8')
 
 import execjs
 import pandas as pd
 import Bilibili_methods.all_methods
 from grpc获取动态.src.DynObjectClass import lotDynData
-from grpc获取动态.src.SqlHelper import grpc_sql_helper
+from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+
 """
 使用reg查询动态保存下来
 """
@@ -22,8 +26,8 @@ import os
 class LotDynSortByDate:
     def __init__(self, ):
         self.path = os.path.dirname(os.path.abspath(__file__))
-        if not os.path.exists(os.path.join(self.path,'result')):
-            os.makedirs(os.path.join(self.path,'result'))
+        if not os.path.exists(os.path.join(self.path, 'result')):
+            os.makedirs(os.path.join(self.path, 'result'))
         self.sql = grpc_sql_helper
         self.BAPI = Bilibili_methods.all_methods.methods()
         self.highlight_word_list = [
@@ -187,11 +191,11 @@ class LotDynSortByDate:
             start_date_time += datetime.timedelta(1)
         return ret_list
 
-    def solve_dyn_gen(self, dyn_gen: Generator) -> list[lotDynData]:
+    def solve_dyn_gen(self, dyn_gen: Sequence[Bilidyndetail]) -> list[lotDynData]:
         lot_data: list[lotDynData] = []
         for dyn in dyn_gen:
-            dynData = json.loads(dyn.get('dynData'), strict=False)
-            if not dynData.get('extend').get('origDesc'):
+            dynData = json.loads(dyn.dynData if dyn.dynData else 'null', strict=False)
+            if not dynData or dynData.get('extend').get('origDesc'):
                 continue
             # dynamic_content = ''.join([x.get('text') for x in dynData.get('extend').get('origDesc')])
             dynamic_content = ''
@@ -287,14 +291,14 @@ class LotDynSortByDate:
 
         return lot_data
 
-    def main(self, between_ts=[int(time.time()) - 7 * 24 * 3600, int(time.time())],GenWordCloud=False):
+    async def main(self, between_ts=[int(time.time()) - 7 * 24 * 3600, int(time.time())], GenWordCloud=False):
         print('开始获取所有动态的抽奖信息')
         if between_ts[1] > int(time.time()):  # 确保最大时间到当前时间截止
             between_ts[1] = int(time.time())
         ts_list = self.get_split_ts(between_ts)
         for ts in ts_list:
             print(f'当前进度【{ts_list.index(ts) + 1}/{len(ts_list)}】:{datetime.date.fromtimestamp(ts[0])}')
-            dyn_gen = self.sql.query_dynData_by_date(ts)
+            dyn_gen = await self.sql.query_dynData_by_date(ts)
             lot_data: [lotDynData] = self.solve_dyn_gen(dyn_gen)
             df = pd.DataFrame(
                 [x.author_space, x.dyn_url, x.author_name, x.official_verify_type, x.pub_time, x.dynamic_content,
@@ -307,17 +311,18 @@ class LotDynSortByDate:
                 for x in lot_data
             )
             if not df.empty:
-                df.columns = ['发布者空间', '动态链接', 'up昵称', '账号类型', '发布时间', '动态内容', '评论数', '转发数',
+                df.columns = ['发布者空间', '动态链接', 'up昵称', '账号类型', '发布时间', '动态内容', '评论数',
+                              '转发数',
                               '点赞数',
                               '是否需要人工判断', '高亮关键词', '抽奖类型', '抽奖id', '需要携带的词']
                 date_start = datetime.date.fromtimestamp(ts[0])
-                if not os.path.exists(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}')):
-                    os.makedirs(os.path.join(self.path , f'result/{date_start.year}/{date_start.month}'))
+                if not os.path.exists(os.path.join(self.path, f'result/{date_start.year}/{date_start.month}')):
+                    os.makedirs(os.path.join(self.path, f'result/{date_start.year}/{date_start.month}'))
                 df.to_csv(
-                    os.path.join(self.path , f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv'),
+                    os.path.join(self.path,
+                                 f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv'),
                     index=False, sep='\t', encoding='utf-8')
             print(f'{datetime.date.fromtimestamp(ts[0])}的动态处理完成，总计{len(df)}条！')
-
 
 if __name__ == '__main__':
     a = LotDynSortByDate()

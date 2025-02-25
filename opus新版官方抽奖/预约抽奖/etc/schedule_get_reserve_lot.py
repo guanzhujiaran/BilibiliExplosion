@@ -15,7 +15,7 @@ async def main():
     global reserve_robot
     reserve_robot = ReserveScrapyRobot()
     await reserve_robot.get_dynamic_with_thread()
-
+    await reserve_robot.refresh_not_drawn_lottery()
     await submit_reserve__lot_main(is_post=True)
 
     reserve_lot_logger.info('提交专栏完毕')

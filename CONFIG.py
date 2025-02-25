@@ -65,6 +65,7 @@ class database:
         bili_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
         bili_reserve_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bili_reserve?charset=utf8mb4&autocommit=true'
         get_other_lot_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
+        dyn_detail:str= 'mysql+aiomysql://root:114514@127.0.0.1:3306/dynDetail?charset=utf8mb4&autocommit=true'
 
     @dataclass
     class _REDISINFO:
@@ -82,6 +83,8 @@ class database:
     MYSQL = _MYSQL()
     proxyRedis = _REDISINFO(15)
     proxySubRedis = _REDISINFO(6)
+    lotDataRedisObj = _REDISINFO(2)
+    ipInfoRedisObj = _REDISINFO(2)
 
 
 class SqlAlchemyConfig:

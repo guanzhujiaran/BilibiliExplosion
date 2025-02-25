@@ -1,3 +1,6 @@
+"""
+一次性使用的脚本
+"""
 import asyncio
 
 import time

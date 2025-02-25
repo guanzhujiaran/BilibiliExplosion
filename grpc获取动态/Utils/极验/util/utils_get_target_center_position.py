@@ -12,6 +12,7 @@ import ddddocr
 import subprocess
 from functools import partial
 from fastapi接口.log.base_log import Voucher352_logger
+
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 import numpy as np
@@ -34,18 +35,9 @@ def imshow(im):
     plt.show()
 
 
-@Singleton
 class CaptchaDetector:
     _lock = threading.Lock()
     _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-        return cls._instance
-
     class LogPath:
         detect_result_pic: str = 'log/detect_result_pic/'
         detect_failed_pic: str = 'log/detect_failed_pic/'
@@ -77,12 +69,12 @@ class CaptchaDetector:
         if self.inited:
             return
         self.inited = True
-        Voucher352_logger.debug('初始化一个CLIP模型实例')
+        Voucher352_logger.critical('初始化一个CLIP模型实例')
         self.model, _, self.preprocess = open_clip.create_model_and_transforms('ViT-B-16-SigLIP',
                                                                                pretrained='webli',
                                                                                device=self.__device,
                                                                                )
-        Voucher352_logger.debug('CLIP模型实例初始化完成')
+        Voucher352_logger.critical('CLIP模型实例初始化完成')
 
     def gen_cost_matrix(self, origin_matrix):
         """
@@ -177,6 +169,7 @@ class CaptchaDetector:
             x1, y1, x2, y2 = bbox
             im = cv2.rectangle(origin_im, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.imwrite(os.path.join(self.current_file_root_dir, file_name), im)
+
     def detect(self, geetest_pic_url: str) -> CaptchaResultInfo:
         """
         传入极验图片地址，直接返回对应的点图结果，检测失败则返回None
@@ -315,6 +308,7 @@ class CaptchaDetector:
             probabilities = char_result['probability'][0]
             max_index = probabilities.index(max(probabilities))
             return char_result['charsets'][max_index]
+
         def calculate_key(pic_url):
             pic_img = self._get_geetest_pic(pic_url)
             pic_img = Image.open(BytesIO(pic_img))
@@ -334,9 +328,6 @@ class CaptchaDetector:
             bg_img.save(bg_bytes, format='PNG')
             bg_bytes.seek(0)
             det = self.det.detection(bg_bytes.read())
-
-
-
 
         def generate_w():
             click_w = execjs.compile('./js/click.js')
@@ -366,3 +357,6 @@ class CaptchaDetector:
             time.sleep(2 - w_use_time)
         (msg, validate) = verify()
         print(validate)
+
+
+captcha_detector = CaptchaDetector()

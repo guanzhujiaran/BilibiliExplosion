@@ -196,7 +196,7 @@ class request_with_proxy:
                 break
             cookie_data = CookieWrapper(ck=ck, ua=ua, expire_ts=int(time.time() + 24 * 3600))  # cookie时间长一点应该没问题吧
             self.fake_cookie_list.append(cookie_data)
-        logger.debug(f'当前cookie池数量：{len(self.fake_cookie_list)}')
+        # logger.debug(f'当前cookie池数量：{len(self.fake_cookie_list)}')
         return cookie_data
 
     def _timeshift(self, timestamp):
