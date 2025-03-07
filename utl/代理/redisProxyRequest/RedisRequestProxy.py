@@ -424,9 +424,9 @@ class request_with_proxy:
     def set_GetProxy_Flag(self, boolean: bool):
         self.GetProxy_Flag = boolean
 
-    # region 从代理网站获取代理
+    # region a从代理网站获取代理
 
-    # region 从免费代理网站获取代理，每个网站的表格不一样，需要测试！网站按照表格的样式填充代理信息
+    # region a从免费代理网站获取代理，每个网站的表格不一样，需要测试！网站按照表格的样式填充代理信息
 
     async def get_proxy_from_kuaidaili(self) -> tuple[list, bool]:
         headers = {

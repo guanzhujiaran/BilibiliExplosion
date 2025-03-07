@@ -3,7 +3,6 @@
 import io
 import os
 import sys
-import tracemalloc
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
@@ -66,22 +65,12 @@ req = request_with_proxy()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    tracemalloc.start()
 
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
     show_log = False
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
     yield
-    # 获取快照并打印内存使用情况
-    snapshot = tracemalloc.take_snapshot()
-    top_stats = snapshot.statistics('lineno')
-
-    myfastapi_logger.critical("[ Top 100 ]")
-    for stat in top_stats[:100]:
-        myfastapi_logger.critical(stat)
-    # 停止 tracemalloc 并取消其他服务
-    tracemalloc.stop()
     myfastapi_logger.critical("正在取消其他服务")
     [
         x.cancel() for x in back_ground_tasks
@@ -92,17 +81,6 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
-
-
-@app.get('/v1/get/snapshot', tags=['v1', 'debug'])
-def get_snapshot(limit: int = Query(default=10, gt=0, lt=100)):
-    snapshot = tracemalloc.take_snapshot()
-    top_stats = snapshot.statistics('lineno')
-
-    for stat in top_stats[:100]:
-        myfastapi_logger.critical(stat)
-    return top_stats[:limit]
-
 
 @app.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息', )
 def v1_get_live_lots(

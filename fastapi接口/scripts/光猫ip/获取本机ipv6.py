@@ -22,6 +22,8 @@ class ipv6Obj:
                 "profile.default_content_setting_values.notifications": 2  # 2 表示关闭通知
             }
             opts.add_argument("--headless")
+            # 添加无痕模式参数
+            opts.add_argument('--incognito')
             opts.add_experimental_option("prefs", prefs)
             self.edge = webdriver.WebDriver(service=Service(CONFIG.selenium_config.edge_path), options=opts)
             self.edge.implicitly_wait(30)
@@ -188,8 +190,7 @@ class ipv6Obj:
             except Exception as e:
                 ipv6_monitor_logger.exception(f'selenium获取ipv6失败！{e}')
                 if self.edge:
-                    self.edge.close()
-                self.edge = None
+                    self.edge.get('about:blank')
 
     def get_ipv6_prefix_from_selenium(self):
         def login():

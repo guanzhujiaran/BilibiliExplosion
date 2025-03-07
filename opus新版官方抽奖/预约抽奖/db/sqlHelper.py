@@ -315,7 +315,7 @@ bili_reserve_sqlhelper = _SqlHelper()
 # region 测试用代码
 
 async def _test_solve_reserve_resp():
-    a = await bili_reserve_sqlhelper.get_all_undrawn_reserve_lottery()
+    a = await bili_reserve_sqlhelper.get_all_available_reserve_lotterys()
     print(a)
 
 

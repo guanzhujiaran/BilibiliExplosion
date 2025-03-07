@@ -2,7 +2,7 @@ import asyncio
 import random
 import time
 import traceback
-from typing import Union, Any, List, Callable
+from typing import Union, Any, List, Callable, Dict
 from datetime import timedelta
 from redis import asyncio as redis
 from enum import Enum
@@ -11,9 +11,10 @@ from CONFIG import CONFIG
 import redis as sync_redis
 from fastapi接口.log.base_log import redis_logger
 
-_sem = asyncio.Semaphore(1024)
+_sem = asyncio.Semaphore(4096)
 
-def retry(func: Callable) -> Callable:
+
+def retry(func):
     async def wrapper(*args, **kwargs):
         while 1:
             async with _sem:
@@ -191,11 +192,9 @@ class RedisManagerBase:
                 pipe = r.pipeline()
                 for k in key:
                     await pipe.get(k)
-                async with r.lock('Lock_' + str(key[0]), timeout=self.RedisTimeout):
-                    return await pipe.execute()
+                return await pipe.execute()
             else:
-                async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                    return await r.get(key)
+                return await r.get(key)
 
     @retry
     async def _set(self, key, value):
@@ -246,26 +245,22 @@ class RedisManagerBase:
     @retry
     async def _sisexist(self, set_name, val):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
-                return await r.sismember(set_name, val)
+            return await r.sismember(set_name, val)
 
     @retry
     async def _sget_rand(self, set_name):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
-                return r.srandmember(set_name)
+            return r.srandmember(set_name)
 
     @retry
     async def _scount(self, set_name):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
-                return await r.scard(set_name)
+            return await r.scard(set_name)
 
     @retry
     async def _sget_all(self, set_name):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
-                return await r.smembers(set_name)
+            return await r.smembers(set_name)
 
     @retry
     async def _srem(self, set_name, *val):
@@ -280,8 +275,7 @@ class RedisManagerBase:
     @retry
     async def _z_exist(self, key, element):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zscore(key, element) is not None
+            return await r.zscore(key, element) is not None
 
     @retry
     async def _zadd(self, key, mapping: dict):
@@ -298,40 +292,45 @@ class RedisManagerBase:
     @retry
     async def _zget_range(self, key, start: int = 0, end: int = -1, num: int = None, offset: int = None):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zrange(key, start=start, end=end, num=num, offset=offset)
+            return await r.zrange(key, start=start, end=end, num=num, offset=offset)
 
     @retry
     async def _zget_range_with_score(self, key, num: int = None, offset: int = None):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zrevrangebyscore(name=key, min='-inf', max='inf', num=num,
-                                                start=offset, withscores=True)
+            return await r.zrevrangebyscore(name=key, min='-inf', max='inf', num=num,
+                                            start=offset, withscores=True)
+
+    @retry
+    async def _zget_rank(self, key, name):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            return await r.zrevrank(key, name)
+
+    @retry
+    async def _zcard(self, key):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            return await r.zcard(key)
 
     @retry
     async def _zget_top_score(self, key, rand=False):
+        end = 0 if not rand else 20
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                end = 0 if not rand else 20
-                if members := await r.zrevrange(key, 0, 0):
-                    return random.choice(members)
-                else:
-                    return None
+            if members := await r.zrevrange(key, 0, 0):
+                return random.choice(members)
+            else:
+                return None
 
     @retry
     async def _zget_bottom_score(self, key):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                if members := await r.zrange(key, 0, 0):
-                    return members[0]
-                else:
-                    return None
+            if members := await r.zrange(key, 0, 0):
+                return members[0]
+            else:
+                return None
 
     @retry
     async def _zget_range_by_score(self, key, min_score: int, max_score: int, start: int = None, num: int = None):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zrangebyscore(key, min_score, max_score, start=start, num=num, )
+            return await r.zrangebyscore(key, min_score, max_score, start=start, num=num, )
 
     @retry
     async def _zdel_elements(self, key, *elements_to_remove):
@@ -375,10 +374,42 @@ class RedisManagerBase:
                 return await r.hset(name=name, mapping=field_values)
 
     @retry
+    async def _hmset_bulk_batch(self, hm_name: str, hm_k_v_List: list[Dict[int | str, int | str | float | bytes]]):
+        # 使用redis连接池创建redis对象
+        async with redis.Redis(connection_pool=self.pool) as r:
+            # 创建redis管道
+            async with r.pipeline() as pipe:
+                # 设置每次批量处理的数量
+                chunk_size = 1000
+                # 遍历hm_list，每次处理chunk_size个元素
+                for i in range(0, len(hm_k_v_List), chunk_size):
+                    # 获取当前批次的元素
+                    chunk_kv = hm_k_v_List[i:i + chunk_size]
+                    # 遍历当前批次的元素
+                    for idx in range(len(chunk_kv)):
+                        # 将当前批次的元素添加到管道中
+                        await pipe.hset(hm_name, mapping=chunk_kv[idx])
+                    # 执行当前批次的命令
+                    await pipe.execute()  # 执行当前批次的命令
+
+    @retry
+    async def _hmget_bulk(self, name: str, key_arr: list[str], ):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.pipeline() as pipe:
+                for key in key_arr:
+                    await pipe.hget(name, key)
+                return await pipe.execute()
+
+    @retry
     async def _hmgetall(self, name, ):
         async with redis.Redis(connection_pool=self.pool) as r:
             async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
                 return await r.hgetall(name=name)
+
+    async def _hmget(self, name, key):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
+                return await r.hget(name=name, key=key)
 
     @retry
     async def _hmdel(self, name):

@@ -3,10 +3,8 @@
 # 相当于一个客户端，所以设置为永不超时，无限次重试
 
 import asyncio
-import json
 import traceback
 from typing import Union
-import httpx
 from fastapi接口.log.base_log import request_with_proxy_logger
 from utl.代理.ProxyTool.ProxyObj import TypePDict
 from utl.代理.SealedRequests import MYASYNCHTTPX

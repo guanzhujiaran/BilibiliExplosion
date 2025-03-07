@@ -9,6 +9,7 @@ from fastapi接口.models.v1.background_service.background_service_model import 
     TopicScrapyStatusResp, ReserveScrapyStatusResp, AllLotScrapyStatusResp, OthersLotStatusResp
 from .base import new_router
 from github.my_operator.get_others_lot.new_main import get_others_lot_dyn, GetOthersLotDyn
+from fastapi接口.service.background_tasks import schedule_refresh_bili_lot_database
 
 router = new_router()
 dyn_detail_scrapy_class = None
@@ -33,7 +34,6 @@ def start_background_service(show_log: bool):
 
     from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
     from src.monitor import bili_live_async_monitor
-    from fastapi接口.service.background_tasks import schedule_refresh_bili_lot_database
     back_ground_tasks.append(asyncio.create_task(bili_space_monitor.main(show_log=show_log)))
     back_ground_tasks.append(asyncio.create_task(
         定时获取所有动态以及发布充电和官方抽奖专栏.async_schedule_get_official_lot_main(show_log=show_log)))
@@ -54,7 +54,10 @@ def start_background_service(show_log: bool):
 
 
 def get_scrapy_status(scrapy_type: Literal[
-    'dyn', 'topic', 'reserve', 'other_space', 'other_dyn']) -> DynScrapyStatusResp | TopicScrapyStatusResp | ReserveScrapyStatusResp | OthersLotStatusResp | None:
+    'dyn', 'topic', 'reserve',
+    'other_space', 'other_dyn',
+    'refresh_bili_official', 'refresh_bili_reserve'
+]) -> DynScrapyStatusResp | TopicScrapyStatusResp | ReserveScrapyStatusResp | OthersLotStatusResp | None:
     match scrapy_type:
         case 'dyn':
             if dyn_detail_scrapy_class and dyn_detail_scrapy_class.dyn_detail_scrapy is not None:
@@ -66,7 +69,7 @@ def get_scrapy_status(scrapy_type: Literal[
                     latest_succ_dyn_id=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.latest_succ_dyn_id,
                     start_ts=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.start_ts,
                     freq=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.show_pace(),
-                    is_running=dyn_detail_scrapy_class.dyn_detail_scrapy.is_running,
+                    is_running=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.is_running,
                     update_ts=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.update_ts
                 )
             else:
@@ -78,7 +81,7 @@ def get_scrapy_status(scrapy_type: Literal[
                     cur_stop_num=topic_scrapy_class.topic_robot.cur_stop_times,
                     start_ts=topic_scrapy_class.topic_robot.succ_counter.start_ts,
                     freq=topic_scrapy_class.topic_robot.succ_counter.show_pace(),
-                    is_running=topic_scrapy_class.topic_robot.is_running,
+                    is_running=topic_scrapy_class.topic_robot.succ_counter.is_running,
                     latest_succ_topic_id=topic_scrapy_class.topic_robot.succ_counter.latest_succ_topic_id,
                     first_topic_id=topic_scrapy_class.topic_robot.succ_counter.first_topic_id,
                     latest_topic_id=topic_scrapy_class.topic_robot.succ_counter.latest_topic_id,
@@ -93,7 +96,7 @@ def get_scrapy_status(scrapy_type: Literal[
                     cur_stop_num=reserve_scrapy_class.reserve_robot.null_timer,
                     start_ts=reserve_scrapy_class.reserve_robot.succ_counter.start_ts,
                     freq=reserve_scrapy_class.reserve_robot.succ_counter.show_pace(),
-                    is_running=reserve_scrapy_class.reserve_robot.is_running,
+                    is_running=reserve_scrapy_class.reserve_robot.succ_counter.is_running,
                     latest_succ_reserve_id=reserve_scrapy_class.reserve_robot.succ_counter.latest_succ_reserve_id,
                     first_reserve_id=reserve_scrapy_class.reserve_robot.succ_counter.first_reserve_id,
                     latest_reserve_id=reserve_scrapy_class.reserve_robot.succ_counter.latest_reserve_id,
@@ -125,7 +128,34 @@ def get_scrapy_status(scrapy_type: Literal[
                 )
             else:
                 return OthersLotStatusResp()
-
+        case 'refresh_bili_official':
+            if schedule_refresh_bili_lot_database.extract_official_lottery \
+                    and schedule_refresh_bili_lot_database.extract_official_lottery.refresh_official_lot_progress:
+                _progress = schedule_refresh_bili_lot_database.extract_official_lottery.refresh_official_lot_progress
+                return OthersLotStatusResp(
+                    succ_count=_progress.succ_count,
+                    start_ts=_progress.start_ts,
+                    total_num=_progress.total_num,
+                    progress=_progress.show_pace(),
+                    is_running=_progress.is_running,
+                    update_ts=_progress.update_ts
+                )
+            else:
+                return OthersLotStatusResp()
+        case 'refresh_bili_reserve':
+            if schedule_refresh_bili_lot_database.reserve_robot \
+                    and schedule_refresh_bili_lot_database.reserve_robot.refresh_progress_counter:
+                _progress = schedule_refresh_bili_lot_database.reserve_robot.refresh_progress_counter
+                return OthersLotStatusResp(
+                    succ_count=_progress.succ_count,
+                    start_ts=_progress.start_ts,
+                    total_num=_progress.total_num,
+                    progress=_progress.show_pace(),
+                    is_running=_progress.is_running,
+                    update_ts=_progress.update_ts
+                )
+            else:
+                return OthersLotStatusResp()
 
 @router.get('/GetDynamicScrapyStatus', description='获取动态爬虫状态',
             response_model=CommonResponseModel[Union[DynScrapyStatusResp, None]])
@@ -167,3 +197,15 @@ async def get_others_lot_space_status():
             response_model=CommonResponseModel[Union[OthersLotStatusResp, None]])
 async def get_others_lot_dyn_status():
     return CommonResponseModel(data=get_scrapy_status('other_dyn'))
+
+
+@router.get('/GetRefreshBiliOfficialStatus', description='获取刷新B站官方和充电抽奖结果状态',
+            response_model=CommonResponseModel[Union[OthersLotStatusResp, None]])
+async def get_refresh_bili_official_status():
+    return CommonResponseModel(data=get_scrapy_status('refresh_bili_official'))
+
+
+@router.get('/GetRefreshBiliReserveStatus', description='获取刷新B站预约抽奖结果状态',
+            response_model=CommonResponseModel[Union[OthersLotStatusResp, None]])
+async def get_refresh_bili_reserve_status():
+    return CommonResponseModel(data=get_scrapy_status('refresh_bili_reserve'))

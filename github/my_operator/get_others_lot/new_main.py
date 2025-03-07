@@ -17,7 +17,7 @@ from functools import partial
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from grpc获取动态.grpc.bapi.biliapi import proxy_req, get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail
-from opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter
+from opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, ProgressCounter
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 from py_mini_racer import MiniRacer
@@ -169,28 +169,6 @@ def writeIntoFile(write_in_list: list[Any], filePath, write_mode='w', sep=','):
             f.writelines(sep.join(write_in_list))
     except Exception as e:
         get_others_lot_log.critical(f'写入文件失败！\n{e}')
-
-
-class SuccCounter(BaseSuccCounter):
-    _total_num: int = 0
-    is_running: bool = False
-
-    def __init__(self):
-        super().__init__()
-
-    @property
-    def total_num(self):
-        # 返回私有变量_total_num的值
-        return self._total_num
-
-    @total_num.setter
-    def total_num(self, value: int):
-        self.is_running = True
-        self.succ_count = 0
-        self._total_num = value
-
-    def show_pace(self):
-        return math.floor(self.succ_count / self.total_num * 100) / 100 if self.total_num else 0
 
 
 class GetOthersLotDynRobot:
@@ -604,8 +582,8 @@ class GetOthersLotDynRobot:
 
         self.pub_lot_user_info_list: list[pub_lot_user_info] = []  # 获取发布抽奖动态的用户信息
 
-        self.space_succ_counter = SuccCounter()
-        self.dyn_succ_counter = SuccCounter()
+        self.space_succ_counter = ProgressCounter()
+        self.dyn_succ_counter = ProgressCounter()
 
     def calculate_pub_ts_by_dynamic_id(self, dynamic_id: str) -> int:
         return int((int(dynamic_id) + 6437415932101782528) / 4294939971.297)

@@ -110,24 +110,38 @@ class BulkAddDynamicLotteryRespItem(CustomBaseModel):
     is_succ: bool
 
 
+class BiliUserInfoSimple(CustomBaseModel):
+    uid: int | str
+    name: str
+    face: str
+
+
 class AddTopicLotteryReq(CustomBaseModel):
     topic_id: int | str
 
 
 class WinnerInfo(CustomBaseModel):
-    uid: int | str
+    user: BiliUserInfoSimple
     count: int
+    rank: int
 
 
 class BiliLotStatisticInfoResp(CustomBaseModel):
     sync_ts: int
     winners: list[WinnerInfo]
+    total: int
+
+
+class BiliLotStatisticLotteryResultResp(CustomBaseModel):
+    user: BiliUserInfoSimple
+    prize_result: list[dict]
 
 
 class BiliLotStatisticLotTypeEnum(str, Enum):
     official = "official"
     reserve = "reserve"
     charge = "charge"
+    total = "total"
 
     @classmethod
     def lot_type_2_business_type(cls, lot_type: 'BiliLotStatisticLotTypeEnum') -> int:

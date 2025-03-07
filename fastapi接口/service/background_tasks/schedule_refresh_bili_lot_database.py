@@ -14,10 +14,14 @@ from opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import Reserv
 from utl.pushme.pushme import async_pushme_try_catch_decorator, pushme
 
 _scheduler_start_hour = 4  # 定时任务开始时间：凌晨4点
+reserve_robot: ReserveScrapyRobot | None = None
+extract_official_lottery: ExtractOfficialLottery | None = None
 
 
 async def _get_next_run_date():
-    dyn_lot_sync_ts: int | None = await lottery_data_statistic_redis.get_dyn_lot_sync_ts()
+    dyn_lot_sync_ts: int | None = await lottery_data_statistic_redis.get_sync_ts(
+        lot_type=BiliLotStatisticLotTypeEnum.official
+    )
     if not dyn_lot_sync_ts:
         return datetime.now()
     latest_sync_datetime = datetime.fromtimestamp(dyn_lot_sync_ts)
@@ -36,15 +40,16 @@ async def _get_next_run_date():
         return datetime.now()
 
 
-async def _refresh_bili_lot_database():
-    """
-    同步官方抽奖、充电抽奖和预约抽奖
-    :return:
-    """
+async def __sync_bili_user_info_simple():
+    res = await bili_official_sqlhelper.get_all_bili_user_info()
+    await lottery_data_statistic_redis.set_bili_user_info_bulk(res)
 
-    async def sync_2_redis(_lot_type: BiliLotStatisticLotTypeEnum):
+async def __sync_2_redis(_lot_type: BiliLotStatisticLotTypeEnum, sync_ts_flag: bool = True):
+        _tasks = []
+        # 遍历抽奖类型
         for j in BiliLotStatisticRankTypeEnum:
-            tasks.append(
+            # 将抽奖结果存入Redis
+            _tasks.append(
                 lottery_data_statistic_redis.set_lot_prize_count(
                     lot_type=_lot_type,
                     rank_type=j,
@@ -56,21 +61,40 @@ async def _refresh_bili_lot_database():
                     )
                 )
             )
+        # 并发执行任务
+        await asyncio.gather(*_tasks)
+        # 如果需要同步时间戳，则将当前时间戳存入Redis
+        if sync_ts_flag:
+            await lottery_data_statistic_redis.set_sync_ts(lot_type=_lot_type, ts=int(time.time()))
 
-        await asyncio.gather(*tasks)
-        await lottery_data_statistic_redis.set_sync_ts(lot_type=_lot_type, ts=int(time.time()))
 
-    # 先同步一遍
-    tasks = [sync_2_redis(i) for i in BiliLotStatisticLotTypeEnum]
-    await asyncio.gather(*tasks)
+async def _refresh_bili_lot_database():
+    """
+    同步官方抽奖、充电抽奖和预约抽奖
+    :return:
+    """
+    global reserve_robot
+    global extract_official_lottery
 
+    # 定义一个异步函数，用于同步抽奖数据到Redis
+
+    # 创建任务列表，用于同步抽奖数据到Redis
+    tasks = [__sync_2_redis(i, sync_ts_flag=False) for i in BiliLotStatisticLotTypeEnum]
+    tasks.append(__sync_bili_user_info_simple())
+
+    # 初始化预约抽奖机器人
     reserve_robot = ReserveScrapyRobot()
-    e = ExtractOfficialLottery()
+    # 初始化官方抽奖提取器
+    extract_official_lottery = ExtractOfficialLottery()
+    # 并发执行预约抽奖机器人和官方抽奖提取器的刷新任务
     await asyncio.gather(
         reserve_robot.refresh_not_drawn_lottery(),
-        e.get_all_lots(is_api_update=True)
+        extract_official_lottery.get_all_lots(is_api_update=True)
     )
-    tasks = [sync_2_redis(i) for i in BiliLotStatisticLotTypeEnum]
+    # 创建任务列表，用于同步抽奖数据到Redis
+    tasks.extend([__sync_2_redis(i) for i in BiliLotStatisticLotTypeEnum])
+    tasks.append(__sync_bili_user_info_simple())
+    # 并发执行任务
     await asyncio.gather(*tasks)
 
 
@@ -79,6 +103,9 @@ async def _async_run(schedulers: Union[None, AsyncIOScheduler] = None, schedule_
                      *args,
                      **kwargs):
     try:
+        if schedulers and schedule_mark:
+            background_task_logger.critical(
+                f'【刷新B站抽奖数据库】通过定时器开始执行任务！')
         await _refresh_bili_lot_database()
     except Exception as e:
         background_task_logger.exception(e)
@@ -100,9 +127,12 @@ async def async_schedule_get_topic_lot_main(schedule_mark: bool = True):
     if schedule_mark:
         schedulers = AsyncIOScheduler()
         run_date = await _get_next_run_date()
-        job = schedulers.add_job(_async_run, args=(schedulers, schedule_mark), trigger='date',
+        job = schedulers.add_job(_async_run,
+                                 args=(schedulers, schedule_mark),
+                                 trigger='date',
                                  run_date=run_date,
-                                 misfire_grace_time=360)
+                                 misfire_grace_time=360
+                                 )
         background_task_logger.critical(
             f'【刷新B站抽奖数据库】使用内置定时器,开启定时任务,等待时间（{job.trigger}）到达后执行')
         schedulers.start()
@@ -111,4 +141,8 @@ async def async_schedule_get_topic_lot_main(schedule_mark: bool = True):
 
 
 if __name__ == "__main__":
-    asyncio.run(_async_run())
+    async def _test():
+        await __sync_2_redis(BiliLotStatisticLotTypeEnum.total, sync_ts_flag=True)
+
+
+    asyncio.run(_test())

@@ -11,16 +11,15 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-
+import asyncio
 import CONFIG
 from grpc获取动态.Models.GrpcApiBaseModel import MetaDataBasicInfo
 from grpc获取动态.Utils.CONST import MemSizes, CPUFreqs, ProductDevices, Languages, Countries, NetworkTypes, UsbStates, \
     CPUAbiLists, CPUHardwares, ANDROID_VERSIONS, BatteryStates, ANDROID_KERNELS, ScreenDPIs
 from grpc获取动态.grpc.bapi.biliapi import appsign
 from utl.代理.SealedRequests import MYASYNCHTTPX
-
 myreq = MYASYNCHTTPX()
-from bilibili.api.ticket.v1 import  ticket_pb2
+from bilibili.api.ticket.v1 import ticket_pb2
 from bilibili.metadata.device.device_pb2 import Device
 from bilibili.metadata.fawkes.fawkes_pb2 import FawkesReq
 from bilibili.metadata.locale.locale_pb2 import Locale, LocaleIds
@@ -29,6 +28,7 @@ from bilibili.metadata.network.network_pb2 import Network, NetworkType
 from bilibili.metadata.restriction.restriction_pb2 import Restriction
 from datacenter.hakase.protobuf import android_device_info_pb2
 from fastapi接口.log.base_log import BiliGrpcApi_logger
+
 
 class Fp:
     def __init__(self, buvid_auth, device_model, device_radio_ver):
@@ -295,7 +295,7 @@ async def make_metadata(
             ua=metaDataNeedInfo.ua,
             proxy=proxy
         )
-    except:
+    except Exception as e:
         pass
     finally:
         pass
@@ -715,27 +715,39 @@ async def get_bili_ticket(device_info: bytes,
     proto_bytes = reqdata.SerializeToString()
     compressed_proto_bytes = gzip.compress(proto_bytes, compresslevel=6)
     data = b"\01" + len(compressed_proto_bytes).to_bytes(4, "big") + compressed_proto_bytes
-    try:
-        resp = await myreq.request(
-            url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',
-            method='post',
-            data=data,
-            headers=tuple(new_headers),
-            proxies={
-                'http': proxy['proxy']['http'],
-                'https': proxy['proxy']['https']
-            } if proxy else None, verify=False
-        )
-        gresp = ticket_pb2.GetTicketResponse()
-        if 'gzip' in dict(new_headers).get('grpc-encoding'):
-            gresp.ParseFromString(gzip.decompress(resp.content[5:]))
-        else:
-            gresp.ParseFromString(resp.content[5:])
-        if not gresp.ticket:
-            BiliGrpcApi_logger.error(f'获取ticket失败！\n{resp.content}\n{resp.headers}')
-        return gresp
-    except Exception as e:
-        BiliGrpcApi_logger.exception(f'使用代理 {proxy} 获取bili_ticket失败！\n{type(e)}\t{e}')
+    while 1:
+        try:
+            resp = await myreq.request(
+                url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',
+                method='post',
+                data=data,
+                headers=tuple(new_headers),
+                proxies={
+                    'http': proxy['proxy']['http'],
+                    'https': proxy['proxy']['https']
+                } if proxy else None,
+                verify=False
+            )
+            gresp = ticket_pb2.GetTicketResponse()
+            if 'gzip' in dict(new_headers).get('grpc-encoding'):
+                gresp.ParseFromString(gzip.decompress(resp.content[5:]))
+            else:
+                gresp.ParseFromString(resp.content[5:])
+            if not gresp.ticket:
+                BiliGrpcApi_logger.error(f'获取ticket失败！\n{resp.content}\n{resp.headers}')
+            return gresp
+        except Exception as e:
+            BiliGrpcApi_logger.exception(f'使用代理 {proxy} 获取bili_ticket失败！\n{type(e)}\t{e}')
+            await asyncio.sleep(30)
+            if not proxy:
+                proxy = {'proxy':
+                    {
+                        'http': CONFIG.CONFIG.my_ipv6_addr,
+                        'https': CONFIG.CONFIG.my_ipv6_addr
+                    }
+                }
+            else:
+                proxy = None
 
 
 async def active_buvid(brand, build, buvid, channel, app_version_build, app_version_name, model, ua, proxy):
@@ -787,7 +799,6 @@ async def active_buvid(brand, build, buvid, channel, app_version_build, app_vers
 
 
 if __name__ == '__main__':
-    import asyncio
 
     __ = asyncio.run(make_metadata(""))
     print(__)

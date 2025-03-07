@@ -1,3 +1,4 @@
+import math
 import time
 
 class BaseStopCounter:
@@ -23,10 +24,14 @@ class BaseStopCounter:
         self.cur_stop_continuous_num = self._max_stop_continuous_num
 
 
+
+
 class BaseSuccCounter:
     start_ts = int(time.time())
     _succ_count = 0
     update_ts:int=0
+    is_running:bool = False
+
     @property
     def succ_count(self):
         return self._succ_count
@@ -45,8 +50,11 @@ class BaseSuccCounter:
         获取一个动态需要花多少秒
         :return:
         """
-        now_ts = int(time.time())
-        spend_ts = now_ts - self.start_ts
+        if self.is_running:
+            target_ts = int(time.time())
+        else:
+            target_ts = self.update_ts
+        spend_ts = target_ts - self.start_ts
         if self.succ_count > 0:
             pace_per_sec = spend_ts / self.succ_count
             return pace_per_sec
@@ -55,3 +63,25 @@ class BaseSuccCounter:
 
     def show_text(self) -> str:
         pass
+
+
+
+class ProgressCounter(BaseSuccCounter):
+    _total_num: int = 0
+
+    def __init__(self):
+        super().__init__()
+
+    @property
+    def total_num(self):
+        # 返回私有变量_total_num的值
+        return self._total_num
+
+    @total_num.setter
+    def total_num(self, value: int):
+        self.is_running = True
+        self.succ_count = 0
+        self._total_num = value
+
+    def show_pace(self):
+        return math.floor(self.succ_count / self.total_num * 100) / 100 if self.total_num else 0

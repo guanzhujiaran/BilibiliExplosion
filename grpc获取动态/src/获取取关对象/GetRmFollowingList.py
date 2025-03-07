@@ -17,7 +17,7 @@ from grpc获取动态.grpc.grpc_api import bili_grpc
 
 class GetRmFollowingListV1:
     def __init__(self, ):
-        self.space_sem = asyncio.Semaphore(300)
+        self.space_sem = asyncio.Semaphore(100)
         self.sqliteLock = asyncio.Lock()
         self.logger = get_rm_following_list_logger
         self.lucky_up_list = []

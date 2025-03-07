@@ -168,7 +168,7 @@ class MYASYNCHTTPX:
             client.headers.clear()
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
                                         content=content, files=files, json=json, params=params, cookies=cookies,
-                                        extensions=extensions, follow_redirects=True,
+                                        extensions=extensions, follow_redirects=True
                                         )
             return resp
 

@@ -116,7 +116,7 @@ def run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticle
 
 
 @async_pushme_try_catch_decorator
-async def async_run(schedulers: Union[None, BlockingScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool,
+async def async_run(schedulers: Union[None, AsyncIOScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool,
                     *args, **kwargs):
     delta_hour = 8
     try:
@@ -143,7 +143,6 @@ def schedule_get_topic_lot_main(schedule_mark: bool = True, show_log: bool = Tru
     :return:
     """
     log.info('启动获取B站话题抽奖程序！！！')
-
     pub_article_info = pubArticleInfo()
     if schedule_mark:
         # from apscheduler.triggers.cron import CronTrigger

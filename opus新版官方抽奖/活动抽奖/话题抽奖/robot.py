@@ -33,7 +33,6 @@ class TopicRobot:
         self.req = request_with_proxy()
         self.stop_counter = StopCounter()
         self.succ_counter = SuccCounter()
-        self.is_running = False
         self.__max_stop_times = 5  # 遇到超过时间的话题次数
         self._cur_stop_times: int = 0
         self.sql = topic_sqlhelper
@@ -198,7 +197,7 @@ class TopicRobot:
     async def main(self, start_topic_id=0):
         # region 重新获取获取失败的数据
         try:
-            self.is_running = True
+            self.succ_counter.is_running = True
             get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(
                 self._max_stop_count + self.sem_limit + 5000)
             _task_list = set()
@@ -219,8 +218,7 @@ class TopicRobot:
             while not self.stop_flag:
                 self.start_topic_id += 1
                 await self.sem.acquire()
-                task = asyncio.create_task(self.pipeline(self.start_topic_id))
-                task.set_name(str(self.start_topic_id))
+                task = asyncio.create_task(self.pipeline(self.start_topic_id),name=str(self.start_topic_id))
                 task_list.add(task)
                 task.add_done_callback(task_list.discard)
                 while [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]:
@@ -232,7 +230,7 @@ class TopicRobot:
             topic_lot_logger.error(f'发生异常！{e}')
             pushme(title=f'爬取话题异常', content=str(e))
         finally:
-            self.is_running = False
+            self.succ_counter.is_running = False
 
 
 def run():

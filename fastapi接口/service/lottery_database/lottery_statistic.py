@@ -1,7 +1,10 @@
 import asyncio
+
 from fastapi接口.dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticInfoResp, WinnerInfo, \
-    BiliLotStatisticRankTypeEnum, BiliLotStatisticLotTypeEnum
+    BiliLotStatisticRankTypeEnum, BiliLotStatisticLotTypeEnum, BiliLotStatisticLotteryResultResp
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 
 
 async def GetLotStatisticInfo(lot_type: BiliLotStatisticLotTypeEnum, rank_type: BiliLotStatisticRankTypeEnum,
@@ -15,17 +18,66 @@ async def GetLotStatisticInfo(lot_type: BiliLotStatisticLotTypeEnum, rank_type: 
     :param limit:
     :return:
     """
-    dyn_lot_sync_ts = await lottery_data_statistic_redis.get_sync_ts(lot_type)
-    return BiliLotStatisticInfoResp(winners=[WinnerInfo(uid=uid, count=count) for uid, count in
-                                             await lottery_data_statistic_redis.get_lot_prize_count(lot_type, rank_type,
-                                                                                                    offset, limit)],
-                                    sync_ts=dyn_lot_sync_ts)
+    uid_count_list = await lottery_data_statistic_redis.get_lot_prize_count(
+        lot_type,
+        rank_type,
+        offset,
+        limit
+    )
+    uid_count_dict = dict(uid_count_list)
+    uid_list = list(uid_count_dict.keys())
+    users, dyn_lot_sync_ts, rank_dict, total = await asyncio.gather(
+        lottery_data_statistic_redis.get_bili_user_info_bulk(uid_list),
+        lottery_data_statistic_redis.get_sync_ts(lot_type),
+        lottery_data_statistic_redis.get_lot_prize_rank_bulk(lot_type, rank_type, uid_list),
+        lottery_data_statistic_redis.get_lot_prize_total(lot_type, rank_type)
+    )
+    users_dict = {user.uid: user for user in users}
+
+    return BiliLotStatisticInfoResp(
+        winners=[WinnerInfo(user=users_dict.get(uid), count=count, rank=rank_dict.get(uid) + 1) for uid, count in
+                 uid_count_list
+                 ],
+        sync_ts=dyn_lot_sync_ts,
+        total=total
+    )
+
+
+async def GetLotteryResult(
+        uid: int | str,
+        lot_type: BiliLotStatisticLotTypeEnum = None,
+        rank_type: BiliLotStatisticRankTypeEnum = None,
+        offset: int = None,
+        limit: int = None
+) -> BiliLotStatisticLotteryResultResp:
+    prize_result, user = await asyncio.gather(
+        grpc_sql_helper.get_lottery_result(
+            uid,
+            BiliLotStatisticLotTypeEnum.lot_type_2_business_type(lot_type),
+            rank_type,
+            offset, limit
+        ),
+        lottery_data_statistic_redis.get_bili_user_info(uid)
+    )
+    return BiliLotStatisticLotteryResultResp(
+        user=user,
+        prize_result=[sqlalchemy_model_2_dict(x) for x in prize_result]
+    )
 
 
 if __name__ == '__main__':
+    from fastapi接口.log.base_log import myfastapi_logger
+
+
     async def _test():
-        a = await GetLotStatisticInfo("total", offset=0, limit=10)
-        print(a)
+        myfastapi_logger.info(1)
+        a = await GetLotStatisticInfo(
+            BiliLotStatisticLotTypeEnum.official,
+            BiliLotStatisticRankTypeEnum.first,
+            offset=0,
+            limit=10
+        )
+        myfastapi_logger.info(a)
 
 
     asyncio.run(_test())

@@ -274,7 +274,7 @@ class SQLHelperClass:
             try:
                 redis_sync_ts = await self.sub_redis_store.get_sync_ts()
                 if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:
-                    sql_log.debug('开始同步redis和mysql数据库')
+                    sql_log.debug('上次同步时间：{}\n开始同步redis和mysql数据库')
                     start_ts = int(time.time())
                     sql_log.debug('开始将redis数据同步至MySQL中')
                     await self.sync_2_database()
@@ -819,7 +819,9 @@ if __name__ == '__main__':
         while 1:
             print(int(time.time()))
             await asyncio.sleep(0.5)
-
+    async def _test_available_num():
+        result = await SQLHelper.get_available_proxy_nums()
+        print(result)
 
     async def _test():
         task = asyncio.create_task(_test_other_evnet())
@@ -828,4 +830,4 @@ if __name__ == '__main__':
         task.cancel()
 
 
-    asyncio.run(_test())
+    asyncio.run(_test_available_num())

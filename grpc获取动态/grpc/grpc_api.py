@@ -134,7 +134,7 @@ class BiliGrpc:
         self.lock_prepare_proxy = asyncio.Lock()
         self.latest_352_ts = 0
         self._352MQServer = VoucherRabbitMQ.Instance()
-        self.GeetestV3BreakerPool = BaseAsyncPool(1, GeetestV3Breaker, 'a_validate_form_voucher_ua')
+        self.GeetestV3BreakerPool = BaseAsyncPool(10, GeetestV3Breaker, 'a_validate_form_voucher_ua')
 
     # region 准备工作
     async def _prepare_ck_proxy(self):
@@ -142,7 +142,7 @@ class BiliGrpc:
         channel = self.channel
         cookies = await self.__set_available_cookies(self.cookies)
         if not channel:
-            proxy, channel = await self.__get_random_channel()
+            proxy, channel = await self._get_random_channel()
 
         return proxy, channel, cookies
 
@@ -177,7 +177,7 @@ class BiliGrpc:
         self.proxy = proxy
         self.channel = channel
 
-    async def __get_random_channel(self):
+    async def _get_random_channel(self):
         while 1:
             avaliable_ip_status = await self.GrpcProxyTools.get_rand_avaliable_ip_status()
             proxy = {}
@@ -350,7 +350,7 @@ class BiliGrpc:
                 ip_status = None
                 cookies = None
             if proxy_flag:
-                proxy, channel = await self.__get_random_channel()
+                proxy, channel = await self._get_random_channel()
                 if cookie_flag:
                     cookies = await self.__set_available_cookies(self.cookies)
                 if not await self.GrpcProxyTools.check_ip_status(proxy['proxy']['http']):
@@ -748,6 +748,6 @@ if __name__ == '__main__':
     async def _test():
         t = BiliGrpc()
         t.debug_mode = False
-        result1 = await t.grpc_get_dynamic_detail_by_type_and_rid('273885938')
+        result1 = await t._get_random_channel()
         print(result1)
     asyncio.run(_test())

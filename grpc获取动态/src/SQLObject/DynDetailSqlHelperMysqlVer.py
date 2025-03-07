@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import datetime
-from typing import Literal, List, Sequence, Union
+from copy import deepcopy
+from typing import Literal, List, Sequence, Union, Optional
 import numpy as np
-from sqlalchemy import select, and_, exists, func, String, text
-from sqlalchemy.dialects.mysql import insert
+from sqlalchemy import select, and_, exists, func, String, text, or_, cast
+from sqlalchemy.dialects.mysql import insert, BIGINT
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
 from fastapi接口.log.base_log import myfastapi_logger
-from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum
+from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, \
+    BiliLotStatisticLotTypeEnum
 from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 import time
 import ast
@@ -63,7 +65,8 @@ class SQLHelper:
 
     # region 返回和提交内容预处理
 
-    def _process_2_save_data(self, orig_list_dict: list[dict]) -> list[dict]:
+    @classmethod
+    def _process_2_save_data(cls, orig_list_dict: list[dict]) -> list[dict]:
         '''
         对存入数据预处理，将dict转化为str(dict)
         :param orig_list_dict:
@@ -398,8 +401,9 @@ class SQLHelper:
     # region 更新和新增内容
 
     @lock_wrapper
-    async def upsert_DynDetail(self, doc_id: str | int, dynamic_id: str | int, dynData: dict|None, lot_id: str | int | None,
-                               dynamic_created_time: str|None):
+    async def upsert_DynDetail(self, doc_id: str | int, dynamic_id: str | int, dynData: dict | None,
+                               lot_id: str | int | None,
+                               dynamic_created_time: str | None):
         if dynData:
             parsed_dyn_data = json.dumps(dynData, ensure_ascii=False)
         else:
@@ -421,6 +425,26 @@ class SQLHelper:
             await session.execute(stmt)
             await session.commit()
 
+    @classmethod
+    def process_resp_data_dict_2_lotdata(cls, lot_data_resp_data: dict) -> Lotdata:
+        lot_data_dict = deepcopy(lot_data_resp_data)
+        # 获取Lotdata的所有列名
+        columns = Lotdata.__table__.columns.keys()
+
+        # 分离出不在Lotdata模型中的键值对
+        custom_extra = {k: lot_data_dict.pop(k) for k in list(lot_data_dict.keys()) if
+                        k not in columns and k != 'lottery_id'}
+        if custom_extra:
+            lot_data_dict['custom_extra_key'] = json.dumps(custom_extra)
+        else:
+            lot_data_dict['custom_extra_key'] = None
+        cls._process_2_save_data(
+            [
+                lot_data_dict
+            ]
+        )
+        return Lotdata(**lot_data_dict)
+
     @lock_wrapper
     async def upsert_lot_detail(self, lot_data_dict: dict):
         '''
@@ -438,23 +462,8 @@ class SQLHelper:
                 select(Lotdata).where(Lotdata.lottery_id == lottery_id)
             )
             exists = existing_record.scalars().first() is not None
-            # 获取Lotdata的所有列名
-            columns = Lotdata.__table__.columns.keys()
 
-            # 分离出不在Lotdata模型中的键值对
-            custom_extra = {k: lot_data_dict.pop(k) for k in list(lot_data_dict.keys()) if
-                            k not in columns and k != 'lottery_id'}
-            if custom_extra:
-                lot_data_dict['custom_extra_key'] = json.dumps(custom_extra)
-            else:
-                lot_data_dict['custom_extra_key'] = None
-            self._process_2_save_data(
-                [
-                    lot_data_dict
-                ]
-            )
-
-            await session.merge(Lotdata(**lot_data_dict))
+            await session.merge(self.process_resp_data_dict_2_lotdata(lot_data_dict))
 
             # 判断是插入还是更新
             mode = 'insert' if exists == 1 else 'update'
@@ -476,70 +485,256 @@ class SQLHelper:
             return result.scalars().all()
 
     @lock_wrapper
-    async def get_all_lottery_result_rank(self, business_type: Literal[1, 10, 12],
+    async def get_all_lottery_result_rank(self, business_type: Literal[1, 10, 12, 0],
                                           rank_type: BiliLotStatisticRankTypeEnum) -> list[
         tuple[int, int]]:
         async with self._session() as session:
             if rank_type == BiliLotStatisticRankTypeEnum.total:
-                query = text("""
-                        SELECT uid, COUNT(*) AS total_count 
-                        FROM (
-                            SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(JSON_EXTRACT(lotData.lottery_result, '$.first_prize_result')), CONCAT('$[', seq.seq, '].uid'))) AS uid
-                            FROM lotData, 
-                            (SELECT 0 AS seq UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS seq
-                            WHERE lotData.business_type = :business_type AND JSON_VALID(lotData.lottery_result)
-                            AND seq.seq < JSON_LENGTH(JSON_EXTRACT(lotData.lottery_result, '$.first_prize_result'))
+                query = text(f"""SELECT uid, 
+COUNT(*) AS atari_count
+FROM (SELECT jt.uid FROM 
+lotData,
+JSON_TABLE(lotData.lottery_result, '$.first_prize_result[*]' 
+COLUMNS (
+uid BIGINT PATH '$.uid'
+)
+) AS jt
+WHERE 
+JSON_VALID(lotData.lottery_result)
+{'AND lotData.business_type = :business_type' if business_type else ''}
+UNION ALL
 
-                            UNION ALL
+SELECT 
+jt.uid
+FROM 
+lotData,
+JSON_TABLE(lotData.lottery_result, '$.second_prize_result[*]' 
+COLUMNS (
+uid BIGINT PATH '$.uid'
+)
+) AS jt
+WHERE 
+JSON_VALID(lotData.lottery_result)
+{'AND lotData.business_type = :business_type' if business_type else ''}
 
-                            SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(JSON_EXTRACT(lotData.lottery_result, '$.second_prize_result')), CONCAT('$[', seq.seq, '].uid'))) AS uid
-                            FROM lotData, 
-                            (SELECT 0 AS seq UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS seq
-                            WHERE lotData.business_type = :business_type AND JSON_VALID(lotData.lottery_result)
-                            AND seq.seq < JSON_LENGTH(JSON_EXTRACT(lotData.lottery_result, '$.second_prize_result'))
+UNION ALL
 
-                            UNION ALL
-
-                            SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(JSON_EXTRACT(lotData.lottery_result, '$.third_prize_result')), CONCAT('$[', seq.seq, '].uid'))) AS uid
-                            FROM lotData, 
-                            (SELECT 0 AS seq UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS seq
-                            WHERE lotData.business_type = :business_type AND JSON_VALID(lotData.lottery_result)
-                            AND seq.seq < JSON_LENGTH(JSON_EXTRACT(lotData.lottery_result, '$.third_prize_result'))
-                        ) AS combined_results
-                        WHERE uid IS NOT NULL
-                        GROUP BY uid
-                        ORDER BY total_count DESC;
+SELECT 
+jt.uid
+FROM 
+lotData,
+JSON_TABLE(lotData.lottery_result, '$.third_prize_result[*]' 
+COLUMNS (
+uid BIGINT PATH '$.uid'
+)
+) AS jt
+WHERE 
+JSON_VALID(lotData.lottery_result)
+{'AND lotData.business_type = :business_type' if business_type else ''}
+) AS combined_uids
+WHERE uid IS NOT NULL
+GROUP BY uid
+ORDER BY atari_count DESC, uid DESC;
                     """)
                 result = await session.execute(query, {"business_type": business_type})
-                return [(row.uid, row.total_count) for row in result]
+                return [(row.uid, row.atari_count) for row in result]
             else:
                 prize_key = f"{rank_type.value}_prize_result"
                 query = text(f"""
-                        SELECT JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(JSON_EXTRACT(lotData.lottery_result, '$.{prize_key}')), CONCAT('$[', seq.seq, '].uid'))) AS uid, COUNT(*) AS count 
-                        FROM lotData, 
-                        (SELECT 0 AS seq UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS seq
-                        WHERE lotData.business_type = :business_type AND JSON_VALID(lotData.lottery_result)
-                        AND seq.seq < JSON_LENGTH(JSON_EXTRACT(lotData.lottery_result, '$.{prize_key}'))
-                        AND JSON_UNQUOTE(JSON_EXTRACT(JSON_UNQUOTE(JSON_EXTRACT(lotData.lottery_result, '$.{prize_key}')), CONCAT('$[', seq.seq, '].uid'))) IS NOT NULL
-                        GROUP BY uid
-                        ORDER BY count DESC, uid DESC;
+SELECT
+	jt.uid,
+	COUNT(*) as atari_count
+FROM
+	lotData,
+	JSON_TABLE(
+		JSON_EXTRACT(
+			lottery_result, '$.{prize_key}'
+		),
+		'$[*]' COLUMNS(uid BIGINT PATH '$.uid')
+	) AS jt
+WHERE
+	JSON_VALID(lottery_result)
+	{'AND business_type = :business_type' if business_type else ''}
+GROUP BY
+	jt.uid
+ORDER BY
+	atari_count DESC,
+	jt.uid;
                     """)
                 result = await session.execute(query, {"business_type": business_type})
 
-                return [(row.uid, row.count) for row in result]
+                return [(row.uid, row.atari_count) for row in result]
+
+    async def get_lottery_result(
+            self, uid: int | str,
+            business_type: Literal[1, 10, 12, 0] = None,
+            rank_type: Optional[BiliLotStatisticRankTypeEnum] = None,
+            offset: Optional[int] = None,
+            limit: Optional[int] = None
+    ) -> Sequence[Lotdata]:
+
+        async with self._session() as session:
+            uid_num = int(uid)
+
+            # 构建基础查询（直接在主查询中操作，避免子查询别名问题）
+            query = select(Lotdata)
+
+            # 添加UID过滤条件
+            if rank_type and rank_type != BiliLotStatisticRankTypeEnum.total:
+                prize_key = f"{rank_type.value}_prize_result"
+                json_path = text(f"'$.{prize_key}[*].uid'")
+                query = query.where(
+                    func.json_contains(
+                        func.json_extract(Lotdata.lottery_result, json_path),
+                        func.json_array(uid_num)
+                    )
+                )
+            else:
+                # 同时检查三个奖项
+                conditions = []
+                for prize in ["first", "second", "third"]:
+                    json_path = text(f"'$.{prize}_prize_result[*].uid'")
+                    conditions.append(
+                        func.json_contains(
+                            func.json_extract(Lotdata.lottery_result, json_path),
+                            func.json_array(uid_num)
+                        )
+                    )
+                query = query.where(or_(*conditions))
+
+            # 添加business_type过滤
+            if business_type:
+                query = query.where(Lotdata.business_type == business_type)
+
+            # 排序和分页
+            query = query.order_by(Lotdata.lottery_id.desc())
+            if offset is not None and limit is not None:
+                query = query.offset(offset).limit(limit)
+
+            results = await session.execute(query)
+            return results.scalars().all()
+
+    async def get_all_bili_user_info(self) -> list[
+        BiliUserInfoSimple]:
+        async with self._session() as session:
+            query = text("""
+WITH
+	all_results AS (
+		SELECT
+			jt.uid,
+			jt.name,
+			jt.face,
+			lotdata.lottery_id,
+			ROW_NUMBER() OVER (
+				PARTITION BY
+					jt.uid
+				ORDER BY
+					lotdata.lottery_id DESC
+			) AS rn
+		FROM
+			lotData,
+			JSON_TABLE(
+				lotData.lottery_result,
+				'$.first_prize_result[*]' COLUMNS (
+					uid BIGINT PATH '$.uid', `name` TEXT PATH '$.name',
+					face TEXT PATH '$.face'
+				)
+			) AS jt
+		WHERE
+			JSON_VALID(lotData.lottery_result)
+		UNION ALL
+		SELECT
+			jt.uid,
+			jt.name,
+			jt.face,
+			lotdata.lottery_id,
+			ROW_NUMBER() OVER (
+				PARTITION BY
+					jt.uid
+				ORDER BY
+					lotdata.lottery_id DESC
+			) AS rn
+		FROM
+			lotData,
+			JSON_TABLE(
+				lotData.lottery_result,
+				'$.second_prize_result[*]' COLUMNS (
+					uid BIGINT PATH '$.uid', `name` TEXT PATH '$.name',
+					face TEXT PATH '$.face'
+				)
+			) AS jt
+		WHERE
+			JSON_VALID(lotData.lottery_result)
+		UNION ALL
+		SELECT
+			jt.uid,
+			jt.name,
+			jt.face,
+			lotdata.lottery_id,
+			ROW_NUMBER() OVER (
+				PARTITION BY
+					jt.uid
+				ORDER BY
+					lotdata.lottery_id DESC
+			) AS rn
+		FROM
+			lotData,
+			JSON_TABLE(
+				lotData.lottery_result,
+				'$.third_prize_result[*]' COLUMNS (
+					uid BIGINT PATH '$.uid', `name` TEXT PATH '$.name',
+					face TEXT PATH '$.face'
+				)
+			) AS jt
+		WHERE
+			JSON_VALID(lottery_result)
+	),
+	ranked_results AS (
+		SELECT
+			uid,
+			name,
+			face,
+			ROW_NUMBER() OVER (
+				PARTITION BY
+					uid
+				ORDER BY
+					lottery_id DESC
+			) AS rn
+		FROM
+			all_results
+	)
+SELECT
+	uid,
+	name,
+	face
+FROM
+	ranked_results
+WHERE
+	rn = 1
+ORDER BY
+	uid
+    """)
+            # 执行查询
+            result = await session.execute(query)
+
+            # 获取结果
+            rows = [BiliUserInfoSimple(uid=row.uid, name=row.name, face=row.face) for row in result]
+            # 如果没有更多数据返回空列表
+            if not rows:
+                return []
+            # 返回当前批次的数据以及下一个批次的起点
+            return rows  # 返回当前批次的数据和最后一个uid作为下次查询的起点
 
 
 grpc_sql_helper = SQLHelper()
 
 if __name__ == "__main__":
-
-
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.get_all_lottery_result_rank(
-                                                     )
-
-        sql_log.debug(result)
+        result = await grpc_sql_helper.get_lottery_result(1642844375,
+                                                          0,
+                                                          BiliLotStatisticRankTypeEnum.first)
+        sql_log.debug(len(result))
 
 
     asyncio.run(_test())

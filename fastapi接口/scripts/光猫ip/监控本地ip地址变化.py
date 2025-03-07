@@ -154,7 +154,7 @@ async def async_monitor_ipv6_address_changes():
                     ipv6_monitor_logger.exception('推送失败')
                 previous_ipv6_address = current_ipv6_address
                 previous_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[0:4])
-            await asyncio.sleep(30)  # 每隔40秒检查一次
+            await asyncio.sleep(60)  # 每隔60秒检查一次
         except Exception as e:
             ipv6_monitor_logger.exception(e)
             pushme(f'IPv6地址监控程序异常！{time.strftime("%Y-%m-%d %H:%M:%S")}', f'异常信息：{e}')

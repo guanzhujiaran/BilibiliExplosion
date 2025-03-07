@@ -120,6 +120,18 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
             if resp.get('code') == -9999:
                 return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
             await asyncio.sleep(10)
+            bapi_log.critical(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            pushme('get_lot_notice响应代码错误！',
+                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+                   f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            continue
+        resp_business_id = resp.get('business_id')
+        if str(business_id) != str(resp_business_id):
+            bapi_log.error(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            pushme('get_lot_notice响应内容错误！',
+                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+                   f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            await asyncio.sleep(10)
             continue
         return resp
 

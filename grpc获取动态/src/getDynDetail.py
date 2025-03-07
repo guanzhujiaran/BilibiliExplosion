@@ -64,15 +64,13 @@ class DynDetailScrapy:
         self.Sqlhelper = grpc_sql_helper
         self.stop_counter: StopCounter = StopCounter()  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = asyncio.Semaphore(200)  # 同时运行的协程数量
-        # self.thread_sem = threading.Semaphore(50)
+        self.scrapy_sem = asyncio.Semaphore(100)  # 同时运行的协程数量
         self.stop_limit_time = 2 * 3600  # 提前多少时间停止
         self.log = official_lot_logger
 
         self.succ_counter = SuccCounter()
 
         self._BiliLotDataPublisher = None
-        self.is_running = False
 
     @property
     def BiliLotDataPublisher(self):
@@ -543,11 +541,9 @@ class DynDetailScrapy:
         except Exception as e:
             self.log.exception(e)
         self.scrapy_sem.release()
-        # self.thread_sem.release()
         return rid
 
     async def main_get_dynamic_detail_by_rid(self, latest_rid: int):
-
         self.log.debug(f'爬虫，启动！最后的rid为：{latest_rid}\t往前回滚500个rid！')
         latest_rid -= 500
         thread_num = 10
@@ -559,31 +555,17 @@ class DynDetailScrapy:
                     self.log.info('遇到停止标志，等待剩余任务完成！')
                     break
             turn_times += 1
-            self.log.info(
-                f'第{turn_times}轮获取动态（每轮获取{thread_num * self.offset}个动态）当前共获取{thread_num * self.offset * turn_times}条动态')
             for i in range(thread_num):
                 await self.scrapy_sem.acquire()
-                # self.thread_sem.acquire() # 获得线程，可用线程数减1
                 task = asyncio.create_task(self.get_single_dynDetail_by_rid_start(latest_rid))
-                # task = threading.Thread(target=self.run_async_in_thread,args=(self.get_single_dynDetail_by_rid_start,latest_rid))
-                # task.start()
                 latest_rid += self.offset
                 self.succ_counter.latest_rid = latest_rid
                 task_list.append(task)
-            self.log.debug(f'当前可开启线程数剩余：{self.scrapy_sem._value}')
-            # task_list = list(filter(lambda _t: not _t.is_alive(), task_list))
             task_list = list(filter(lambda _t: not _t.done(), task_list))
             if self.stop_counter.stop_flag:
-                # for t in task_list:
-                #     t.join()
-                while task_list:
-                    task_list = list(filter(lambda _t: not _t.done(), task_list))
-                    self.log.info(f'遇到停止标志，等待剩余任务{len(task_list)}个完成！')
-                    await asyncio.sleep(10)
                 await asyncio.gather(*task_list)
 
     async def main(self):
-        self.is_running = True
         try:
             latest_rid = int(await self.Sqlhelper.get_latest_rid())
             task_list = []
@@ -598,6 +580,7 @@ class DynDetailScrapy:
                 task2 = asyncio.create_task(self.get_lost_lottery_notice())
                 task_list.append(task2)
             self.succ_counter = SuccCounter()
+            self.succ_counter.is_running = True
             self.log.info('开始执行获取动态详情')
             task3 = asyncio.create_task(self.main_get_dynamic_detail_by_rid(latest_rid))
             task_list.append(task3)
@@ -607,7 +590,7 @@ class DynDetailScrapy:
             self.log.error(f'爬取动态任务出错：{e}')
             pushme(title='爬取动态任务出错', content=f'爬取动态任务出错：{e}')
         finally:
-            self.is_running = False
+            self.succ_counter.is_running = False
 
     # region 测试用
     async def get_dynamics_by_spec_rids(self, all_rids: [int]):

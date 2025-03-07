@@ -38,6 +38,7 @@ async def gen_all_cv(is_api_update: bool = False):
         gen_dynamic_cv(is_api_update),
         gen_reserve_cv(is_api_update)
     )
+    print('全部生成完成')
 
 
 if __name__ == "__main__":
