@@ -8,9 +8,8 @@ import json
 import os
 import random
 import time
-import traceback
 import urllib.parse
-from typing import List, Any, Coroutine
+from typing import Any
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
@@ -628,4 +627,4 @@ dyn_detail_scrapy = DynDetailScrapy()
 
 
 if __name__ == "__main__":
-    asyncio.run(dyn_detail_scrapy.get_grpc_single_dynDetail_by_dynamic_id(992217516493242370))
+    asyncio.run(dyn_detail_scrapy.main())

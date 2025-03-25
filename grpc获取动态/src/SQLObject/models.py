@@ -1,7 +1,7 @@
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Column, Computed, ForeignKeyConstraint, Index, Text, text
-from sqlalchemy.dialects.mysql import VARCHAR
+from sqlalchemy import BigInteger, Column, Computed, ForeignKeyConstraint, Index, TIMESTAMP, Text, text
+from sqlalchemy.dialects.mysql import LONGTEXT, VARCHAR
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.orm.base import Mapped
 
@@ -11,7 +11,10 @@ Base = declarative_base()
 class Lotdata(Base):
     __tablename__ = 'lotdata'
     __table_args__ = (
+        Index('business_id', 'business_id'),
         Index('idx_lottery_id', 'lottery_id'),
+        Index('lottery_time', 'lottery_time'),
+        Index('sender_uid', 'sender_uid')
     )
 
     lottery_id = mapped_column(BigInteger, primary_key=True)
@@ -48,8 +51,10 @@ class Lotdata(Base):
     followed = mapped_column(BigInteger)
     reposted = mapped_column(BigInteger)
     custom_extra_key = mapped_column(Text(collation='utf8mb4_general_ci'))
+    created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
-    bilidyndetail: Mapped['Bilidyndetail'] = relationship('Bilidyndetail', uselist=False, back_populates='lot')
+    bilidyndetail: Mapped['Bilidyndetail'] = relationship('Bilidyndetail', uselist=True, back_populates='lot')
 
 
 class Bilidyndetail(Base):
@@ -66,10 +71,10 @@ class Bilidyndetail(Base):
 
     rid = mapped_column(VARCHAR(255), primary_key=True, server_default=text("''"))
     dynamic_id = mapped_column(Text(collation='utf8mb4_general_ci'))
-    dynData = mapped_column(Text(collation='utf8mb4_general_ci'))
+    dynData = mapped_column(LONGTEXT)
     lot_id = mapped_column(BigInteger)
     dynamic_created_time = mapped_column(Text(collation='utf8mb4_general_ci'))
-    rid_int = mapped_column(BigInteger, Computed('(cast(`rid` as unsigned))', persisted=True))
-    dynamic_id_int = mapped_column(BigInteger, Computed('(cast(`dynamic_id` as unsigned))', persisted=True))
+    rid_int = mapped_column(BigInteger, Computed('(cast(`rid` as signed))', persisted=True))
+    dynamic_id_int = mapped_column(BigInteger, Computed('(cast(`dynamic_id` as signed))', persisted=True))
 
     lot: Mapped[Optional['Lotdata']] = relationship('Lotdata', back_populates='bilidyndetail')

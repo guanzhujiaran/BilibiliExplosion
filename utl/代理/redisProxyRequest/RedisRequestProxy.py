@@ -7,20 +7,28 @@ import random
 import re
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from functools import reduce
+from json import JSONDecodeError
 from typing import Union
 import bs4
+from exceptiongroup import ExceptionGroup
 from loguru import logger
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import request_with_proxy_logger
 from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import VoucherRabbitMQ
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from grpc获取动态.Models.CustomRequestErrorModel import Request412Error, Request352Error, RequestProxyResponseError
+from grpc获取动态.Utils.GrpcRedis import grpc_proxy_tools
 from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, APIExClimbWuzhi
 from utl.redisTool.RedisManager import RedisManagerBase
-from utl.代理.ProxyTool.ProxyObj import MyProxyData, MyProxyDataTools, TypePDict
 from utl.代理.SealedRequests import MYASYNCHTTPX
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
-
+from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
+    WriteError, NetworkError
+from ssl import SSLError
 
 @dataclass
 class CookieWrapper:
@@ -48,13 +56,9 @@ class CheckProxyTime:
         }
 
 
-class MyRedisManager(RedisManagerBase):
+class ProxyRedisManager(RedisManagerBase):
     class RedisMap(str, Enum):
-        fake_cookie = 'fake_cookie'
-        using_p_dict_list = 'using_p_dict_list'
-        _352_time = '_352_time'
         check_proxy_time = 'check_proxy_time'
-        isGettingCookie = 'isGettingCookie'
 
     def __init__(self):
         super().__init__()
@@ -71,84 +75,22 @@ class MyRedisManager(RedisManagerBase):
     async def set_check_proxy_time(self, check_proxy_time: CheckProxyTime):
         return await self._set(self.RedisMap.check_proxy_time.value, json.dumps(check_proxy_time.to_dict()))
 
-    async def set__352_time(self, _352_time):
-        return await self._set(self.RedisMap._352_time.value, str(_352_time))
 
-    async def get__352_time(self):
-        resp = await self._get(self.RedisMap._352_time.value)
-        if resp:
-            return int(resp)
-        else:
-            return 0
-
-    async def get_using_p_dict_list(self) -> list[MyProxyData]:
-        resp = await self._get(self.RedisMap.using_p_dict_list.value)
-        if resp:
-            ret_list = []
-            for i in json.loads(resp):
-                ret_list.append(MyProxyData(**i))
-            return ret_list
-        else:
-            return []
-
-    async def add_using_p_dict_list(self, using_p_dict_list: MyProxyData) -> list[MyProxyData]:
-        resp = await self._get(self.RedisMap.using_p_dict_list.value)
-        if resp:
-            retLs = json.loads(resp)
-            if using_p_dict_list.__dict__() not in retLs:
-                retLs.append(using_p_dict_list.__dict__())
-                retLs = reduce(lambda x, y: x if y in x else x + [y], [[], ] + retLs)
-
-                await self._set(self.RedisMap.using_p_dict_list.value, json.dumps(retLs))
-            return list(map(lambda x: MyProxyData(**x), retLs))
-        else:
-            await self._set(self.RedisMap.using_p_dict_list.value, json.dumps([using_p_dict_list.__dict__()]))
-            return [using_p_dict_list]
-
-    async def get_fake_cookie(self):
-        resp = await self._get(self.RedisMap.fake_cookie.value)
-        if resp:
-            return resp
-        else:
-            return ''
-
-    async def set_fake_cookie(self, fake_cookie):
-        return await self._set(self.RedisMap.fake_cookie.value, fake_cookie)
-
-    async def isGettingCookie(self):
-        resp = await self._get(self.RedisMap.isGettingCookie.value)
-        if resp:
-            return json.loads(resp)
-        else:
-            return resp
-
-    async def setIsGettingCookie(self, boolean: bool, _time: Union[int, timedelta]):
-        return await self._setex(self.RedisMap.isGettingCookie.value, json.dumps(boolean), _time)
-
-
-class request_with_proxy:
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(request_with_proxy, cls).__new__(cls)
-        return cls._instance
+class RequestWithProxy:
 
     def __init__(self):
-        self.redis = MyRedisManager()
+        self.redis = ProxyRedisManager()
         self.use_p_dict_flag = False
         self.channel = 'bili'
         self.mysql_proxy_op = SQLHelper
         self.max_get_proxy_sep = 0.5 * 3600 * 24  # 最大间隔x天获取一次网络上的代理
-        self.log = logger.bind(user="MYREQ")
+        self.log = request_with_proxy_logger
         self.get_proxy_sep_time = 0.5 * 3600  # 获取代理的间隔
         self.get_proxy_timestamp = 0
         self.check_proxy_time: CheckProxyTime = CheckProxyTime()
         self.get_proxy_page = 7  # 获取代理网站的页数
         self.__dir_path = CONFIG.root_dir + 'utl/代理/'
         self.check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
-        self._352_time = 0
-        self.using_p_dict_list: list[MyProxyData] = []  # 正在使用的代理列表，可以使用的，无法使用则删除
         self.timeout = 10
         self.mode = 'rand'  # single || rand # 默认是rand，改成single之后从分数最高的代理开始用，这样获取响应特别快
         self.mode_fixed = True  # 是否固定mode (已丢弃的功能)
@@ -164,6 +106,44 @@ class request_with_proxy:
         self.cookie_queue_num = 0
         self._352MQServer = VoucherRabbitMQ.Instance()
 
+    def format_proxy(self, proxy_str) -> dict | None:
+        """
+        将传入的代理字符串标准化为 {'protocol1': 'address1', 'protocol2': 'address2'} 的形式。
+
+        :param proxy_str: 代理字符串，可能是IP地址或带有协议前缀的完整URL
+        :return: 标准化的代理字典或None（如果输入不符合预期格式）
+        """
+        ip_pattern = re.compile(r'^(?:(http|https|socks[45])://)?([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]{2,5})?$')
+
+        match = ip_pattern.match(proxy_str)
+        if not match:
+            return None
+
+        protocol_in_input = match.group(1)  # 输入中的协议部分，可能为None
+        ip_address = match.group(2)
+        port = match.group(3) or ':80'  # 如果没有提供端口，默认使用80
+
+        # 构建基础的代理地址
+        base_protocol = protocol_in_input or 'http'
+        normalized_address = f"{base_protocol}://{ip_address}{port}"
+
+        # 创建代理字典
+        proxy_dict = {}
+
+        # 添加原始协议到字典
+        proxy_dict[base_protocol] = normalized_address
+
+        # 如果不是http或https协议，还需要添加默认的http和https代理配置
+        if base_protocol not in ['http', 'https']:
+            proxy_dict['http'] = f"http://{ip_address}{port}"
+            proxy_dict['https'] = f"https://{ip_address}{port}"
+        else:
+            # 确保http和https都有，并且值与输入保持一致
+            proxy_dict['http'] = proxy_str if base_protocol == 'http' else proxy_str.replace("https://", "http://")
+            proxy_dict['https'] = proxy_str if base_protocol == 'https' else proxy_str.replace("http://", "https://")
+
+        return proxy_dict
+
     async def Get_Bili_Cookie(self, ua: str) -> CookieWrapper:
         """
         获取b站cookie
@@ -171,7 +151,7 @@ class request_with_proxy:
         :return:
         """
         async with self.cookie_lock:
-            if self.cookie_queue_num < 20:
+            if self.cookie_queue_num <= 20:
                 self.cookie_queue_num += 1
                 cookie_data: Union[CookieWrapper, None] = None
             else:
@@ -204,7 +184,7 @@ class request_with_proxy:
         realtime = time.strftime('%Y-%m-%d %H:%M:%S', local_time)
         return realtime
 
-    async def get_one_rand_proxy(self):
+    async def get_one_rand_proxy(self) -> ProxyTab:
         return await self.mysql_proxy_op.select_proxy('rand', channel=self.channel)
 
     def _generate_httpx_proxy_from_requests_proxy(self, request_proxy: dict) -> dict:
@@ -213,33 +193,7 @@ class request_with_proxy:
             'https://': request_proxy['https'],
         }
 
-    async def _prepare_proxy_from_using_p_dict(self, ) -> Union[TypePDict, dict]:
-        p_dict = {}
-        self.using_p_dict_list = await self.redis.get_using_p_dict_list()
-        if len(self.using_p_dict_list) > 1000:
-            self.use_p_dict_flag = True
-        if len(self.using_p_dict_list) < 500:
-            self.use_p_dict_flag = False
-        if self.use_p_dict_flag and self.using_p_dict_list:
-            task_list = []
-
-            def remove_unavailable_ProxyData(ProxyData: MyProxyData):
-                if ProxyData.is_available():
-                    return True
-                else:
-                    task_list.append(self.update_to_proxy_dict(ProxyData.__dict__(), 0))
-                    return False
-
-            self.using_p_dict_list = list(filter(remove_unavailable_ProxyData, self.using_p_dict_list))
-            if task_list:
-                await asyncio.gather(*task_list)
-            temp: MyProxyData = random.choice(self.using_p_dict_list)
-            if temp.is_available(True):
-                p_dict = temp.__dict__()
-                p_dict['status'] = -412 if p_dict['status'] != 0 else p_dict['status']
-        return p_dict
-
-    async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
+    async def request_with_proxy(self, *args, **kwargs) -> dict| list[dict]:
         """
 
         :param args:
@@ -251,29 +205,27 @@ class request_with_proxy:
         kwargs.update(*args)
         args = ()
         mode = self.mode
-        hybrid: bool = False
+        proxy_flag: bool = False
         hybrid_flag = False
         real_proxy_weights = 1
         ipv6_proxy_weights = 1000
         if 'mode' in kwargs.keys():
             mode = kwargs.pop('mode')
         if 'hybrid' in kwargs.keys():
-            hybrid_flag = True
+            kwargs.pop('hybrid')
         status = 0
         ua = kwargs.get('headers', {}).get('user-agent', '') or kwargs.get('headers', {}).get('User-Agent',
                                                                                               '') or CONFIG.rand_ua
-        url = kwargs.get('url')
         origin = kwargs.get('headers', {}).get('origin', 'https://www.bilibili.com')
         referer = kwargs.get('headers', {}).get('referer', 'https://www.bilibili.com/')
         kwargs.get('headers').update({'user-agent': ua})
         use_cookie_flag = False
         while True:
             cookie_data = await self.Get_Bili_Cookie(ua)
-            if hybrid_flag:
-                hybrid: bool = random.choices([True, False], weights=[
-                    real_proxy_weights if real_proxy_weights >= 0 else 0,
-                    ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
-                ], k=1)[0]
+            proxy_flag: bool = random.choices([True, False], weights=[
+                real_proxy_weights if real_proxy_weights >= 0 else 0,
+                ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
+            ], k=1)[0]
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
                 'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
@@ -285,83 +237,66 @@ class request_with_proxy:
                 loop = asyncio.get_event_loop()
                 loop.call_later(30, self.set_GetProxy_Flag, False)
                 continue
-            # if not hybrid or status != 0:
-            if not hybrid or status == -352:
+            ip_status = None
+            if not proxy_flag or status != 0:
                 real_proxy_weights += 1
-                p_dict: Union[TypePDict, dict] = await self._prepare_proxy_from_using_p_dict()
-                if not p_dict:
-                    p_dict = await self._set_new_proxy(mode)
-                    if p_dict.get('proxy') in [x.proxy for x in self.using_p_dict_list]:
-                        temp: MyProxyData = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'),
-                                                                                           self.using_p_dict_list)
-                        temp.is_available(True)
-                p = p_dict.get('proxy', {})
+                proxy: ProxyTab = await self._set_new_proxy()
+                ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
             else:
                 ipv6_proxy_weights += 20
-                p_dict: Union[TypePDict, dict] = {
-                    'proxy_id': -1,
-                    'proxy': {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr},
-                    'status': 0,
-                    'update_ts': 0,
-                    'score': 0,
-                    'add_ts': 0,
-                    'success_times': 0,
-                    'zhihu_status': 0
-                }
-                p = p_dict.get('proxy', {})
-            if not p:
-                self.log.debug('刷新全局-412代理')
+                proxy: ProxyTab = ProxyTab(
+                    **{
+                        'proxy_id': -1,
+                        'proxy': {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr},
+                        'status': 0,
+                        'update_ts': 0,
+                        'score': 0,
+                        'add_ts': 0,
+                        'success_times': 0,
+                        'zhihu_status': 0
+                    }
+                )
+            if not proxy:
+                self.log.critical('无代理，单独刷新全局-412代理')
                 await self._refresh_412_proxy()
                 continue
-            req_dict = {}
+            req_dict = False
             req_text = ''
             try:
                 # self.log.info(f'正在发起请求中！\t{p}\n{args}\n{kwargs}\n')
-                req = await self.s.request(*args, **kwargs, timeout=self.timeout, proxies=p)
+                req = await self.s.request(*args, **kwargs, timeout=self.timeout, proxies=proxy.proxy)
                 req_text = req.text
-                self.log.debug(f'url:{kwargs.get("url")}) 获取到请求结果！\n{p}\n{req.text[0:200]}\n')
-                if 'code' not in req.text and 'bili' in req.url.host:  # 如果返回的不是json那么就打印出来看看是什么
-                    self.log.info(req.text.replace('\n', ''))
-                try:
-                    req_dict = req.json()
-                except:
-                    req_text = req.text.replace("\n", "")
-                    self.log.warning(f'解析为dict时失败，响应内容为：\n{req_text}\n{args}\n{kwargs}\n')
+                self.log.debug(f'url:{kwargs.get("url")}) 获取到请求结果！\n{proxy.proxy}\n{req_text[0:200]}\n')
+                if 'code' not in req_text and 'bili' in req.url.host:  # 如果返回的不是json那么就打印出来看看是什么
+                    self.log.info(req_text.replace('\n', ''))
+                req_dict = req.json()
                 if type(req_dict) is list:
-                    p_dict['score'] += 10
-                    p_dict['status'] = status
-                    self.log.debug(f'更新数据库中的代理status:{status}')
-                    await self.update_to_proxy_dict(p_dict, 50)
+                    if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                        proxy.score += 100
+                        proxy.status = status
+                        await self.update_to_proxy_dict(proxy, 50)
+                        if ip_status:
+                            ip_status.available = True
+                            ip_status.code = 0
+                            ip_status.latest_used_ts = int(time.time())
+                            await grpc_proxy_tools.set_ip_status(ip_status)
                     return req_dict
                 if type(req_dict) is not dict:
                     self.log.warning(f'请求获取的req_dict类型出错！{req_dict}')
-                if ((req_dict.get('code') is None
-                     or type(req_dict.get('code')) is not int
-                     or req_dict == {'code': 5, 'message': 'Not Found'})
-                        or req_dict.get('msg') == 'system error'
-                        and 'bili' in req.url.host):
-                    self.log.warning(f'获取bili真实响应失败！\n{req.text}\n{args}\n{kwargs}\n')
-                    p_dict['score'] -= 10
-                    p_dict['status'] = -412
-                    await self.update_to_proxy_dict(p_dict, -10)
-                    continue
+                if ((req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict == {'code': 5,
+                                                                                                           'message': 'Not Found'}) or req_dict.get(
+                    'msg') == 'system error' and 'bili' in req.url.host):
+                    raise RequestProxyResponseError(f'代理返回真实响应错误！\n{req.text}\n{args}\n{kwargs}\n', -500)
+
                 if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
                     if use_cookie_flag:
                         cookie_data.times_352 += 1
                     status = -412
-                    # 代理被风控
-                    temp = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'),
-                                                                          self.using_p_dict_list)
-                    if temp:
-                        temp.status = -352
-                        temp.max_counter_ts = int(time.time())
-                    self.log.critical(
-                        f'{req_dict.get("code")}报错,换个ip\t{p_dict}\t{self._timeshift(time.time())}\t{req_dict}\n{args}\t{kwargs}\n{req.headers}')
+                    err_msg = f'{req_dict.get("code")}报错,换个ip\t{proxy}\t{self._timeshift(time.time())}\t{req_dict}\n{args}\t{kwargs}\n{req.headers}'
                     if req_dict.get('code') == 65539:
                         pass
                     if req_dict.get('code') == -412:
-                        # self._check_ip_by_bili_zone(p, status=status, score=p_dict['score'])  # 如何代理ip检测没问题就追加回去
-                        pass
+                        raise Request412Error(err_msg, -412)
                     elif req_dict.get('code') == -352:
                         voucher = req.headers.get('x-bili-gaia-vvoucher')
                         ua = req.request.headers.get('user-agent')
@@ -373,52 +308,72 @@ class request_with_proxy:
                                                             ticket='',
                                                             version=""
                                                             )
-                        self._352_time = await self.redis.get__352_time()
                         await self.Get_Bili_Cookie(kwargs.get('headers').get('user-agent'))
-                        await self.redis.set__352_time(self._352_time)
-                    p_dict['score'] += 10
-                    p_dict['status'] = status
-                    self.log.debug(f'更新数据库中的代理status:{status}')
-                    await self.update_to_proxy_dict(p_dict, 50)
-                    continue
-                if req_dict.get('code') == 0 or req_dict.get('code') == 4101131 or req_dict.get('code') == -9999:
-                    # self.log.info(
-                    #     f'{mode}获取成功(url:{kwargs.get("url")})目前正在使用代理{p_dict}\n目前正在使用代理数量:{len(self.using_p_dict_list)}\n{p_dict}\n{kwargs}')
-                    p_dict['score'] += 100
-                    p_dict['status'] = 0
-                    self.log.debug(f'更新数据库中的代理status:{status}')
-            except (ValueError, AttributeError) as common_err:
-                self.log.exception(f'请求时出错，一般错误：{common_err}')
+                        raise Request352Error(err_msg, -352)
+                    raise Request412Error(err_msg, req_dict.get('code'))
+            except (Request412Error, Request352Error) as _err:
+                self.log.debug(
+                    f'{_err}\n请求：\n{kwargs}\n结束，报错了！\n{type(_err)}\t{sqlalchemy_model_2_dict(proxy)}\n{req_text}')
+                if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                    proxy.score += 10
+                    proxy.status = status
+                    await self.update_to_proxy_dict(proxy, 50)
+                    if ip_status:
+                        ip_status.available = True
+                        ip_status.code = 0
+                        ip_status.latest_used_ts = int(time.time())
+                        await grpc_proxy_tools.set_ip_status(ip_status)
                 continue
-            except Exception as e:
-                # if p not in self.ban_proxy_pool:
-                #     self.ban_proxy_pool.append(p)
-                # try:
-                #     self._remove_proxy_list(p_dict['proxy'])
-                # except:
-                #     pass
-                self.log.warning(f'请求结束，报错了！\t{p}\n{e}\n{req_text}')
-                status = -412
-                temp = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'), self.using_p_dict_list)
-                if temp:
-                    temp.status = -352
-                    temp.max_counter_ts = int(time.time())
-                p_dict['score'] -= 10
-                p_dict['status'] = status
-                # self.log.warning(f'更新数据库中的代理status:{status}')
-                await self.update_to_proxy_dict(p_dict, change_score_num=-10)
-                # self.log.warning(
-                #     f'{mode}使用代理访问失败，代理扣分。\n{e}\t{type(e)}\n{kwargs}\n获取请求时使用的代理信息：{p_dict}\t{self._timeshift(time.time())}\t剩余{await self.mysql_proxy_op.get_available_proxy_nums()}/{await self.mysql_proxy_op.get_all_proxy_nums()}个代理')
+            except (SSLError,JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,ReadError, WriteError,InvalidURL, NetworkError, RequestProxyResponseError, ExceptionGroup)as _err:
+                self.log.debug(
+                    f'{_err}\n请求：\n{kwargs}\n结束，报错了！\n{type(_err)}\t{sqlalchemy_model_2_dict(proxy)}\n{req_text}')
+                score_change = -10
+                if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                    proxy.status = -412
+                    await self.update_to_proxy_dict(proxy, score_change)
+                    if not ip_status:
+                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
+                    ip_status.max_counter_ts = int(time.time())
+                    ip_status.code = -412
+                    ip_status.available = False
+                    await grpc_proxy_tools.set_ip_status(ip_status)
+                    ipv6_proxy_weights += 1
+                else:
+                    real_proxy_weights += 20
                 continue
-            p_dict['score'] += 50
-            p_dict['status'] = status
-            # 最后能返回dict肯定是获取去成功了，这个时候再设置使用的代理
-            temp = MyProxyDataTools.get_MyProxyData_by_proxy_dict(p_dict.get('proxy'), self.using_p_dict_list)
-            if not temp:
-                self.using_p_dict_list = await self.redis.add_using_p_dict_list(MyProxyData(**p_dict))
-            await self.update_to_proxy_dict(p_dict, 50)
+            except (ValueError, AttributeError) as _err:
+                self.log.error(f'请求时出错，一般错误：{_err}')
+                continue
+            except Exception as _err:
+                self.log.exception(
+                    f'未知请求错误！请求：\n{kwargs}'
+                    f'\n结束，报错了！'
+                    f'\n{type(_err)}'
+                    f'\t{sqlalchemy_model_2_dict(proxy)}'
+                    f'\n{_err}\n{req_text}')
+                if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                    proxy.status = -412
+                    await self.update_to_proxy_dict(proxy, -10)
+                    if not ip_status:
+                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
+                    ip_status.max_counter_ts = int(time.time())
+                    ip_status.code = -412
+                    ip_status.available = False
+                continue
+
+
+
             if req_dict is False:
                 continue
+            if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                proxy.score += 100
+                proxy.status = 0
+                await self.update_to_proxy_dict(proxy, 50)
+                if ip_status:
+                    ip_status.available = True
+                    ip_status.code = 0
+                    ip_status.latest_used_ts = int(time.time())
+                    await grpc_proxy_tools.set_ip_status(ip_status)
             return req_dict
 
     def set_GetProxy_Flag(self, boolean: bool):
@@ -444,7 +399,7 @@ class request_with_proxy:
 
             try:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except:
+            except Exception:
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -461,10 +416,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         # if append_dict not in have_proxy:
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
@@ -472,7 +427,6 @@ class request_with_proxy:
                 self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
             else:
                 self.log.info(f'{req.text}, {url}')
-
                 Get_proxy_success = False
         return proxy_queue, Get_proxy_success
 
@@ -488,8 +442,8 @@ class request_with_proxy:
             url = f'https://www.zdaye.com/free/{page}/'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False,
-                                       proxies=(await self.mysql_proxy_op.select_score_top_proxy()).get('proxy'))
-            except:
+                                       proxies=(await self.mysql_proxy_op.select_score_top_proxy()).proxy)
+            except Exception as e:
                 await asyncio.sleep(10)
                 # self.GetProxy_Flag = False
                 Get_proxy_success = False
@@ -506,11 +460,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -533,9 +486,9 @@ class request_with_proxy:
             url = f'http://www.66ip.cn/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                       proxies=(await self.mysql_proxy_op.select_score_top_proxy()).get('proxy')
+                                       proxies=(await self.mysql_proxy_op.select_score_top_proxy()).proxy
                                        )
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 self.log.info(url)
@@ -555,11 +508,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 5:
                     self.log.info(f'{req.text}, {url}')
@@ -582,7 +534,7 @@ class request_with_proxy:
             url = f'https://www.89ip.cn/index_{page}.html'
             try:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 self.log.info(url)
@@ -602,11 +554,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 5:
                     self.log.info(f'{req.text}, {url}')
@@ -629,7 +580,7 @@ class request_with_proxy:
             url = f'https://www.tyhttp.com/free/page{page}/'
             try:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 self.log.info(url)
@@ -649,11 +600,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 5:
                     self.log.info(f'{req.text}, {url}')
@@ -674,7 +624,7 @@ class request_with_proxy:
             url = f'http://www.kxdaili.com/dailiip/1/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 await asyncio.sleep(10)
@@ -693,11 +643,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -719,7 +668,7 @@ class request_with_proxy:
             url = f'http://www.kxdaili.com/dailiip/2/{page}.html'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 await asyncio.sleep(10)
@@ -738,11 +687,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -765,7 +713,7 @@ class request_with_proxy:
             url = f'http://www.ip3366.net/free/?stype=1&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 await asyncio.sleep(10)
@@ -784,11 +732,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -811,7 +758,7 @@ class request_with_proxy:
             url = f'http://www.ip3366.net/free/?stype=2&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 await asyncio.sleep(10)
@@ -830,11 +777,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -858,7 +804,7 @@ class request_with_proxy:
             url = f'https://proxy.ip3366.net/free/?action=china&page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 await asyncio.sleep(10)
@@ -877,11 +823,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -905,7 +850,7 @@ class request_with_proxy:
             url = f'https://ip.ihuan.me/?page={page}'
             try:
                 req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 await asyncio.sleep(10)
@@ -924,11 +869,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -954,7 +898,7 @@ class request_with_proxy:
         url = f'https://www.docip.net/data/free.json?t={gmt}'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -967,10 +911,10 @@ class request_with_proxy:
 
             for i in req.json().get('data'):
                 if i.get('ip'):
-                    append_dict = {
-                        'http': 'http' + '://' + i.get('ip'),
-                        'https': 'http' + '://' + i.get('ip')
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -996,7 +940,7 @@ class request_with_proxy:
         url = f'https://openproxylist.xyz/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1009,10 +953,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1037,7 +981,7 @@ class request_with_proxy:
             headers.update({"cookie": f"page={page};"})
             try:
                 req = await self.s.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 self.log.info(url)
@@ -1057,11 +1001,10 @@ class request_with_proxy:
 
                 for i in proxies:
                     if i:
-                        append_dict = {
-                            'http': 'http' + '://' + i,
-                            'https': 'http' + '://' + i
-                        }
-                        # if append_dict not in have_proxy:
+                        append_dict = self.format_proxy(i)
+                        if not append_dict:
+                            self.log.critical(f'代理格式错误！{i}\n{td}')
+                            continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
@@ -1086,7 +1029,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/parserpp/ip_ports/main/proxyinfo.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1097,10 +1040,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1121,7 +1064,7 @@ class request_with_proxy:
         url = f'https://api.openproxylist.xyz/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1132,10 +1075,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1156,7 +1099,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/https.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1167,10 +1110,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1191,7 +1134,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1202,10 +1145,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1227,7 +1170,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1238,10 +1181,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1263,7 +1206,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Https.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1274,10 +1217,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1299,7 +1242,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/themiralay/Proxy-List-World/refs/heads/master/data.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1310,10 +1253,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1334,7 +1277,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/https.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1345,10 +1288,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip().split(' ')[0],
-                        'https': 'http://' + i.strip().split(' ')[0]
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1369,7 +1312,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1380,10 +1323,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip().split(' ')[0],
-                        'https': 'http://' + i.strip().split(' ')[0]
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1404,7 +1347,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/claude89757/free_https_proxies/refs/heads/main/free_https_proxies.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1415,10 +1358,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text:
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1439,7 +1382,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/Simatwa/free-proxies/master/files/http.json'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1450,10 +1393,10 @@ class request_with_proxy:
             proxies = []
             for i in req.json().get('proxies'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + i.strip(),
-                        'https': 'http://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1474,7 +1417,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/main/connect.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1485,10 +1428,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http://' + ':'.join(i.strip().split(':')[0:2]),
-                        'https': 'http://' + ':'.join(i.strip().split(':')[0:2])
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1509,7 +1452,7 @@ class request_with_proxy:
         url = f'https://cdn.rei.my.id/proxy/pHTTP'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1520,10 +1463,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': i.strip(),
-                        'https': i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1544,7 +1487,7 @@ class request_with_proxy:
         url = f'https://cdn.rei.my.id/proxy/pSOCKS5'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1555,10 +1498,10 @@ class request_with_proxy:
             proxies = []
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': i.strip(),
-                        'https': i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1578,7 +1521,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/officialputuid/KangProxy/KangProxy/https/https.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1591,10 +1534,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1615,7 +1558,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/officialputuid/KangProxy/KangProxy/http/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1628,10 +1571,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1652,7 +1595,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1665,10 +1608,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1691,7 +1634,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1704,10 +1647,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1731,7 +1674,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/casals-ar/proxy.casals.ar/main/http'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1744,10 +1687,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1771,7 +1714,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1784,10 +1727,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1810,7 +1753,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/https.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1823,10 +1766,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1849,7 +1792,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1862,10 +1805,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1889,7 +1832,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/yemixzy/proxy-list/main/proxies/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1902,10 +1845,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1929,7 +1872,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/http_proxies.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1941,10 +1884,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -1968,7 +1911,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/https_proxies.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -1981,10 +1924,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2008,7 +1951,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2022,10 +1965,10 @@ class request_with_proxy:
             for i in req.text.split('\n'):
                 addr = ''.join(re.findall('\d+.\d+.\d+.\d+', i.strip()))
                 if addr:
-                    append_dict = {
-                        'http': 'http' + '://' + addr,
-                        'https': 'http' + '://' + addr
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2049,7 +1992,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/sarperavci/freeCheckedHttpProxies/main/freshHttpProxies.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2062,10 +2005,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2089,7 +2032,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/prxchk/proxy-list/main/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2102,10 +2045,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2129,7 +2072,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/andigwandi/free-proxy/main/proxy_list.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2142,10 +2085,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2167,7 +2110,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/elliottophellia/yakumo/master/results/http/global/http_checked.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2180,10 +2123,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2204,7 +2147,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/im-razvan/proxy_list/main/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2217,10 +2160,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2241,7 +2184,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/proxy4parsing/proxy-list/main/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2254,10 +2197,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2278,7 +2221,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2291,10 +2234,10 @@ class request_with_proxy:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = {
-                        'http': 'http' + '://' + i.strip(),
-                        'https': 'http' + '://' + i.strip()
-                    }
+                    append_dict = self.format_proxy(i)
+                    if not append_dict:
+                        self.log.critical(f'代理格式错误！{i}')
+                        continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
@@ -2318,7 +2261,7 @@ class request_with_proxy:
         url = f'https://proxy.953959.xyz/all/'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2354,7 +2297,7 @@ class request_with_proxy:
         url = f'https://www.proxyshare.com/detection/proxyList?limit=500&page=1&sort_by=lastChecked&sort_type=desc&protocols=http'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2391,7 +2334,7 @@ class request_with_proxy:
         url = f'https://raw.githubusercontent.com/t0mer/free-proxies/main/proxies.json'
         try:
             req = await self.s.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except:
+        except Exception:
             # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
             await asyncio.sleep(10)
@@ -2434,7 +2377,7 @@ class request_with_proxy:
             }
             try:
                 req = await self.s.get(url=url, headers=headers, params=params, verify=False, timeout=self.timeout)
-            except:
+            except Exception:
                 # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
 
                 await asyncio.sleep(10)
@@ -2829,6 +2772,7 @@ class request_with_proxy:
     async def get_proxy(self):
         try:
             await self.__get_proxy()
+            await self.mysql_proxy_op.check_redis_data(True)
         except Exception as e:
             self.log.exception(e)
         finally:
@@ -2876,48 +2820,19 @@ class request_with_proxy:
     def _proxy_warrper(self, proxy, status=0, score=50):
         return {"proxy": proxy, "status": status, "update_ts": int(time.time()), 'score': score}
 
-    async def _set_new_proxy(self, mode=None):
-        if not mode:
-            mode = self.mode
-        ret_p_dict = {}
+    async def _set_new_proxy(self) -> ProxyTab:
         while 1:
-            try:
-                p_dict = await self.mysql_proxy_op.select_proxy(mode, channel=self.channel)
-                if p_dict == {}:
-                    self.log.critical('获取代理为空')
-                    await self.get_proxy()
-                    self.log.debug('刷新全局-412代理')
-                    await self._refresh_412_proxy()
-                    continue
-                ret_p_dict = p_dict
-                if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-                    self.check_proxy_time = await self.redis.get_check_proxy_time()
-                if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-                    _412_counter = await self.mysql_proxy_op.get_412_proxy_num()
-                    latest_add_ts = await self.mysql_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
-                    proxy_num = await self.mysql_proxy_op.get_all_proxy_nums()
-                    if _412_counter > proxy_num - 10:
-                        self.log.warning(
-                            f'-412风控代理过多\t{_412_counter, proxy_num}\t{time.strftime("%Y-%m-%d %H:%M:", time.localtime(time.time()))}')
-                        self.log.debug('刷新全局-412代理')
-                        await self._refresh_412_proxy()
-                        await self.get_proxy()  # 如果可用代理数量太少就去获取新的代理
-                    if latest_add_ts:
-                        if int(time.time() - latest_add_ts) > self.max_get_proxy_sep and latest_add_ts != 0:
-                            await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
-                            self.log.debug('刷新全局-412代理')
-                            await self._refresh_412_proxy()
-                    else:
-                        await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
-                        self.log.debug('刷新全局-412代理')
-                        await self._refresh_412_proxy()
-                    self.check_proxy_time.last_checked_ts = int(time.time())
-                    await self.redis.set_check_proxy_time(self.check_proxy_time)
-                break
-            except Exception as e:
-                self.log.critical(e)
-                continue
-        return ret_p_dict
+            avaliable_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
+            proxy: ProxyTab | None = None
+            if avaliable_ip_status:
+                proxy = await self.get_proxy_by_ip(avaliable_ip_status.ip)
+            if not proxy:
+                proxy = await self.get_one_rand_proxy()
+            if proxy:
+                return proxy
+            else:
+                self.log.debug('无可用代理状态！')
+                await asyncio.sleep(30)
 
     async def _refresh_412_proxy(self):
         '''
@@ -2934,7 +2849,7 @@ class request_with_proxy:
         '''
         await self.mysql_proxy_op.remove_proxy(proxy_dict['proxy'])
 
-    async def update_to_proxy_dict(self, proxy_dict: dict,
+    async def update_to_proxy_dict(self, proxy_dict: ProxyTab,
                                    change_score_num=10):
         '''
         修改所选的proxy，如果不存在则新增在第一个
@@ -2942,17 +2857,17 @@ class request_with_proxy:
         :param proxy_dict:
         :return:
         '''
-        if proxy_dict.get('proxy', {}).get('http') == CONFIG.my_ipv6_addr:
+        if proxy_dict.proxy.get('http') == CONFIG.my_ipv6_addr:
             return
-        proxy_dict['update_ts'] = int(time.time())
-        if proxy_dict['score'] > 100000:
-            proxy_dict['score'] = 100000
-        if proxy_dict['score'] < -100000:
-            proxy_dict['score'] = -100000
-        if proxy_dict['success_times'] > 100:
-            proxy_dict['success_times'] = 100
-        if proxy_dict['success_times'] < -10:
-            proxy_dict['success_times'] = -10
+        proxy_dict.update_ts = int(time.time())
+        if proxy_dict.score > 100000:
+            proxy_dict.score = 100000
+        if proxy_dict.score < -100000:
+            proxy_dict.score = -100000
+        if proxy_dict.success_times > 100:
+            proxy_dict.success_times = 100
+        if proxy_dict.success_times < -10:
+            proxy_dict.success_times = -10
         await self.mysql_proxy_op.update_to_proxy_list(proxy_dict, change_score_num)
 
     async def _add_to_proxy_list(self, proxy_dict: dict):
@@ -2965,18 +2880,12 @@ class request_with_proxy:
         if not have_flag:
             proxy_dict.update({'add_ts': int(time.time())})
             self.log.info(f'新增代理：{proxy_dict}')
-            await self.mysql_proxy_op.add_to_proxy_list(proxy_dict)
+            proxy_tab = ProxyTab(
+                **proxy_dict
+            )
+            await self.mysql_proxy_op.add_to_proxy_tab_database(proxy_tab)
 
-    # async def get_one_rand_grpc_proxy(self) -> Union[TypePDict, None]:
-    #     while 1:
-    #         ret_proxy = await self.mysql_proxy_op.get_one_rand_grpc_proxy()
-    #         if not ret_proxy:
-    #             # self.log.critical(f'没有可用的Grpc代理，尝试获取新代理！')
-    #             await self.get_proxy()
-    #             return None
-    #         return ret_proxy
-
-    async def get_proxy_by_ip(self, ip: str) -> Union[TypePDict, None]:
+    async def get_proxy_by_ip(self, ip: str) -> ProxyTab | None:
         '''
 
         :param ip:传个ip地址进去查找
@@ -2989,41 +2898,9 @@ class request_with_proxy:
             else:
                 return None
 
-    # async def upsert_grpc_proxy_status(self, proxy_id: int, status: int, score_change: int = 0) -> None:
-    #     if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-    #         self.check_proxy_time = await self.redis.get_check_proxy_time()
-    #     if int(time.time()) - self.check_proxy_time.last_checked_ts >= self.check_proxy_time.checked_ts_sep:
-    #         grpc_412_num = await self.mysql_proxy_op.get_412_proxy_num()
-    #         latest_add_ts = await self.mysql_proxy_op.get_latest_add_ts()  # 最后一次更新的时间
-    #         proxy_num = await self.mysql_proxy_op.grpc_get_all_proxy_nums()
-    #         if grpc_412_num > proxy_num * 0.8:
-    #             self.log.warning(
-    #                 f'-412风控代理过多\t{grpc_412_num, proxy_num}\t{time.strftime("%Y-%m-%d %H:%M:", time.localtime(time.time()))}')
-    #             await self._grpc_refresh_412_proxy()
-    #             await self.get_proxy()  # 如果可用代理数量太少就去获取新的代理
-    #         if latest_add_ts:
-    #             if int(time.time() - latest_add_ts) > self.max_get_proxy_sep and latest_add_ts != 0:
-    #                 await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
-    #                 await self._grpc_refresh_412_proxy()
-    #         else:
-    #             await self.get_proxy()  # 最后一次获取的时间如果是x天前，就再去获取一次代理
-    #             await self._grpc_refresh_412_proxy()
-    #         self.check_proxy_time.last_checked_ts = int(time.time())
-    #         await self.redis.set_check_proxy_time(self.check_proxy_time)
-    #     await self.mysql_proxy_op.upsert_grpc_proxy_status(proxy_id, status, score_change)
 
-    # async def _grpc_refresh_412_proxy(self):
-    #     '''
-    #     刷新两个小时前的412代理状态
-    #     :return:
-    #     '''
-    #     await self.mysql_proxy_op.grpc_refresh_412_proxy()
+request_with_proxy_internal = RequestWithProxy()
 
-
-async def __test():
-    a = request_with_proxy()
-    print(await a.get_one_rand_proxy())
-
-
-if __name__ == "__main__":
-    asyncio.run(__test())
+if __name__ == '__main__':
+    __a = asyncio.run(request_with_proxy_internal.get_one_rand_proxy())
+    print(type(__a.proxy))

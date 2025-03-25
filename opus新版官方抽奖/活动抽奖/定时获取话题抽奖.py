@@ -5,6 +5,8 @@ from typing import Union
 import asyncio
 import time
 from datetime import datetime, timedelta
+
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi接口.log.base_log import topic_lot_logger
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
@@ -35,7 +37,7 @@ class pubArticleInfo(CustomBaseModel):
                 log.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
             log.warning(f"获取到上一次发布专栏的时间失败！使用0时间！")
-            self.lastPubDate = datetime.fromtimestamp(0)
+            self.lastPubDate = datetime.fromtimestamp(86400)
 
     def save_lastPubTs(self):
         try:

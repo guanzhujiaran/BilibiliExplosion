@@ -125,10 +125,18 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
                    f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
                    f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             continue
-        resp_business_id = resp.get('business_id')
-        if str(business_id) != str(resp_business_id):
+        resp_business_id = resp.get('data', {}).get('business_id')
+        resp_business_type = resp.get('data', {}).get('business_type')
+        if str(business_type) != '2' and str(business_id) != str(resp_business_id):  # 非图片动态响应才使用business_id判断
             bapi_log.error(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            pushme('get_lot_notice响应内容错误！',
+            pushme(f'get_lot_notice响应内容错误，business_type{business_type}！',
+                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+                   f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            await asyncio.sleep(10)
+            continue
+        if str(business_type) == '2' and origin_dynamic_id and str(origin_dynamic_id) != str(resp_business_id):
+            bapi_log.error(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            pushme(f'get_lot_notice响应内容错误，business_type{business_type}！',
                    f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
                    f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             await asyncio.sleep(10)
@@ -173,6 +181,14 @@ async def reserve_relation_info(ids: int | str, use_custom_proxy=False) -> dict:
 
 @_request_wrapper
 async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_custom_proxy=False):
+    """
+    offset不能为0，需要为0的时候传入空字符串即可
+    :param hostuid:
+    :param offset:
+    :param use_custom_proxy:
+    :return:
+    """
+    offset = offset if offset else ''
     while 1:
         url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
         headers = _gen_headers({

@@ -3,12 +3,12 @@
 """
 import asyncio
 from typing import Literal, Union
-
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.background_service.background_service_model import DynScrapyStatusResp, \
-    TopicScrapyStatusResp, ReserveScrapyStatusResp, AllLotScrapyStatusResp, OthersLotStatusResp
+    TopicScrapyStatusResp, ReserveScrapyStatusResp, AllLotScrapyStatusResp, OthersLotStatusResp, ProxyStatusResp
+from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from .base import new_router
-from github.my_operator.get_others_lot.new_main import get_others_lot_dyn, GetOthersLotDyn
+from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn, GetOthersLotDyn
 from fastapi接口.service.background_tasks import schedule_refresh_bili_lot_database
 
 router = new_router()
@@ -44,7 +44,7 @@ def start_background_service(show_log: bool):
     back_ground_tasks.append(asyncio.create_task(async_monitor_ipv6_address_changes()))
     back_ground_tasks.append(asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log)))
     back_ground_tasks.append(
-        asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_get_topic_lot_main(True)))
+        asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
     from grpc获取动态.Utils.MQClient.VoucherMQClient import VoucherMQClient
     back_ground_tasks.append(
         asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer))
@@ -157,6 +157,7 @@ def get_scrapy_status(scrapy_type: Literal[
             else:
                 return OthersLotStatusResp()
 
+
 @router.get('/GetDynamicScrapyStatus', description='获取动态爬虫状态',
             response_model=CommonResponseModel[Union[DynScrapyStatusResp, None]])
 async def get_dynamic_scrapy_status():
@@ -182,7 +183,8 @@ async def get_all_scrapy_status():
         data=AllLotScrapyStatusResp(
             dyn_scrapy_status=get_scrapy_status('dyn'),
             topic_scrapy_status=get_scrapy_status('topic'),
-            reserve_scrapy_status=get_scrapy_status('reserve')
+            reserve_scrapy_status=get_scrapy_status('reserve'),
+            scrapy_proxy_pool_status=await SQLHelper.sub_redis_store.get_proxy_status()
         )
     )
 
@@ -209,3 +211,13 @@ async def get_refresh_bili_official_status():
             response_model=CommonResponseModel[Union[OthersLotStatusResp, None]])
 async def get_refresh_bili_reserve_status():
     return CommonResponseModel(data=get_scrapy_status('refresh_bili_reserve'))
+
+
+@router.get('/GetProxyStatus',
+            description='获取代理状态',
+            response_model=CommonResponseModel[Union[ProxyStatusResp, None]]
+            )
+async def get_proxy_status():
+    return CommonResponseModel(data=
+                               await SQLHelper.sub_redis_store.get_proxy_status()
+                               )

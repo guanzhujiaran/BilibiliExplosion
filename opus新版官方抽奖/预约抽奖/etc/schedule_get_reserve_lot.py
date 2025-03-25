@@ -5,6 +5,8 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from typing import Union
+
+import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi接口.log.base_log import reserve_lot_logger
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
@@ -28,8 +30,8 @@ class pubArticleInfo(CustomBaseModel):
                 self.lastPubDate = datetime.fromtimestamp(int(contents))
                 reserve_lot_logger.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
-            reserve_lot_logger.warning(f"获取到上一次发布专栏的时间失败！使用0时间！")
-            self.lastPubDate = datetime.fromtimestamp(0)
+            reserve_lot_logger.exception(f"获取到上一次发布专栏的时间失败！使用0时间！")
+            self.lastPubDate = datetime.fromtimestamp(86400)
 
     def save_lastPubTs(self):
         try:
@@ -52,7 +54,7 @@ class pubArticleInfo(CustomBaseModel):
                     reserve_lot_logger.error(f'满足发布专栏文章条件，发布专栏！\t上次发布时间：{self.lastPubDate}')
                     return True
             else:  # 上次发布日期在同一天
-                if reserve_lot_logger.timestamp() - self.lastPubDate.timestamp() >= 24 * 3600:  # 同一天只要满足超过24小时，就直接发布
+                if now.timestamp() - self.lastPubDate.timestamp() >= 24 * 3600:  # 同一天只要满足超过24小时，就直接发布
                     reserve_lot_logger.error(f'满足发布专栏文章条件，发布专栏！\t上次发布时间：{self.lastPubDate}')
                     return True
         else:
@@ -71,7 +73,7 @@ async def async_run(schedulers: Union[None, AsyncIOScheduler], pub_article_info:
     except Exception as e:
         reserve_lot_logger.exception(e)
         delta_hour = 24
-        pushme(f'定时发布话题抽奖专栏任务出错', f'{traceback.format_exc()}')
+        pushme(f'定时发布预约抽奖专栏任务出错', f'{traceback.format_exc()}')
     if schedule_mark and schedulers:
         next_job = schedulers.add_job(async_run, args=(schedulers, pub_article_info, schedule_mark), trigger='date',
                                       run_date=datetime.now() + timedelta(hours=delta_hour))

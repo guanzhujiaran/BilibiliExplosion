@@ -140,14 +140,15 @@ async def async_monitor_ipv6_address_changes():
     while True:
         try:
             current_ipv6_address = await my_ipv6.async_get_ipv6_prefix_selenium()  # 2409:8a1e:2a62:69a0::/60
-            current_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[0:4])  # 2409:8a1e:2a62:69a
+            current_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[
+                                           0:4]) if current_ipv6_address and current_ipv6_address != '::' else ''  # 2409:8a1e:2a62:69a
             ipv6_monitor_logger.info(f'当前ipv6地址：{current_ipv6_address}')
             if current_ipv6_prefix and current_ipv6_prefix != previous_ipv6_prefix:  # 只判断前缀
                 ipv6_monitor_logger.critical(f"IPv6地址发生变化：{current_ipv6_address} {int(time.time())}")
                 change_ipv6_config(':'.join(current_ipv6_address.split(':')[0:4]),
                                    previous_ipv6_prefix)
                 try:
-                    pushme(f'IPv6地址发生变化！{time.strftime("%Y-%m-%d %H:%M:%S")}',
+                    await asyncio.to_thread(pushme,f'IPv6地址发生变化！{time.strftime("%Y-%m-%d %H:%M:%S")}',
                            f'原地址：{previous_ipv6_address}\n现地址：{current_ipv6_address}')
                     await set_ipv6_to_redis(current_ipv6_address)
                 except Exception as e:
@@ -157,7 +158,7 @@ async def async_monitor_ipv6_address_changes():
             await asyncio.sleep(60)  # 每隔60秒检查一次
         except Exception as e:
             ipv6_monitor_logger.exception(e)
-            pushme(f'IPv6地址监控程序异常！{time.strftime("%Y-%m-%d %H:%M:%S")}', f'异常信息：{e}')
+            await asyncio.to_thread(pushme,f'IPv6地址监控程序异常！{time.strftime("%Y-%m-%d %H:%M:%S")}', f'异常信息：{e}')
 
 
 if __name__ == '__main__':

@@ -170,6 +170,7 @@ class MYASYNCHTTPX:
                                         content=content, files=files, json=json, params=params, cookies=cookies,
                                         extensions=extensions, follow_redirects=True
                                         )
+            await resp.aread()
             return resp
 
     async def cffi_request(self, url,
@@ -207,7 +208,6 @@ class MYASYNCHTTPX:
                                         verify=False,
                                         default_headers=False,
                                         )
-            await asyncio.sleep(0.8)
         return resp
 
 

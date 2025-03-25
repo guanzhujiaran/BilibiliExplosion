@@ -5,6 +5,8 @@ import random
 import time
 from datetime import datetime
 from typing import Union, Sequence
+
+import pytz
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from Bilibili_methods.all_methods import methods
@@ -86,7 +88,7 @@ class GetRmFollowingListV1:
                         async with session.begin():
                             data = UserInfo(
                                 uid=uid,
-                                upTimeStamp=datetime.fromtimestamp(0)
+                                upTimeStamp=datetime.fromtimestamp(86400)
                             )
                             session.add(data)
                             await session.flush()
@@ -327,13 +329,6 @@ class GetRmFollowingListV1:
         resp_list = await self.check_lot_up(following_list)
         return resp_list
 
-
-if __name__ == '__main__':
-    async def _run(*args, **kwargs):
-        _____test = GetRmFollowingListV1()
-        result = await _____test.main([1])
-        print(result)
-        return result
+get_rm_following_list = GetRmFollowingListV1()
 
 
-    print(asyncio.run(_run()))

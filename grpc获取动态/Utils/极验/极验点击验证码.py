@@ -372,9 +372,9 @@ class GeetestV3Breaker:
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
         if self.driver is None:
             if use_bili_ticket_gt or use_jy_click_selenium:
-                self.init_browser()
+                await asyncio.to_thread(self.init_browser)
             if use_bili_ticket_gt:
-                self.init_det()
+                await asyncio.to_thread(self.init_det)
         try:
             geetest_reg_info = await get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
                                                           version=version)

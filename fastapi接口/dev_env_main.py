@@ -2,22 +2,24 @@
 开发环境
 测试并开发api用！
 """
+import asyncio
 from contextlib import asynccontextmanager
+
+import objgraph
 from fastapi_cache.backends.inmemory import InMemoryBackend
 import uvicorn
-from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
 
-from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
-from fastapi接口.controller.v1.background_service import MQController
+from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
+from fastapi接口.controller.v1.background_service import BackgroundService
 import fastapi_cdn_host
 from fastapi接口.models.common import CommonResponseModel
-from starlette.requests import Request
 from pydantic import BaseModel as PydanticBaseModel
-from fastapi.responses import JSONResponse
 from loguru import logger
-
+from fastapi import FastAPI
+from starlette.requests import Request
+from starlette.responses import  JSONResponse
 log = logger.bind(name='fastapi')
 
 
@@ -32,11 +34,10 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
 
-app.include_router(ReplySingle.router)
-# app.include_router(LotteryData.router)
-# app.include_router(GetV3ClickTarget.router)
-# app.include_router(MQController.router)
-
+app.include_router(BackgroundService.router)
+@app.get('/memory_objgraph',)
+async def memory_objgraph(limit=50):
+    return await asyncio.to_thread(objgraph.show_most_common_types, limit=limit)
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, e: Exception):

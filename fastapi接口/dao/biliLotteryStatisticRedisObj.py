@@ -4,14 +4,14 @@ from enum import Enum
 from typing import List
 from CONFIG import CONFIG
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
-    BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
+    BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, BiliLotStatisticRankDateTypeEnum
 from utl.redisTool.RedisManager import RedisManagerBase
 import asyncio
 
 
 class LotteryDataStatisticRedis(RedisManagerBase):
     class RedisMap(str, Enum):
-        lot_type_rank = 'LotteryDataStatisticRedis:{lot_type}:{rank_type}_prize'  # 转发抽奖类
+        lot_type_rank = 'LotteryDataStatisticRedis:{date}:{lot_type}:{rank_type}_prize'  # 转发抽奖类
         lot_sync_ts = 'LotteryDataStatisticRedis:{lot_type}:sync_ts'
         bili_user_uid_face_name = 'LotteryDataStatisticRedis:user_info'
 
@@ -24,9 +24,10 @@ class LotteryDataStatisticRedis(RedisManagerBase):
         @classmethod
         def get_lot_type_rank_name(
                 cls,
+                date: BiliLotStatisticRankDateTypeEnum,
                 lot_type: BiliLotStatisticLotTypeEnum,
                 rank_type: BiliLotStatisticRankTypeEnum):
-            return cls.lot_type_rank.format(lot_type=lot_type, rank_type=rank_type)
+            return cls.lot_type_rank.format(date=date, lot_type=lot_type, rank_type=rank_type)
 
     def __init__(self):
         super().__init__(db=CONFIG.database.lotDataRedisObj.db,
@@ -35,17 +36,20 @@ class LotteryDataStatisticRedis(RedisManagerBase):
 
     async def set_lot_prize_count(
             self,
+            date: BiliLotStatisticRankDateTypeEnum,
             lot_type: BiliLotStatisticLotTypeEnum,
             rank_type: BiliLotStatisticRankTypeEnum,
             uid_atari_count_dict: dict):
         """设置抽奖统计信息"""
         return await self._zadd(self.RedisMap.get_lot_type_rank_name(
+            date=date,
             lot_type=lot_type,
             rank_type=rank_type),
             uid_atari_count_dict)
 
     async def get_lot_prize_count(
             self,
+            date: BiliLotStatisticRankDateTypeEnum,
             lot_type: BiliLotStatisticLotTypeEnum,
             rank_type: BiliLotStatisticRankTypeEnum,
             offset: int = 0,
@@ -53,6 +57,7 @@ class LotteryDataStatisticRedis(RedisManagerBase):
     ):
         return await self._zget_range_with_score(
             self.RedisMap.get_lot_type_rank_name(
+                date=date,
                 lot_type=lot_type,
                 rank_type=rank_type),
             offset=offset,
@@ -60,12 +65,14 @@ class LotteryDataStatisticRedis(RedisManagerBase):
         )
 
     async def get_lot_prize_rank(self,
+                                 date: BiliLotStatisticRankDateTypeEnum,
                                  lot_type: BiliLotStatisticLotTypeEnum,
                                  rank_type: BiliLotStatisticRankTypeEnum,
                                  uid: int | str
                                  ) -> int:
         """
         返回一个从0开始计数的排名，真实排名**需要+1**
+        :param date:
         :param lot_type:
         :param rank_type:
         :param uid:
@@ -73,24 +80,29 @@ class LotteryDataStatisticRedis(RedisManagerBase):
         """
         return await self._zget_rank(
             self.RedisMap.get_lot_type_rank_name(
+                date=date,
                 lot_type=lot_type,
                 rank_type=rank_type),
             uid
         )
 
-    async def get_lot_prize_rank_bulk(self, lot_type: BiliLotStatisticLotTypeEnum,
+    async def get_lot_prize_rank_bulk(self,
+                                      date: BiliLotStatisticRankDateTypeEnum,
+                                      lot_type: BiliLotStatisticLotTypeEnum,
                                       rank_type: BiliLotStatisticRankTypeEnum,
                                       uid_arr: List[int | str]) -> dict[int | str, int]:
 
         """
         返回一个从0开始计数的排名，真实排名**需要+1**
+        :param uid_arr:
+        :param date:
         :param lot_type:
         :param rank_type:
-        :param uid:
         :return:
         """
         ret_dict = {}
         tasks = [self._zget_rank(self.RedisMap.get_lot_type_rank_name(
+            date=date,
             lot_type=lot_type,
             rank_type=rank_type), uid) for uid in uid_arr]
         results = await asyncio.gather(*tasks)
@@ -101,10 +113,11 @@ class LotteryDataStatisticRedis(RedisManagerBase):
                 ret_dict[uid] = -99
         return ret_dict
 
-    async def get_lot_prize_total(self, lot_type: BiliLotStatisticLotTypeEnum,
+    async def get_lot_prize_total(self, date: BiliLotStatisticRankDateTypeEnum, lot_type: BiliLotStatisticLotTypeEnum,
                                   rank_type: BiliLotStatisticRankTypeEnum,
                                   ) -> int:
-        if res := await self._zcard(self.RedisMap.get_lot_type_rank_name(lot_type=lot_type, rank_type=rank_type)):
+        if res := await self._zcard(
+                self.RedisMap.get_lot_type_rank_name(date=date, lot_type=lot_type, rank_type=rank_type)):
             return res
         return -1
 
@@ -116,6 +129,7 @@ class LotteryDataStatisticRedis(RedisManagerBase):
             return int(res)
         return 0
 
+    # region b用户信息的region
     async def set_bili_user_info_bulk(self, user_infos: List[BiliUserInfoSimple]):
         await self._hmset_bulk_batch(
             hm_name=self.RedisMap.bili_user_uid_face_name,
@@ -126,8 +140,8 @@ class LotteryDataStatisticRedis(RedisManagerBase):
 
     async def get_bili_user_info(self, uid: int | str) -> BiliUserInfoSimple:
         if res := await self._hmget(self.RedisMap.bili_user_uid_face_name, uid):
-            return BiliUserInfoSimple(uid=uid, **ast.literal_eval(res))
-        return BiliUserInfoSimple(uid=uid, face='', name='')
+            return BiliUserInfoSimple(uid=str(uid), **ast.literal_eval(res))
+        return BiliUserInfoSimple(uid=str(uid), face='', name='')
 
     async def get_bili_user_info_bulk(self, uid_arr: [int | str]) -> List[BiliUserInfoSimple]:
         if res := await self._hmget_bulk(self.RedisMap.bili_user_uid_face_name, uid_arr):
@@ -136,16 +150,16 @@ class LotteryDataStatisticRedis(RedisManagerBase):
                     uid=uid_arr[idx], face='', name='')
                 for idx in range(len(uid_arr))
             ]
-        return [BiliUserInfoSimple(uid=uid, face='', name='') for uid in uid_arr]
+        return [BiliUserInfoSimple(uid=str(uid), face='', name='') for uid in uid_arr]
+    # endregion
 
 
 lottery_data_statistic_redis = LotteryDataStatisticRedis()
 
 if __name__ == '__main__':
     async def _test():
-        a = await lottery_data_statistic_redis.get_lot_prize_count(
-            lot_type=BiliLotStatisticLotTypeEnum.total,
-            rank_type=BiliLotStatisticRankTypeEnum.total,
+        a = await lottery_data_statistic_redis.get_bili_user_info(
+            uid=4237378
         )
         print(a)
 

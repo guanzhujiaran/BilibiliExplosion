@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, \
-    BiliLotStatisticLotTypeEnum
+    BiliLotStatisticRankDateTypeEnum
 from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 import time
 import ast
@@ -78,21 +78,46 @@ class SQLHelper:
                     _dic[k] = json.dumps(v, ensure_ascii=False)
         return orig_list_dict
 
-    def _preprocess_ret_data(self, ret_dict: dict) -> dict:
+    def preprocess_ret_data(self, data):
         '''
-        对取出的数据中的str转为dict
-        :param ret_dict:
-        :return:
+        对取出的数据进行预处理，包括转换字符串表示的字典、处理大整数（大于9007199254740991）转为字符串以避免精度丢失。
+        该函数能够处理嵌套的字典和列表。
+        :param data: 输入的数据，可以是字典或列表
+        :return: 处理后的数据
         '''
-        for k, v in ret_dict.items():
-            if type(v) == str:
-                try:
-                    literal_value = ast.literal_eval(v)
-                except:
-                    continue
-                if type(literal_value) == dict:
-                    ret_dict[k] = ast.literal_eval(v)
-        return ret_dict
+        if isinstance(data, dict):
+            for k, v in list(data.items()):
+                if isinstance(v, str):
+                    try:
+                        literal_value = ast.literal_eval(v)
+                        if isinstance(literal_value, dict) or isinstance(literal_value, list):
+                            data[k] = self.preprocess_ret_data(literal_value)
+                        else:
+                            data[k] = literal_value
+                    except (ValueError, SyntaxError):
+                        # 如果解析失败，则保留原值
+                        pass
+                elif isinstance(v, int) and v > 9007199254740991:
+                    data[k] = str(v)
+                else:
+                    data[k] = self.preprocess_ret_data(v)
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                if isinstance(item, str):
+                    try:
+                        literal_value = ast.literal_eval(item)
+                        if isinstance(literal_value, dict) or isinstance(literal_value, list):
+                            data[i] = self.preprocess_ret_data(literal_value)
+                        else:
+                            data[i] = literal_value
+                    except (ValueError, SyntaxError):
+                        # 如果解析失败，则保留原值
+                        pass
+                elif isinstance(item, int) and item > 9007199254740991:
+                    data[i] = str(item)
+                else:
+                    data[i] = self.preprocess_ret_data(item)
+        return data
 
     # endregion
 
@@ -296,7 +321,7 @@ class SQLHelper:
             return result.scalars().first()
 
     @lock_wrapper
-    async def query_official_lottery_by_timelimit(self, time_limit: int = 24 * 3600) -> Sequence[Lotdata]:
+    async def query_official_lottery_by_timelimit(self, time_limit: int = 24 * 3600,order_by_ts_desc=True) -> Sequence[Lotdata]:
         """
         通过日期查询需要的动态，默认查询当天
         :return:
@@ -312,7 +337,11 @@ class SQLHelper:
                     Lotdata.lottery_time >= now_ts,
                     Lotdata.lottery_time <= target_ts
                 )
-            ).order_by(Lotdata.lottery_time.desc())
+            )
+            if order_by_ts_desc:
+                stmt = stmt.order_by(Lotdata.lottery_time.desc())
+            else:
+                stmt = stmt.order_by(Lotdata.lottery_time.asc())
 
             result = await session.execute(stmt)
             return result.scalars().all()
@@ -338,7 +367,7 @@ class SQLHelper:
             Lotdata.lottery_time >= now_ts
         ]
 
-        if time_limit:
+        if time_limit and time_limit > 0:
             target_ts = now_ts + time_limit
             base_conditions.append(Lotdata.lottery_time <= target_ts)
         stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(and_(*base_conditions)).order_by(
@@ -399,7 +428,6 @@ class SQLHelper:
     # endregion
 
     # region 更新和新增内容
-
     @lock_wrapper
     async def upsert_DynDetail(self, doc_id: str | int, dynamic_id: str | int, dynData: dict | None,
                                lot_id: str | int | None,
@@ -485,7 +513,10 @@ class SQLHelper:
             return result.scalars().all()
 
     @lock_wrapper
-    async def get_all_lottery_result_rank(self, business_type: Literal[1, 10, 12, 0],
+    async def get_all_lottery_result_rank(self,
+                                          start_ts: int,
+                                          end_ts: int,
+                                          business_type: Literal[1, 10, 12, 0],
                                           rank_type: BiliLotStatisticRankTypeEnum) -> list[
         tuple[int, int]]:
         async with self._session() as session:
@@ -502,6 +533,8 @@ uid BIGINT PATH '$.uid'
 WHERE 
 JSON_VALID(lotData.lottery_result)
 {'AND lotData.business_type = :business_type' if business_type else ''}
+{'AND lotData.lottery_time >= :start_ts' if start_ts else ''}
+{'AND lotData.lottery_time <= :end_ts' if end_ts else ''}
 UNION ALL
 
 SELECT 
@@ -516,7 +549,8 @@ uid BIGINT PATH '$.uid'
 WHERE 
 JSON_VALID(lotData.lottery_result)
 {'AND lotData.business_type = :business_type' if business_type else ''}
-
+{'AND lotData.lottery_time >= :start_ts' if start_ts else ''}
+{'AND lotData.lottery_time <= :end_ts' if end_ts else ''}
 UNION ALL
 
 SELECT 
@@ -531,12 +565,15 @@ uid BIGINT PATH '$.uid'
 WHERE 
 JSON_VALID(lotData.lottery_result)
 {'AND lotData.business_type = :business_type' if business_type else ''}
+{'AND lotData.lottery_time >= :start_ts' if start_ts else ''}
+{'AND lotData.lottery_time <= :end_ts' if end_ts else ''}
 ) AS combined_uids
 WHERE uid IS NOT NULL
 GROUP BY uid
 ORDER BY atari_count DESC, uid DESC;
                     """)
-                result = await session.execute(query, {"business_type": business_type})
+                result = await session.execute(query,
+                                               {"business_type": business_type, 'start_ts': start_ts, 'end_ts': end_ts})
                 return [(row.uid, row.atari_count) for row in result]
             else:
                 prize_key = f"{rank_type.value}_prize_result"
@@ -555,65 +592,109 @@ FROM
 WHERE
 	JSON_VALID(lottery_result)
 	{'AND business_type = :business_type' if business_type else ''}
+	{'AND lotData.lottery_time >= :start_ts' if start_ts else ''}
+    {'AND lotData.lottery_time <= :end_ts' if end_ts else ''}
 GROUP BY
 	jt.uid
 ORDER BY
 	atari_count DESC,
 	jt.uid;
                     """)
-                result = await session.execute(query, {"business_type": business_type})
+                result = await session.execute(query,
+                                               {"business_type": business_type, 'start_ts': start_ts, 'end_ts': end_ts})
 
                 return [(row.uid, row.atari_count) for row in result]
 
+    @lock_wrapper
     async def get_lottery_result(
             self, uid: int | str,
+            start_ts: int = 0,
+            end_ts: int = 0,
             business_type: Literal[1, 10, 12, 0] = None,
             rank_type: Optional[BiliLotStatisticRankTypeEnum] = None,
             offset: Optional[int] = None,
             limit: Optional[int] = None
-    ) -> Sequence[Lotdata]:
+    ) -> tuple[Sequence[Lotdata], int]:
 
+        # 使用async with语句创建一个异步的session
         async with self._session() as session:
+            # 将uid转换为整数
             uid_num = int(uid)
 
-            # 构建基础查询（直接在主查询中操作，避免子查询别名问题）
+            # 创建一个查询Lotdata表的查询对象
             query = select(Lotdata)
-
-            # 添加UID过滤条件
+            # 创建一个查询Lotdata表记录总数的查询对象
+            count_query = select(func.count()).select_from(Lotdata)
+            # 如果rank_type存在且不等于total
             if rank_type and rank_type != BiliLotStatisticRankTypeEnum.total:
+                # 获取prize_key
                 prize_key = f"{rank_type.value}_prize_result"
+                # 获取json_path
                 json_path = text(f"'$.{prize_key}[*].uid'")
-                query = query.where(
-                    func.json_contains(
-                        func.json_extract(Lotdata.lottery_result, json_path),
-                        func.json_array(uid_num)
-                    )
+                # 创建条件
+                condition = func.json_contains(
+                    func.json_extract(Lotdata.lottery_result, json_path),
+                    func.json_array(uid_num)
                 )
+                # 将条件添加到查询对象中
+                query = query.where(
+                    condition
+                )
+                # 将条件添加到查询记录总数的查询对象中
+                count_query = count_query.where(condition)
             else:
-                # 同时检查三个奖项
+                # 创建一个空的conditions列表
                 conditions = []
+                # 遍历prize
                 for prize in ["first", "second", "third"]:
+                    # 获取json_path
                     json_path = text(f"'$.{prize}_prize_result[*].uid'")
+                    # 创建条件
                     conditions.append(
                         func.json_contains(
                             func.json_extract(Lotdata.lottery_result, json_path),
                             func.json_array(uid_num)
                         )
                     )
+                # 将条件添加到查询对象中
                 query = query.where(or_(*conditions))
-
-            # 添加business_type过滤
+                # 将条件添加到查询记录总数的查询对象中
+                count_query = count_query.where(or_(*conditions))
+            # 如果business_type存在
             if business_type:
+                # 将business_type添加到查询对象中
                 query = query.where(Lotdata.business_type == business_type)
+                # 将business_type添加到查询记录总数的查询对象中
+                count_query = count_query.where(Lotdata.business_type == business_type)
+            if start_ts:
+                # 将start_ts添加到查询对象中
+                query = query.where(Lotdata.lottery_time >= start_ts)
+                # 将start_ts添加到查询记录总数的查询对象中
+                count_query = count_query.where(Lotdata.lottery_time >= start_ts)
+            if end_ts:
+                # 将end_ts添加到查询对象中
+                query = query.where(Lotdata.lottery_time <= end_ts)
+                # 将end_ts添加到查询记录总数的查询对象中
+                count_query = count_query.where(Lotdata.lottery_time <= end_ts)
 
-            # 排序和分页
+            # 执行查询记录总数的查询对象
+            total_result = await session.execute(count_query)
+            # 获取记录总数
+            total = total_result.scalar()
+
+            # 将查询对象按照lottery_id降序排列
             query = query.order_by(Lotdata.lottery_id.desc())
+            # 如果offset和limit存在
             if offset is not None and limit is not None:
+                # 将offset和limit添加到查询对象中
                 query = query.offset(offset).limit(limit)
 
+            # 执行查询对象
             results = await session.execute(query)
-            return results.scalars().all()
+            # 返回查询结果和记录总数
+            return results.scalars().all(), total
 
+    @lock_wrapper
     async def get_all_bili_user_info(self) -> list[
         BiliUserInfoSimple]:
         async with self._session() as session:
@@ -718,7 +799,7 @@ ORDER BY
             result = await session.execute(query)
 
             # 获取结果
-            rows = [BiliUserInfoSimple(uid=row.uid, name=row.name, face=row.face) for row in result]
+            rows = [BiliUserInfoSimple(uid=str(row.uid), name=row.name, face=row.face) for row in result]
             # 如果没有更多数据返回空列表
             if not rows:
                 return []
@@ -731,9 +812,8 @@ grpc_sql_helper = SQLHelper()
 if __name__ == "__main__":
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.get_lottery_result(1642844375,
-                                                          0,
-                                                          BiliLotStatisticRankTypeEnum.first)
+        result = await grpc_sql_helper.query_official_lottery_by_timelimit( time_limit=30 * 24 * 3600,
+            order_by_ts_desc=False)
         sql_log.debug(len(result))
 
 

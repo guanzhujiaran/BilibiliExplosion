@@ -8,10 +8,9 @@ from fastapi接口.models.lottery_database.bili.LotteryDataModels import CommonL
     OfficialLotteryResp, AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp
 from fastapi接口.models.lottery_database.redisModel.biliRedisModel import bili_live_lottery_redis
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from github.my_operator.get_others_lot.Tool.newSqlHelper.SqlHelper import SqlHelper as bili_dynamic_sqlhelper
-from github.my_operator.get_others_lot.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
-from github.my_operator.get_others_lot.svmJudgeBigLot.judgeBigLot import big_lot_predict
-from grpc获取动态.src.DynObjectClass import dynAllDetail
+from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper as bili_dynamic_sqlhelper
+from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
+from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from opus新版官方抽奖.Model.GenerateCvModel import CvItem
 from opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import GenerateTopicLotCv
 from opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper as bili_topic_sqlhelper
@@ -85,7 +84,7 @@ async def GetMustOfficialLottery(limit_time: int, page_num: int = 0, page_size: 
     if page_num and page_size:
         is_lot_list = [1 for i in range(len(official_texts))]
     else:
-        is_lot_list = big_reserve_predict(official_texts)
+        is_lot_list = await asyncio.to_thread(big_reserve_predict,official_texts)
     for i in range(len(all_official_lottery_resp_infos)):
         if is_lot_list[i] == 1:
             ret_list.append(all_official_lottery_resp_infos[i])
@@ -112,7 +111,7 @@ async def GetChargeLottery(limit_time: int, page_num: int = 0, page_size: int = 
     if page_num and page_size:
         is_lot_list = [1 for i in range(len(charge_texts))]
     else:
-        is_lot_list = big_reserve_predict(charge_texts)
+        is_lot_list = await asyncio.to_thread(big_reserve_predict,charge_texts)
     for i in range(len(all_charge_lottery_resp_infos)):
         if is_lot_list[i] == 1:
             ret_list.append(all_charge_lottery_resp_infos[i])
@@ -254,7 +253,7 @@ async def AddTopicLottery(topic_id: str | int):
 
 if __name__ == "__main__":
     async def _test():
-        result = await GetChargeLottery(99999999999999999)
+        result = await GetMustOfficialLottery(page_num=1,page_size=10)
         print(result)
 
 

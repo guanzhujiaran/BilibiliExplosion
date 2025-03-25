@@ -2,7 +2,7 @@ import asyncio
 import random
 import time
 import traceback
-from typing import Union, Any, List, Callable, Dict
+from typing import Union, Any, List, Callable, Dict, Sequence
 from datetime import timedelta
 from redis import asyncio as redis
 from enum import Enum
@@ -11,7 +11,7 @@ from CONFIG import CONFIG
 import redis as sync_redis
 from fastapi接口.log.base_log import redis_logger
 
-_sem = asyncio.Semaphore(4096)
+_sem = asyncio.Semaphore(8192)
 
 
 def retry(func):
@@ -130,7 +130,7 @@ class RedisManagerBase:
         self.port = port
         self.db = db
         self.pool = redis.ConnectionPool.from_url(
-            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True')
+            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True&health_check_interval=30')
         self.RedisTimeout = 30
 
     @retry
@@ -203,11 +203,9 @@ class RedisManagerBase:
                 async with r.pipeline() as pipe:
                     for idx in range(len(key)):
                         await pipe.set(key[idx], value[idx])
-                    async with r.lock('Lock_' + str(key[0]), timeout=self.RedisTimeout):
-                        return await pipe.execute()
+                    return await pipe.execute()
             else:
-                async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                    return await r.set(key, value)
+                return await r.set(key, value)
 
     @retry
     async def _setex(self, key, value, _time: Union[int, timedelta]):
@@ -216,11 +214,9 @@ class RedisManagerBase:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
                     await pipe.setex(name=key[idx], value=value[idx], time=_time)
-                async with r.lock('Lock_' + str(key[0]), timeout=self.RedisTimeout):
-                    return await pipe.execute()
+                return await pipe.execute()
             else:
-                async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                    return await r.setex(name=key, value=value, time=_time)
+                return await r.setex(name=key, value=value, time=_time)
 
     # endregion
 
@@ -233,14 +229,12 @@ class RedisManagerBase:
         :return: 0-删除失败 1-删除成功
         """
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
-                return await r.delete(*set_name)
+            return await r.delete(*set_name)
 
     @retry
     async def _sadd(self, set_name, val):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
-                return await r.sadd(set_name, val)
+            return await r.sadd(set_name, val)
 
     @retry
     async def _sisexist(self, set_name, val):
@@ -265,8 +259,7 @@ class RedisManagerBase:
     @retry
     async def _srem(self, set_name, *val):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(set_name), timeout=self.RedisTimeout):
-                return await r.srem(set_name, *val)
+            return await r.srem(set_name, *val)
 
     # endregion
 
@@ -280,14 +273,12 @@ class RedisManagerBase:
     @retry
     async def _zadd(self, key, mapping: dict):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zadd(key, mapping, )
+            return await r.zadd(key, mapping, )
 
     @retry
     async def _zscore_change(self, key, element, score_change: int):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zincrby(key, score_change, element)
+            return await r.zincrby(key, score_change, element)
 
     @retry
     async def _zget_range(self, key, start: int = 0, end: int = -1, num: int = None, offset: int = None):
@@ -309,9 +300,12 @@ class RedisManagerBase:
     async def _zcard(self, key):
         async with redis.Redis(connection_pool=self.pool) as r:
             return await r.zcard(key)
-
     @retry
-    async def _zget_top_score(self, key, rand=False):
+    async def _zcount(self,key,min_val,max_val):
+        async with redis.Redis(connection_pool=self.pool) as r:
+            return await r.zcount(key,min_val,max_val)
+    @retry
+    async def _zget_top_score(self, key, rand=False)->str:
         end = 0 if not rand else 20
         async with redis.Redis(connection_pool=self.pool) as r:
             if members := await r.zrevrange(key, 0, 0):
@@ -337,41 +331,37 @@ class RedisManagerBase:
         if not elements_to_remove:
             return
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zrem(key, *elements_to_remove)
+            return await r.zrem(key, *elements_to_remove)
 
     @retry
     async def _zdel_range(self, key, start: int, end: int):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                return await r.zremrangebyrank(key, start, end)
+            return await r.zremrangebyrank(key, start, end)
 
     @retry
     async def _zrand(self, key, count: int = None):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
-                total = await r.zcard(key)
-                if total == 0:
-                    return None
-                count = 1 if not count else count
-                count = total if count > total else count
-                if count > 1:
-                    random_nums = random.sample(range(total), count)
-                    async with r.pipeline() as pipe:
-                        await asyncio.gather(*[pipe.zrange(key, i, i) for i in random_nums])
-                    values = await pipe.execute()
-                    return values
-                else:
-                    random_num = random.randint(0, total - 1)
-                    return (await r.zrange(key, random_num, random_num))[0]
+            total = await r.zcard(key)
+            if total == 0:
+                return None
+            count = 1 if not count else count
+            count = total if count > total else count
+            if count > 1:
+                random_nums = random.sample(range(total), count)
+                async with r.pipeline() as pipe:
+                    await asyncio.gather(*[pipe.zrange(key, i, i) for i in random_nums])
+                values = await pipe.execute()
+                return values
+            else:
+                random_num = random.randint(0, total - 1)
+                return (await r.zrange(key, random_num, random_num))[0]
 
     # endregion
 
     @retry
     async def _hmset(self, name, field_values):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
-                return await r.hset(name=name, mapping=field_values)
+            return await r.hset(name=name, mapping=field_values)
 
     @retry
     async def _hmset_bulk_batch(self, hm_name: str, hm_k_v_List: list[Dict[int | str, int | str | float | bytes]]):
@@ -403,19 +393,27 @@ class RedisManagerBase:
     @retry
     async def _hmgetall(self, name, ):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
-                return await r.hgetall(name=name)
+            return await r.hgetall(name=name)
 
     async def _hmget(self, name, key):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
-                return await r.hget(name=name, key=key)
+            return await r.hget(name=name, key=key)
 
     @retry
     async def _hmdel(self, name):
         async with redis.Redis(connection_pool=self.pool) as r:
-            async with r.lock('Lock_' + str(name), timeout=self.RedisTimeout):
-                return await r.delete(name)
+            return await r.delete(name)
+
+    @retry
+    async def _scan(self, cursor: int = 0, match_str: str = ''):
+        """
+        记得确保match_str 里面带个*，如果要获取多个的话
+        :param cursor:
+        :param match_str:
+        :return:
+        """
+        async with redis.Redis(connection_pool=self.pool) as r:
+            return await r.scan(cursor=cursor, match=match_str, count=5000)
 
 
 if __name__ == "__main__":

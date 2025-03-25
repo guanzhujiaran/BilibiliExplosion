@@ -6,9 +6,8 @@ import asyncio
 import traceback
 from typing import Union
 from fastapi接口.log.base_log import request_with_proxy_logger
-from utl.代理.ProxyTool.ProxyObj import TypePDict
-from utl.代理.SealedRequests import MYASYNCHTTPX
-from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy as redis_request_with_proxy
+from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 
 
 class request_with_proxy:
@@ -20,8 +19,7 @@ class request_with_proxy:
         self.post_localhost_timeout = None
         self.post_localhost_timeout = None
         self.log = request_with_proxy_logger
-        self.redis_request_with_proxy = redis_request_with_proxy()
-        self.session = MYASYNCHTTPX()
+        self.redis_request_with_proxy = request_with_proxy_internal
 
     async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
         """
@@ -36,10 +34,10 @@ class request_with_proxy:
                 resp = await self.redis_request_with_proxy.request_with_proxy(*args, **kwargs)
                 return resp
             except Exception as e:
-                traceback.print_exc()
+                request_with_proxy_logger.exception(e)
                 await asyncio.sleep(10)
 
-    async def get_one_rand_proxy(self) -> Union[TypePDict, None]:
+    async def get_one_rand_proxy(self) -> ProxyTab | None:
         while True:
             try:
                 resp = await self.redis_request_with_proxy.get_one_rand_proxy()
@@ -48,7 +46,7 @@ class request_with_proxy:
                 traceback.print_exc()
                 await asyncio.sleep(10)
 
-    async def update_to_proxy_list(self, proxy_dict: dict, change_score_num=10):
+    async def update_to_proxy_list(self, proxy_dict: ProxyTab, change_score_num=10):
         ret_time = 0
         while True:
             ret_time += 1
@@ -84,7 +82,7 @@ class request_with_proxy:
     #             traceback.print_exc()
     #             await asyncio.sleep(10)
 
-    async def get_proxy_by_ip(self, ip: str):
+    async def get_proxy_by_ip(self, ip: str)->ProxyTab | None:
         ret_time = 0
         while True:
             ret_time += 1

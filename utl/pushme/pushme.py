@@ -30,7 +30,7 @@ def __preprocess_content(content: str) -> str:
 
 
 def pushme(title: str, content: str, __type: Optional[Literal[
-    "text", "data", "markdata", "html", "txt", "json", "markdown", "cloudMonitor", "jenkins", "route", "pay"]] = 'text') -> Response:
+    'text', 'data', "markdata", "html", "txt", "json", "markdown", "cloudMonitor", "jenkins", "route", "pay"]] = 'text') -> Response:
     resp = Response()
     if content in push_msg_d:
         return Response()

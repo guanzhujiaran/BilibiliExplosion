@@ -286,7 +286,6 @@ class _SqlHelper:
         async with self._session() as session:
             result = await session.execute(sql)
             count_result = await session.execute(count_sql)
-            print(sql.compile(compile_kwargs={'literal_binds': True}))
         return result.scalars().all(), count_result.scalars().first()
 
     @lock_wrapper

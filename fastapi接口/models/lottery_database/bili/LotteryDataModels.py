@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional
 from pydantic import Field
@@ -111,7 +111,7 @@ class BulkAddDynamicLotteryRespItem(CustomBaseModel):
 
 
 class BiliUserInfoSimple(CustomBaseModel):
-    uid: int | str
+    uid: str
     name: str
     face: str
 
@@ -135,6 +135,7 @@ class BiliLotStatisticInfoResp(CustomBaseModel):
 class BiliLotStatisticLotteryResultResp(CustomBaseModel):
     user: BiliUserInfoSimple
     prize_result: list[dict]
+    total: int
 
 
 class BiliLotStatisticLotTypeEnum(str, Enum):
@@ -147,8 +148,8 @@ class BiliLotStatisticLotTypeEnum(str, Enum):
     def lot_type_2_business_type(cls, lot_type: 'BiliLotStatisticLotTypeEnum') -> int:
         mapping = {
             cls.official: 1,
-            cls.reserve: 12,
-            cls.charge: 10,
+            cls.reserve: 10,
+            cls.charge: 12,
         }
         return mapping.get(lot_type, 0)
 
@@ -158,3 +159,35 @@ class BiliLotStatisticRankTypeEnum(str, Enum):
     second = "second"
     third = "third"
     total = "total"
+
+
+class BiliLotStatisticRankDateTypeEnum(str, Enum):
+    month = "month"  # 当月
+    pre_month = "pre_month"  # 上月
+    year = 'year'
+    pre_year = 'pre_year'
+    total = "total"  # 总计
+
+    def get_start_end_ts(self) -> tuple[int, int]:
+        now = datetime.now()
+        if self.value == 'total':
+            return 0, 0
+        elif self.value == 'month':
+            start_ts = datetime(now.year, now.month, 1)  # 本月1号
+            end_ts = now
+        elif self.value == 'pre_month':
+            start_ts = datetime(now.year, now.month - 1, 1)  # 上月1号
+            end_ts = datetime(now.year, now.month, 1) - timedelta(seconds=1)  # 上月最后一天
+        elif self.value == 'year':
+            start_ts = datetime(now.year, 1, 1)  # 本年1号
+            end_ts = now
+        elif self.value == 'pre_year':
+            start_ts = datetime(now.year - 1, 1, 1)  # 上年1号
+            end_ts = datetime(now.year, 1, 1) - timedelta(seconds=1)  # 上年最后一天
+        else:
+            raise ValueError(f"Invalid rank date type: {self.value}")
+        return int(start_ts.timestamp()), int(end_ts.timestamp())
+
+
+if __name__ == '__main__':
+    print(BiliLotStatisticRankDateTypeEnum.month.get_start_end_ts())

@@ -1,4 +1,4 @@
-def dynamic_id_2_ts(dynamic_id: int) -> int:
+def dynamic_id_2_ts(dynamic_id: int|str) -> int:
     """
     返回的是秒级时间戳
     :param dynamic_id:

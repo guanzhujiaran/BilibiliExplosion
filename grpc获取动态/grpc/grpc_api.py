@@ -14,12 +14,12 @@ from grpc import aio
 import json
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
     Response, WriteError, NetworkError
-
 from bilibili.app.dynamic.v2.dynamic_pb2 import Config
 from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
 from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
 from fastapi接口.log.base_log import BiliGrpcApi_logger
+from grpc获取动态.Models.CustomRequestErrorModel import Request352Error
 from grpc获取动态.Models.GrpcApiBaseModel import MetaDataWrapper
 from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import VoucherRabbitMQ
 from grpc获取动态.Utils.极验.极验点击验证码 import GeetestV3Breaker
@@ -30,9 +30,11 @@ from grpc获取动态.grpc.prevent_risk_control_tool.activateExClimbWuzhi import
 from utl.designMode.asyncPool import BaseAsyncPool
 from utl.代理.request_with_proxy import request_with_proxy
 from CONFIG import CONFIG
-from grpc获取动态.Utils.GrpcProxyUtils import GrpcProxyTools
+from grpc获取动态.Utils.GrpcRedis import grpc_proxy_tools
 from utl.代理.SealedRequests import MYASYNCHTTPX
 from urllib.parse import urlparse
+
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 
 
 # Handle gRPC errors
@@ -55,7 +57,6 @@ class BiliGrpc:
         self.my_proxy_addr = CONFIG.my_ipv6_addr
         self.grpc_api_any_log = BiliGrpcApi_logger
         self.s = MYASYNCHTTPX()
-        self.GrpcProxyTools = GrpcProxyTools()  # 实例化
         # 版本号根据 ```https://app.bilibili.com/x/v2/version?mobi_app=android```这个api获取
         self.version_name_build_list: [LatestVersionBuild] = [LatestVersionBuild(**x) for x in [
             {
@@ -126,15 +127,18 @@ class BiliGrpc:
                            'Alcatel', 'BlackBerry']
         self.__req = request_with_proxy()
         self.channel = None
-        self.proxy = None
+        self.proxy: ProxyTab | None = None
+
         self.timeout = 10
         self.cookies = None
         self.cookies_ts = 0
-        self.lock_metadata = asyncio.Lock()
-        self.lock_prepare_proxy = asyncio.Lock()
         self.latest_352_ts = 0
         self._352MQServer = VoucherRabbitMQ.Instance()
         self.GeetestV3BreakerPool = BaseAsyncPool(10, GeetestV3Breaker, 'a_validate_form_voucher_ua')
+
+    @property
+    def proxy_id(self):
+        return self.proxy.proxy_id if self.proxy else 0
 
     # region 准备工作
     async def _prepare_ck_proxy(self):
@@ -173,22 +177,22 @@ class BiliGrpc:
             await asyncio.sleep(2 * 3600)
             return await self.__get_available_cookies()
 
-    async def __set_available_channel(self, proxy, channel):
+    async def __set_available_channel(self, proxy: ProxyTab | None, channel: aio.Channel | None):
         self.proxy = proxy
         self.channel = channel
 
-    async def _get_random_channel(self):
+    async def _get_random_channel(self) -> tuple[ProxyTab, aio.Channel]:
         while 1:
-            avaliable_ip_status = await self.GrpcProxyTools.get_rand_avaliable_ip_status()
-            proxy = {}
+            avaliable_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
+            proxy: ProxyTab | None = None
             if avaliable_ip_status:
                 proxy = await self.__req.get_proxy_by_ip(avaliable_ip_status.ip)
             if not proxy:
                 proxy = await self.__req.get_one_rand_proxy()
             if proxy:
-                if 'http' in proxy['proxy']['http']:
+                if 'http' in proxy.proxy['http']:
                     options = [
-                        ("grpc.http_proxy", proxy['proxy']['http']),
+                        ("grpc.http_proxy", proxy.proxy['http']),
                     ]
                 else:
                     options = []
@@ -209,7 +213,6 @@ class BiliGrpc:
         :param proxy:
         :return:
         """
-        await self.lock_metadata.acquire()
         if self.queue_num < self.metadata_pool_size:
             self.queue_num += 1
             metadata: Union[MetaDataWrapper, None] = None
@@ -230,7 +233,6 @@ class BiliGrpc:
                     metadata = None
                     break
                 await asyncio.sleep(1)
-        self.lock_metadata.release()
         if not metadata:
             while 1:
                 brand = random.choice(self.brand_list)
@@ -321,45 +323,54 @@ class BiliGrpc:
         """
         md: MetaDataWrapper | None = None
         validate_token: str = ''
-        proxy = {'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr}}
         channel = None
         ipv6_proxy_weights = 1
         real_proxy_weights = 1000
         while 1:
             # self.grpc_api_any_log.debug(f'距离上次352时间：{int(time.time()) - self.latest_352_ts}秒')
-            async with (self.lock_prepare_proxy):
-                if int(time.time()) - self.latest_352_ts > 30 * 60:
-                    proxy_flag = random.choices([True, False], weights=[
-                        real_proxy_weights if real_proxy_weights >= 0 else 0,
-                        ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
-                    ], k=1)[0]  # 是否使用真实代理 True用真实代理 False用ipv6代理
-                else:
-                    proxy_flag = False
-                    # random.choices([True, False], weights=[
-                    #     real_proxy_weights if real_proxy_weights >= 0 else 0,
-                    #     ipv6_proxy_weights if ipv6_proxy_weights >= 0 else 0
-                    # ], k=1)[0]
-                if validate_token and int(time.time()) - self.latest_352_ts > 30 * 60:
-                    proxy_flag = False
-                if force_proxy:
-                    proxy_flag = True
-                if self.debug_mode:
-                    proxy_flag = False
-                if int(time.time()) - self.latest_352_ts <= 30 * 60:
-                    proxy_flag = True
-                ip_status = None
-                cookies = None
+            if int(time.time()) - self.latest_352_ts > 30 * 60:
+                proxy_flag = random.choices([True, False], weights=[
+                    real_proxy_weights if real_proxy_weights >= 0 else 0,
+                    ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
+                ], k=1)[0]  # 是否使用真实代理 True用真实代理 False用ipv6代理
+            else:
+                proxy_flag = False
+                # random.choices([True, False], weights=[
+                #     real_proxy_weights if real_proxy_weights >= 0 else 0,
+                #     ipv6_proxy_weights if ipv6_proxy_weights >= 0 else 0
+                # ], k=1)[0]
+            if validate_token and int(time.time()) - self.latest_352_ts > 30 * 60:
+                proxy_flag = False
+            if force_proxy:
+                proxy_flag = True
+            if self.debug_mode:
+                proxy_flag = False
+            if int(time.time()) - self.latest_352_ts <= 30 * 60:
+                proxy_flag = True
+            ip_status = None
+            cookies = None
             if proxy_flag:
                 proxy, channel = await self._get_random_channel()
                 if cookie_flag:
                     cookies = await self.__set_available_cookies(self.cookies)
-                if not await self.GrpcProxyTools.check_ip_status(proxy['proxy']['http']):
-                    proxy['status'] = -412
+                if not grpc_proxy_tools.check_ip_status(proxy.proxy['http']):
+                    proxy.status = -412
                     await self.__req.update_to_proxy_list(proxy_dict=proxy,
                                                           change_score_num=10)
-                ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+                ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
             else:
-                proxy = {'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr}}
+                proxy: ProxyTab = ProxyTab(
+                    **{
+                        'proxy_id': -1,
+                        'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr},
+                        'status': 0,
+                        'update_ts': 0,
+                        'score': 0,
+                        'add_ts': 0,
+                        'success_times': 0,
+                        'zhihu_status': 0
+                    }
+                )
                 if cookie_flag:
                     self.cookies = await ExClimbWuzhi.verifyExClimbWuzhi(use_proxy=False, my_cfg=APIExClimbWuzhi(
                         ua=self.ua
@@ -418,9 +429,8 @@ class BiliGrpc:
                                             # headers=dict(new_headers),
                                             timeout=self.timeout,
                                             proxies={
-                                                'http': proxy['proxy']['http'],
-                                                'https': proxy['proxy']['https']} if proxy_flag else proxy.get(
-                                                'proxy'),
+                                                'http': proxy.proxy['http'],
+                                                'https': proxy.proxy['https']} if proxy_flag else proxy.proxy,
                                             )
                 resp.raise_for_status()
                 md.able(num_add=True)
@@ -466,13 +476,15 @@ class BiliGrpc:
                             self.grpc_api_any_log.debug(f'获取到-352验证token:{validate_token}')
                             continue
                         else:
-                            self.grpc_api_any_log.error(f'未获取到-352验证token:{validate_token}')
-                            raise MY_Error(
-                                f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，遇到-352，未获取到-352验证token'
+                            self.grpc_api_any_log.critical(f'未获取到-352验证token:{validate_token}')
+                            raise Request352Error(
+                                f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，遇到-352，未获取到-352验证token',
+                                -352
                             )
                     else:
-                        raise MY_Error(
-                            f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，携带validate_token{validate_token}请求依旧 -352报错-{proxy}\n{str(resp.headers)}\n{str(new_headers)}\n{str(data)}'
+                        raise Request352Error(
+                            f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，携带validate_token{validate_token}请求依旧 -352报错-{proxy}\n{str(resp.headers)}\n{str(new_headers)}\n{str(data)}',
+                            -352
                         )
 
                 gresp = grpc_resp_msg
@@ -482,44 +494,76 @@ class BiliGrpc:
                     gresp.ParseFromString(resp.content[5:])
                 resp_dict = MessageToDict(gresp)
                 if proxy_flag:
-                    if proxy != self.proxy:
-                        proxy['status'] = 0
+                    if proxy.proxy_id != self.proxy_id:
+                        proxy.status = 0
                         await self.__req.update_to_proxy_list(proxy, 10)
                     await self.__set_available_channel(proxy, channel)  # 能用的代理就设置为可用的，下一个获取的代理的就直接接着用了
                 if ip_status:
                     ip_status.available = True
                     ip_status.code = 0
                     ip_status.latest_used_ts = int(time.time())
-                    await self.GrpcProxyTools.set_ip_status(ip_status)
+                    await grpc_proxy_tools.set_ip_status(ip_status)
                 self.grpc_api_any_log.info(
-                    f'{func_name}\t{url} 获取grpc动态请求成功代理：{proxy.get("proxy")} {grpc_req_message}\n{new_headers}'
-                    f'\n当前可用代理数量：{self.GrpcProxyTools.avalibleNum}/{self.GrpcProxyTools.allNum}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
+                    f'{func_name}\t{url} 获取grpc动态请求成功代理：{proxy.proxy} {grpc_req_message}\n{new_headers}'
+                    f'\n当前可用代理数量：{grpc_proxy_tools.avalibleNum}/{grpc_proxy_tools.allNum}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
                 md.times_352 = 0
                 return resp_dict
             except (
                     ConnectionError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,
                     ReadError, WriteError,
-                    InvalidURL, NetworkError
+                    InvalidURL, NetworkError, ValueError, OverflowError
             ) as httpx_err:
                 # self.grpc_api_any_log.debug(
                 #     f'请求失败！{traceback.format_exc(0)}ip:{ip_status.to_dict() if ip_status else proxy}进行请求，url:{url}')
                 score_change = -10
                 if proxy_flag:
-                    if proxy == self.proxy:
+                    if proxy.proxy_id == self.proxy_id:
                         await self.__set_available_channel(None, None)
-                    proxy['status'] = -412
+                    proxy.status = -412
                     await self.__req.update_to_proxy_list(proxy, score_change)
                     if not ip_status:
-                        ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
                     origin_available = ip_status.available
                     ip_status.max_counter_ts = int(time.time())
                     ip_status.code = -412
                     ip_status.available = False
                     # if origin_available != ip_status.available:
-                    await self.GrpcProxyTools.set_ip_status(ip_status)
+                    await grpc_proxy_tools.set_ip_status(ip_status)
                     ipv6_proxy_weights += 1
                 else:
                     real_proxy_weights += 20
+            except Request352Error as _352_err:
+                score_change = 10
+                if cookie_flag:
+                    self.grpc_api_any_log.warning(
+                        f"{ip_status.ip} ip获取次数到达{ip_status.counter}次，出现-352现象，times_352加1！")
+                    if ip_status and ip_status.counter > 10:
+                        pass
+                    else:
+                        if cookies == self.cookies:
+                            self.cookies = None
+                            await self.__set_available_cookies(None, useProxy=True)
+                md.times_352 += 1  # -352报错就增加一次352次数，满了之后舍弃
+                if proxy.proxy['http'] != self.my_proxy_addr:
+                    ip_status.code = -352
+                    ip_status.available = True
+                    ip_status.latest_352_ts = int(time.time())
+                else:
+                    self.latest_352_ts = int(time.time())
+                    self.grpc_api_any_log.debug(f'设置本地代理最后-352时间为：{self.latest_352_ts}')
+                    await asyncio.sleep(10)  # 本地ipv6状态-352的情况下，等待一段时间，破解验证码之后再执行
+                ipv6_proxy_weights -= 10
+
+                if proxy_flag:
+                    if proxy.proxy_id == self.proxy_id:
+                        await self.__set_available_channel(None, None)
+                    proxy.status = -412
+                    await self.__req.update_to_proxy_list(proxy, score_change)
+                    await grpc_proxy_tools.set_ip_status(ip_status)
+                    ipv6_proxy_weights += 1
+                else:
+                    real_proxy_weights += 20
+
             except Exception as err:
                 if str(err) == 'Error parsing message':
                     self.grpc_api_any_log.error(
@@ -527,43 +571,22 @@ class BiliGrpc:
                     return {}
                 if proxy_flag:
                     if not ip_status:
-                        ip_status = await self.GrpcProxyTools.get_ip_status_by_ip(proxy['proxy']['http'])
+                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
                     ip_status.max_counter_ts = int(time.time())
                     ip_status.code = -412
                     ip_status.available = False
                 origin_available = False
                 score_change = -10
-                self.grpc_api_any_log.warning(
+                self.grpc_api_any_log.exception(
                     f"{func_name}\t{url} grpc_get_dynamic_detail_by_type_and_rid\nBiliGRPC error: {err}\n"
-                    f"{proxy['proxy'] if proxy_flag else proxy.get('proxy')}")
+                    f"{proxy.proxy}")
 
-                if '352' in str(err) or '412' in str(err):
-                    score_change = 10
-                    if cookie_flag:
-                        self.grpc_api_any_log.warning(
-                            f"{ip_status.ip} ip获取次数到达{ip_status.counter}次，出现-352现象，times_352加1！")
-                        if ip_status and ip_status.counter > 10:
-                            pass
-                        else:
-                            if cookies == self.cookies:
-                                self.cookies = None
-                                await self.__set_available_cookies(None, useProxy=True)
-                    md.times_352 += 1  # -352报错就增加一次352次数，满了之后舍弃
-                    if proxy['proxy']['http'] != self.my_proxy_addr:
-                        ip_status.code = -352
-                        ip_status.available = True
-                        ip_status.latest_352_ts = int(time.time())
-                    else:
-                        self.latest_352_ts = int(time.time())
-                        self.grpc_api_any_log.debug(f'设置本地代理最后-352时间为：{self.latest_352_ts}')
-                        await asyncio.sleep(10)  # 本地ipv6状态-352的情况下，等待一段时间，破解验证码之后再执行
-                    ipv6_proxy_weights -= 10
                 if proxy_flag:
-                    if proxy == self.proxy:
+                    if proxy.proxy_id == self.proxy_id:
                         await self.__set_available_channel(None, None)
-                    proxy['status'] = -412
+                    proxy.status = -412
                     await self.__req.update_to_proxy_list(proxy, score_change)
-                    await self.GrpcProxyTools.set_ip_status(ip_status)
+                    await grpc_proxy_tools.set_ip_status(ip_status)
                     ipv6_proxy_weights += 1
                 else:
                     real_proxy_weights += 20
@@ -598,21 +621,21 @@ class BiliGrpc:
                 # print(dyn_details_req.SerializeToString())
                 # ack = gen_random_access_key()
                 ack = ''
-                md, ticket, metadat_basic_info = await make_metadata(ack, proxy=proxy)
+                md, ticket, metadat_basic_info = await make_metadata(ack)
 
                 dyn_all_resp = await dynamic_client.DynDetails(dyn_details_req,
                                                                metadata=md,
                                                                timeout=self.timeout)
                 ret_dict = MessageToDict(dyn_all_resp)
-                if proxy != self.proxy:
-                    proxy['status'] = 0
+                if proxy.proxy_id != self.proxy_id:
+                    proxy.status = 0
                     await self.__req.update_to_proxy_list(proxy, 10)
                     await self.__set_available_channel(proxy, channel)
                 return ret_dict
             except grpc.RpcError as e:
                 stat, det = grpc_error(e)
-                self.grpc_api_any_log.warning(f"\nBiliGRPC error: {stat} - {proxy['proxy']}")
-                if proxy == self.proxy:
+                self.grpc_api_any_log.critical(f"\nBiliGRPC error: {stat} - {proxy['proxy']}")
+                if proxy.proxy_id == self.proxy_id:
                     await self.__set_available_channel(None, None)
                 score_change = -10
                 if 'HTTP proxy returned response code 400' in det or 'OPENSSL_internal' in det:  # 400状态码表示代理可能是http1.1协议，不支持grpc的http2.0
@@ -629,7 +652,7 @@ class BiliGrpc:
                 else:
                     self.grpc_api_any_log.warning(
                         f"{dyn_ids} grpc_api_get_DynDetails\n BiliGRPC error: {stat} - {det}\n{dyn_details_req}\n{type(e)}")  # 重大错误！
-                proxy['status'] = -412
+                proxy.status = -412
                 await self.__req.update_to_proxy_list(proxy, score_change)
 
     # endregion
@@ -750,4 +773,6 @@ if __name__ == '__main__':
         t.debug_mode = False
         result1 = await t._get_random_channel()
         print(result1)
+
+
     asyncio.run(_test())

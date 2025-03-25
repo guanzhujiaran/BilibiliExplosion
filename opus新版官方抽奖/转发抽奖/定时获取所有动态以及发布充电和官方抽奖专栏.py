@@ -5,6 +5,7 @@ from typing import Union
 import asyncio
 import time
 from datetime import datetime, timedelta
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
@@ -37,7 +38,7 @@ class pubArticleInfo(CustomBaseModel):
                 log.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
             log.warning(f"获取到上一次发布专栏的时间失败！使用0时间！")
-            self.lastPubDate = datetime.fromtimestamp(0)
+            self.lastPubDate = datetime.fromtimestamp(86400)
 
     def save_lastPubTs(self):
         try:
@@ -73,9 +74,9 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     global dyn_detail_scrapy
     dyn_detail_scrapy = DynDetailScrapy()
     if time.time() - pub_article_info.lastPubDate.timestamp() > 8 * 3600:
-        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(100)
-    else:
         dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(200)
+    else:
+        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(400)
     await dyn_detail_scrapy.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():

@@ -85,6 +85,7 @@ class database:
     proxySubRedis = _REDISINFO(6)
     lotDataRedisObj = _REDISINFO(2)
     ipInfoRedisObj = _REDISINFO(2)
+    getOtherLotRedis = _REDISINFO(15)
 
 
 class SqlAlchemyConfig:
