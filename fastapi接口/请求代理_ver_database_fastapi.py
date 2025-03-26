@@ -3,6 +3,9 @@
 import io
 import os
 import sys
+
+import objgraph
+
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
 sys.path.extend([
@@ -20,8 +23,8 @@ args = parser.parse_args()
 print(f'运行 args:{args}')
 if not args.logger:
     print('关闭日志输出')
-logger.remove()
-logger.add(sink=sys.stdout, level="ERROR", colorize=True)
+    logger.remove()
+    logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 import asyncio
 from starlette.requests import Request
 from starlette.responses import Response
@@ -71,6 +74,9 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
 
+@app.get('/memory_objgraph',)
+async def memory_objgraph(limit=50):
+    return await asyncio.to_thread(objgraph.show_most_common_types, limit=limit)
 
 @app.middleware("http")
 async def global_middleware(request: Request, call_next):
@@ -132,5 +138,5 @@ if __name__ == '__main__':
         # If host is an empty string or None, all interfaces are assumed and a list of multiple sockets will be returned (most likely one for IPv4 and another one for IPv6).
         host="0.0.0.0",
         port=23333,
-        access_log=False
+        loop='asyncio'
     )

@@ -27,7 +27,7 @@ from utl.代理.SealedRequests import MYASYNCHTTPX
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
-    WriteError, NetworkError
+    WriteError, NetworkError, TooManyRedirects
 from ssl import SSLError
 
 @dataclass
@@ -263,7 +263,7 @@ class RequestWithProxy:
             req_dict = False
             req_text = ''
             try:
-                # self.log.info(f'正在发起请求中！\t{p}\n{args}\n{kwargs}\n')
+                # self.log.debug(f'正在通过代理发起一般http请求中！\t使用代理：{sqlalchemy_model_2_dict(proxy)}\n{args}\n{kwargs}\n')
                 req = await self.s.request(*args, **kwargs, timeout=self.timeout, proxies=proxy.proxy)
                 req_text = req.text
                 self.log.debug(f'url:{kwargs.get("url")}) 获取到请求结果！\n{proxy.proxy}\n{req_text[0:200]}\n')
@@ -324,7 +324,7 @@ class RequestWithProxy:
                         ip_status.latest_used_ts = int(time.time())
                         await grpc_proxy_tools.set_ip_status(ip_status)
                 continue
-            except (SSLError,JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,ReadError, WriteError,InvalidURL, NetworkError, RequestProxyResponseError, ExceptionGroup)as _err:
+            except (TooManyRedirects,SSLError,JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,ReadError, WriteError,InvalidURL, NetworkError, RequestProxyResponseError, ExceptionGroup)as _err:
                 self.log.debug(
                     f'{_err}\n请求：\n{kwargs}\n结束，报错了！\n{type(_err)}\t{sqlalchemy_model_2_dict(proxy)}\n{req_text}')
                 score_change = -10
@@ -2822,10 +2822,10 @@ class RequestWithProxy:
 
     async def _set_new_proxy(self) -> ProxyTab:
         while 1:
-            avaliable_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
+            available_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
             proxy: ProxyTab | None = None
-            if avaliable_ip_status:
-                proxy = await self.get_proxy_by_ip(avaliable_ip_status.ip)
+            if available_ip_status:
+                proxy = await self.get_proxy_by_ip(available_ip_status.ip)
             if not proxy:
                 proxy = await self.get_one_rand_proxy()
             if proxy:

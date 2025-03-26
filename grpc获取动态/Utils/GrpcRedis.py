@@ -11,6 +11,9 @@ from grpc获取动态.Utils.GrpcProxyModel import GrpcProxyStatus
 from utl.redisTool.RedisManager import RedisManagerBase
 from enum import Enum
 
+MIN_USABLE_PROXY_NUM = 100  # 确保MAX_USABLE_PROXY_NUM >> MIN_USABLE_PROXY_NUM
+MAX_USABLE_PROXY_NUM = 200
+
 
 class GrpcProxyRedis(RedisManagerBase):
     class RedisMap(str, Enum):
@@ -22,10 +25,10 @@ class GrpcProxyRedis(RedisManagerBase):
         self.lock_ip = asyncio.Lock()
         self.score_refresh_ts: int = 0
         self.INIT_SCORE = 20
-        self.SCORE_REFRESH_TIME = 2 * 60 * 60  # 两小时刷新一次
+        self.SCORE_REFRESH_TIME = 10 * 60  # 10分钟刷新一次
         self.sched = AsyncIOScheduler()
-        self.sched.add_job(self.background_task, 'interval', hours=2, next_run_time=datetime.datetime.now(),
-                           misfire_grace_time=600)  # 2个小时刷新一次，确保352和412的代理过掉冷却期
+        self.sched.add_job(self.background_task, 'interval', seconds=10 * 60, next_run_time=datetime.datetime.now(),
+                           misfire_grace_time=600)  # 10分钟刷新一次，确保352和412的代理过掉冷却期
         self.sched.start()
 
     async def get_score_refresh_ts(self) -> int:
@@ -46,26 +49,26 @@ class GrpcProxyRedis(RedisManagerBase):
                                ])
         redis_logger.critical(f'定时任务执行完毕，耗时：{int(time.time()) - start_ts}秒')
 
-    async def reset_ip_score(self):
-        redis_logger.critical('开始重置ip分数')
+    async def reset_ip_score(self, force: bool = False):
 
         async def bulk_handle_ips(ip):
             ip_status = await self.get_ip_status(ip)
             if not ip_status.available:
                 await self.del_ip(ip_status.ip)
             if ip_status.is_usable_before_use(False):
-                await self.set_ip_status(ip_status) # 重置为20
+                await self.init_ip_status(ip_status)  # 重置为20
 
-        if self.score_refresh_ts == 0:
-            self.score_refresh_ts = await self.get_score_refresh_ts()
-        if self.score_refresh_ts != 0 and self.score_refresh_ts + self.SCORE_REFRESH_TIME > time.time():
+        if not self.score_refresh_ts:
+            await self.get_score_refresh_ts()
+        if self.score_refresh_ts and self.score_refresh_ts > (int(time.time()) - self.SCORE_REFRESH_TIME) and not force:
             return
+        redis_logger.critical('开始重置ip分数！')
         all_used_ip = await self._zget_range_by_score(self.RedisMap.accessible_ip_zset.value, min_score=-99999,
-                                                      max_score=19)
+                                                      max_score=99999)
         await asyncio.gather(*[bulk_handle_ips(__) for __ in all_used_ip])
         await self.set_score_refresh_ts(int(time.time()))
 
-    async def set_ip_status(self, ip_status: GrpcProxyStatus):
+    async def init_ip_status(self, ip_status: GrpcProxyStatus):
         await self._zadd(self.RedisMap.accessible_ip_zset.value,
                          {ip_status.ip: self.INIT_SCORE})  # 每个都设置成20分，用完就检查分数
         await self._hmset(ip_status.ip, ip_status.to_redis_data())
@@ -120,22 +123,22 @@ class GrpcProxyTools:
     def __init__(self):
         self.use_good_proxy_flag = False
         self.lock_change_ip_data = asyncio.Lock()
-        self._avalibleNum = 0
-        self._avalibleNum_need_refresh = False
+        self._available_num = 0
+        self._available_num_need_refresh = False
         self.__set_proxy_lock = asyncio.Lock()
 
     @property
-    def avalibleNum(self):
-        if self._avalibleNum and not self._avalibleNum_need_refresh:
-            return self._avalibleNum
+    def available_num(self):
+        if self._available_num and not self._available_num_need_refresh:
+            return self._available_num
         else:
-            self._avalibleNum = len([x for x in self.ip_list if x.is_usable_before_use(False)])
-            self._avalibleNum_need_refresh = False
-        return self._avalibleNum
+            self._available_num = len([x for x in self.ip_list if x.is_usable_before_use(False)])
+            self._available_num_need_refresh = False
+        return self._available_num
 
-    @avalibleNum.setter
-    def avalibleNum(self, value):
-        self._avalibleNum = value
+    @available_num.setter
+    def available_num(self, value):
+        self._available_num = value
 
     @property
     def allNum(self):
@@ -178,10 +181,10 @@ class GrpcProxyTools:
             if not ip_status.available:
                 await grpc_proxy_redis.del_ip(ip_status.ip)
                 if ip_status.ip in self.__ip_str_list:
-                    self.avalibleNum -= 1
+                    self.available_num -= 1
             else:
-                await grpc_proxy_redis.set_ip_status(ip_status)
-                self._avalibleNum_need_refresh = True
+                await grpc_proxy_redis.init_ip_status(ip_status)
+                self._available_num_need_refresh = True
 
     async def get_ip_status_by_ip(self, ip: str) -> GrpcProxyStatus:
         resp = list(filter(lambda x: x.ip == ip, self.ip_list))
@@ -204,9 +207,9 @@ class GrpcProxyTools:
         if len(self.ip_list) >= 2000:
             BiliGrpcUtils_logger.debug(f'代理列表达到2000，清理无效代理（x.available is False）')
             self.ip_list = [x for x in self.ip_list if x.is_usable_before_use(False)]
-        avalibleNum = self.avalibleNum
+        avalibleNum = self.available_num
         # BiliGrpcUtils_logger.debug(f'GrpcProxyTools中代理数量：{avalibleNum}/{len(self.ip_list)}')
-        if avalibleNum > 500 and self.use_good_proxy_flag:
+        if avalibleNum > MAX_USABLE_PROXY_NUM and self.use_good_proxy_flag:
             while 1:
                 _ = await grpc_proxy_redis.get_accessible_ips(start=0, num=100)
                 if len(_) == 100:
@@ -214,7 +217,7 @@ class GrpcProxyTools:
                     ip_status = await grpc_proxy_redis.get_ip_status(picked_ip)
                     if ip_status.is_usable_before_use(False):
                         ip_status.is_usable_before_use(True)
-                        await grpc_proxy_redis.change_ip_score(picked_ip, -1)
+                        await grpc_proxy_redis.change_ip_score(picked_ip, -1)  # 每用一次就扣分，扣到负分就不会瞬间把20次全部用完，等自动刷新之后再用
                         return ip_status
                     else:
                         if not ip_status.available:
@@ -222,14 +225,11 @@ class GrpcProxyTools:
                 else:
                     return None
         else:
-            if avalibleNum > 500:
+            if avalibleNum > MAX_USABLE_PROXY_NUM:
                 self.use_good_proxy_flag = True
-            if avalibleNum < 200:
+            if avalibleNum < MIN_USABLE_PROXY_NUM:
                 self.use_good_proxy_flag = False
             return None
-
-    async def get_all_ip(self):
-        return await grpc_proxy_redis.get_all_ip_status()
 
     @staticmethod
     async def get_accessible_ip_count():
@@ -240,4 +240,4 @@ grpc_proxy_tools = GrpcProxyTools()
 grpc_proxy_redis = GrpcProxyRedis()
 
 if __name__ == '__main__':
-    print(asyncio.run(grpc_proxy_redis.get_all_ip_status()))
+    print(asyncio.run(grpc_proxy_redis.reset_ip_score()))

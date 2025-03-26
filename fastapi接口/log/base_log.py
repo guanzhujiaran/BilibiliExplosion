@@ -34,7 +34,7 @@ class UserMap(Enum):
     activeExclimbWuzhi_logger = "激活cookie日志"
 
 
-def create_logger(user: UserMap):
+def create_logger(user: UserMap)->logger:
     user_uq_value = uuid.uuid4().hex + user.value
     _user_logger = logger.bind(user=user_uq_value)
     _user_logger.add(os.path.join(CONFIG.root_dir, f"fastapi接口/scripts/log/error_{user.value}_log.log"),

@@ -22,7 +22,7 @@ from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-MIN_REFRESH_SUCCESS_TIME = -10  # 最低允许刷新状态的代理获取请求成功次数
+MIN_REFRESH_SUCCESS_TIME = -5  # 最低允许刷新状态的代理获取请求成功次数
 
 
 def lock_wrapper(_func: callable) -> callable:
@@ -55,7 +55,7 @@ class SubRedisStore(RedisManagerBase):
     def __init__(self):
         super().__init__(db=database.proxySubRedis.db)
         self.sync_ts = 0
-        self.sync_sep_ts = 12 * 60 * 60  # 12个小时同步一次 耗时基本2000秒，就是半个小时
+        self.sync_sep_ts = 0.5 * 60 * 60  # 半小时同步一次 耗时基本2000秒，就是半个小时
         self.RedisTimeout = 600
 
     async def _get_redis_count_by_prefix(self, prefix: RedisMap):
@@ -159,6 +159,7 @@ class SubRedisStore(RedisManagerBase):
                 if proxy_tab_dict := await self._get(self._gen_proxy_key(p)):
                     return self.dict_2_model(ast.literal_eval(proxy_tab_dict))
                 else:
+                    sql_log.debug(f"没找到对应代理数据：{p}")
                     continue
             else:
                 break  # 这里才是真的redis里面没代理能用了
@@ -196,7 +197,7 @@ class SubRedisStore(RedisManagerBase):
                 key=self._gen_proxy_key(redis_data.proxy, is_black=True),
                 value=json.dumps(sqlalchemy_model_2_dict(redis_data))
             )  # 黑名单的key
-            await self._zdel_elements( # 这样就不会把不能用的代理再次取出来了
+            await self._zdel_elements(  # 这样就不会把不能用的代理再次取出来了
                 self.RedisMap.bili_proxy_zset.value,
                 self._get_scheme_ip_port(proxy_info_dict=redis_data.proxy)
             )
@@ -209,7 +210,9 @@ class SubRedisStore(RedisManagerBase):
                              {self._get_scheme_ip_port(proxy_info_dict=redis_data.proxy): redis_data.score})
 
     async def redis_clear_all_proxy(self):
-        await self._del(self.RedisMap.bili_proxy.value)
+        await self.redis_clear_black_proxy()
+        await self.redis_clear_changed_proxy()
+        await self._del(self.RedisMap.bili_proxy_zset.value)
         return await self._del_keys_with_prefix(self.RedisMap.bili_proxy.value)
 
     async def redis_clear_black_proxy(self):
@@ -299,8 +302,6 @@ class SQLHelperClass:
                     ProxyTab,
                     lst,
                 ))
-                # sql_log.debug(f'开始更新MySQL中数据，共{len(all_proxy_infos)}条')
-                # await asyncio.gather(*[_handle_update(proxy_info) for proxy_info in all_proxy_infos])
                 await session.commit()
 
     async def check_redis_data(self, force=False):
@@ -322,6 +323,11 @@ class SQLHelperClass:
                     sql_log.debug(f'开始清空redis中数据')
                     await self.sub_redis_store.redis_clear_all_proxy()
                     sql_log.debug(f'清空redis中数据完成，耗时：{int(time.time() - start_ts)}秒！')
+
+                    sql_log.debug(f'开始清理无法使用的mysql中的代理数据')
+                    clean_unusable_proxy_num = await self.clear_unusable_proxy()
+                    sql_log.debug(f'清理无法使用的mysql中的代理数据完成，清理了{clean_unusable_proxy_num}条无效代理，耗时：{int(time.time() - start_ts)}秒！')
+
                     sql_log.debug(f'开始获取MySQL中可用代理数据')
                     all_available_proxy_infos = await self.select_proxy(mode="all")
                     sql_log.debug(f'获取MySQL中可用代理数据完成，耗时：{int(time.time() - start_ts)}秒！')
@@ -336,7 +342,10 @@ class SQLHelperClass:
                 raise e
             finally:
                 self.is_sync = False
-                sql_log.debug(f'同步redis和mysql数据库成功！')
+                sql_log.debug(f'同步redis和mysql数据库任务完成！')
+        else:
+            sql_log.debug(
+                f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_sep_ts, tz=pytz.UTC)}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
 
     async def background_service(self):
         start_ts = int(time.time())
@@ -361,7 +370,7 @@ class SQLHelperClass:
             sql = delete(ProxyTab).where(
                 and_(ProxyTab.score <= -10, ProxyTab.success_times < MIN_REFRESH_SUCCESS_TIME))  # 负分就删除了
             res = await session.execute(sql)
-            sql_log.error(f'共清除{res.rowcount}条无效代理！')
+            await session.commit()
             return res.rowcount
 
     @lock_wrapper
@@ -718,7 +727,7 @@ if __name__ == '__main__':
 
     async def _test():
         task = asyncio.create_task(_test_other_evnet())
-        ret = await SQLHelper.background_service()
+        ret = await SQLHelper.clear_unusable_proxy()
         print(ret)
         task.cancel()
 

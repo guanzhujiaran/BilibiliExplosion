@@ -10,6 +10,7 @@ import traceback
 import uuid
 from typing import Union
 import grpc
+from exceptiongroup import ExceptionGroup
 from grpc import aio
 import json
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
@@ -19,6 +20,7 @@ from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
 from bilibili.app.dynamic.v2 import dynamic_pb2_grpc, dynamic_pb2
 from fastapi接口.log.base_log import BiliGrpcApi_logger
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from grpc获取动态.Models.CustomRequestErrorModel import Request352Error
 from grpc获取动态.Models.GrpcApiBaseModel import MetaDataWrapper
 from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import VoucherRabbitMQ
@@ -422,6 +424,8 @@ class BiliGrpc:
                     data = b"\01" + len(compressed_proto_bytes).to_bytes(4, "big") + compressed_proto_bytes
                 else:
                     data = b"\01" + len(proto_bytes).to_bytes(4, "big") + proto_bytes
+                # self.grpc_api_any_log.debug(f'正在通过代理发起GRPC请求中！\t使用代理：{sqlalchemy_model_2_dict(proxy)}\n{url}')
+
                 resp = await self.s.request(method="post",
                                             url=url,
                                             data=data,
@@ -505,13 +509,13 @@ class BiliGrpc:
                     await grpc_proxy_tools.set_ip_status(ip_status)
                 self.grpc_api_any_log.info(
                     f'{func_name}\t{url} 获取grpc动态请求成功代理：{proxy.proxy} {grpc_req_message}\n{new_headers}'
-                    f'\n当前可用代理数量：{grpc_proxy_tools.avalibleNum}/{grpc_proxy_tools.allNum}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
+                    f'\n当前可用代理数量：{grpc_proxy_tools.available_num}/{grpc_proxy_tools.allNum}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
                 md.times_352 = 0
                 return resp_dict
             except (
                     ConnectionError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,
                     ReadError, WriteError,
-                    InvalidURL, NetworkError, ValueError, OverflowError
+                    InvalidURL, NetworkError, ValueError, OverflowError,ExceptionGroup
             ) as httpx_err:
                 # self.grpc_api_any_log.debug(
                 #     f'请求失败！{traceback.format_exc(0)}ip:{ip_status.to_dict() if ip_status else proxy}进行请求，url:{url}')
