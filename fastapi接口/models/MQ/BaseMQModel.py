@@ -8,6 +8,7 @@ class QueueName(str, Enum):
     UpsertOfficialReserveChargeLotMQ = "UpsertOfficialReserveChargeLotQueue"
     UpsertLotDataByDynamicIdMQ = "UpsertLotDataByDynamicIdQueue"
     UpsertTopicLotMQ = "UpsertTopicLotMQ"
+    UpsertMilvusBiliLotDataMQ="UpsertMilvusBiliLotDataMQ"
 
 class ExchangeName(str, Enum):
     bili_data = "bili_data"
@@ -23,6 +24,7 @@ class RoutingKey(str, Enum):
     UpsertLotDataByDynamicIdMQ = "BiliData.UpsertLotDataByDynamicIdMQ"
     # 定义一个名为UpsertTopicLotMQ的枚举值，值为"BiliData.UpsertTopicLotMQ"
     UpsertTopicLotMQ = "BiliData.UpsertTopicLotMQ"
+    UpsertMilvusBiliLotDataMQ="Milvus.BiliLotDataMQ"
 
 
 class RabbitMQConfig(CustomBaseModel):

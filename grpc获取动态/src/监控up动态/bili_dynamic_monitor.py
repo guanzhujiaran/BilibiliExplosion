@@ -5,12 +5,9 @@ import threading
 import json
 import os
 from CONFIG import CONFIG
-from fastapi接口.log.base_log import space_monitor_logger
+from fastapi接口.log.base_log import space_monitor_logger as log
 from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
 from grpc获取动态.grpc.grpc_api import bili_grpc
-
-log = space_monitor_logger
-
 
 class monitor:
     def __init__(self):
@@ -106,18 +103,9 @@ class monitor:
 
     @async_pushme_try_catch_decorator
     async def main(self, show_log=True):
-        log.info('启动B站动态监控程序！！！')
+        log.critical('启动B站动态监控程序！！！')
         if not show_log:
             pass
-        log.add(os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_space_monitor_log.log"),
-                level="WARNING",
-                encoding="utf-8",
-                enqueue=True,
-                rotation="500MB",
-                compression="zip",
-                retention="15 days",
-                filter=lambda record: record["extra"].get('user') == "space_monitor",
-                )
         task_list = []
         for i in self.monitor_uid_list:
             task = asyncio.create_task(self.monitor_main(i.get('uid')))

@@ -520,7 +520,7 @@ class ExClimbWuzhi:
                 for k, v in bili_ticket.items():
                     cookie.append("=".join([k, str(v)]))
         except Exception as e:
-            activeExclimbWuzhi_logger.error("获取bili_ticket失败: %s", e)
+            activeExclimbWuzhi_logger.error(f"获取bili_ticket失败:{e}")
 
         return "; ".join(cookie)
 

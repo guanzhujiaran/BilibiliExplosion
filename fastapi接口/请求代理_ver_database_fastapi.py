@@ -8,12 +8,14 @@ import objgraph
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
+
 sys.path.extend([
     x.value for x in CONFIG.project_path
 ])
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from loguru import logger
 import argparse
+
 parser = argparse.ArgumentParser(
     prog='lot_fastapi',  # 程序名
     description='lottery info fastapi backend',  # 描述
@@ -37,27 +39,9 @@ import fastapi_cdn_host
 from fastapi import FastAPI, HTTPException
 from utl.pushme.pushme import pushme
 
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    from fastapi接口.controller.damo import DamoML
-    from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
-    from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
-    from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
-    from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
-    from fastapi接口.controller.v1.ip_info import get_ip_info
-    from fastapi接口.controller.v1.background_service import BackgroundService, MQController
-    from fastapi接口.controller.common import CommonRouter
-
-    _app.include_router(DamoML.router)
-    _app.include_router(ReplySingle.router)
-    _app.include_router(LotteryData.router)
-    _app.include_router(LotteryStatistic.router)
-    _app.include_router(GetV3ClickTarget.router)
-    _app.include_router(get_ip_info.router)
-    _app.include_router(BackgroundService.router)
-    _app.include_router(MQController.router)
-    _app.include_router(CommonRouter.router)
-
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
     show_log = False
@@ -73,10 +57,35 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
+loop = asyncio.get_event_loop()
+asyncio.set_event_loop(loop)
 
-@app.get('/memory_objgraph',)
-async def memory_objgraph(limit=50):
-    return await asyncio.to_thread(objgraph.show_most_common_types, limit=limit)
+from fastapi接口.controller.damo import DamoML
+from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
+from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
+from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
+from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
+from fastapi接口.controller.v1.ip_info import get_ip_info
+from fastapi接口.controller.v1.background_service import BackgroundService, MQController
+from fastapi接口.controller.common import CommonRouter
+
+app.include_router(DamoML.router)
+app.include_router(ReplySingle.router)
+app.include_router(LotteryData.router)
+app.include_router(LotteryStatistic.router)
+app.include_router(GetV3ClickTarget.router)
+app.include_router(get_ip_info.router)
+app.include_router(BackgroundService.router)
+app.include_router(MQController.router)
+app.include_router(CommonRouter.router)
+
+
+
+@app.get('/memory_objgraph', )
+async def memory_objgraph(limit: int = 50):
+    common_types = await asyncio.to_thread(objgraph.most_common_types, limit=limit)
+    return [{"type": item[0], "count": item[1]} for item in common_types]
+
 
 @app.middleware("http")
 async def global_middleware(request: Request, call_next):

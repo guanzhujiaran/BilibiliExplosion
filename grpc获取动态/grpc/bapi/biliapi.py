@@ -10,6 +10,7 @@ from curl_cffi.requests import BrowserType
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import bapi_log
 from grpc获取动态.Utils.UserAgentParser import UserAgentParser
+from grpc获取动态.Utils.response.check_resp import check_reserve_relation_info
 from grpc获取动态.Utils.极验.models.captcha_models import GeetestRegInfo
 from grpc获取动态.grpc.bapi.models import LatestVersionBuild
 from utl.代理.SealedRequests import MYASYNCHTTPX
@@ -176,6 +177,7 @@ async def reserve_relation_info(ids: int | str, use_custom_proxy=False) -> dict:
         req_dict = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
                                                                              headers=headers, hybrid='1',
                                                                              )
+    check_reserve_relation_info(req_dict,ids=ids)
     return req_dict
 
 

@@ -5,8 +5,11 @@ from datetime import datetime
 import random
 from enum import Enum
 from typing import Union, Callable, List, Any, Coroutine, Sequence
+
+from sqlalchemy.exc import IntegrityError
+
 from fastapi接口.log.base_log import get_others_lot_logger
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotdyninfo, \
     TLotuserspaceresp, TRiddynid
@@ -21,8 +24,12 @@ def lock_wrapper(func: Callable) -> Callable:
             try:
                 res = await func(*args, **kwargs)
                 return res
-            except Exception as e:
+            except IntegrityError as e:
                 get_others_lot_logger.exception(e)
+                await asyncio.sleep(random.choice([5, 6, 7]))
+                continue
+            except Exception as e:
+                get_others_lot_logger.critical(e)
                 await asyncio.sleep(random.choice([5, 6, 7]))
                 continue
 
@@ -163,6 +170,15 @@ class __SqlHelper:
             return ret
 
     @lock_wrapper
+    async def getAllLotDynInfoByRoundNum(self, LotRoundNum: int) -> Sequence[TLotdyninfo]:
+        async with self._session() as session:
+            sql = select(TLotdyninfo).filter(TLotdyninfo.dynLotRound_id == LotRoundNum).order_by(
+                TLotdyninfo.dynId.desc())
+            res = await session.execute(sql)
+            ret = res.scalars().all()
+            return ret
+
+    @lock_wrapper
     async def isExistDynInfoByDynId(self, DynId: str) -> Union[TLotdyninfo, None]:
         async with self._session() as session:
             sql = select(TLotdyninfo).filter(TLotdyninfo.dynId == DynId).limit(1)
@@ -203,7 +219,7 @@ class __SqlHelper:
     async def getDynInfoByDynamicId(self, dynamic_id: int | str) -> TLotdyninfo | None:
         """
         直接把最新的动态信息merge进去
-        :param DynInfo:
+        :param dynamic_id:
         :return:
         """
         async with self._session() as session:
@@ -284,6 +300,21 @@ class __SqlHelper:
                 return 0
 
     @lock_wrapper
+    async def getOldestSpaceOffsetByUidRoundId(self, uid: int, round_id: int) -> int:
+        async with self._session() as session:
+            sql = select(TLotuserspaceresp).filter(
+                and_(
+                TLotuserspaceresp.spaceUid == uid,
+                    TLotuserspaceresp.dynLotRound_id == round_id)).order_by(
+                TLotuserspaceresp.spaceOffset.asc()).limit(1)
+            res = await session.execute(sql)
+            ret: TLotuserspaceresp = res.scalars().first()
+            if ret:
+                return ret.spaceOffset
+            else:
+                return 1000000000000000000
+
+    @lock_wrapper
     async def get_lot_user_info_updatetime_by_uid(self, uid: Union[int, str]) -> Union[datetime, None]:
         async with self._session() as session:
             sql = select(TLotuserinfo.updatetime).filter(TLotuserinfo.uid == uid).order_by(
@@ -309,7 +340,9 @@ SqlHelper = __SqlHelper()
 
 
 async def __test__():
-    result = await SqlHelper.getLatestFinishedRound()
+    result = await SqlHelper.addDynInfo(TLotdyninfo(
+        dynId=114514
+    ))
     print(result)
 
 

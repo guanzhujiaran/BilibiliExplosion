@@ -65,6 +65,7 @@ class ProxyStatusResp(CustomBaseModel):
     proxy_total_count: int = 0
     proxy_black_count: int = 0
     proxy_unknown_count: int = 0
+    proxy_usable_count: int = 0
     mysql_sync_redis_ts: int = 0
     free_proxy_fetch_ts: int = 0
     sync_ts: int = 0  # 同步到redis的时间
@@ -77,4 +78,3 @@ class AllLotScrapyStatusResp(CustomBaseModel):
     dyn_scrapy_status: DynScrapyStatusResp = DynScrapyStatusResp()
     topic_scrapy_status: TopicScrapyStatusResp = TopicScrapyStatusResp()
     reserve_scrapy_status: ReserveScrapyStatusResp = ReserveScrapyStatusResp()
-    scrapy_proxy_pool_status: ProxyStatusResp = ProxyStatusResp()

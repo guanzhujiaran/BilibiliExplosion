@@ -12,7 +12,7 @@ class GrpcProxyStatus:
     ip: str  # ip地址 如”https://127.0.0.1:114514“
     counter: int  # 使用次数
     max_counter_ts: int = 0  # 达到最大的时间戳
-    code: int = 0  # 返回响应的代码。0或者-352
+    code: int = 0  # 返回响应的代码。0或者-352或者-412
     available: bool = False  # 是否能够连接同的代理，不管412还是352，只要能用就是True，不能用就是False，删除代理都是删掉那些无法连接的
     latest_352_ts: int = 0
     latest_used_ts: int = 0

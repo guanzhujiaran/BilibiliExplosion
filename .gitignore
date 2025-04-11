@@ -45,3 +45,4 @@ users.yaml
 /github/ChatGLM2-6B/ptuning/output/checkpoint-3000/training_args.bin
 /github/ChatGLM2-6B/ptuning/output/微调模型chat.py
 /github/ChatGLM2-6B/ptuning/train.sh
+./CONFIG.py

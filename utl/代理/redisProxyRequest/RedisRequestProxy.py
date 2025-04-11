@@ -13,6 +13,7 @@ from functools import reduce
 from json import JSONDecodeError
 from typing import Union
 import bs4
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from exceptiongroup import ExceptionGroup
 from loguru import logger
 from CONFIG import CONFIG
@@ -29,6 +30,9 @@ from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelpe
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
     WriteError, NetworkError, TooManyRedirects
 from ssl import SSLError
+
+from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
+
 
 @dataclass
 class CookieWrapper:
@@ -102,46 +106,57 @@ class RequestWithProxy:
         #  self.s = session()
         self.s = MYASYNCHTTPX()
         self.fake_cookie_list: list[CookieWrapper] = []
-        self.cookie_lock = asyncio.Lock()
         self.cookie_queue_num = 0
         self._352MQServer = VoucherRabbitMQ.Instance()
+        self.schd = AsyncIOScheduler()
+        self.schd.add_job(self.background_service, 'interval', seconds=2 * 3600, next_run_time=datetime.now(),
+                          misfire_grace_time=600)
+        self.schd.start()
 
-    def format_proxy(self, proxy_str) -> dict | None:
+    async def background_service(self):
+        start_ts = int(time.time())
+        request_with_proxy_logger.critical('开始后台定时任务')
+        await asyncio.gather(
+            *[
+                self.get_proxy()
+            ]
+        )
+        request_with_proxy_logger.critical(f'定时任务执行完毕，耗时：{int(time.time()) - start_ts}秒')
+
+    def format_proxy(self, proxy_str, protocol: str = None) -> dict | None:
         """
         将传入的代理字符串标准化为 {'protocol1': 'address1', 'protocol2': 'address2'} 的形式。
 
+        :param protocol:
         :param proxy_str: 代理字符串，可能是IP地址或带有协议前缀的完整URL
         :return: 标准化的代理字典或None（如果输入不符合预期格式）
         """
-        ip_pattern = re.compile(r'^(?:(http|https|socks[45])://)?([0-9]{1,3}\.){3}[0-9]{1,3}(:[0-9]{2,5})?$')
+        ip_pattern = re.compile(r'^(?:(http|https|socks[45]|sock[45])://)?'  # 协议部分（可选）
+                                r'((?:[0-9]{1,3}\.){3}[0-9]{1,3})'  # 完整的 IP 地址
+                                r'(:[0-9]{2,5})?$'  # 端口号部分（可选）
+                                )
 
         match = ip_pattern.match(proxy_str)
         if not match:
             return None
-
         protocol_in_input = match.group(1)  # 输入中的协议部分，可能为None
         ip_address = match.group(2)
         port = match.group(3) or ':80'  # 如果没有提供端口，默认使用80
-
         # 构建基础的代理地址
-        base_protocol = protocol_in_input or 'http'
-        normalized_address = f"{base_protocol}://{ip_address}{port}"
-
+        base_protocol = protocol_in_input or protocol or 'http'
         # 创建代理字典
         proxy_dict = {}
-
-        # 添加原始协议到字典
-        proxy_dict[base_protocol] = normalized_address
-
-        # 如果不是http或https协议，还需要添加默认的http和https代理配置
-        if base_protocol not in ['http', 'https']:
-            proxy_dict['http'] = f"http://{ip_address}{port}"
-            proxy_dict['https'] = f"https://{ip_address}{port}"
+        if base_protocol in ['http', 'https']:
+            proxy_dict['http'] = f'{base_protocol}://{ip_address}{port}'
+            proxy_dict['https'] = f'{base_protocol}://{ip_address}{port}'
+        elif base_protocol in ['sock5', 'socks5']:
+            proxy_dict['sock5'] = f'{base_protocol}://{ip_address}{port}'
+            proxy_dict['socks5'] = f'{base_protocol}://{ip_address}{port}'
+        elif base_protocol in ['sock4', 'socks4']:
+            proxy_dict['sock4'] = f'{base_protocol}://{ip_address}{port}'
+            proxy_dict['socks4'] = f'{base_protocol}://{ip_address}{port}'
         else:
-            # 确保http和https都有，并且值与输入保持一致
-            proxy_dict['http'] = proxy_str if base_protocol == 'http' else proxy_str.replace("https://", "http://")
-            proxy_dict['https'] = proxy_str if base_protocol == 'https' else proxy_str.replace("http://", "https://")
-
+            return None
         return proxy_dict
 
     async def Get_Bili_Cookie(self, ua: str) -> CookieWrapper:
@@ -150,30 +165,27 @@ class RequestWithProxy:
         :param ua:
         :return:
         """
-        async with self.cookie_lock:
-            if self.cookie_queue_num <= 20:
-                self.cookie_queue_num += 1
-                cookie_data: Union[CookieWrapper, None] = None
-            else:
-                while 1:
-                    if len(self.fake_cookie_list) > 0:
-                        cookie_data = random.choice(self.fake_cookie_list)
-                        if cookie_data.expire_ts < time.time() or cookie_data.able == False:
-                            self.cookie_queue_num -= 1
-                            self.fake_cookie_list.remove(cookie_data)
-                            continue
-                        break
-                    if len(self.fake_cookie_list) == 0 and self.cookie_queue_num == 0:
-                        self.cookie_queue_num += 1
-                        cookie_data = None
-                        break
-                    await asyncio.sleep(1)
-        if not cookie_data:
+        if self.cookie_queue_num <= 20:
+            self.cookie_queue_num += 1
+            cookie_data: Union[CookieWrapper, None] = None
+        else:
             while 1:
-                logger.debug(
-                    f'当前cookie池数量：{len(self.fake_cookie_list)}，总共{self.cookie_queue_num}个cookie信息，前往获取新的cookie')
-                ck = await ExClimbWuzhi.verifyExClimbWuzhi(my_cfg=APIExClimbWuzhi(ua=ua), use_proxy=False)
-                break
+                if len(self.fake_cookie_list) > 0:
+                    cookie_data = random.choice(self.fake_cookie_list)
+                    if cookie_data.expire_ts < time.time() or cookie_data.able == False:
+                        self.cookie_queue_num -= 1
+                        self.fake_cookie_list.remove(cookie_data)
+                        continue
+                    break
+                if len(self.fake_cookie_list) == 0 and self.cookie_queue_num == 0:
+                    self.cookie_queue_num += 1
+                    cookie_data = None
+                    break
+                await asyncio.sleep(1)
+        if not cookie_data:
+            logger.debug(
+                f'当前cookie池数量：{len(self.fake_cookie_list)}，总共{self.cookie_queue_num}个cookie信息，前往获取新的cookie')
+            ck = await ExClimbWuzhi.verifyExClimbWuzhi(my_cfg=APIExClimbWuzhi(ua=ua), use_proxy=False)
             cookie_data = CookieWrapper(ck=ck, ua=ua, expire_ts=int(time.time() + 24 * 3600))  # cookie时间长一点应该没问题吧
             self.fake_cookie_list.append(cookie_data)
         # logger.debug(f'当前cookie池数量：{len(self.fake_cookie_list)}')
@@ -187,13 +199,7 @@ class RequestWithProxy:
     async def get_one_rand_proxy(self) -> ProxyTab:
         return await self.mysql_proxy_op.select_proxy('rand', channel=self.channel)
 
-    def _generate_httpx_proxy_from_requests_proxy(self, request_proxy: dict) -> dict:
-        return {
-            'http://': request_proxy['http'],
-            'https://': request_proxy['https'],
-        }
-
-    async def request_with_proxy(self, *args, **kwargs) -> dict| list[dict]:
+    async def request_with_proxy(self, *args, **kwargs) -> dict | list[dict]:
         """
 
         :param args:
@@ -241,7 +247,13 @@ class RequestWithProxy:
             if not proxy_flag or status != 0:
                 real_proxy_weights += 1
                 proxy: ProxyTab = await self._set_new_proxy()
-                ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
+                if not proxy:
+                    self.log.warning('获取代理失败！')
+                    await self.get_proxy()
+                    continue
+                ip_status = await grpc_proxy_tools.get_ip_status_by_ip(
+                    get_scheme_ip_port_form_proxy_dict(proxy.proxy)
+                )
             else:
                 ipv6_proxy_weights += 20
                 proxy: ProxyTab = ProxyTab(
@@ -256,10 +268,6 @@ class RequestWithProxy:
                         'zhihu_status': 0
                     }
                 )
-            if not proxy:
-                self.log.critical('无代理，单独刷新全局-412代理')
-                await self._refresh_412_proxy()
-                continue
             req_dict = False
             req_text = ''
             try:
@@ -269,16 +277,17 @@ class RequestWithProxy:
                 self.log.debug(f'url:{kwargs.get("url")}) 获取到请求结果！\n{proxy.proxy}\n{req_text[0:200]}\n')
                 if 'code' not in req_text and 'bili' in req.url.host:  # 如果返回的不是json那么就打印出来看看是什么
                     self.log.info(req_text.replace('\n', ''))
+                if '<div class="txt-item err-text">由于触发哔哩哔哩安全风控策略，该次访问请求被拒绝。</div>' in req_text:
+                    raise Request412Error(req_text, -412)
                 req_dict = req.json()
                 if type(req_dict) is list:
-                    if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                    if proxy and get_scheme_ip_port_form_proxy_dict(proxy.proxy) != CONFIG.my_ipv6_addr:
                         proxy.score += 100
                         proxy.status = status
                         await self.update_to_proxy_dict(proxy, 50)
                         if ip_status:
                             ip_status.available = True
                             ip_status.code = 0
-                            ip_status.latest_used_ts = int(time.time())
                             await grpc_proxy_tools.set_ip_status(ip_status)
                     return req_dict
                 if type(req_dict) is not dict:
@@ -314,26 +323,28 @@ class RequestWithProxy:
             except (Request412Error, Request352Error) as _err:
                 self.log.debug(
                     f'{_err}\n请求：\n{kwargs}\n结束，报错了！\n{type(_err)}\t{sqlalchemy_model_2_dict(proxy)}\n{req_text}')
-                if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                if proxy and get_scheme_ip_port_form_proxy_dict(proxy.proxy) != CONFIG.my_ipv6_addr:
                     proxy.score += 10
-                    proxy.status = status
+                    proxy.status = _err.code
                     await self.update_to_proxy_dict(proxy, 50)
                     if ip_status:
                         ip_status.available = True
-                        ip_status.code = 0
-                        ip_status.latest_used_ts = int(time.time())
+                        ip_status.code = _err.code
                         await grpc_proxy_tools.set_ip_status(ip_status)
                 continue
-            except (TooManyRedirects,SSLError,JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,ReadError, WriteError,InvalidURL, NetworkError, RequestProxyResponseError, ExceptionGroup)as _err:
+            except (
+                    TooManyRedirects, SSLError, JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError,
+                    ConnectTimeout,
+                    ReadTimeout, ReadError, WriteError, InvalidURL, NetworkError, RequestProxyResponseError,
+                    ExceptionGroup) as _err:
                 self.log.debug(
                     f'{_err}\n请求：\n{kwargs}\n结束，报错了！\n{type(_err)}\t{sqlalchemy_model_2_dict(proxy)}\n{req_text}')
                 score_change = -10
-                if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                if proxy and get_scheme_ip_port_form_proxy_dict(proxy.proxy) != CONFIG.my_ipv6_addr:
                     proxy.status = -412
                     await self.update_to_proxy_dict(proxy, score_change)
                     if not ip_status:
-                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
-                    ip_status.max_counter_ts = int(time.time())
+                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(get_scheme_ip_port_form_proxy_dict(proxy.proxy))
                     ip_status.code = -412
                     ip_status.available = False
                     await grpc_proxy_tools.set_ip_status(ip_status)
@@ -351,28 +362,24 @@ class RequestWithProxy:
                     f'\n{type(_err)}'
                     f'\t{sqlalchemy_model_2_dict(proxy)}'
                     f'\n{_err}\n{req_text}')
-                if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+                if proxy and get_scheme_ip_port_form_proxy_dict(proxy.proxy) != CONFIG.my_ipv6_addr:
                     proxy.status = -412
                     await self.update_to_proxy_dict(proxy, -10)
                     if not ip_status:
-                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(proxy.proxy['http'])
+                        ip_status = await grpc_proxy_tools.get_ip_status_by_ip(get_scheme_ip_port_form_proxy_dict(proxy.proxy))
                     ip_status.max_counter_ts = int(time.time())
                     ip_status.code = -412
                     ip_status.available = False
                 continue
-
-
-
             if req_dict is False:
                 continue
-            if proxy and proxy.proxy['http'] != CONFIG.my_ipv6_addr:
+            if proxy and get_scheme_ip_port_form_proxy_dict(proxy.proxy) != CONFIG.my_ipv6_addr:
                 proxy.score += 100
                 proxy.status = 0
                 await self.update_to_proxy_dict(proxy, 50)
                 if ip_status:
                     ip_status.available = True
                     ip_status.code = 0
-                    ip_status.latest_used_ts = int(time.time())
                     await grpc_proxy_tools.set_ip_status(ip_status)
             return req_dict
 
@@ -1073,9 +1080,9 @@ class RequestWithProxy:
             return proxy_queue, Get_proxy_success
         if req:
             proxies = []
-            for i in req.text:
+            for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = self.format_proxy(i)
+                    append_dict = self.format_proxy(i, protocol='https')
                     if not append_dict:
                         self.log.critical(f'代理格式错误！{i}')
                         continue
@@ -1498,7 +1505,7 @@ class RequestWithProxy:
             proxies = []
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = self.format_proxy(i)
+                    append_dict = self.format_proxy(i, protocol='socks5')
                     if not append_dict:
                         self.log.critical(f'代理格式错误！{i}')
                         continue
@@ -2251,6 +2258,101 @@ class RequestWithProxy:
     # endregion
 
     # region json格式代理（每个函数的json响应可能都不一样，要换里面解析json的方式）
+    async def get_proxy_from_proxylist_geonode_com(self) -> tuple[list, bool]:
+        headers = {
+            'User-Agent': CONFIG.rand_ua,
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://proxylist.geonode.com/api/proxy-list?limit=500&page=2&sort_by=lastChecked&sort_type=desc'
+        page = 1
+        total_count = 0
+        limit = 500
+        while 1:
+            params = {
+                "limit": limit,
+                "page": page,
+                "sort_by": "lastChecked",
+                "sort_type": "desc"
+            }
+            try:
+                req = await self.s.get(url=url, params=params, headers=headers, verify=False, timeout=self.timeout)
+            except Exception:
+                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+                await asyncio.sleep(10)
+                # self.GetProxy_Flag = False
+                Get_proxy_success = False
+                return proxy_queue, Get_proxy_success
+            if req:
+                req_dict = req.json()
+                http_p = req_dict.get('data')
+                total_count = req_dict.get('total')
+                for da in http_p:
+                    ip = da.get('ip')
+                    port = da.get('port')
+                    protocols = da.get('protocols')
+                    for protocol in protocols:
+                        if ip and port and protocol:
+                            proxy_queue.append(self.format_proxy(f'{protocol}://{ip}:{port}', protocol=protocol))
+                if len(proxy_queue) < 10:
+                    self.log.info(f'{req.text}, {url}')
+                self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+            else:
+                self.log.info(f'{req.text}, {url}')
+                Get_proxy_success = False
+                break
+            page += 1
+            if page * limit >= total_count:
+                break
+        return proxy_queue, Get_proxy_success
+
+    async def get_proxy_from_proxydb_net(self) -> tuple[list, bool]:
+        headers = {
+            'User-Agent': CONFIG.rand_ua,
+        }
+        Get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://proxydb.net/list'
+        offset = 0
+        total_count = 0
+        while 1:
+            data = {
+                "anonlvls": [],
+                "offset": offset,
+                "protocols": ["https", "http", "socks5"]
+            }
+            try:
+                req = await self.s.post(url=url, data=data, headers=headers, verify=False, timeout=self.timeout)
+            except Exception:
+                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+                await asyncio.sleep(10)
+                # self.GetProxy_Flag = False
+                Get_proxy_success = False
+                return proxy_queue, Get_proxy_success
+            if req:
+                req_dict = req.json()
+                http_p = req_dict.get('proxies')
+                total_count = req_dict.get('total_count')
+                for da in http_p:
+                    ip = da.get('ip')
+                    port = da.get('port')
+                    protocol = da.get('type')
+                    if ip and port and protocol:
+                        proxy_queue.append(self.format_proxy(f'{protocol}://{ip}:{port}'))
+                if len(proxy_queue) < 10:
+                    self.log.info(f'{req.text}, {url}')
+                self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+            else:
+                self.log.info(f'{req.text}, {url}')
+                Get_proxy_success = False
+                break
+            offset += 30
+            if offset >= total_count:
+                break
+        return proxy_queue, Get_proxy_success
+
     async def get_proxy_from_proxy_953959_xyz(self) -> tuple[list, bool]:
         headers = {
             'User-Agent': CONFIG.rand_ua,
@@ -2407,7 +2509,6 @@ class RequestWithProxy:
 
     # region 获取代理主函数
     async def __get_proxy(self):
-        Get_proxy_success = False
         if self.GetProxy_Flag or time.time() - self.get_proxy_timestamp < self.get_proxy_sep_time:
             self.log.info(
                 f'获取代理时间过短！返回！（冷却剩余：{self.get_proxy_sep_time - (int(time.time() - self.get_proxy_timestamp))}）')
@@ -2731,14 +2832,12 @@ class RequestWithProxy:
                 self.get_proxy_from_proxyshare())
             task_list.append(task)
         except Exception as e:
-
             self.log.critical(e)
         try:
             task = asyncio.create_task(
                 self.get_proxy_from_proxy_953959_xyz())
             task_list.append(task)
         except Exception as e:
-
             self.log.critical(e)
 
         try:
@@ -2746,10 +2845,24 @@ class RequestWithProxy:
                 self.get_proxy_from_parserpp_ip_ports())
             task_list.append(task)
         except Exception as e:
-
             self.log.critical(e)
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_proxydb_net())
+            task_list.append(task)
+        except Exception as e:
+            self.log.critical(e)
+
+        try:
+            task = asyncio.create_task(
+                self.get_proxy_from_proxylist_geonode_com())
+            task_list.append(task)
+        except Exception as e:
+            self.log.critical(e)
+
         results: Union[tuple[list[str], bool] or Exception] = await asyncio.gather(*task_list,
                                                                                    return_exceptions=True)
+
         for result in results:
             if isinstance(result, Exception) is True:
                 self.log.critical(f'获取代理出错！{result}')
@@ -2767,12 +2880,12 @@ class RequestWithProxy:
         await self.mysql_proxy_op.remove_list_dict_data_by_proxy()
         self.log.info(f'移除重复代理')
         Get_proxy_success = True
+        await self.mysql_proxy_op.check_redis_data(True)
         return
 
     async def get_proxy(self):
         try:
             await self.__get_proxy()
-            await self.mysql_proxy_op.check_redis_data(True)
         except Exception as e:
             self.log.exception(e)
         finally:
@@ -2820,8 +2933,9 @@ class RequestWithProxy:
     def _proxy_warrper(self, proxy, status=0, score=50):
         return {"proxy": proxy, "status": status, "update_ts": int(time.time()), 'score': score}
 
-    async def _set_new_proxy(self) -> ProxyTab:
-        while 1:
+    async def _set_new_proxy(self) -> ProxyTab | None:
+        tetry = 0
+        while tetry < 3:
             available_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
             proxy: ProxyTab | None = None
             if available_ip_status:
@@ -2833,13 +2947,7 @@ class RequestWithProxy:
             else:
                 self.log.debug('无可用代理状态！')
                 await asyncio.sleep(30)
-
-    async def _refresh_412_proxy(self):
-        '''
-        刷新两个小时前的412代理状态
-        :return:
-        '''
-        await self.mysql_proxy_op.refresh_412_proxy()
+            tetry += 1
 
     async def _remove_proxy_list(self, proxy_dict):
         '''
@@ -2860,10 +2968,10 @@ class RequestWithProxy:
         if proxy_dict.proxy.get('http') == CONFIG.my_ipv6_addr:
             return
         proxy_dict.update_ts = int(time.time())
-        if proxy_dict.score > 100000:
-            proxy_dict.score = 100000
-        if proxy_dict.score < -100000:
-            proxy_dict.score = -100000
+        if proxy_dict.score > 10000:
+            proxy_dict.score = 10000
+        if proxy_dict.score < -10000:
+            proxy_dict.score = -10000
         if proxy_dict.success_times > 100:
             proxy_dict.success_times = 100
         if proxy_dict.success_times < -10:

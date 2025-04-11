@@ -3,9 +3,12 @@ from typing import List
 
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
+from fastapi接口.utils.Common import GLOBAL_SEM
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from grpc获取动态.grpc.bapi.biliapi import get_lot_notice
 from grpc获取动态.grpc.grpc_api import bili_grpc
 from grpc获取动态.src.SQLObject.models import Lotdata
+from grpc获取动态.src.getDynDetail import dyn_detail_scrapy
 from opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
 from utl.pushme.pushme import pushme
 import time
@@ -105,28 +108,28 @@ class ExtractOfficialLottery:
 
             :param lot_data:
             """
-            new_lot_resp = await get_lot_notice(
-                business_type=lot_data.business_type,
-                business_id=lot_data.business_id,
-                origin_dynamic_id=lot_data.business_id,
-            )
-            new_lot_data_resp = new_lot_resp.get('data', {})
-
-            if new_lot_data_resp:
-                self.log.info(f'获取到新的抽奖数据，推送到upsert_official_reserve_charge_lot消息队列{new_lot_data_resp}')
-                await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
-                    new_lot_data_resp,
-                    extra_routing_key="ExtractOfficialLottery.update_lot_notice.solve_lot_data"
+            if lot_data.business_id and lot_data.business_type:
+                new_lot_resp = await get_lot_notice(
+                    business_type=lot_data.business_type,
+                    business_id=lot_data.business_id,
+                    origin_dynamic_id=lot_data.business_id,
                 )
-                new_lot_data: Lotdata = grpc_sql_helper.process_resp_data_dict_2_lotdata(new_lot_data_resp)
-                new_updated_lot_data.append(new_lot_data)
-            else:
-                self.log.critical(f'获取到空数据，可能是api接口问题，请检查！使用原始抽奖数据！！！{lot_data}')
-                new_updated_lot_data.append(lot_data)
-            rs['cur_num'] += 1
-            self.log.info(f'当前更新了【{rs["cur_num"]}/{rs["total_num"]}】条官方抽奖数据')
-            if self.refresh_official_lot_progress and self.refresh_official_lot_progress.is_running:
-                self.refresh_official_lot_progress.succ_count += 1
+                new_lot_data_resp = new_lot_resp.get('data', {})
+
+                if new_lot_data_resp:
+                    self.log.info(
+                        f'获取到新的抽奖数据，推送到upsert_official_reserve_charge_lot消息队列{new_lot_data_resp}')
+                    await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
+                        new_lot_data_resp,
+                        extra_routing_key="ExtractOfficialLottery.update_lot_notice.solve_lot_data"
+                    )
+                    new_lot_data: Lotdata = grpc_sql_helper.process_resp_data_dict_2_lotdata(new_lot_data_resp)
+                    new_updated_lot_data.append(new_lot_data)
+                else:
+                    self.log.critical(f'获取到空数据，可能是api接口问题，请检查！使用原始抽奖数据！！！{lot_data}')
+                    new_updated_lot_data.append(lot_data)
+                rs['cur_num'] += 1
+                self.log.info(f'当前更新了【{rs["cur_num"]}/{rs["total_num"]}】条官方抽奖数据')
 
         running_status = {
             'total_num': len(original_lot_notice),
@@ -139,10 +142,9 @@ class ExtractOfficialLottery:
             task = asyncio.create_task(_solve_lot_data(da, running_status))
             task_list.append(task)
         await asyncio.gather(*task_list)
-        self.refresh_official_lot_progress.is_running = False
         return new_updated_lot_data
 
-    async def get_lot_dict(self, all_lots: List[Lotdata], latest_lots_judge_ts=20 * 3600, is_api_update: bool = True) -> \
+    async def get_lot_dict(self, all_lots: List[Lotdata], latest_lots_judge_ts=20 * 3600) -> \
             tuple[
                 List[Lotdata], List[Lotdata], List[Lotdata], List[Lotdata]]:
         """
@@ -157,18 +159,13 @@ class ExtractOfficialLottery:
         # 获取到的更新抽奖的lot_id
         if len(update_lots_lot_ids) == len(all_lots):
             update_lots_lot_ids = []
-        if is_api_update:
-            self.refresh_official_lot_progress = ProgressCounter()
-            self.refresh_official_lot_progress.total_num = len(all_lots)
-            freshed_all_lot_datas: List[Lotdata] = await self.update_lot_notice(all_lots)  # 更新抽奖
-        else:
-            freshed_all_lot_datas: List[Lotdata] = all_lots
-        self.log.info(f'更新完成，当前抽奖剩余{len(freshed_all_lot_datas)}条')
-        all_lot_official_data: List[Lotdata] = [x for x in freshed_all_lot_datas if
+        refreshed_all_lot_datas: List[Lotdata] = all_lots
+        self.log.info(f'更新完成，当前抽奖剩余{len(refreshed_all_lot_datas)}条')
+        all_lot_official_data: List[Lotdata] = [x for x in refreshed_all_lot_datas if
                                                 x.status != 2 and x.status != -1 and x.business_type == 1]
         latest_updated_official_lot_data: List[Lotdata] = [x for x in all_lot_official_data if
                                                            int(x.lottery_id) in update_lots_lot_ids]
-        all_lot_charge_data: List[Lotdata] = [x for x in freshed_all_lot_datas if
+        all_lot_charge_data: List[Lotdata] = [x for x in refreshed_all_lot_datas if
                                               x.status != 2 and x.status != -1 and x.business_type == 12]
         latest_updated_charge_lot_data: List[Lotdata] = [x for x in all_lot_charge_data if
                                                          int(x.lottery_id) in update_lots_lot_ids]
@@ -182,25 +179,6 @@ class ExtractOfficialLottery:
         df4.to_csv(os.path.join(self.__dir, 'log/更新充电.csv'), index=False, header=True)
 
         return all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data
-
-    async def resolve_dynamic_details_card(self, dynData):
-        temp_rid = dynData.get('extend').get('businessId')
-        dynamic_id = dynData.get('extend').get('dynIdStr')
-        dynamic_calculated_ts = int((int(dynamic_id) + 6437415932101782528) / 4294939971.297)
-        dynamic_created_time = self._timeshift(dynamic_calculated_ts)  # 通过公式获取大致的时间，误差大概20秒左右
-        moduels = dynData.get('modules')
-        lot_id = None
-        if dynData.get('extend').get('origDesc'):
-            for descNode in dynData.get('extend').get('origDesc'):
-                if descNode.get('type') == 'desc_type_lottery':
-                    lot_id = descNode.get('rid')
-                    lot_rid = dynData.get('extend').get('businessId')
-                    lot_notice_res = await get_lot_notice(business_type=2, business_id=lot_rid,
-                                                          origin_dynamic_id=dynamic_id)
-                    lot_data = lot_notice_res.get('data')
-                    if lot_data:
-                        lot_id = lot_data.get('lottery_id')
-        return temp_rid, lot_id, dynamic_id, dynamic_created_time
 
     async def get_repost_count(self, dynamic_id):
         dyn_detail = await self.sql.get_all_dynamic_detail_by_dynamic_id(dynamic_id)
@@ -231,87 +209,42 @@ class ExtractOfficialLottery:
             'third_prize_cmt'
         ]
 
-        async def _construct_lot_detail_bulk(lot_data:dict):
-            if not all(key in lot_data.keys() for key in need_keys):
-                self.log.error(
-                    f'lot_data:{lot_data} is not complete! missing key:{[key for key in need_keys if key not in lot_data.keys()]}')
-            self.log.info(f'Constructing:{lot_data}')
-            lottery_id = lot_data.get('lottery_id', '')
-            dynamic_id = lot_data.get('dynamic_id') or lot_data.get('business_id')
-            lottery_time = lot_data.get('lottery_time', 0)
-            first_prize = lot_data.get('first_prize', 0)
-            second_prize = lot_data.get('second_prize', 0)
-            third_prize = lot_data.get('third_prize', 0)
-            first_prize_cmt = lot_data.get('first_prize_cmt', '')
-            second_prize_cmt = lot_data.get('second_prize_cmt', '')
-            third_prize_cmt = lot_data.get('third_prize_cmt', '')
-            if get_repost_count_flag:
-                participants = await self.get_repost_count(dynamic_id)
-            else:
-                participants = lot_data.get('participants', 0)
-            result = LotDetail(
-                lottery_id,
-                dynamic_id,
-                lottery_time,
-                first_prize,
-                second_prize,
-                third_prize,
-                first_prize_cmt,
-                second_prize_cmt,
-                third_prize_cmt,
-                participants
-            )
-            ret_list.append(result)
+        async def _construct_lot_detail_bulk(lot_data: dict):
+            async with GLOBAL_SEM:
+                if not all(key in lot_data.keys() for key in need_keys):
+                    self.log.error(
+                        f'lot_data:{lot_data} is not complete! missing key:{[key for key in need_keys if key not in lot_data.keys()]}')
+                self.log.info(f'Constructing:{lot_data}')
+                lottery_id = lot_data.get('lottery_id', '')
+                dynamic_id = lot_data.get('dynamic_id') or lot_data.get('business_id')
+                lottery_time = lot_data.get('lottery_time', 0)
+                first_prize = lot_data.get('first_prize', 0)
+                second_prize = lot_data.get('second_prize', 0)
+                third_prize = lot_data.get('third_prize', 0)
+                first_prize_cmt = lot_data.get('first_prize_cmt', '')
+                second_prize_cmt = lot_data.get('second_prize_cmt', '')
+                third_prize_cmt = lot_data.get('third_prize_cmt', '')
+                if get_repost_count_flag:
+                    participants = await self.get_repost_count(dynamic_id)
+                else:
+                    participants = lot_data.get('participants', 0)
+                result = LotDetail(
+                    lottery_id,
+                    dynamic_id,
+                    lottery_time,
+                    first_prize,
+                    second_prize,
+                    third_prize,
+                    first_prize_cmt,
+                    second_prize_cmt,
+                    third_prize_cmt,
+                    participants
+                )
+                ret_list.append(result)
 
         await asyncio.gather(*[_construct_lot_detail_bulk(x) for x in lot_data_list])
 
         return ret_list
-
-    async def get_and_update_all_details_by_dynamic_id_list(self, all_dynamic_ids: [int]):
-        async def thread_get_details(dynamic_ids):
-            """
-            需要放进thread里面跑
-            :param dynamic_ids:
-            :return:
-            """
-            ret_dict_list = []
-            resp_list = await self.BiliGrpc.grpc_api_get_DynDetails(dynamic_ids)
-            if resp_list.get('list'):
-                for resp_data in resp_list['list']:
-                    temp_rid, lot_id, dynamic_id, dynamic_created_time = self.resolve_dynamic_details_card(
-                        resp_data)
-                    tempdetail_dict = dynAllDetail(
-                        rid=temp_rid,
-                        dynamic_id=dynamic_id,
-                        dynData=resp_data,
-                        lot_id=lot_id if lot_id else None,
-                        dynamic_created_time=dynamic_created_time
-                    )
-                    ret_dict_list.append(tempdetail_dict.__dict__)
-            for detail in ret_dict_list:
-                await self.sql.upsert_DynDetail(doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-                                                dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-                                                dynamic_created_time=detail.get('dynamic_created_time'))
-
-        task_args_list = []  # [[1,2,3,4,5,6,7,8],[9,10,11,12,13,14,15],...]
-        offset = 10
-        for rid_index in range(len(all_dynamic_ids) // offset + 1):
-            rids_list = all_dynamic_ids[offset * rid_index:offset * (rid_index + 1)]
-            task_args_list.append(rids_list)
-
-        thread_num = 50
-        task_list = []
-        for task_index in range(len(task_args_list) // thread_num + 1):
-            args_list = task_args_list[
-                        thread_num * task_index:thread_num * (task_index + 1)]  # 将task切片成[[0...49],[50....99]]
-            print(f'args_list:{args_list}')
-            for args in args_list:
-                print(args)
-                if not args[0]:
-                    continue
-                task = asyncio.create_task(thread_get_details(args))
-                task_list.append(task)
-        await asyncio.gather(*task_list)
 
     async def get_all_lots(self, latest_lots_judge_ts=20 * 3600, is_api_update: bool = True) -> tuple[
         List[LotDetail], List[LotDetail], List[LotDetail], List[LotDetail]]:
@@ -319,20 +252,48 @@ class ExtractOfficialLottery:
         已经排除了开奖了的和失效了的抽奖了
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
         """
+
+        all_lots_with_no_business_id = await self.sql.get_all_lot_with_no_business_id()
+
+        self.log.critical(f'未同步到Lotdata表中的官方抽奖数量:{len(all_lots_with_no_business_id)}')
+        await asyncio.gather(*[
+            dyn_detail_scrapy.resolve_dynamic_details_card(json.loads(x.bilidyndetail.dynData, strict=False),
+                                                           is_running_scrapy=False) for x in
+            all_lots_with_no_business_id
+        ])
+
         all_official_lots_undrawn = await self.sql.get_all_lot_not_drawn()
         self.log.critical(f'未开奖的官方抽奖数量:{len(all_official_lots_undrawn)}')
+        if is_api_update:
+            async def __(lotdata: Lotdata):
+                async with GLOBAL_SEM:
+                    if not lotdata.bilidyndetail:
+                        ...
+                        lot_data_resp = await get_lot_notice(
+                            business_type=lotdata.business_type,
+                            business_id=lotdata.business_id
+                        )
+                        if da:=lot_data_resp.get('data'):
+                            await self.sql.upsert_lot_detail(da)
+                        else:
+                            self.log.error(f'{sqlalchemy_model_2_dict(lotdata)}lot_data_resp:{lot_data_resp} is not complete!')
+                    else:
+                        await dyn_detail_scrapy.resolve_dynamic_details_card(json.loads(lotdata.bilidyndetail.dynData, strict=False), is_running_scrapy=False)
+                        self.refresh_official_lot_progress.succ_count += 1
+
+            self.refresh_official_lot_progress = ProgressCounter()
+            self.refresh_official_lot_progress.total_num = len(all_official_lots_undrawn)
+            await asyncio.gather(*[
+                __(x) for x in all_official_lots_undrawn
+            ]
+                                 )
+            self.refresh_official_lot_progress.is_running = False
+
         all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data = \
             await self.get_lot_dict(
                 all_official_lots_undrawn,
                 latest_lots_judge_ts,
-                is_api_update=is_api_update
             )  # 更新抽奖信息
-        official_lot_dynamic_ids: List[int | str] = [x.business_id for x in all_lot_official_data if x.status != 2]
-        charge_lot_dynamic_ids: List[int | str] = [x.business_id for x in all_lot_charge_data if x.status != 2]
-        if is_api_update:
-            await self.get_and_update_all_details_by_dynamic_id_list(
-                [official_lot_dynamic_ids.extend(charge_lot_dynamic_ids)]
-            )  # 更新抽奖的动态
 
         all_official_lot_detail_result: list[LotDetail] = await self.construct_lot_detail(
             [x.__dict__ for x in all_lot_official_data], get_repost_count_flag=is_api_update)
@@ -420,4 +381,4 @@ class ExtractOfficialLottery:
 
 if __name__ == '__main__':
     __e = ExtractOfficialLottery()
-    asyncio.run(__e.save_article(is_api_update=True))
+    asyncio.run(__e.get_all_lots(is_api_update=True))

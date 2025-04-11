@@ -1,16 +1,14 @@
 import asyncio
-import copy
 import random
 import typing
 from typing import Union
-
-import certifi
-from curl_cffi import CurlHttpVersion, CurlOpt, CurlSslVersion
-from curl_cffi.requests import AsyncSession, BrowserType, ExtraFingerprints, BrowserTypeLiteral
+from curl_cffi.requests import AsyncSession, BrowserTypeLiteral
 from httpx import AsyncClient
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
 import ssl
-
+from httpx_socks import AsyncProxyTransport # 目前httpx官方不支持sock4代理，对socks5代理的支持也不是特别好，需要使用第三方库
+from fastapi接口.log.base_log import httpx_logger
+from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 
 class SSLFactory:
     @property
@@ -72,19 +70,38 @@ class SSLFactory:
 sslgen = SSLFactory()
 
 
-class MYASYNCHTTPX:
-    def generate_httpx_proxy_from_requests_proxy(self, request_proxy: dict) -> dict:
-        if request_proxy:
-            return {
-                'http://': request_proxy['http'],
-                'https://': request_proxy['https'],
-            }
-        else:
-            return {
-                'http://': None,
-                'https://': None,
-            }
+def _wrapper(func):
+    async def wrapper(*args, **kwargs):
+        httpx_logger.info(f"开始请求{kwargs}")
+        res = await func(*args, **kwargs)
+        httpx_logger.info(f"请求结束{kwargs}")
+        return res
+    return wrapper
 
+
+def format_transport(request_proxy: dict | None):
+    if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
+        if 'sock' in format_ip_str or 'socks' in format_ip_str:
+            return AsyncProxyTransport.from_url(
+                url=format_ip_str,
+            )
+    return None
+
+
+def format_httpx_proxy(request_proxy: dict | None) -> str | None:
+    if not request_proxy:
+        return None
+    if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
+        if 'sock' in format_ip_str or 'socks' in format_ip_str:
+            return None
+    else:
+        format_ip_str = None
+
+    return format_ip_str
+
+
+class MYASYNCHTTPX:
+    @_wrapper
     async def get(self, url, headers=None, verify=False, proxies: Union[dict, None] = None, timeout=10, params=None,
                   *args, **kwargs):
         """
@@ -102,8 +119,10 @@ class MYASYNCHTTPX:
         :param kwargs:
         :return:
         """
+        format_proxy_str = format_httpx_proxy(proxies)
         async with AsyncClient(
-                proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+                transport=format_transport(proxies),
+                proxy=format_proxy_str,
                 http2=True,
                 verify=False,
         ) as client:
@@ -111,9 +130,12 @@ class MYASYNCHTTPX:
             resp = await client.get(url=url, headers=headers, params=params, timeout=timeout, follow_redirects=True)
             return resp
 
+    @_wrapper
     async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10, *args, **kwargs):
+        format_proxy_str = format_httpx_proxy(proxies)
         async with AsyncClient(
-                proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+                transport=format_transport(proxies),
+                proxy=format_proxy_str,
                 http2=True,
                 verify=False,
         ) as client:
@@ -121,6 +143,7 @@ class MYASYNCHTTPX:
             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
             return resp
 
+    @_wrapper
     async def request(self, url,
                       data: typing.Optional[RequestData] = None,
                       method='GET',
@@ -158,8 +181,10 @@ class MYASYNCHTTPX:
         ):
             ca = sslgen()
             proxies = None
+        format_proxy_str = format_httpx_proxy(proxies)
         async with AsyncClient(
-                proxies=self.generate_httpx_proxy_from_requests_proxy(proxies),
+                transport=format_transport(proxies),
+                proxy=format_proxy_str,
                 verify=ca,
                 http2=True,
                 http1=False,
@@ -216,12 +241,14 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     task = loop.create_task(MyAsyncReq.request(
         method="get",
-        url='https://tls.browserleaks.com/json',
+        url='https://test.ipw.cn',
         headers=
         (("Referer", 'https://www.bilibili.com/'),
          ("User-Agent",
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'),
-         ("Cookie", "1"),)
-    ))
+         ("Cookie", "1"),),
+        proxies={"sock4": "socks4://8.137.92.88:8080", "socks4": "socks4://8.137.92.88:8080"}
+    )
+    )
     loop.run_until_complete(task)
     print(task.result().text)

@@ -5,6 +5,7 @@ from typing import List
 from CONFIG import CONFIG
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, BiliLotStatisticRankDateTypeEnum
+from fastapi接口.utils.Common import GLOBAL_SEM
 from utl.redisTool.RedisManager import RedisManagerBase
 import asyncio
 
@@ -100,11 +101,17 @@ class LotteryDataStatisticRedis(RedisManagerBase):
         :param rank_type:
         :return:
         """
+
+        async def __do_task(__uid):
+            async with GLOBAL_SEM:
+                return await self._zget_rank(self.RedisMap.get_lot_type_rank_name(
+                    date=date,
+                    lot_type=lot_type,
+                    rank_type=rank_type), __uid
+                )
+
         ret_dict = {}
-        tasks = [self._zget_rank(self.RedisMap.get_lot_type_rank_name(
-            date=date,
-            lot_type=lot_type,
-            rank_type=rank_type), uid) for uid in uid_arr]
+        tasks = [__do_task(uid) for uid in uid_arr]
         results = await asyncio.gather(*tasks)
         for uid, rank in zip(uid_arr, results):
             if rank is not None:  # 确保结果不是异常

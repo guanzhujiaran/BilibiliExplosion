@@ -8,15 +8,13 @@ from datetime import datetime, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from CONFIG import CONFIG
-from fastapi接口.log.base_log import official_lot_logger
+from fastapi接口.log.base_log import official_lot_logger as log
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 from grpc获取动态.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
 from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
 from grpc获取动态.src.getDynDetail import DynDetailScrapy
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from apscheduler.schedulers.blocking import BlockingScheduler
-
-log = official_lot_logger
 
 dyn_detail_scrapy: DynDetailScrapy | None = None
 
@@ -74,9 +72,9 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     global dyn_detail_scrapy
     dyn_detail_scrapy = DynDetailScrapy()
     if time.time() - pub_article_info.lastPubDate.timestamp() > 8 * 3600:
-        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(200)
+        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(50)
     else:
-        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(400)
+        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(100)
     await dyn_detail_scrapy.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
@@ -170,16 +168,6 @@ async def async_schedule_get_official_lot_main(schedule_mark: bool = True, show_
     :return:
     """
     log.info('启动获取所有B站动态以及发布充电和官方抽奖专栏程序！！！')
-    log.add(
-        os.path.join(CONFIG.root_dir, "fastapi接口/scripts/log/error_official_lot_log.log"),
-        level="WARNING",
-        encoding="utf-8",
-        enqueue=True,
-        rotation="500MB",
-        compression="zip",
-        retention="15 days",
-        filter=lambda record: record["extra"].get('user') == "官方抽奖"
-    )
     pub_article_info = pubArticleInfo()
     if schedule_mark:
         # from apscheduler.triggers.cron import CronTrigger

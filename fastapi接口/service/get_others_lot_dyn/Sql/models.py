@@ -24,6 +24,7 @@ class TLotmaininfo(Base):
     updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
     t_lotdyninfo: Mapped[List['TLotdyninfo']] = relationship('TLotdyninfo', uselist=True, back_populates='dynLotRound')
+    t_lotuserspaceresp: Mapped[List['TLotuserspaceresp']] = relationship('TLotuserspaceresp', uselist=True, back_populates='dynLotRound')
 
 
 class TLotuserinfo(Base):
@@ -36,7 +37,7 @@ class TLotuserinfo(Base):
     isUserSpaceFinished = mapped_column(Integer)
     offset = mapped_column(BigInteger, comment='保存每一次循环之后的offset，如果中途推出了，从这个offset接着获取')
     latestFinishedOffset = mapped_column(BigInteger, comment='最后一次获取结束时候的offset，作为判断是否获取重复的标准')
-    isPubLotUser = mapped_column(TINYINT(1))
+    isPubLotUser = mapped_column(TINYINT(1), comment='0：要获取的抽奖用户的空间数据（判断这个抽奖号是否活跃的重要标志）\r\n1：发布抽奖用户的空间数据（不重要）')
 
     t_lotuserspaceresp: Mapped[List['TLotuserspaceresp']] = relationship('TLotuserspaceresp', uselist=True, back_populates='t_lotuserinfo')
 
@@ -81,12 +82,16 @@ class TLotdyninfo(Base):
 class TLotuserspaceresp(Base):
     __tablename__ = 't_lotuserspaceresp'
     __table_args__ = (
+        ForeignKeyConstraint(['dynLotRound_id'], ['t_lotmaininfo.lotRound_id'], name='FK_t_lotuserspaceresp_t_lotmaininfo'),
         ForeignKeyConstraint(['spaceUid'], ['t_lotuserinfo.uid'], name='t_lotuserspaceresp_ibfk_1'),
+        Index('FK_t_lotuserspaceresp_t_lotmaininfo', 'dynLotRound_id'),
         Index('spaceUid', 'spaceUid')
     )
 
     spaceOffset = mapped_column(BigInteger, primary_key=True, server_default=text('(0)'))
     spaceUid = mapped_column(BigInteger)
     spaceRespJson = mapped_column(JSON)
+    dynLotRound_id = mapped_column(Integer)
 
+    dynLotRound: Mapped[Optional['TLotmaininfo']] = relationship('TLotmaininfo', back_populates='t_lotuserspaceresp')
     t_lotuserinfo: Mapped[Optional['TLotuserinfo']] = relationship('TLotuserinfo', back_populates='t_lotuserspaceresp')

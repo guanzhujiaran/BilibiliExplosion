@@ -19,7 +19,7 @@ class OfficialReserveChargeLotMQ(BasicMessageReceiver):
 
     async def consume(self, method, properties, body):
         try:
-            MQ_logger.critical(
+            MQ_logger.debug(
                 f"【{OfficialReserveChargeLotMQ.__name__}】收到消息：{self.decode_message(body=body)}\n{method}")
             _body: LotDataReq = LotDataReq(**self.decode_message(body=body))
             lot_data = await get_lot_notice(
@@ -31,7 +31,7 @@ class OfficialReserveChargeLotMQ(BasicMessageReceiver):
             if newly_lot_data:
                 MQ_logger.debug(f"newly_lot_data: {newly_lot_data}")
                 result = await grpc_sql_helper.upsert_lot_detail(newly_lot_data)
-                MQ_logger.critical(f"插入数据：{newly_lot_data.get('lottery_id')}\t结果：{result}")
+                MQ_logger.debug(f"插入数据：{newly_lot_data.get('lottery_id')}\t结果：{result}")
                 return self.acknowledge_message(delivery_tag=method.delivery_tag)
             MQ_logger.error(f"未获取到抽奖提示数据！参数：{_body}\t响应：{lot_data}")
             return self.acknowledge_message(delivery_tag=method.delivery_tag)
@@ -74,10 +74,10 @@ class UpsertOfficialReserveChargeLotMQ(BasicMessageReceiver):
     async def consume(self, method, properties, body):
         try:
             newly_lot_data = self.decode_message(body=body)
-            MQ_logger.critical(f"【{UpsertOfficialReserveChargeLotMQ.__name__}】收到消息：{newly_lot_data}\n{method}")
+            MQ_logger.debug(f"【{UpsertOfficialReserveChargeLotMQ.__name__}】收到消息：{newly_lot_data}\n{method}")
             if newly_lot_data:
                 result = await grpc_sql_helper.upsert_lot_detail(newly_lot_data)
-                MQ_logger.critical(f"插入数据：{newly_lot_data.get('lottery_id')}\t结果：{result}")
+                MQ_logger.debug(f"插入数据：{newly_lot_data.get('lottery_id')}\t结果：{result}")
                 return self.acknowledge_message(delivery_tag=method.delivery_tag)
             MQ_logger.error(
                 f"【{UpsertOfficialReserveChargeLotMQ.__name__}】未获取到抽奖提示数据！参数：{newly_lot_data}\n原始参数：{body}")
@@ -124,7 +124,7 @@ class UpsertLotDataByDynamicIdMQ(BasicMessageReceiver):
 
     async def consume(self, method, properties, body):
         try:
-            MQ_logger.critical(
+            MQ_logger.debug(
                 f"【{UpsertLotDataByDynamicIdMQ.__name__}】收到消息：{self.decode_message(body=body)}\n{method}")
             lot_data_dynamic_req: LotDataDynamicReq = LotDataDynamicReq(**self.decode_message(body=body))
             if lot_data_dynamic_req.dynamic_id:
@@ -182,7 +182,7 @@ class UpsertTopicLotMQ(BasicMessageReceiver):
 
     async def consume(self, method, properties, body):
         try:
-            MQ_logger.critical(
+            MQ_logger.debug(
                 f"【{UpsertTopicLotMQ.__name__}】收到消息：{self.decode_message(body=body)}\n{method}")
             _body: TopicLotData = TopicLotData(**self.decode_message(body=body))
             if 定时获取话题抽奖.topic_robot is None:

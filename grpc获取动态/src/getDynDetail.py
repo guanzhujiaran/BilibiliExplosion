@@ -124,9 +124,10 @@ class DynDetailScrapy:
         })
         return await self.proxy_req.request_with_proxy(url=url, method='get', headers=new_headers, params=signed_params)
 
-    async def resolve_dynamic_details_card(self, dynData):
+    async def resolve_dynamic_details_card(self, dynData:dict, is_running_scrapy=True):
         """
         解析grpc返回的data里面的东西
+        :param is_running_scrapy:
         :param dynData:
         :return: temp_rid, lot_id, dynamic_id, dynamic_created_time
         """
@@ -134,10 +135,11 @@ class DynDetailScrapy:
             temp_rid = dynData.get('extend').get('businessId')
             dynamic_id = dynData.get('extend').get('dynIdStr')
             dynamic_calculated_ts = dynamic_id_2_ts(int(dynamic_id))
-            if time.time() - dynamic_calculated_ts < self.stop_limit_time and time.time() - dynamic_calculated_ts > 0:
-                async with self.stop_Flag_lock:
-                    self.log.debug(f'遇到终止动态！连续终止数+1！\n{dynData}')
-                    self.stop_counter.cur_stop_continuous_num += 1
+            if is_running_scrapy:
+                if time.time() - dynamic_calculated_ts < self.stop_limit_time and time.time() - dynamic_calculated_ts > 0:
+                    async with self.stop_Flag_lock:
+                        self.log.debug(f'遇到终止动态！连续终止数+1！\n{dynData}')
+                        self.stop_counter.cur_stop_continuous_num += 1
             dynamic_created_time = self._timeshift(dynamic_calculated_ts)  # 通过公式获取大致的时间，误差大概20秒左右
             moduels = dynData.get('modules')
             lot_id = None
@@ -533,10 +535,10 @@ class DynDetailScrapy:
             for rid in rids_list:
                 detail = (await self.get_grpc_single_dynDetail(rid))[0]
                 await self.Sqlhelper.upsert_DynDetail(
-                                        doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-                                        dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-                                        dynamic_created_time=detail.get('dynamic_created_time')
-                                        )
+                    doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
+                    dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
+                    dynamic_created_time=detail.get('dynamic_created_time')
+                )
         except Exception as e:
             self.log.exception(e)
         self.scrapy_sem.release()
@@ -624,6 +626,7 @@ dyn_detail_scrapy = DynDetailScrapy()
 #     resp = dyn_detail_scrapy.get_lot_notice(2, '260978218')
 #     lot_data = resp.get('data')
 #     dyn_detail_scrapy.Sqlhelper.upsert_lot_detail(lot_data)
+
 
 
 if __name__ == "__main__":

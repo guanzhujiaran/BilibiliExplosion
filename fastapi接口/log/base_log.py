@@ -6,6 +6,7 @@ from CONFIG import CONFIG
 
 
 class UserMap(Enum):
+    httpx = "httpx"
     background_task = 'background_task'
     live_monitor_logger = "live_monitor_logger"
     request_with_proxy_logger = "request_with_proxy_logger"
@@ -33,8 +34,10 @@ class UserMap(Enum):
     ipv6_monitor_logger = "ipv6_monitor_logger"
     activeExclimbWuzhi_logger = "激活cookie日志"
 
+    milvus_db_logger = "milvus_db_logger"
 
-def create_logger(user: UserMap)->logger:
+
+def create_logger(user: UserMap) -> logger:
     user_uq_value = uuid.uuid4().hex + user.value
     _user_logger = logger.bind(user=user_uq_value)
     _user_logger.add(os.path.join(CONFIG.root_dir, f"fastapi接口/scripts/log/error_{user.value}_log.log"),
@@ -72,7 +75,10 @@ Voucher352_logger = create_logger(UserMap.Voucher352_logger)
 topic_lot_logger = create_logger(UserMap.topic_lot_logger)
 official_lot_logger = create_logger(UserMap.official_lot_logger)
 reserve_lot_logger = create_logger(UserMap.reserve_lot_logger)
+milvus_db_logger = create_logger(UserMap.milvus_db_logger)
 
 pushme_logger = create_logger(UserMap.pushme_logger)
 request_with_proxy_logger = create_logger(UserMap.request_with_proxy_logger)
 background_task_logger = create_logger(UserMap.background_task)
+
+httpx_logger = create_logger(UserMap.httpx)

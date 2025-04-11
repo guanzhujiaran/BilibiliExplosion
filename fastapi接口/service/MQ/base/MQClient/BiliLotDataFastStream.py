@@ -1,14 +1,19 @@
-from typing import Callable, Dict
+from typing import Callable, Dict, List
 import asyncio
 from faststream.rabbit import RabbitQueue, fastapi, RabbitBroker
 from fastapi接口.log.base_log import MQ_logger
 from fastapi接口.models.MQ.BaseMQModel import QueueName, RoutingKey, RabbitMQConfig
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
+from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
+from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from grpc获取动态.grpc.bapi.biliapi import get_lot_notice
 from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from faststream.rabbit.annotations import (
     RabbitMessage,
 )
+
+from grpc获取动态.src.SQLObject.models import Lotdata
 from utl.pushme.pushme import pushme
 from CONFIG import CONFIG
 from faststream.rabbit import RabbitExchange, ExchangeType
@@ -32,7 +37,7 @@ def get_broker():
 
 def func_wrapper(func: Callable):
     async def wrapper(*args, **kwargs):
-        MQ_logger.critical(
+        MQ_logger.debug(
             f"【{func.__name__}】收到消息：{args}")
         return await func(*args, **kwargs)
 
@@ -120,7 +125,10 @@ class UpsertOfficialReserveChargeLot(BaseFastStreamMQ):
 
         try:
             if newly_lot_data:
+                lot_data = grpc_sql_helper.process_resp_data_dict_2_lotdata(newly_lot_data)
+                await upsert_milvus_bili_lot_data.publish(lot_data)
                 result = await grpc_sql_helper.upsert_lot_detail(newly_lot_data)
+
                 MQ_logger.critical(f"【{self.queue_name}】upsert_lot_detail {newly_lot_data} result: {result}")
                 return await msg.ack()
             MQ_logger.error(
@@ -255,7 +263,52 @@ class UpsertTopicLot(BaseFastStreamMQ):
         await broker.close()
 
 
+class UpsertMilvusBiliLotData(BaseFastStreamMQ):
+
+    def __init__(self):
+        super().__init__(
+            queue_name=QueueName.UpsertMilvusBiliLotDataMQ,
+            routing_key_name=RoutingKey.UpsertMilvusBiliLotDataMQ
+        )
+
+    @func_wrapper
+    async def consume(
+            self,
+            _body: dict,
+            msg: RabbitMessage,
+    ):
+        module_name = self.queue_name
+        try:
+            MQ_logger.critical(
+                f"【{module_name}】收到消息：{_body}")
+            lot_data = Lotdata(**_body)
+            da = await lot_data_2_bili_lot_data_ls(lot_data)
+            await milvus_sql_helper.upsert_bili_lot_data(da)
+            return await msg.ack()
+        except Exception as e:
+            MQ_logger.exception(f'{module_name} consume error: {e}')
+            pushme(f'{module_name} consume error: {e}', e.__str__())
+            await msg.nack()
+
+    async def publish(self, body: Lotdata, extra_routing_key=""):
+        broker = RabbitBroker(url=_rabbit_mq_url)
+        await broker.connect()
+        async with broker:
+            if extra_routing_key and type(extra_routing_key) is str:
+                routing_key = self.routing_key_name + "." + extra_routing_key
+            else:
+                routing_key = self.routing_key_name
+            await broker.publish(
+                message=sqlalchemy_model_2_dict(body),
+                queue=self.queue,
+                exchange=exch,
+                routing_key=routing_key
+            )
+        await broker.close()
+
+
 official_reserve_charge_lot = OfficialReserveChargeLot()
 upsert_official_reserve_charge_lot = UpsertOfficialReserveChargeLot()
 upsert_lot_data_by_dynamic_id = UpsertLotDataByDynamicId()
 upsert_topic_lot = UpsertTopicLot()
+upsert_milvus_bili_lot_data = UpsertMilvusBiliLotData()

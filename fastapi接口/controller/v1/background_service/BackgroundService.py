@@ -184,7 +184,6 @@ async def get_all_scrapy_status():
             dyn_scrapy_status=get_scrapy_status('dyn'),
             topic_scrapy_status=get_scrapy_status('topic'),
             reserve_scrapy_status=get_scrapy_status('reserve'),
-            scrapy_proxy_pool_status=await SQLHelper.sub_redis_store.get_proxy_status()
         )
     )
 
@@ -219,5 +218,5 @@ async def get_refresh_bili_reserve_status():
             )
 async def get_proxy_status():
     return CommonResponseModel(data=
-                               await SQLHelper.sub_redis_store.get_proxy_status()
+                               await SQLHelper.sub_redis_store.get_proxy_database_redis()
                                )

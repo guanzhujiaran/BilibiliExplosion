@@ -4,13 +4,12 @@ import datetime
 from copy import deepcopy
 from typing import Literal, List, Sequence, Union, Optional
 import numpy as np
-from sqlalchemy import select, and_, exists, func, String, text, or_, cast
-from sqlalchemy.dialects.mysql import insert, BIGINT
+from sqlalchemy import select, and_, exists, func, String, text, or_
+from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
 from fastapi接口.log.base_log import myfastapi_logger
-from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, \
-    BiliLotStatisticRankDateTypeEnum
+from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
 from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 import time
 import ast
@@ -221,6 +220,13 @@ class SQLHelper:
             return result.scalars().first()
 
     @lock_wrapper
+    async def get_lotDetail_ls_by_lot_ids(self,lot_id_ls:List[int])->Sequence[Lotdata]:
+        async with self._session() as session:
+            sql = select(Lotdata).where(Lotdata.lottery_id.in_(lot_id_ls))
+            result = await session.execute(sql)
+            return result.scalars().all()
+
+    @lock_wrapper
     async def get_latest_rid(self) -> int | None:
         batch_size = 1000
         async with self._session() as session:
@@ -321,7 +327,8 @@ class SQLHelper:
             return result.scalars().first()
 
     @lock_wrapper
-    async def query_official_lottery_by_timelimit(self, time_limit: int = 24 * 3600,order_by_ts_desc=True) -> Sequence[Lotdata]:
+    async def query_official_lottery_by_timelimit(self, time_limit: int = 24 * 3600, order_by_ts_desc=True) -> Sequence[
+        Lotdata]:
         """
         通过日期查询需要的动态，默认查询当天
         :return:
@@ -436,6 +443,13 @@ class SQLHelper:
             parsed_dyn_data = json.dumps(dynData, ensure_ascii=False)
         else:
             parsed_dyn_data = None
+        if lot_id:
+            async with self._session() as session:
+                sql = """
+INSERT IGNORE INTO lotdata (lottery_id)
+VALUES (:lottery_id);
+"""
+                await session.execute(text(sql), {"lottery_id": lot_id})
         async with self._session() as session:
             stmt = insert(Bilidyndetail).values(
                 rid=doc_id,
@@ -489,26 +503,46 @@ class SQLHelper:
             existing_record = await session.execute(
                 select(Lotdata).where(Lotdata.lottery_id == lottery_id)
             )
-            exists = existing_record.scalars().first() is not None
+            _exists = existing_record.scalars().first() is not None
 
             await session.merge(self.process_resp_data_dict_2_lotdata(lot_data_dict))
 
             # 判断是插入还是更新
-            mode = 'insert' if exists == 1 else 'update'
+            mode = 'insert' if _exists == 1 else 'update'
             await session.commit()
             return {'mode': mode}
 
     # endregion
     @lock_wrapper
     async def get_all_lot_not_drawn(self) -> Sequence[Lotdata]:
+        """
+        查询所有未开奖的 Lotdata 数据，并加载关联的 Bilidyndetail 数据。
+        :return:
+        """
         async with self._session() as session:
-            stmt = select(Lotdata).where(
+            stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(
                 and_(
                     Lotdata.lottery_result.is_(None),
-                    Lotdata.status != -1
+                    Lotdata.status != -1,
+                    Lotdata.business_type != 10
                 )
             ).order_by(Lotdata.lottery_id)
+            result = await session.execute(stmt)
+            return result.scalars().all()
 
+    @lock_wrapper
+    async def get_all_lot_with_no_business_id(self) -> Sequence[Lotdata]:
+        """
+        查询所有没有加载好数据的 Lotdata ，并加载关联的 Bilidyndetail 数据。
+        :return:
+        """
+        async with self._session() as session:
+            stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(
+                and_(
+                    Lotdata.business_id.is_(None),
+                    Lotdata.bilidyndetail.has(Bilidyndetail.rid.is_not(None))
+                )
+            ).order_by(Lotdata.lottery_id)
             result = await session.execute(stmt)
             return result.scalars().all()
 
@@ -806,14 +840,30 @@ ORDER BY
             # 返回当前批次的数据以及下一个批次的起点
             return rows  # 返回当前批次的数据和最后一个uid作为下次查询的起点
 
+    @lock_wrapper
+    async def query_all_lottery_data(self) -> Sequence[Lotdata]:
+        async with self._session() as session:
+            stmt = select(Lotdata)
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
+    @lock_wrapper
+    async def get_all_lot_before_lottery_time(self) -> Sequence[Lotdata]:
+        async with self._session() as session:
+            stmt = select(Lotdata).filter(and_(
+                Lotdata.lottery_time > int(time.time()),
+                Lotdata.status == 0
+            ))
+            result = await session.execute(stmt)
+            return result.scalars().all()
+
 
 grpc_sql_helper = SQLHelper()
 
 if __name__ == "__main__":
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.upsert_DynDetail( time_limit=30 * 24 * 3600,
-            order_by_ts_desc=False)
+        result = await grpc_sql_helper.get_all_lot_with_no_business_id()
         sql_log.debug(len(result))
 
 

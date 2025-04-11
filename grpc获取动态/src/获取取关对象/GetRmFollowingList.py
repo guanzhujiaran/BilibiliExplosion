@@ -20,7 +20,7 @@ from grpc获取动态.grpc.grpc_api import bili_grpc
 class GetRmFollowingListV1:
     def __init__(self, ):
         self.space_sem = asyncio.Semaphore(100)
-        self.sqliteLock = asyncio.Lock()
+        self.sql_lock = asyncio.Lock()
         self.logger = get_rm_following_list_logger
         self.lucky_up_list = []
         self.max_recorded_dyn_num = 300  # 每个uid最多记录多少个动态
@@ -49,7 +49,7 @@ class GetRmFollowingListV1:
         is_lot_dyn = self.BAPI.choujiangxinxipanduan(dyn_obj.dynCard.dynamicContent)
         while 1:
             try:
-                async with self.sqliteLock:
+                async with self.sql_lock:
                     async with self.AsyncSession() as session:
                         async with session.begin():
                             space_dyn = SpaceDyn(
@@ -83,16 +83,16 @@ class GetRmFollowingListV1:
         """
         while 1:
             try:
-                async with self.sqliteLock:
+                async with self.sql_lock:
                     async with self.AsyncSession() as session:
                         async with session.begin():
                             data = UserInfo(
                                 uid=uid,
                                 upTimeStamp=datetime.fromtimestamp(86400)
                             )
-                            session.add(data)
+                            merged_data = await session.merge(data)
                             await session.flush()
-                            session.expunge(data)
+                            session.expunge(merged_data)
                             break
             except Exception as e:
                 self.logger.critical(f'Exception while create user info!{uid}\n{e}')
@@ -107,7 +107,7 @@ class GetRmFollowingListV1:
         """
         while 1:
             try:
-                async with self.sqliteLock:
+                async with self.sql_lock:
                     async with self.AsyncSession() as session:
                         sql = select(SpaceDyn).where(dynamic_id == SpaceDyn.dynamic_id)
                         result = await session.execute(sql)
@@ -199,7 +199,7 @@ class GetRmFollowingListV1:
                     f"uid:{uid} {dyn_obj.uname if dyn_obj else ''} 空间没有动态")
                 while 1:
                     try:
-                        async with self.sqliteLock:
+                        async with self.sql_lock:
                             async with self.AsyncSession() as session:
                                 sql = select(UserInfo).where(uid == UserInfo.uid)
                                 result = await session.execute(sql)
@@ -237,7 +237,7 @@ class GetRmFollowingListV1:
 
         while 1:
             try:
-                async with self.sqliteLock:
+                async with self.sql_lock:
                     async with self.AsyncSession() as session:
                         async with session.begin():
                             sql = select(SpaceDyn).where(uid == SpaceDyn.Space_Dyn_uid).order_by(SpaceDyn.pubts.desc())
@@ -280,7 +280,7 @@ class GetRmFollowingListV1:
                     return True
                 async with self.AsyncSession() as session:
                     sql = select(UserInfo).where(uid == UserInfo.uid)
-                    async with self.sqliteLock:
+                    async with self.sql_lock:
                         session_res = await session.execute(sql)
                     res = session_res.scalars().first()
                 if res:

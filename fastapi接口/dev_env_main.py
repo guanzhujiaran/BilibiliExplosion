@@ -11,8 +11,7 @@ import uvicorn
 from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
 
-from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
-from fastapi接口.controller.v1.background_service import BackgroundService
+from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 import fastapi_cdn_host
 from fastapi接口.models.common import CommonResponseModel
 from pydantic import BaseModel as PydanticBaseModel
@@ -31,13 +30,17 @@ async def lifespan(_app: FastAPI):
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     yield
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+
+              )
 fastapi_cdn_host.patch_docs(app)
 
-app.include_router(BackgroundService.router)
+app.include_router(LotteryData.router)
 @app.get('/memory_objgraph',)
-async def memory_objgraph(limit=50):
-    return await asyncio.to_thread(objgraph.show_most_common_types, limit=limit)
+async def memory_objgraph(limit:int=50):
+    common_types = await asyncio.to_thread(objgraph.most_common_types, limit=limit)
+    return [{"type": item[0], "count": item[1]} for item in common_types]
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, e: Exception):

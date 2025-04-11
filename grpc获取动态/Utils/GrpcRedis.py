@@ -11,8 +11,8 @@ from grpc获取动态.Utils.GrpcProxyModel import GrpcProxyStatus
 from utl.redisTool.RedisManager import RedisManagerBase
 from enum import Enum
 
-MIN_USABLE_PROXY_NUM = 100  # 确保MAX_USABLE_PROXY_NUM >> MIN_USABLE_PROXY_NUM
-MAX_USABLE_PROXY_NUM = 200
+MIN_USABLE_PROXY_NUM = 50  # 确保MAX_USABLE_PROXY_NUM >> MIN_USABLE_PROXY_NUM
+MAX_USABLE_PROXY_NUM = 300
 
 
 class GrpcProxyRedis(RedisManagerBase):
@@ -107,6 +107,9 @@ class GrpcProxyRedis(RedisManagerBase):
         return await self._zget_range_by_score(self.RedisMap.accessible_ip_zset.value, min_score=0, max_score=99999,
                                                start=start, num=num)
 
+    async def get_accessible_ip_zset_len(self):
+        return await self._zcard(self.RedisMap.accessible_ip_zset.value)
+
     async def get_accessible_ip_count(self):
         return await self._zcount(self.RedisMap.accessible_ip_zset.value, 1, 21)
 
@@ -116,9 +119,10 @@ class GrpcProxyTools:
     redis里面只存能用的代理！！！
     用一个zset有序集合存储，设置一个分数，每次取用分数最大的，取完就扣分，
     """
-    ip_list: list[GrpcProxyStatus] = []  # 所有的ip列表
-    __ip_str_list: list[str] = []
+    ip_list: List[GrpcProxyStatus] = []  # 所有的ip列表
+    __ip_str_set: set[str] = set()
     _redis_data_sync_flag = False  # 只需要同步一次，剩下都是同步的
+    _ip_list_clear_ts: int = 0
 
     def __init__(self):
         self.use_good_proxy_flag = False
@@ -144,26 +148,6 @@ class GrpcProxyTools:
     def allNum(self):
         return len(self.ip_list)
 
-    @staticmethod
-    def _check_ip_352(ip: str, ip_list: list[GrpcProxyStatus]) -> bool:
-        '''
-        true 可用，false无法用
-        :param ip:
-        :param ip_list:
-        :return:
-        '''
-        filter_ip_list: list[GrpcProxyStatus] = list(
-            filter(lambda x: x.ip == ip, ip_list)
-        )
-        if len(filter_ip_list) == 0:
-            ip_list.append(GrpcProxyStatus(ip=ip, counter=1, max_counter_ts=0, code=0))
-            return True
-        ip_stat = filter_ip_list[0]
-        return ip_stat.is_usable_before_use(True)
-
-    def check_ip_status(self, ip: str) -> bool:
-        return GrpcProxyTools._check_ip_352(ip, self.ip_list)
-
     async def set_ip_status(
             self,
             ip_status: GrpcProxyStatus,
@@ -175,14 +159,29 @@ class GrpcProxyTools:
         """
         async with self.__set_proxy_lock:
             if not self._redis_data_sync_flag:
-                self.ip_list = await grpc_proxy_redis.get_all_ip_status()
-                self.__ip_str_list = [x.ip for x in self.ip_list]
                 self._redis_data_sync_flag = True
+                self.ip_list = await grpc_proxy_redis.get_all_ip_status()
+                self.__ip_str_set = set([x.ip for x in self.ip_list])
+        now = int(time.time())
+        ip_status.latest_used_ts = now
+        ip_status.counter += 1
+        match ip_status.code:
+            case -352:
+                ip_status.latest_352_ts = now
+            case -412:
+                ip_status.max_counter_ts = now
+        if ip_status.ip in self.__ip_str_set:
             if not ip_status.available:
                 await grpc_proxy_redis.del_ip(ip_status.ip)
-                if ip_status.ip in self.__ip_str_list:
-                    self.available_num -= 1
+                self.available_num -= 1
+                self.__ip_str_set.discard(ip_status.ip)
             else:
+                await grpc_proxy_redis.init_ip_status(ip_status)
+                self._available_num_need_refresh = True
+        else:
+            if ip_status.available:
+                self.ip_list.append(ip_status)
+                self.__ip_str_set.add(ip_status.ip)
                 await grpc_proxy_redis.init_ip_status(ip_status)
                 self._available_num_need_refresh = True
 
@@ -202,17 +201,20 @@ class GrpcProxyTools:
 
     async def get_rand_available_ip_status(self) -> Union[GrpcProxyStatus, None]:
         if not self._redis_data_sync_flag:
-            self.ip_list = await grpc_proxy_redis.get_all_ip_status()
             self._redis_data_sync_flag = True
-        if len(self.ip_list) >= 2000:
+            self.ip_list = await grpc_proxy_redis.get_all_ip_status()
+        if len(self.ip_list) >= 2000 and self._ip_list_clear_ts < time.time() - 60 * 60 * 24: # 用的异步，不用加锁，本来就是顺序执行的
             BiliGrpcUtils_logger.debug(f'代理列表达到2000，清理无效代理（x.available is False）')
             self.ip_list = [x for x in self.ip_list if x.is_usable_before_use(False)]
-        avalibleNum = self.available_num
+            self._ip_list_clear_ts=int(time.time())
+        avalible_num = self.available_num
         # BiliGrpcUtils_logger.debug(f'GrpcProxyTools中代理数量：{avalibleNum}/{len(self.ip_list)}')
-        if avalibleNum > MAX_USABLE_PROXY_NUM and self.use_good_proxy_flag:
-            while 1:
-                _ = await grpc_proxy_redis.get_accessible_ips(start=0, num=100)
-                if len(_) == 100:
+        if avalible_num > MAX_USABLE_PROXY_NUM and self.use_good_proxy_flag:
+            retry_times = 0
+            while retry_times < 3:
+                retry_times += 1
+                _ = await grpc_proxy_redis.get_accessible_ips(start=0, num=10)
+                if len(_) == 10:
                     picked_ip = random.choice(_)
                     ip_status = await grpc_proxy_redis.get_ip_status(picked_ip)
                     if ip_status.is_usable_before_use(False):
@@ -225,9 +227,9 @@ class GrpcProxyTools:
                 else:
                     return None
         else:
-            if avalibleNum > MAX_USABLE_PROXY_NUM:
+            if avalible_num > MAX_USABLE_PROXY_NUM:
                 self.use_good_proxy_flag = True
-            if avalibleNum < MIN_USABLE_PROXY_NUM:
+            if avalible_num < MIN_USABLE_PROXY_NUM:
                 self.use_good_proxy_flag = False
             return None
 

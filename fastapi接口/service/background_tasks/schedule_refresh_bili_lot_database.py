@@ -7,6 +7,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi接口.dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticRankDateTypeEnum
+from fastapi接口.scripts.同步向量数据库.sync_bili_lottery_data import sync_bili_lottery_data, \
+    del_outdated_bili_lottery_data
 from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper as bili_official_sqlhelper
 from fastapi接口.log.base_log import background_task_logger
 from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
@@ -112,6 +114,8 @@ async def _async_run(schedulers: Union[None, AsyncIOScheduler] = None, schedule_
             background_task_logger.info(
                 f'【刷新B站抽奖数据库】通过定时器开始执行任务！')
         await _refresh_bili_lot_database()
+        await sync_bili_lottery_data()
+        await del_outdated_bili_lottery_data()
     except Exception as e:
         background_task_logger.exception(e)
         await asyncio.to_thread(pushme, f'【刷新B站抽奖数据库】任务出错', f'{traceback.format_exc()}')

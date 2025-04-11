@@ -7,24 +7,33 @@ from datetime import timedelta
 from redis import asyncio as redis
 from enum import Enum
 from redis.typing import KeyT
+from redis.exceptions import ConnectionError
 from CONFIG import CONFIG
 import redis as sync_redis
 from fastapi接口.log.base_log import redis_logger
-
-_sem = asyncio.Semaphore(8192)
+from fastapi接口.utils.Common import GLOBAL_SEM
 
 
 def retry(func):
     async def wrapper(*args, **kwargs):
         while 1:
-            async with _sem:
+            async with GLOBAL_SEM:
                 try:
                     return await func(*args, **kwargs)
+                except ConnectionError as e:
+                    redis_logger.exception(f'Redis连接错误，重试中...{e}')
+                    await asyncio.sleep(30)
                 except Exception as e:
                     redis_logger.exception(e)
                     await asyncio.sleep(30)
 
     return wrapper
+
+
+def _redis_client_factory(pool, sync=False):
+    if sync:
+        return sync_redis.Redis(connection_pool=pool, socket_timeout=10)
+    return redis.Redis(connection_pool=pool, socket_timeout=10)
 
 
 def sync_retry(func):
@@ -66,7 +75,7 @@ class SyncRedisManagerBase:
         :param key:
         :return:
         """
-        with sync_redis.Redis(connection_pool=self.pool) as r:
+        with _redis_client_factory(pool=self.pool, sync=True) as r:
             if type(key) is list:
                 pipe = r.pipeline()
                 for k in key:
@@ -79,7 +88,7 @@ class SyncRedisManagerBase:
 
     @sync_retry
     def _set(self, key: Union[Any, List[Any]], value: Union[Any, List[Any]]):
-        with sync_redis.Redis(connection_pool=self.pool) as r:
+        with _redis_client_factory(pool=self.pool, sync=True) as r:
             if type(key) is list:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
@@ -92,7 +101,7 @@ class SyncRedisManagerBase:
 
     @sync_retry
     def _setex(self, key: Union[Any, List[Any]], value: Union[Any, List[Any]], _time: Union[int, timedelta]):
-        with sync_redis.Redis(connection_pool=self.pool) as r:
+        with _redis_client_factory(pool=self.pool, sync=True) as r:
             if type(key) is list:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
@@ -110,7 +119,7 @@ class SyncRedisManagerBase:
         :param key:
         :return: 返回1存在 0不存在
         """
-        with sync_redis.Redis(connection_pool=self.pool) as r:
+        with _redis_client_factory(pool=self.pool, sync=True) as r:
             return r.exists(key)
 
 
@@ -137,7 +146,7 @@ class RedisManagerBase:
     async def __get_keys_with_prefix(self, prefix, count=100) -> List[Any]:
         cursor = '0'
         matched_keys = []
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             while cursor:
                 cursor, keys = await r.scan(cursor=cursor, match=f'{prefix}:*',
                                             count=count)
@@ -146,11 +155,12 @@ class RedisManagerBase:
 
         return matched_keys
 
+    @retry
     async def _del_keys_with_prefix(self, prefix: str):
         keys = await self.__get_keys_with_prefix(prefix)
         if not keys:
             return []
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             async with r.pipeline() as pipe:
                 for key in keys:
                     await pipe.delete(key)
@@ -162,7 +172,7 @@ class RedisManagerBase:
         keys = await self.__get_keys_with_prefix(prefix)
         if not keys:
             return []
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             async with r.pipeline() as pipe:
                 for key in keys:
                     await pipe.get(key)
@@ -176,7 +186,7 @@ class RedisManagerBase:
         :param key:
         :return: 返回1存在 0不存在
         """
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.exists(key)
 
     # region 字符串操作
@@ -187,7 +197,7 @@ class RedisManagerBase:
         :param key:
         :return:
         """
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             if type(key) is list:
                 pipe = r.pipeline()
                 for k in key:
@@ -198,7 +208,7 @@ class RedisManagerBase:
 
     @retry
     async def _set(self, key, value):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             if type(key) is list:
                 async with r.pipeline() as pipe:
                     for idx in range(len(key)):
@@ -209,7 +219,7 @@ class RedisManagerBase:
 
     @retry
     async def _setex(self, key, value, _time: Union[int, timedelta]):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             if type(key) is list:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
@@ -228,37 +238,37 @@ class RedisManagerBase:
         :param set_name:
         :return: 0-删除失败 1-删除成功
         """
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.delete(*set_name)
 
     @retry
     async def _sadd(self, set_name, val):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.sadd(set_name, val)
 
     @retry
     async def _sisexist(self, set_name, val):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.sismember(set_name, val)
 
     @retry
     async def _sget_rand(self, set_name):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return r.srandmember(set_name)
 
     @retry
     async def _scount(self, set_name):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.scard(set_name)
 
     @retry
     async def _sget_all(self, set_name):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.smembers(set_name)
 
     @retry
     async def _srem(self, set_name, *val):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.srem(set_name, *val)
 
     # endregion
@@ -267,47 +277,50 @@ class RedisManagerBase:
 
     @retry
     async def _z_exist(self, key, element):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zscore(key, element) is not None
 
     @retry
     async def _zadd(self, key, mapping: dict):
-        async with redis.Redis(connection_pool=self.pool) as r:
-            return await r.zadd(key, mapping, )
+        if mapping:
+            async with _redis_client_factory(pool=self.pool) as r:
+                return await r.zadd(key, mapping, )
 
     @retry
     async def _zscore_change(self, key, element, score_change: int):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zincrby(key, score_change, element)
 
     @retry
     async def _zget_range(self, key, start: int = 0, end: int = -1, num: int = None, offset: int = None):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zrange(key, start=start, end=end, num=num, offset=offset)
 
     @retry
     async def _zget_range_with_score(self, key, num: int = None, offset: int = None):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zrevrangebyscore(name=key, min='-inf', max='inf', num=num,
                                             start=offset, withscores=True)
 
     @retry
     async def _zget_rank(self, key, name):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zrevrank(key, name)
 
     @retry
     async def _zcard(self, key):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zcard(key)
+
     @retry
-    async def _zcount(self,key,min_val,max_val):
-        async with redis.Redis(connection_pool=self.pool) as r:
-            return await r.zcount(key,min_val,max_val)
+    async def _zcount(self, key, min_val, max_val):
+        async with _redis_client_factory(pool=self.pool) as r:
+            return await r.zcount(key, min_val, max_val)
+
     @retry
-    async def _zget_top_score(self, key, rand=False)->str:
+    async def _zget_top_score(self, key, rand=False) -> str:
         end = 0 if not rand else 20
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             if members := await r.zrevrange(key, 0, 0):
                 return random.choice(members)
             else:
@@ -315,7 +328,7 @@ class RedisManagerBase:
 
     @retry
     async def _zget_bottom_score(self, key):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             if members := await r.zrange(key, 0, 0):
                 return members[0]
             else:
@@ -323,24 +336,24 @@ class RedisManagerBase:
 
     @retry
     async def _zget_range_by_score(self, key, min_score: int, max_score: int, start: int = None, num: int = None):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zrangebyscore(key, min_score, max_score, start=start, num=num, )
 
     @retry
     async def _zdel_elements(self, key, *elements_to_remove):
         if not elements_to_remove:
             return
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zrem(key, *elements_to_remove)
 
     @retry
     async def _zdel_range(self, key, start: int, end: int):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.zremrangebyrank(key, start, end)
 
     @retry
     async def _zrand(self, key, count: int = None):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             total = await r.zcard(key)
             if total == 0:
                 return None
@@ -356,17 +369,22 @@ class RedisManagerBase:
                 random_num = random.randint(0, total - 1)
                 return (await r.zrange(key, random_num, random_num))[0]
 
+    @retry
+    async def _zrand_member(self, key, count: int = 1):
+        async with _redis_client_factory(pool=self.pool) as r:
+            return await r.zrandmember(key, count=count)
+
     # endregion
 
     @retry
     async def _hmset(self, name, field_values):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.hset(name=name, mapping=field_values)
 
     @retry
     async def _hmset_bulk_batch(self, hm_name: str, hm_k_v_List: list[Dict[int | str, int | str | float | bytes]]):
         # 使用redis连接池创建redis对象
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             # 创建redis管道
             async with r.pipeline() as pipe:
                 # 设置每次批量处理的数量
@@ -384,7 +402,7 @@ class RedisManagerBase:
 
     @retry
     async def _hmget_bulk(self, name: str, key_arr: list[str], ):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             async with r.pipeline() as pipe:
                 for key in key_arr:
                     await pipe.hget(name, key)
@@ -392,16 +410,16 @@ class RedisManagerBase:
 
     @retry
     async def _hmgetall(self, name, ):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.hgetall(name=name)
 
     async def _hmget(self, name, key):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.hget(name=name, key=key)
 
     @retry
     async def _hmdel(self, name):
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.delete(name)
 
     @retry
@@ -412,7 +430,7 @@ class RedisManagerBase:
         :param match_str:
         :return:
         """
-        async with redis.Redis(connection_pool=self.pool) as r:
+        async with _redis_client_factory(pool=self.pool) as r:
             return await r.scan(cursor=cursor, match=match_str, count=5000)
 
 

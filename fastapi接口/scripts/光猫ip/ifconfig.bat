@@ -1,32 +1,32 @@
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:0:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:1:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:2:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:3:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:4:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:5:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:6:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:7:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:8:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:9:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:a:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:b:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:c:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:d:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:e:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:f:0000:0000:000b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:0:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:1:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:2:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:3:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:4:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:5:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:6:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:7:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:8:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:9:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:a:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:b:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:c:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:d:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:e:0000:0000:001b
-netsh interface ipv6 add address "vEthernet (wsl-bg)" 2409:8a1e:2e93:9490:f:0000:0000:001b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:f::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:f::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:e::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:e::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:d::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:d::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:c::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:c::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:b::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:b::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:a::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:a::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:9::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:9::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:8::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:8::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:7::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:7::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:6::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:6::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:5::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:5::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:4::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:4::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:3::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:3::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:2::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:2::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:1::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0:1::b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0::1b
+netsh interface ipv6 add address "以太网" 2409:8a1e:2e9a:50b0::b

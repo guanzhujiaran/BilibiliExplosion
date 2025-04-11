@@ -5,8 +5,6 @@ from typing import Union
 import asyncio
 import time
 from datetime import datetime, timedelta
-
-import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi接口.log.base_log import topic_lot_logger
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
