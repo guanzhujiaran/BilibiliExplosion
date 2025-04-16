@@ -2,7 +2,7 @@ import asyncio
 import random
 import time
 import traceback
-from typing import Union, Any, List, Callable, Dict, Sequence
+from typing import Union, Any, List, Dict
 from datetime import timedelta
 from redis import asyncio as redis
 from enum import Enum
@@ -11,13 +11,15 @@ from redis.exceptions import ConnectionError
 from CONFIG import CONFIG
 import redis as sync_redis
 from fastapi接口.log.base_log import redis_logger
-from fastapi接口.utils.Common import GLOBAL_SEM
+
+_MAX_SEM_NUM = 1024
+_sem = asyncio.Semaphore(_MAX_SEM_NUM)
 
 
 def retry(func):
     async def wrapper(*args, **kwargs):
         while 1:
-            async with GLOBAL_SEM:
+            async with _sem:
                 try:
                     return await func(*args, **kwargs)
                 except ConnectionError as e:
@@ -65,7 +67,9 @@ class SyncRedisManagerBase:
         self.port = port
         self.db = db
         self.pool = sync_redis.connection.ConnectionPool.from_url(
-            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True')
+            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True&retry_on_timeout=30&socket_timeout=30',
+            max_connections=_MAX_SEM_NUM
+        )
         self.RedisTimeout = 30
 
     @sync_retry
@@ -139,7 +143,9 @@ class RedisManagerBase:
         self.port = port
         self.db = db
         self.pool = redis.ConnectionPool.from_url(
-            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True&health_check_interval=30')
+            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True&health_check_interval=30&retry_on_timeout=30&socket_timeout=30',
+            max_connections=_MAX_SEM_NUM
+        )
         self.RedisTimeout = 30
 
     @retry
@@ -309,6 +315,11 @@ class RedisManagerBase:
 
     @retry
     async def _zcard(self, key):
+        """
+        计算集合中元素的数量。
+        :param key:
+        :return:
+        """
         async with _redis_client_factory(pool=self.pool) as r:
             return await r.zcard(key)
 

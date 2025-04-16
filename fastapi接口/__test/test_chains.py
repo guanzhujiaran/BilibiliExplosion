@@ -2,7 +2,7 @@ import unittest
 from langchain_openai import ChatOpenAI
 from fastapi接口.models.v1.ChatGpt3_5.ReplySingleModel import OpenAiClientModel
 from fastapi接口.service.compo.chains import myChains
-from fastapi接口.service.handleLLMReplySingle import ChatGpt3_5
+from fastapi接口.service.LLM.handleLLMReplySingle import ChatGpt3_5
 import loguru
 
 class MyTestCase(unittest.IsolatedAsyncioTestCase):

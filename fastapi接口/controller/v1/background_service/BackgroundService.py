@@ -24,12 +24,12 @@ def start_background_service(show_log: bool):
     global reserve_scrapy_class
     global other_lot_class
     back_ground_tasks = []
-    from grpc获取动态.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
-    from opus新版官方抽奖.转发抽奖 import 定时获取所有动态以及发布充电和官方抽奖专栏
+    from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
+    from fastapi接口.service.opus新版官方抽奖.转发抽奖 import 定时获取所有动态以及发布充电和官方抽奖专栏
     dyn_detail_scrapy_class = 定时获取所有动态以及发布充电和官方抽奖专栏
-    from opus新版官方抽奖.预约抽奖.etc import schedule_get_reserve_lot
+    from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc import schedule_get_reserve_lot
     reserve_scrapy_class = schedule_get_reserve_lot
-    from opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖
+    from fastapi接口.service.opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖
     topic_scrapy_class = 定时获取话题抽奖
 
     from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
@@ -45,7 +45,7 @@ def start_background_service(show_log: bool):
     back_ground_tasks.append(asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log)))
     back_ground_tasks.append(
         asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
-    from grpc获取动态.Utils.MQClient.VoucherMQClient import VoucherMQClient
+    from fastapi接口.service.grpc_module.Utils.MQClient.VoucherMQClient import VoucherMQClient
     back_ground_tasks.append(
         asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer))
     )

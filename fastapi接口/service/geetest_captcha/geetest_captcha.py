@@ -1,7 +1,7 @@
 import asyncio
 from typing import List
 
-from grpc获取动态.Utils.极验.极验点击验证码 import GeetestV3Breaker
+from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import GeetestV3Breaker
 
 gb = GeetestV3Breaker()
 

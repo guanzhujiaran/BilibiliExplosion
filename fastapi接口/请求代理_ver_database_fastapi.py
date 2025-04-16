@@ -3,19 +3,15 @@
 import io
 import os
 import sys
-
 import objgraph
-
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
 from CONFIG import CONFIG
-
 sys.path.extend([
     x.value for x in CONFIG.project_path
 ])
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from loguru import logger
 import argparse
-
 parser = argparse.ArgumentParser(
     prog='lot_fastapi',  # 程序名
     description='lottery info fastapi backend',  # 描述
@@ -38,27 +34,8 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 import fastapi_cdn_host
 from fastapi import FastAPI, HTTPException
 from utl.pushme.pushme import pushme
+from fastapi接口.utils.Common import GLOBAL_SCHEDULER
 
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
-    myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
-    show_log = False
-    back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
-    yield
-    myfastapi_logger.critical("正在取消其他服务")
-    [
-        x.cancel() for x in back_ground_tasks
-    ]
-    await asyncio.gather(*back_ground_tasks)
-    myfastapi_logger.critical("其他服务已取消")
-
-
-app = FastAPI(lifespan=lifespan)
-fastapi_cdn_host.patch_docs(app)
-loop = asyncio.get_event_loop()
-asyncio.set_event_loop(loop)
 
 from fastapi接口.controller.damo import DamoML
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
@@ -69,6 +46,26 @@ from fastapi接口.controller.v1.ip_info import get_ip_info
 from fastapi接口.controller.v1.background_service import BackgroundService, MQController
 from fastapi接口.controller.common import CommonRouter
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
+    myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
+    GLOBAL_SCHEDULER.start()
+    show_log = False
+    back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
+    yield
+    myfastapi_logger.critical("正在取消其他服务")
+    [
+        x.cancel() for x in back_ground_tasks
+    ]
+    await asyncio.gather(*back_ground_tasks, return_exceptions=True)
+    myfastapi_logger.critical("其他服务已取消")
+
+
+app = FastAPI(lifespan=lifespan, debug=True)
+fastapi_cdn_host.patch_docs(app)
+app.include_router(MQController.router)
 app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)
 app.include_router(LotteryData.router)
@@ -76,9 +73,8 @@ app.include_router(LotteryStatistic.router)
 app.include_router(GetV3ClickTarget.router)
 app.include_router(get_ip_info.router)
 app.include_router(BackgroundService.router)
-app.include_router(MQController.router)
 app.include_router(CommonRouter.router)
-
+FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
 
 
 @app.get('/memory_objgraph', )
@@ -147,5 +143,4 @@ if __name__ == '__main__':
         # If host is an empty string or None, all interfaces are assumed and a list of multiple sockets will be returned (most likely one for IPv4 and another one for IPv6).
         host="0.0.0.0",
         port=23333,
-        loop='asyncio'
     )

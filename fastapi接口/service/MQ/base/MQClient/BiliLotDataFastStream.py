@@ -1,23 +1,35 @@
-from typing import Callable, Dict, List
-import asyncio
-from faststream.rabbit import RabbitQueue, fastapi, RabbitBroker
-from fastapi接口.log.base_log import MQ_logger
-from fastapi接口.models.MQ.BaseMQModel import QueueName, RoutingKey, RabbitMQConfig
-from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
-from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
-from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
-from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from grpc获取动态.grpc.bapi.biliapi import get_lot_notice
-from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from faststream.rabbit.annotations import (
-    RabbitMessage,
-)
+from typing import Callable, Dict
+from faststream.rabbit import RabbitQueue, RabbitBroker
+from faststream.rabbit.fastapi import RabbitRouter
+from faststream.rabbit import RabbitExchange, ExchangeType
+from faststream.rabbit.annotations import RabbitMessage
+import fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
+import fastapi接口.service.grpc_module.src.SQLObject.models as models
+import fastapi接口.log.base_log as base_log
+import fastapi接口.models.MQ.UpsertLotDataModel as UpsertLotDataModel
+import fastapi接口.service.compo.lottery_data_vec_sql.sql_helper as sql_helper
+import fastapi接口.service.compo.text_embed as text_embed
+import fastapi接口.utils.SqlalchemyTool as SqlalchemyTool
+import fastapi接口.service.grpc_module.Utils.GrpcProxyModel as GrpcProxyModel
+import fastapi接口.service.grpc_module.Utils.GrpcRedis as GrpcRedis
+import fastapi接口.models.MQ.BaseMQModel as BaseMQModel
 
-from grpc获取动态.src.SQLObject.models import Lotdata
+ExchangeName = BaseMQModel.ExchangeName
+grpc_proxy_tools = GrpcRedis.grpc_proxy_tools
+GrpcProxyStatus = GrpcProxyModel.GrpcProxyStatus
+sqlalchemy_model_2_dict = SqlalchemyTool.sqlalchemy_model_2_dict
+lot_data_2_bili_lot_data_ls = text_embed.lot_data_2_bili_lot_data_ls
+milvus_sql_helper = sql_helper.milvus_sql_helper
+LotDataReq, LotDataDynamicReq, TopicLotData = UpsertLotDataModel.LotDataReq, UpsertLotDataModel.LotDataDynamicReq, UpsertLotDataModel.TopicLotData
+QueueName, RoutingKey, RabbitMQConfig = BaseMQModel.QueueName, BaseMQModel.RoutingKey, BaseMQModel.RabbitMQConfig
+MQ_logger = base_log.MQ_logger
+Lotdata = models.Lotdata
+grpc_sql_helper = DynDetailSqlHelperMysqlVer.grpc_sql_helper
+
 from utl.pushme.pushme import pushme
 from CONFIG import CONFIG
-from faststream.rabbit import RabbitExchange, ExchangeType
-from fastapi接口.models.MQ.BaseMQModel import ExchangeName
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
+from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 
 rabbit_mq_config: RabbitMQConfig = RabbitMQConfig(
     host=CONFIG.RabbitMQConfig.host,
@@ -27,8 +39,9 @@ rabbit_mq_config: RabbitMQConfig = RabbitMQConfig(
     protocol='amqp'
 )
 _rabbit_mq_url = f'{rabbit_mq_config.protocol}://{rabbit_mq_config.username}:{rabbit_mq_config.password}@{rabbit_mq_config.host}:{rabbit_mq_config.port}/'
-router = fastapi.RabbitRouter(_rabbit_mq_url, include_in_schema=True)
+router = RabbitRouter(_rabbit_mq_url, include_in_schema=True, logger=None)
 exch = RabbitExchange(ExchangeName.bili_data.value, auto_delete=False, type=ExchangeType.TOPIC)
+proxy_exch = RabbitExchange(ExchangeName.bili_data.value, auto_delete=False, type=ExchangeType.TOPIC)
 
 
 def get_broker():
@@ -37,8 +50,8 @@ def get_broker():
 
 def func_wrapper(func: Callable):
     async def wrapper(*args, **kwargs):
-        MQ_logger.debug(
-            f"【{func.__name__}】收到消息：{args}")
+        # MQ_logger.debug(
+        #     f"【{func.__name__}】收到消息：{args}")
         return await func(*args, **kwargs)
 
     return wrapper
@@ -66,6 +79,7 @@ class OfficialReserveChargeLot(BaseFastStreamMQ):
             queue_name=QueueName.OfficialReserveChargeLotMQ,
             routing_key_name=RoutingKey.OfficialReserveChargeLotMQ
         )
+        self.biliapi = None
 
     @func_wrapper
     async def consume(self,
@@ -73,7 +87,10 @@ class OfficialReserveChargeLot(BaseFastStreamMQ):
                       msg: RabbitMessage,
                       ):
         try:
-            lot_data = await get_lot_notice(
+            if not self.biliapi:
+                import fastapi接口.service.grpc_module.grpc.bapi.biliapi as biliapi
+                self.biliapi = biliapi
+            lot_data = await self.biliapi.get_lot_notice(
                 business_id=_body.business_id,
                 business_type=_body.business_type,
                 origin_dynamic_id=_body.origin_dynamic_id
@@ -139,7 +156,7 @@ class UpsertOfficialReserveChargeLot(BaseFastStreamMQ):
             pushme(f'【{self.queue_name}】 consume error: {e}', e.__str__())
             await msg.nack()
 
-    async def publish(self, newly_lot_data: dict, extra_routing_key: str = ""):
+    async def publish(self, newly_lot_data: Dict, extra_routing_key: str = ""):
         broker = RabbitBroker(url=_rabbit_mq_url)
         if extra_routing_key and type(extra_routing_key) is str:
             routing_key = self.routing_key_name + "." + extra_routing_key
@@ -162,8 +179,7 @@ class UpsertLotDataByDynamicId(BaseFastStreamMQ):
             queue_name=QueueName.UpsertLotDataByDynamicIdMQ,
             routing_key_name=RoutingKey.UpsertLotDataByDynamicIdMQ
         )
-        self.dyn_detail_scrapy = None
-
+        self.getDynDetail  =None
     @func_wrapper
     async def consume(
             self,
@@ -175,12 +191,12 @@ class UpsertLotDataByDynamicId(BaseFastStreamMQ):
             MQ_logger.critical(
                 f"【{module_name}】收到消息：{lot_data_dynamic_req}")
             if lot_data_dynamic_req.dynamic_id:
-                if not self.dyn_detail_scrapy:
-                    from grpc获取动态.src.getDynDetail import dyn_detail_scrapy
-                    self.dyn_detail_scrapy = dyn_detail_scrapy
-                dyn_detail = await self.dyn_detail_scrapy.get_grpc_single_dynDetail_by_dynamic_id(
+                if not self.getDynDetail:
+                    import fastapi接口.service.grpc_module.src.getDynDetail as getDynDetail
+                    self.getDynDetail = getDynDetail
+                dyn_detail = await self.getDynDetail.dyn_detail_scrapy.get_grpc_single_dynDetail_by_dynamic_id(
                     lot_data_dynamic_req.dynamic_id)
-                await self.dyn_detail_scrapy.Sqlhelper.upsert_DynDetail(
+                await self.getDynDetail.dyn_detail_scrapy.Sqlhelper.upsert_DynDetail(
                     doc_id=dyn_detail.get('rid'),
                     dynamic_id=dyn_detail.get('dynamic_id'),
                     dynData=dyn_detail.get('dynData'),
@@ -224,8 +240,7 @@ class UpsertTopicLot(BaseFastStreamMQ):
             queue_name=QueueName.UpsertTopicLotMQ,
             routing_key_name=RoutingKey.UpsertTopicLotMQ
         )
-        from opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖
-        self.定时获取话题抽奖 = 定时获取话题抽奖
+        self.topic_robot = None
 
     @func_wrapper
     async def consume(
@@ -237,9 +252,10 @@ class UpsertTopicLot(BaseFastStreamMQ):
         try:
             MQ_logger.critical(
                 f"【{module_name}】收到消息：{_body}")
-            if self.定时获取话题抽奖.topic_robot is None:
-                self.定时获取话题抽奖.topic_robot = self.定时获取话题抽奖.TopicRobot()
-            lot_data = await self.定时获取话题抽奖.topic_robot.pipeline(_body.topic_id, use_sem=False)
+            if self.topic_robot is None:
+                import fastapi接口.service.opus新版官方抽奖.活动抽奖.定时获取话题抽奖 as 定时获取话题抽奖
+                self.topic_robot = 定时获取话题抽奖.TopicRobot()
+            lot_data = await self.topic_robot.pipeline(_body.topic_id, use_sem=False)
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{module_name} consume error: {e}')
@@ -274,7 +290,7 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
     @func_wrapper
     async def consume(
             self,
-            _body: dict,
+            _body: Dict,
             msg: RabbitMessage,
     ):
         module_name = self.queue_name
@@ -307,8 +323,69 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
         await broker.close()
 
 
+class UpsertProxyInfo(BaseFastStreamMQ):
+
+    def __init__(self):
+        super().__init__(
+            queue_name=QueueName.UpsertProxyInfoMQ,
+            routing_key_name=RoutingKey.UpsertProxyInfoMQ
+        )
+
+    @func_wrapper
+    async def consume(
+            self,
+            _body: Dict,
+            msg: RabbitMessage,
+    ):
+        module_name = self.queue_name
+        try:
+            # MQ_logger.critical(
+            #     f"【{module_name}】收到消息：{_body}")
+            ip_status = GrpcProxyStatus(**_body.get('ip_status'))
+            proxy_tab = ProxyTab(**_body.get('proxy_tab'))
+            change_score_num = _body.get('change_score_num')
+            origin_ip_status = await grpc_proxy_tools.get_ip_status_by_ip(ip_status.ip)
+            if origin_ip_status.latest_used_ts >= ip_status.latest_used_ts:  # 原来的状态是最新的话
+                ip_status.counter = origin_ip_status.counter
+                ip_status.latest_used_ts = origin_ip_status.latest_used_ts
+                ip_status.max_counter_ts = origin_ip_status.max_counter_ts
+            await SQLHelper.update_to_proxy_list(proxy_tab, change_score_num)
+            await grpc_proxy_tools.set_ip_status(ip_status)
+            return await msg.ack()
+        except Exception as e:
+            MQ_logger.exception(f'{module_name} consume error: {e}')
+            pushme(f'{module_name} consume error: {e}', e.__str__())
+            await msg.nack()
+
+    async def publish(self,
+                      ip_status: GrpcProxyStatus,
+                      proxy_tab: ProxyTab,
+                      change_score_num: int,
+                      extra_routing_key=""):
+        broker = RabbitBroker(url=_rabbit_mq_url)
+        await broker.connect()
+        push_msg = {
+            "ip_status": ip_status.to_dict(),
+            "proxy_tab": sqlalchemy_model_2_dict(proxy_tab),
+            "change_score_num": change_score_num,
+        }
+        async with broker:
+            if extra_routing_key and type(extra_routing_key) is str:
+                routing_key = self.routing_key_name + "." + extra_routing_key
+            else:
+                routing_key = self.routing_key_name
+            await broker.publish(
+                message=push_msg,
+                queue=self.queue,
+                exchange=proxy_exch,
+                routing_key=routing_key
+            )
+        await broker.close()
+
+
 official_reserve_charge_lot = OfficialReserveChargeLot()
 upsert_official_reserve_charge_lot = UpsertOfficialReserveChargeLot()
 upsert_lot_data_by_dynamic_id = UpsertLotDataByDynamicId()
 upsert_topic_lot = UpsertTopicLot()
 upsert_milvus_bili_lot_data = UpsertMilvusBiliLotData()
+upsert_proxy_info = UpsertProxyInfo()

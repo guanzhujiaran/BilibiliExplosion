@@ -9,7 +9,7 @@ import json
 import random
 import time
 from enum import Enum
-from typing import List, Literal, Callable, Any, Coroutine
+from typing import List, Literal, Callable
 import pytz
 from sqlalchemy import select, func, update, and_, or_, delete
 from sqlalchemy.exc import InternalError
@@ -17,12 +17,11 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from CONFIG import CONFIG, database
 from fastapi接口.log.base_log import sql_log
 from fastapi接口.models.v1.background_service.background_service_model import ProxyStatusResp
+from fastapi接口.utils.Common import GLOBAL_SCHEDULER, _comm_lock_wrapper
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from grpc获取动态.Utils.GrpcRedis import grpc_proxy_redis
+from fastapi接口.service.grpc_module.Utils.GrpcRedis import grpc_proxy_redis, grpc_proxy_tools
 from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 
 MIN_REFRESH_SUCCESS_TIME = -5  # 最低允许刷新状态的代理获取请求成功次数
@@ -156,22 +155,21 @@ class SubRedisStore(RedisManagerBase):
         随机获取一个可用的代理
         :return:
         """
-        retry = 0
-        while retry <= 10:
-            retry += 1
-            rand_redis_proxy = await self._zrand_member(key=self.RedisMap.bili_proxy_zset.value, count=1)
-            p = rand_redis_proxy[0] if rand_redis_proxy and type(rand_redis_proxy) is list and len(
-                rand_redis_proxy) > 0 else None
-            if p:
-                if proxy_tab_dict := await self._get(self._gen_proxy_key(p)):
-                    return self.dict_2_model(ast.literal_eval(proxy_tab_dict))
-                else:
-                    sql_log.debug(f"没找到对应代理数据：{p}")
-                    continue  # redis里面可能没代理能用了
+        total_count = await self._zcard(key=self.RedisMap.bili_proxy_zset.value)
+        if total_count <= 30:
+            sql_log.debug(f'代理数量少于30个，无法获取代理，当前数量：{total_count}')
+            return None
+        rand_redis_proxy = await self._zrand_member(key=self.RedisMap.bili_proxy_zset.value, count=1)
+        p = rand_redis_proxy[0] if rand_redis_proxy and type(rand_redis_proxy) is list and len(
+            rand_redis_proxy) > 0 else None
+        if p:
+            if proxy_tab_dict := await self._get(self._gen_proxy_key(p)):
+                return self.dict_2_model(ast.literal_eval(proxy_tab_dict))
             else:
-                continue  # redis里面没代理能用了
-        sql_log.debug("redis中无可用代理！")
-        return None
+                sql_log.debug(f"没找到对应代理数据：{p}")
+                return None
+        else:
+            return None
 
     async def redis_select_score_top_proxy(self) -> ProxyTab | None:
         if top_score_ip_dict := await self._zget_top_score(
@@ -197,17 +195,19 @@ class SubRedisStore(RedisManagerBase):
         succ_times_num = 1 if score_change_num >= 0 else -1
         redis_data.status = proxy_tab.status
         redis_data.score += score_change_num
+        if redis_data.score > 10000:
+            redis_data.score = 10000
         redis_data.success_times += succ_times_num
         await self._set(
             key=self._gen_proxy_key(redis_data.proxy, is_changed=True),
             value=json.dumps(sqlalchemy_model_2_dict(redis_data))
         )  # 变更的key
-
         if proxy_tab.status != 0:
             await self._set(
                 key=self._gen_proxy_key(redis_data.proxy, is_black=True),
                 value=json.dumps(sqlalchemy_model_2_dict(redis_data))
             )  # 黑名单的key
+            await self._hmdel(self._gen_proxy_key(redis_data.proxy))
             await self._zdel_elements(  # 这样就不会把不能用的代理再次取出来了
                 self.RedisMap.bili_proxy_zset.value,
                 get_scheme_ip_port_form_proxy_dict(proxy_info_dict=redis_data.proxy)
@@ -225,8 +225,8 @@ class SubRedisStore(RedisManagerBase):
     async def redis_clear_all_proxy(self):
         await self.redis_clear_black_proxy()
         await self.redis_clear_changed_proxy()
-        await self._del(self.RedisMap.bili_proxy_zset.value)
-        return await self._del_keys_with_prefix(self.RedisMap.bili_proxy.value)
+        await self._del_keys_with_prefix(self.RedisMap.bili_proxy.value)
+        await self._zdel_range(self.RedisMap.bili_proxy_zset.value,0,-1)
 
     async def redis_clear_black_proxy(self):
         return await self._del_keys_with_prefix(self.RedisMap.bili_proxy_black.value)
@@ -234,7 +234,7 @@ class SubRedisStore(RedisManagerBase):
     async def redis_clear_changed_proxy(self):
         return await self._del_keys_with_prefix(self.RedisMap.bili_proxy_changed.value)
 
-    async def get_proxy_database_redis(self)->ProxyStatusResp:
+    async def get_proxy_database_redis(self) -> ProxyStatusResp:
         # 使用asyncio.gather并行获取MySQL和Redis中的代理状态
         (
             mysql_sync_redis_ts,
@@ -247,7 +247,7 @@ class SubRedisStore(RedisManagerBase):
             self._get_redis_count_by_prefix(self.RedisMap.bili_proxy_black),
             self._zcard(self.RedisMap.bili_proxy_zset.value),
             SQLHelper.get_latest_add_ts(),
-            grpc_proxy_redis.get_accessible_ip_zset_len()
+            grpc_proxy_redis.get_accessible_ip_zset_len(), return_exceptions=True
         )
 
         # 将获取到的代理状态转换为ProxyStatusResp对象
@@ -276,13 +276,12 @@ class SQLHelperClass:
             self.async_egn,
             expire_on_commit=False,
         )
-        self.schd = AsyncIOScheduler()
-        self.schd.add_job(self.background_service, 'interval', seconds=600, next_run_time=datetime.datetime.now(),
+        self.schd = GLOBAL_SCHEDULER
+        self.schd.add_job(self.refresh_proxy, 'interval', seconds=600 , next_run_time=datetime.datetime.now(),
                           misfire_grace_time=600)
-        self.schd.start()
+        self.schd.add_job(self.sync_proxy_database_redis,'interval',seconds=1*60*60,next_run_time=datetime.datetime.now(),
+                          misfire_grace_time=600)
         self.sub_redis_store = SubRedisStore()
-        self.lock = asyncio.Lock()
-        self.is_sync = False
 
     @lock_wrapper
     async def sync_2_database(self):
@@ -303,59 +302,47 @@ class SQLHelperClass:
                 ))
                 await session.commit()
 
+    @_comm_lock_wrapper
     async def check_redis_data(self, force=False):
-        async with self.lock:
-            if not self.sub_redis_store.sync_ts:
-                self.sub_redis_store.sync_ts = await self.sub_redis_store.get_sync_ts()
-            if int(time.time()) - self.sub_redis_store.sync_sep_ts > self.sub_redis_store.sync_ts or force:
-                try:
-                    redis_sync_ts = await self.sub_redis_store.get_sync_ts()
-                    if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:
-                        sql_log.critical(
-                            f'上次同步时间：{datetime.datetime.fromtimestamp(redis_sync_ts, tz=pytz.UTC)}\n开始同步redis和mysql数据库')
-                        start_ts = int(time.time())
-                        sql_log.debug('开始将redis数据同步至MySQL中')
-                        await self.sync_2_database()
-                        sql_log.debug(f'将redis数据同步至MySQL中完成，耗时：{int(time.time() - start_ts)}秒！')
+        if not self.sub_redis_store.sync_ts:
+            self.sub_redis_store.sync_ts = await self.sub_redis_store.get_sync_ts()
+        if int(time.time()) - self.sub_redis_store.sync_sep_ts > self.sub_redis_store.sync_ts or force:
+            try:
+                redis_sync_ts = await self.sub_redis_store.get_sync_ts()
+                if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:
+                    sql_log.critical(
+                        f'上次同步时间：{datetime.datetime.fromtimestamp(redis_sync_ts, tz=pytz.UTC)}\n开始同步redis和mysql数据库')
+                    start_ts = int(time.time())
+                    sql_log.debug('开始将redis数据同步至MySQL中')
+                    await self.sync_2_database()
+                    sql_log.debug(f'将redis数据同步至MySQL中完成，耗时：{int(time.time() - start_ts)}秒！')
 
-                        sql_log.debug(f'开始清空redis中数据')
-                        await self.sub_redis_store.redis_clear_all_proxy()
-                        sql_log.debug(f'清空redis中数据完成，耗时：{int(time.time() - start_ts)}秒！')
+                    sql_log.debug(f'开始清空redis中数据')
+                    await self.sub_redis_store.redis_clear_all_proxy()
+                    sql_log.debug(f'清空redis中数据完成，耗时：{int(time.time() - start_ts)}秒！')
 
-                        sql_log.debug(f'开始清理无法使用的mysql中的代理数据')
-                        clean_unusable_proxy_num = await self.clear_unusable_proxy()
-                        sql_log.debug(
-                            f'清理无法使用的mysql中的代理数据完成，清理了{clean_unusable_proxy_num}条无效代理，耗时：{int(time.time() - start_ts)}秒！')
+                    sql_log.debug(f'开始清理无法使用的mysql中的代理数据')
+                    clean_unusable_proxy_num = await self.clear_unusable_proxy()
+                    sql_log.debug(
+                        f'清理无法使用的mysql中的代理数据完成，清理了{clean_unusable_proxy_num}条无效代理，耗时：{int(time.time() - start_ts)}秒！')
 
-                        sql_log.debug(f'开始获取MySQL中可用代理数据')
-                        all_available_proxy_infos = await self.select_proxy(mode="all")
-                        sql_log.debug(f'获取MySQL中可用代理数据完成，耗时：{int(time.time() - start_ts)}秒！')
+                    sql_log.debug(f'开始获取MySQL中可用代理数据')
+                    all_available_proxy_infos = await self.select_proxy(mode="all")
+                    sql_log.debug(f'获取MySQL中可用代理数据完成，耗时：{int(time.time() - start_ts)}秒！')
 
-                        sql_log.debug(f'开始将MySQL内容同步至redis中')
-                        await self.sub_redis_store.sync_2_redis(all_available_proxy_infos)
-                        sql_log.debug(f'将MySQL内容同步至redis中完成，耗时：{int(time.time() - start_ts)}秒！')
-                        await self.sub_redis_store.set_sync_ts()
-                        sql_log.debug(f'同步redis和mysqlMySQL完成，耗时{int(time.time() - start_ts)}秒！')
-                except Exception as e:
-                    sql_log.exception(f'同步redis和mysql数据库失败！{e}')
-                    raise e
-                finally:
-                    self.is_sync = False
-                    sql_log.debug(f'同步redis和mysql数据库任务完成！')
-            else:
-                sql_log.debug(
-                    f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_sep_ts, tz=pytz.UTC)}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
-
-    async def background_service(self):
-        start_ts = int(time.time())
-        sql_log.critical('开始后台定时任务')
-        await asyncio.gather(
-            *[
-                self.refresh_proxy(),
-                self.sync_proxy_database_redis(),
-            ]
-        )
-        sql_log.critical(f'定时任务执行完毕，耗时：{int(time.time()) - start_ts}秒')
+                    sql_log.debug(f'开始将MySQL内容同步至redis中')
+                    await self.sub_redis_store.sync_2_redis(all_available_proxy_infos)
+                    sql_log.debug(f'将MySQL内容同步至redis中完成，耗时：{int(time.time() - start_ts)}秒！')
+                    await self.sub_redis_store.set_sync_ts()
+                    sql_log.debug(f'同步redis和mysqlMySQL完成，耗时{int(time.time() - start_ts)}秒！')
+            except Exception as e:
+                sql_log.exception(f'同步redis和mysql数据库失败！{e}')
+                raise e
+            finally:
+                sql_log.critical(f'同步redis和mysql数据库任结束！')
+        else:
+            sql_log.debug(
+                f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_sep_ts, tz=pytz.UTC)}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
 
     @lock_wrapper
     async def clear_unusable_proxy(self) -> Callable[[], int]:
@@ -626,7 +613,7 @@ class SQLHelperClass:
     async def sync_proxy_database_redis(self):
         sql_log.critical('开始同步redis和数据库中代理')
 
-        await self.check_redis_data()
+        await asyncio.wait_for(self.check_redis_data(),1*60*60)
 
     # endregion
 
@@ -644,7 +631,7 @@ class SQLHelperClass:
         redis_data: ProxyTab | None = await self.sub_redis_store.redis_get_proxy_by_ip(ip_dict=ip_dict)
         if redis_data:
             return redis_data
-        sql = select(ProxyTab).where( ProxyTab.proxy.like(ip)).limit(1)
+        sql = select(ProxyTab).where(ProxyTab.proxy.like(ip)).limit(1)
         async with self.session() as session:
             # async with self.async_lock:
             res = await session.execute(sql)
@@ -654,27 +641,24 @@ class SQLHelperClass:
         else:
             return None
 
+    async def get_available_proxy(self) -> ProxyTab | None:
+        while 1:
+            available_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
+            proxy: ProxyTab | None = None
+            if available_ip_status:
+                proxy = await self.get_proxy_by_ip(available_ip_status.ip)
+            if not proxy:
+                sql_log.debug(f'获取随机代理失败！正在尝试从全部的代理Redis中获取！')
+                proxy = await self.select_proxy('rand')
+            if proxy:
+                sql_log.debug(f'成功获取到代理{proxy.proxy}')
+                return proxy
+            sql_log.debug(f'获取随机代理失败！正在尝试重新获取！')
+            await SQLHelper.check_redis_data()
+
 
 SQLHelper = SQLHelperClass()
 
-if __name__ == '__main__':
-    async def _test_other_evnet():
-        while 1:
-            print(int(time.time()))
-            await asyncio.sleep(1)
-
-
-    async def _test_available_num():
-        result = await SQLHelper.get_available_proxy_nums()
-        print(result)
-
-
-    async def _test():
-        task = asyncio.create_task(_test_other_evnet())
-        ret = await SQLHelper.check_redis_data(True
-                                               )
-        print(ret)
-        task.cancel()
-
-
-    asyncio.run(_test())
+if __name__ == "__main__":
+    result = asyncio.run(SQLHelper.get_available_proxy())
+    print(result)

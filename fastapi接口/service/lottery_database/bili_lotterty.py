@@ -12,12 +12,12 @@ from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotD
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper as bili_dynamic_sqlhelper
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
-from opus新版官方抽奖.Model.GenerateCvModel import CvItem
-from opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import GenerateTopicLotCv
-from opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper as bili_topic_sqlhelper
-from opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
-from opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
-from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper as bili_official_sqlhelper
+from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvItem
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import GenerateTopicLotCv
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper as bili_topic_sqlhelper
+from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
+from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper as bili_official_sqlhelper
 import asyncio
 
 bds = bili_dynamic_sqlhelper  # 获取普通抽奖（主要是非官方的

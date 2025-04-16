@@ -1,13 +1,11 @@
 import asyncio
 from typing import List
-
 from fastapi_cache.decorator import cache
 from openai import AsyncOpenAI
-from fastapi接口.models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
-from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
-from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from grpc获取动态.src.SQLObject.models import Lotdata
-
+import fastapi接口.models.lottery_database.milvusModel.biliMilvusModel as biliMilvusModel
+import fastapi接口.service.compo.lottery_data_vec_sql.sql_helper as sql_helper
+import fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
+import fastapi接口.service.grpc_module.src.SQLObject.models as models
 _client = AsyncOpenAI(base_url='http://127.0.0.1:1234/v1', api_key="your-api-key-here")
 
 _model_name = 'text-embedding-multilingual-e5-base'
@@ -24,13 +22,13 @@ async def _create_embeddings(text: list[str | None], model: str = _model_name) -
     return ret_list
 
 
-async def save_bili_lot_data_embeddings(data_ls: List[BiliLotData]) -> list[list[float]]:
-    return await milvus_sql_helper.upsert_bili_lot_data(data_ls)
+async def save_bili_lot_data_embeddings(data_ls: List[biliMilvusModel.BiliLotData]) -> list[list[float]]:
+    return await sql_helper.milvus_sql_helper.upsert_bili_lot_data(data_ls)
 
 
-async def lot_data_2_bili_lot_data_ls(x: Lotdata) -> List[BiliLotData]:
+async def lot_data_2_bili_lot_data_ls(x: models.Lotdata) -> List[biliMilvusModel.BiliLotData]:
     """
-    sqlalchemy的Lotdata转换成milvusdb的BiliLotData模型
+    sqlalchemy的Lotdata转换成milvusdb的biliMilvusModel.BiliLotData模型
     返回1-3个数据
     :return:
     """
@@ -41,7 +39,7 @@ async def lot_data_2_bili_lot_data_ls(x: Lotdata) -> List[BiliLotData]:
     lottery_time = x.lottery_time
     embeddings = await _create_embeddings([first_prize_cmt, second_prize_cmt, third_prize_cmt])
     first_prize_vec, second_prize_vec, third_prize_vec = embeddings
-    ret_list = [BiliLotData(
+    ret_list = [biliMilvusModel.BiliLotData(
         pk=lottery_id * 10,
         lottery_id=lottery_id,
         prize_vec=first_prize_vec,
@@ -49,7 +47,7 @@ async def lot_data_2_bili_lot_data_ls(x: Lotdata) -> List[BiliLotData]:
         lottery_time=lottery_time
     )]
     if second_prize_vec is not None:
-        ret_list.append(BiliLotData(
+        ret_list.append(biliMilvusModel.BiliLotData(
             pk=lottery_id * 20,
             lottery_id=lottery_id,
             prize_vec=first_prize_vec,
@@ -58,7 +56,7 @@ async def lot_data_2_bili_lot_data_ls(x: Lotdata) -> List[BiliLotData]:
         ))
     if third_prize_vec is not None:
         ret_list.append(
-            BiliLotData(
+            biliMilvusModel.BiliLotData(
                 pk=lottery_id * 30,
                 lottery_id=lottery_id,
                 prize_vec=first_prize_vec,
@@ -69,11 +67,11 @@ async def lot_data_2_bili_lot_data_ls(x: Lotdata) -> List[BiliLotData]:
     return ret_list
 
 
-async def search_lottery_text(query_text: str, limit: int = 10) -> List[Lotdata]:
+async def search_lottery_text(query_text: str, limit: int = 10) -> List[models.Lotdata]:
     query_vec = await _create_embeddings([query_text])
-    res = await milvus_sql_helper.search_bili_lot_data(query_vec=query_vec[0], limit=limit)
+    res = await sql_helper.milvus_sql_helper.search_bili_lot_data(query_vec=query_vec[0], limit=limit)
     lottery_id_ls = [x.get('entity').get('lottery_id') for x in res[0]]
-    lot_data_ls = await grpc_sql_helper.get_lotDetail_ls_by_lot_ids(lottery_id_ls)
+    lot_data_ls = await DynDetailSqlHelperMysqlVer.grpc_sql_helper.get_lotDetail_ls_by_lot_ids(lottery_id_ls)
     return lot_data_ls
 
 

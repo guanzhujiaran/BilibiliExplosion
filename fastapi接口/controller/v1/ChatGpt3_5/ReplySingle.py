@@ -1,7 +1,6 @@
 """
 单轮回复
 """
-import asyncio
 import os
 import time
 from typing import Union
@@ -9,7 +8,7 @@ from fastapi import Query, Body
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.ChatGpt3_5.ReplySingleModel import ReplyReq, ReplyRes, LLMShowInfo
-from fastapi接口.service.handleLLMReplySingle import ChatGpt3_5
+from fastapi接口.service.LLM.handleLLMReplySingle import ChatGpt3_5
 from .base import new_router
 
 chatgpt = ChatGpt3_5()

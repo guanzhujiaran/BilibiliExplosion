@@ -4,9 +4,9 @@
 
 import asyncio
 import traceback
+import utl.代理.redisProxyRequest.RedisRequestProxy as RedisRequestProxy
 from typing import Union
 from fastapi接口.log.base_log import request_with_proxy_logger
-from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 
 
@@ -19,7 +19,7 @@ class request_with_proxy:
         self.post_localhost_timeout = None
         self.post_localhost_timeout = None
         self.log = request_with_proxy_logger
-        self.redis_request_with_proxy = request_with_proxy_internal
+        self.redis_request_with_proxy = RedisRequestProxy.request_with_proxy_internal
 
     async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
         """

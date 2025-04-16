@@ -131,7 +131,7 @@ def monitor_ipv6_address_changes():
         current_ipv6_address = my_ipv6.get_ipv6_prefix()  # 2409:8a1e:2a62:69a0::/60
         current_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[0:4])  # 2409:8a1e:2a62:69a
         # print(current_ipv6_prefix)
-        ipv6_monitor_logger.info(f'当前ipv6地址：{current_ipv6_address}')
+        # ipv6_monitor_logger.info(f'当前ipv6地址：{current_ipv6_address}')
         if current_ipv6_prefix != previous_ipv6_prefix:  # 只判断前缀
             ipv6_monitor_logger.info("IPv6地址发生变化：", current_ipv6_address, int(time.time()))
             change_ipv6_config(':'.join(current_ipv6_address.split(':')[0:4]), previous_ipv6_prefix)
@@ -159,7 +159,7 @@ async def async_monitor_ipv6_address_changes():
             current_ipv6_address = await my_ipv6.async_get_ipv6_prefix_selenium()  # 2409:8a1e:2a62:69a0::/60
             current_ipv6_prefix = ':'.join(current_ipv6_address.split(':')[
                                            0:4]) if current_ipv6_address and current_ipv6_address != '::' else ''  # 2409:8a1e:2a62:69a
-            ipv6_monitor_logger.info(f'当前ipv6地址：{current_ipv6_address}')
+            # ipv6_monitor_logger.info(f'当前ipv6地址：{current_ipv6_address}')
             if current_ipv6_prefix and current_ipv6_prefix != previous_ipv6_prefix:  # 只判断前缀
                 ipv6_monitor_logger.critical(f"IPv6地址发生变化：{current_ipv6_address} {int(time.time())}")
                 await asyncio.to_thread(

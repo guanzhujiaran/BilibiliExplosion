@@ -1,10 +1,9 @@
-import asyncio
 import time
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.GeetestDet.GetV3ClickTarget import GeetestDetectPicReq, GeetestDetectPicRes
 from fastapi接口.service.geetest_captcha.geetest_captcha import get_captcha_target_center
-from fastapi接口.service.geetest_captcha.jy_click_captcha import _get_geetest_pic, a_jy_click
-from grpc获取动态.Utils.极验.极验点击验证码 import GeetestV3Breaker
+from fastapi接口.service.geetest_captcha.jy_click_captcha import a_jy_click
+from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import GeetestV3Breaker
 from .base import new_router
 
 router = new_router()

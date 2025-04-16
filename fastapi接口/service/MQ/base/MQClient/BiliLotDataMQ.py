@@ -5,9 +5,9 @@ from fastapi接口.log.base_log import MQ_logger
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from fastapi接口.service.MQ.base.BasicAsyncClient import BasicMessageReceiver, QueueName, ExchangeName, \
     RoutingKey, BasicMessageSender
-from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from grpc获取动态.grpc.bapi.biliapi import get_lot_notice
-from opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice
+from fastapi接口.service.opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖
 from utl.pushme.pushme import pushme
 
 
@@ -119,7 +119,7 @@ class UpsertLotDataByDynamicIdMQ(BasicMessageReceiver):
 
     def __init__(self):
         super().__init__(self.e, self.t, self.q, self.r)
-        from grpc获取动态.src.getDynDetail import dyn_detail_scrapy
+        from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
         self.dyn_detail_scrapy = dyn_detail_scrapy
 
     async def consume(self, method, properties, body):
@@ -205,7 +205,7 @@ class UpsertTopicLotMQ(BasicMessageReceiver):
     def publish_message(cls, body: TopicLotData, extra_routing_key: str = ""):
         """发布消息"""
         body = body.model_dump()
-        MQ_logger.info(f"【{cls.__name__}】发布消息：{body}")
+        # MQ_logger.info(f"【{cls.__name__}】发布消息：{body}")
         message_sender = BasicMessageSender(cls.e, cls.t, cls.q, cls.r)
         while 1:
             try:

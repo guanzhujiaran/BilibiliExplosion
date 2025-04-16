@@ -7,12 +7,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi接口.dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticRankDateTypeEnum
-from fastapi接口.scripts.同步向量数据库.sync_bili_lottery_data import sync_bili_lottery_data, \
+from fastapi接口.scripts.database.同步向量数据库.sync_bili_lottery_data import sync_bili_lottery_data, \
     del_outdated_bili_lottery_data
-from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper as bili_official_sqlhelper
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import \
+    grpc_sql_helper as bili_official_sqlhelper
 from fastapi接口.log.base_log import background_task_logger
-from opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
-from opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import ReserveScrapyRobot
+from fastapi接口.service.opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
+from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import ReserveScrapyRobot
 from utl.pushme.pushme import async_pushme_try_catch_decorator, pushme
 
 _scheduler_start_hour = 4  # 定时任务开始时间：凌晨4点

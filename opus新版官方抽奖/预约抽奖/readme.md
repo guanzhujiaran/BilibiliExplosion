@@ -1,1 +1,0 @@
-直接运行[__定时获取预约抽奖__](./etc/schedule_get_reserve_lot.py)即可

@@ -4,11 +4,11 @@ import typing
 from typing import Union
 from curl_cffi.requests import AsyncSession, BrowserTypeLiteral
 from httpx import AsyncClient
+from httpx._exceptions import ProxyError
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
 import ssl
-from httpx_socks import AsyncProxyTransport # 目前httpx官方不支持sock4代理，对socks5代理的支持也不是特别好，需要使用第三方库
-from fastapi接口.log.base_log import httpx_logger
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
+
 
 class SSLFactory:
     @property
@@ -66,25 +66,23 @@ class SSLFactory:
         context.set_ciphers(self.bili_cipher)
         return context
 
-
 sslgen = SSLFactory()
-
-
 def _wrapper(func):
     async def wrapper(*args, **kwargs):
-        httpx_logger.info(f"开始请求{kwargs}")
+        # httpx_logger.debug(f"开始请求{kwargs}")
         res = await func(*args, **kwargs)
-        httpx_logger.info(f"请求结束{kwargs}")
+        # httpx_logger.debug(f"请求结束{kwargs}")
         return res
+
     return wrapper
 
 
 def format_transport(request_proxy: dict | None):
-    if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
-        if 'sock' in format_ip_str or 'socks' in format_ip_str:
-            return AsyncProxyTransport.from_url(
-                url=format_ip_str,
-            )
+    # if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
+    #     if 'sock' in format_ip_str or 'socks' in format_ip_str:
+    #         return AsyncProxyTransport.from_url(
+    #             url=format_ip_str,
+    #         )
     return None
 
 
@@ -92,11 +90,12 @@ def format_httpx_proxy(request_proxy: dict | None) -> str | None:
     if not request_proxy:
         return None
     if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
-        if 'sock' in format_ip_str or 'socks' in format_ip_str:
-            return None
+        ...
+        # if 'sock4' in format_ip_str or 'socks4' in format_ip_str:
+        #     return None
     else:
         format_ip_str = None
-
+        raise ProxyError(message=f'代理格式错误！{request_proxy}')
     return format_ip_str
 
 
@@ -125,6 +124,7 @@ class MYASYNCHTTPX:
                 proxy=format_proxy_str,
                 http2=True,
                 verify=False,
+                timeout=timeout
         ) as client:
             client.headers.clear()
             resp = await client.get(url=url, headers=headers, params=params, timeout=timeout, follow_redirects=True)
@@ -138,6 +138,7 @@ class MYASYNCHTTPX:
                 proxy=format_proxy_str,
                 http2=True,
                 verify=False,
+                timeout=timeout
         ) as client:
             client.headers.clear()
             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
@@ -180,22 +181,25 @@ class MYASYNCHTTPX:
                 'api.bilibili.com/x/gaia-vgate/v1/validate' in url
         ):
             ca = sslgen()
-            proxies = None
-        format_proxy_str = format_httpx_proxy(proxies)
+            format_proxy_str = None
+            format_transport_ins = None
+        else:
+            format_proxy_str = format_httpx_proxy(proxies)
+            format_transport_ins = format_transport(proxies)
         async with AsyncClient(
-                transport=format_transport(proxies),
+                transport=format_transport_ins,
                 proxy=format_proxy_str,
                 verify=ca,
                 http2=True,
                 http1=False,
-                follow_redirects=True
+                follow_redirects=True,
+                timeout=timeout
         ) as client:
             client.headers.clear()
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
                                         content=content, files=files, json=json, params=params, cookies=cookies,
                                         extensions=extensions, follow_redirects=True
                                         )
-            await resp.aread()
             return resp
 
     async def cffi_request(self, url,
@@ -235,7 +239,19 @@ class MYASYNCHTTPX:
                                         )
         return resp
 
+    def __getitem__(self, item: typing.Literal['get', 'post', 'request']):
+        match item:
+            case 'get':
+                return self.get
+            case 'post':
+                return self.post
+            case 'request':
+                return self.request
+            case _:
+                raise ValueError(f'item must be in {self.__getitem__.__annotations__}')
 
+
+my_async_httpx = MYASYNCHTTPX()
 if __name__ == '__main__':
     MyAsyncReq = MYASYNCHTTPX()
     loop = asyncio.get_event_loop()

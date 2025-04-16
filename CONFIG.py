@@ -120,7 +120,6 @@ class ProjectPath(str, Enum):
     bili_lottery = 'K:/python test'
     py_test = 'K:/python测试专用'
     zhihu = 'K:/zhihu'
-    grpc_api_proto = "K:/python test/grpc获取动态/grpc/grpc_proto"
 
 
 class _SeleniumConfig:

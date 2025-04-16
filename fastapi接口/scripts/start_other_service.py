@@ -30,7 +30,7 @@ class OtherService:
         监控b站up主空间
         :return:
         """
-        from grpc获取动态.src.监控up动态.bili_dynamic_monitor import monitor
+        from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import monitor
         a = monitor()
         asyncio.run(a.main(show_log=self.show_log))
 
@@ -39,7 +39,7 @@ class OtherService:
         定时获取up主充电和官方抽奖
         :return:
         """
-        from opus新版官方抽奖.转发抽奖.定时获取所有动态以及发布充电和官方抽奖专栏 import schedule_get_official_lot_main
+        from fastapi接口.service.opus新版官方抽奖.转发抽奖.定时获取所有动态以及发布充电和官方抽奖专栏 import schedule_get_official_lot_main
         schedule_get_official_lot_main(show_log=self.show_log)
 
     def schedule_get_reserve_lot(self):
@@ -47,7 +47,7 @@ class OtherService:
         定时获取预约抽奖
         :return:
         """
-        from opus新版官方抽奖.预约抽奖.etc.schedule_get_reserve_lot import schedule_get_reserve_lot_main
+        from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.schedule_get_reserve_lot import schedule_get_reserve_lot_main
         schedule_get_reserve_lot_main(show_log=self.show_log)
 
     def schedule_get_topic_lot(self):
@@ -55,7 +55,7 @@ class OtherService:
         定时获取话题抽奖
         :return:
         """
-        from opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import schedule_get_topic_lot_main
+        from fastapi接口.service.opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import schedule_get_topic_lot_main
         schedule_get_topic_lot_main(show_log=self.show_log)
 
     def monitor_ipv6_change(self):
@@ -76,7 +76,7 @@ class OtherService:
         极验验证码
         :return:
         """
-        from grpc获取动态.Utils.MQClient.VoucherMQClient import VoucherMQClient
+        from fastapi接口.service.grpc_module.Utils.MQClient.VoucherMQClient import VoucherMQClient
         t_set = set()
         for i in range(5):
             __ = VoucherMQClient()

@@ -18,10 +18,9 @@ class ProxyTab(Base):
 
     proxy_id = mapped_column(Integer, primary_key=True)
     proxy = mapped_column(JSON, nullable=False)
-    status = mapped_column(Integer, nullable=False, server_default=text("'0'"))
+    status = mapped_column(Integer, nullable=False, server_default=text("'0'"))  # 只允许-412，不存在-352
     update_ts = mapped_column(Integer, nullable=False)
     score = mapped_column(Integer, nullable=False)
     add_ts = mapped_column(Integer)
     success_times = mapped_column(Integer, server_default=text("'0'"))
     zhihu_status = mapped_column(Integer, server_default=text("'0'"))
-

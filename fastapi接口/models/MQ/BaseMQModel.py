@@ -9,9 +9,11 @@ class QueueName(str, Enum):
     UpsertLotDataByDynamicIdMQ = "UpsertLotDataByDynamicIdQueue"
     UpsertTopicLotMQ = "UpsertTopicLotMQ"
     UpsertMilvusBiliLotDataMQ="UpsertMilvusBiliLotDataMQ"
+    UpsertProxyInfoMQ="UpsertProxyInfoMQ"
 
 class ExchangeName(str, Enum):
     bili_data = "bili_data"
+    proxy='proxy'
 
 
 # 定义一个名为RoutingKey的类，继承自str和Enum
@@ -25,7 +27,7 @@ class RoutingKey(str, Enum):
     # 定义一个名为UpsertTopicLotMQ的枚举值，值为"BiliData.UpsertTopicLotMQ"
     UpsertTopicLotMQ = "BiliData.UpsertTopicLotMQ"
     UpsertMilvusBiliLotDataMQ="Milvus.BiliLotDataMQ"
-
+    UpsertProxyInfoMQ="Proxy.UpsertProxyInfoMQ"
 
 class RabbitMQConfig(CustomBaseModel):
     host: str

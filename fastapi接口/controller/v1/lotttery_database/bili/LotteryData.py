@@ -7,8 +7,7 @@ from typing import List
 from fastapi import Query, Body
 from fastapi接口.models.common import CommonResponseModel, ResponsePaginationItems
 from fastapi接口.service.compo.text_embed import search_lottery_text
-from fastapi接口.utils.Common import GLOBAL_SEM
-from grpc获取动态.src.SQLObject.models import Lotdata
+from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from .base import new_router
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, OfficialLotteryResp, \
     AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp, AddDynamicLotteryReq, \
@@ -214,11 +213,10 @@ async def api_BulkAddLottery(
         data: BulkAddDynamicLotteryReq = Body(...),
 ):
     async def _solve_lottery(dynamic_id_or_url: str):
-        async with GLOBAL_SEM:
-            _msg, _is_succ = await add_dynamic_lottery_by_dynamic_id(dynamic_id_or_url)
-            return BulkAddDynamicLotteryRespItem(dynamic_id=dynamic_id_or_url, msg=_msg, is_succ=_is_succ)
+        _msg, _is_succ = await add_dynamic_lottery_by_dynamic_id(dynamic_id_or_url)
+        return BulkAddDynamicLotteryRespItem(dynamic_id=dynamic_id_or_url, msg=_msg, is_succ=_is_succ)
 
-    resp_data = await asyncio.gather(_solve_lottery(dynamic_id_or_url) for dynamic_id_or_url in data.dynamic_id_or_urls)
+    resp_data = await asyncio.gather(*(_solve_lottery(dynamic_id_or_url) for dynamic_id_or_url in data.dynamic_id_or_urls), return_exceptions=True)
 
     return CommonResponseModel(code=0, data=resp_data)
 

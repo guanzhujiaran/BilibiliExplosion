@@ -3,7 +3,7 @@ import asyncio
 import numpy as np
 from curl_cffi import requests
 from fastapi接口.service.geetest_captcha.textselect.src.method.jy_click import JYClick
-from grpc获取动态.Utils.极验.models.captcha_models import CaptchaResultInfo
+from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import CaptchaResultInfo
 
 cap = JYClick()
 

@@ -5,7 +5,7 @@ from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLot
     BiliLotStatisticRankTypeEnum, BiliLotStatisticLotTypeEnum, BiliLotStatisticLotteryResultResp, \
     BiliLotStatisticRankDateTypeEnum
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from grpc获取动态.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 
 
 async def GetLotStatisticInfo(
