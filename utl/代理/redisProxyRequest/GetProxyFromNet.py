@@ -6,9 +6,7 @@ import json
 import re
 import time
 from datetime import datetime
-from functools import partial
 from typing import Union
-
 import bs4
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import sql_log

@@ -56,6 +56,7 @@ from urllib.parse import urlparse
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
+from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
 
 current_file_path = os.path.abspath(__file__)
 print()
@@ -203,7 +204,7 @@ class BiliGrpc:
             return await self.__get_available_cookies()
 
     async def _get_random_channel(self, is_need_channel: bool = False) -> tuple[ProxyTab, grpc.aio.Channel | None]:
-        proxy_tab = await SQLHelper.get_available_proxy()
+        proxy_tab = await get_available_proxy()
         channel = None
         if is_need_channel:
             channel = grpc.aio.secure_channel('grpc.biliapi.net:443', grpc.ssl_channel_credentials(),

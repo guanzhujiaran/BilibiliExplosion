@@ -32,6 +32,7 @@ import fastapi接口.utils.ProxyEvent as ProxyEvent
 import fastapi接口.utils.SqlalchemyTool as SqlalchemyTool
 import fastapi接口.service.grpc_module.Models.CustomRequestErrorModel as CustomRequestErrorModel
 import fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi as activateExClimbWuzhi
+from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
 
 ExClimbWuzhi, APIExClimbWuzhi = activateExClimbWuzhi.ExClimbWuzhi, activateExClimbWuzhi.APIExClimbWuzhi
 Request412Error, Request352Error, RequestProxyResponseError = CustomRequestErrorModel.Request412Error, \
@@ -202,7 +203,7 @@ class RequestWithProxy:
                 use_cookie_flag = True
             if not proxy_flag or status != 0:
                 real_proxy_weights += 1
-                proxy: ProxyTab = await SQLHelper.get_available_proxy()
+                proxy: ProxyTab = await get_available_proxy()
                 if not proxy:
                     self.log.warning('获取代理失败！')
                     await get_proxy_methods.get_proxy()

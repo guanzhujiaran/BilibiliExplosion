@@ -4,7 +4,6 @@ import typing
 from typing import Union
 from curl_cffi.requests import AsyncSession, BrowserTypeLiteral
 from httpx import AsyncClient
-from httpx._exceptions import ProxyError
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
 import ssl
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
@@ -95,7 +94,6 @@ def format_httpx_proxy(request_proxy: dict | None) -> str | None:
         #     return None
     else:
         format_ip_str = None
-        raise ProxyError(message=f'代理格式错误！{request_proxy}')
     return format_ip_str
 
 

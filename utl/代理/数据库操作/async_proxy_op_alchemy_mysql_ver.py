@@ -19,7 +19,7 @@ from fastapi接口.log.base_log import sql_log
 from fastapi接口.models.v1.background_service.background_service_model import ProxyStatusResp
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER, _comm_lock_wrapper
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from fastapi接口.service.grpc_module.Utils.GrpcRedis import grpc_proxy_redis, grpc_proxy_tools
+from fastapi接口.service.grpc_module.Utils.GrpcRedis import grpc_proxy_redis
 from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
@@ -226,7 +226,7 @@ class SubRedisStore(RedisManagerBase):
         await self.redis_clear_black_proxy()
         await self.redis_clear_changed_proxy()
         await self._del_keys_with_prefix(self.RedisMap.bili_proxy.value)
-        await self._zdel_range(self.RedisMap.bili_proxy_zset.value,0,-1)
+        await self._zdel_range(self.RedisMap.bili_proxy_zset.value, 0, -1)
 
     async def redis_clear_black_proxy(self):
         return await self._del_keys_with_prefix(self.RedisMap.bili_proxy_black.value)
@@ -277,9 +277,10 @@ class SQLHelperClass:
             expire_on_commit=False,
         )
         self.schd = GLOBAL_SCHEDULER
-        self.schd.add_job(self.refresh_proxy, 'interval', seconds=600 , next_run_time=datetime.datetime.now(),
+        self.schd.add_job(self.refresh_proxy, 'interval', seconds=600, next_run_time=datetime.datetime.now(),
                           misfire_grace_time=600)
-        self.schd.add_job(self.sync_proxy_database_redis,'interval',seconds=1*60*60,next_run_time=datetime.datetime.now(),
+        self.schd.add_job(self.sync_proxy_database_redis, 'interval', seconds=1 * 60 * 60,
+                          next_run_time=datetime.datetime.now(),
                           misfire_grace_time=600)
         self.sub_redis_store = SubRedisStore()
 
@@ -306,7 +307,7 @@ class SQLHelperClass:
     async def check_redis_data(self, force=False):
         if not self.sub_redis_store.sync_ts:
             self.sub_redis_store.sync_ts = await self.sub_redis_store.get_sync_ts()
-        if int(time.time()) - self.sub_redis_store.sync_sep_ts > self.sub_redis_store.sync_ts or force:
+        if int(time.time()) - self.sub_redis_store.sync_sep_ts > self.sub_redis_store.sync_ts or force or self.sub_redis_store.sync_sep_ts == 0:
             try:
                 redis_sync_ts = await self.sub_redis_store.get_sync_ts()
                 if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:
@@ -342,7 +343,7 @@ class SQLHelperClass:
                 sql_log.critical(f'同步redis和mysql数据库任结束！')
         else:
             sql_log.debug(
-                f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_sep_ts, tz=pytz.UTC)}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
+                f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_ts, tz=pytz.UTC)}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
 
     @lock_wrapper
     async def clear_unusable_proxy(self) -> Callable[[], int]:
@@ -613,7 +614,7 @@ class SQLHelperClass:
     async def sync_proxy_database_redis(self):
         sql_log.critical('开始同步redis和数据库中代理')
 
-        await asyncio.wait_for(self.check_redis_data(),1*60*60)
+        await asyncio.wait_for(self.check_redis_data(), 1 * 60 * 60)
 
     # endregion
 
@@ -641,24 +642,7 @@ class SQLHelperClass:
         else:
             return None
 
-    async def get_available_proxy(self) -> ProxyTab | None:
-        while 1:
-            available_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
-            proxy: ProxyTab | None = None
-            if available_ip_status:
-                proxy = await self.get_proxy_by_ip(available_ip_status.ip)
-            if not proxy:
-                sql_log.debug(f'获取随机代理失败！正在尝试从全部的代理Redis中获取！')
-                proxy = await self.select_proxy('rand')
-            if proxy:
-                sql_log.debug(f'成功获取到代理{proxy.proxy}')
-                return proxy
-            sql_log.debug(f'获取随机代理失败！正在尝试重新获取！')
-            await SQLHelper.check_redis_data()
-
 
 SQLHelper = SQLHelperClass()
 
-if __name__ == "__main__":
-    result = asyncio.run(SQLHelper.get_available_proxy())
-    print(result)
+

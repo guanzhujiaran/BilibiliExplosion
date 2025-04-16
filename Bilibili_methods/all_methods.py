@@ -2548,7 +2548,6 @@ class methods:
         获取转发详情
         :return:
         '''
-        # TODO 114514
         url = 'https://api.live.bilibili.com/dynamic_repost/v1/dynamic_repost/view_repost'
         query = {
             'dynamic_id': dynamic_id
