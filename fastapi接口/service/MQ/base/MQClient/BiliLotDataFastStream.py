@@ -39,7 +39,11 @@ rabbit_mq_config: RabbitMQConfig = RabbitMQConfig(
     protocol='amqp'
 )
 _rabbit_mq_url = f'{rabbit_mq_config.protocol}://{rabbit_mq_config.username}:{rabbit_mq_config.password}@{rabbit_mq_config.host}:{rabbit_mq_config.port}/'
-router = RabbitRouter(_rabbit_mq_url, include_in_schema=True, logger=None)
+router = RabbitRouter(_rabbit_mq_url,
+                      include_in_schema=True,
+                      logger=None,
+                      max_consumers=100 # 对于我用的rabbitmq来说就是 prefetch_count
+                      )
 exch = RabbitExchange(ExchangeName.bili_data.value, auto_delete=False, type=ExchangeType.TOPIC)
 proxy_exch = RabbitExchange(ExchangeName.bili_data.value, auto_delete=False, type=ExchangeType.TOPIC)
 
@@ -349,8 +353,8 @@ class UpsertProxyInfo(BaseFastStreamMQ):
                 ip_status.counter = origin_ip_status.counter
                 ip_status.latest_used_ts = origin_ip_status.latest_used_ts
                 ip_status.max_counter_ts = origin_ip_status.max_counter_ts
-            await SQLHelper.update_to_proxy_list(proxy_tab, change_score_num)
-            await grpc_proxy_tools.set_ip_status(ip_status)
+            await SQLHelper.update_to_proxy_list(proxy_tab, change_score_num) # 同步到整体数据库代理的redis缓存中
+            await grpc_proxy_tools.set_ip_status(ip_status) # 同步到可用代理的redis中
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{module_name} consume error: {e}')

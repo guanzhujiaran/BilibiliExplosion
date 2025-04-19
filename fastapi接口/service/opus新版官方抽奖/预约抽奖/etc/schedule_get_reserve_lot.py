@@ -12,6 +12,7 @@ from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserve
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import submit_reserve__lot_main
 from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
 
+
 class pubArticleInfo(CustomBaseModel):
     lastPubDate: Union[datetime, None] = None
     shouldPubHour: int = 20  # 每天发布的专栏的事件
@@ -26,7 +27,8 @@ class pubArticleInfo(CustomBaseModel):
             with open(os.path.join(setting_path, 'lastPubTs.txt'), 'r', encoding='utf-8') as f:
                 contents = f.read().strip()
                 self.lastPubDate = datetime.fromtimestamp(int(contents))
-                reserve_lot_logger.info(f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
+                reserve_lot_logger.info(
+                    f"获取到上一次发布专栏的时间是：{self.lastPubDate.strftime('%Y-%m-%d %H:%M:%S')}")
         except Exception as e:
             reserve_lot_logger.exception(f"获取到上一次发布专栏的时间失败！使用0时间！")
             self.lastPubDate = datetime.fromtimestamp(86400)
@@ -61,7 +63,10 @@ class pubArticleInfo(CustomBaseModel):
         reserve_lot_logger.error(f'不满足发布专栏文章条件，不发布专栏！\t上次发布时间：{self.lastPubDate}')
         return False
 
+
 reserve_robot = None
+
+
 @async_pushme_try_catch_decorator
 async def async_run(schedulers: Union[None, AsyncIOScheduler], pub_article_info: pubArticleInfo, schedule_mark: bool,
                     *args, **kwargs):
@@ -77,6 +82,7 @@ async def async_run(schedulers: Union[None, AsyncIOScheduler], pub_article_info:
                                       run_date=datetime.now() + timedelta(hours=delta_hour))
         reserve_lot_logger.info(f"任务结束，等待下一次{next_job.trigger}执行。")
 
+
 @async_pushme_try_catch_decorator
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     global reserve_robot
@@ -85,15 +91,18 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
         reserve_robot.sem = asyncio.Semaphore(300)
     else:
         reserve_robot.sem = asyncio.Semaphore(150)
-    await reserve_robot.get_reserve_concurrency()
-    await reserve_robot.refresh_not_drawn_lottery()
+    try:
+        await reserve_robot.get_reserve_concurrency()
+        await reserve_robot.refresh_not_drawn_lottery()
+    except Exception as e:
+        reserve_lot_logger.exception(f'获取预约抽奖信息失败！{e}')
     reserve_lot_logger.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():
         await submit_reserve__lot_main(is_post=True)
         update_time: int = int(time.time()) - int(pub_article_info.lastPubDate.timestamp()) - 1800  # 这段逻辑关乎更新抽奖的数量！！！
         # 空闲中间的半个小时就是上一次发布之后休息的事件，可以往小调，但决不能是+一个时间段！！！
         reserve_lot_logger.error(f'\n上次发布专栏时间：{pub_article_info.lastPubDate}'
-                  f'\n更新抽奖时间为：{round(update_time / 3600, 2)}小时！')
+                                 f'\n更新抽奖时间为：{round(update_time / 3600, 2)}小时！')
         pub_article_info.start_ts = int(time.time())
         pub_article_info.save_lastPubTs()
 
@@ -115,4 +124,3 @@ async def async_schedule_get_reserve_lot_main(schedule_mark: bool = True, show_l
         schedulers.start()
     else:
         await async_run(None, pub_article_info, schedule_mark)
-

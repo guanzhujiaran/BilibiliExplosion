@@ -312,7 +312,7 @@ class __SqlHelper:
             if ret:
                 return ret.spaceOffset
             else:
-                return 1000000000000000000
+                return 0
 
     @lock_wrapper
     async def get_lot_user_info_updatetime_by_uid(self, uid: Union[int, str]) -> Union[datetime, None]:

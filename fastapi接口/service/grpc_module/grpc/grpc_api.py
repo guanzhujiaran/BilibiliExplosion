@@ -567,7 +567,7 @@ class BiliGrpc:
                 validate_token = ""
 
     # region 第三方grpc库发起的请求
-    async def grpc_api_get_DynDetails(self, dyn_ids: [int]) -> dict:
+    async def grpc_api_get_DynDetails(self, dyn_ids: list[int]) -> dict:
         """
         通过grpc客户端请求的，不太好一起统一处理
         通过动态id的列表批量获取动态详情，但是需要有所有的动态id，不能用，很难受

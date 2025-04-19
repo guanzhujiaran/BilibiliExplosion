@@ -13,11 +13,6 @@ from types import MethodType
 from loguru import logger
 
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../../')))  # 将CONFIG导入
-from CONFIG import CONFIG
-
-sys.path.extend([
-    x.value for x in CONFIG.project_path
-])
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 

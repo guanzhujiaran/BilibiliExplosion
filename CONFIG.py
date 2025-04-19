@@ -114,14 +114,6 @@ class RabbitMQConfig:
     broker_url = f"amqp://{user}:{pwd}@{host}:{port}/"
 
 
-class ProjectPath(str, Enum):
-    bili_live_monitor = "K:/Bili_live_monitor"
-    toutiao = "K:/toutiao/pyProject"
-    bili_lottery = 'K:/python test'
-    py_test = 'K:/python测试专用'
-    zhihu = 'K:/zhihu'
-
-
 class _SeleniumConfig:
     edge_path = 'C:/WebDriver/bin/msedgedriver.exe'
 
@@ -132,7 +124,6 @@ class _SeleniumConfig:
 class _CONFIG:
     root_dir = 'K:/python test/'  # b站代码的根目录
     V2ray_proxy = 'http://127.0.0.1:10809'  # socks端口+1
-    project_path = ProjectPath
     pushnotify = pushnotify()  # 推送设置
     zhihu_CONFIG = zhihu_CONFIG()  # 知乎设置
     database = database()

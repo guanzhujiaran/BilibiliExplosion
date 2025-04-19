@@ -5,10 +5,11 @@ import os
 import sys
 import objgraph
 sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
+current_dir = os.path.dirname(__file__)
+grpc_dir = os.path.join(current_dir, 'service/grpc_module/grpc/grpc_proto')
+sys.path.append(grpc_dir)
 from CONFIG import CONFIG
-sys.path.extend([
-    x.value for x in CONFIG.project_path
-])
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from loguru import logger
 import argparse

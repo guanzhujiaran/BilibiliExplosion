@@ -16,9 +16,11 @@ def format_proxy(proxy_str, protocol: str = None) -> dict | None:
     :param proxy_str: 代理字符串，可能是IP地址或带有协议前缀的完整URL
     :return: 标准化的代理字典或None（如果输入不符合预期格式）
     """
+    if type(proxy_str) is str:
+        proxy_str = proxy_str.strip()
     ip_pattern = re.compile(r'^(?:(http|https|socks[45]|sock[45])://)?'  # 协议部分（可选）
                             r'((?:[0-9]{1,3}\.){3}[0-9]{1,3})'  # 完整的 IP 地址
-                            r'(:[0-9]{2,5})?$'  # 端口号部分（可选）
+                            r'(:[0-9]{1,5})?$'  # 端口号部分（可选）
                             )
 
     match = ip_pattern.match(proxy_str)
@@ -43,4 +45,3 @@ def format_proxy(proxy_str, protocol: str = None) -> dict | None:
     else:
         return None
     return proxy_dict
-

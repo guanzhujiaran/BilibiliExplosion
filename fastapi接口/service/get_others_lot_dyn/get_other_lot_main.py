@@ -20,8 +20,8 @@ from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, g
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer  import grpc_sql_helper
-from fastapi接口.service.grpc_module.src.SQLObject.models  import Lotdata
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
@@ -1168,7 +1168,8 @@ class BiliSpaceUserItem:
             secondRound=False,
             isPubLotUser=False,
             isPreviousRoundFinished=False,
-            SpareTime=5 * 86400
+            SpareTime=5 * 86400,
+            succ_counter: ProgressCounter | None = None
     ) -> None:
         """
         支持了断点续爬
@@ -1208,7 +1209,7 @@ class BiliSpaceUserItem:
                     origin_offset = lot_user_info.offset
                 elif lot_user_info.isUserSpaceFinished and not isPreviousRoundFinished:  # 如果上一轮抽奖没有完成，重新开始了，但是这个用户的空间获取完了，查询数据库，获取当前round_id的最小值 最多多获取到上一轮的全部数据
                     origin_offset = await SqlHelper.getOldestSpaceOffsetByUidRoundId(self.uid,
-                                                                                     self.lot_round_id - 1 if self.lot_round_id > 1 else self.lot_round_id)
+                                                                                     self.lot_round_id)
                 else:  # lot_user_info.isUserSpaceFinished and isPreviousRoundFinished
                     # 如果上一轮抽奖已经完成，并且这个用户的空间获取完了，那么就从0开始重新获取
                     origin_offset = 0
@@ -1231,6 +1232,8 @@ class BiliSpaceUserItem:
             f'当前UID：https://space.bilibili.com/{self.uid}/dynamic'
             f'\t初始offseet:{origin_offset}\t是否为第二轮获取动态：{secondRound}')
         while 1:
+            if succ_counter:
+                succ_counter.update_ts = int(time.time())
             if origin_offset != 0 and first_get_dynamic_flag and not secondRound:  # 从半当中开始接着获取动态
                 items = await SqlHelper.getSpaceRespTillOffset(self.uid, origin_offset)
                 dyreq_dict = {
@@ -1352,7 +1355,8 @@ class BiliSpaceUserItem:
                 secondRound=True,
                 isPubLotUser=isPubLotUser,
                 isPreviousRoundFinished=isPreviousRoundFinished,
-                SpareTime=SpareTime
+                SpareTime=SpareTime,
+                succ_counter=succ_counter
             )
         if n <= 50 and time.time() - time_list[-1] >= SpareTime and secondRound == False and not isPubLotUser:
             get_others_lot_log.critical(
@@ -1592,7 +1596,8 @@ class GetOthersLotDynRobot:
     async def __do_space_task(self, __bili_space_user: BiliSpaceUserItem, isPubLotUser: bool):
         async with self._sem:
             await asyncio.create_task(
-                __bili_space_user.get_user_space_dynamic_id(isPubLotUser=isPubLotUser, SpareTime=self.SpareTime)
+                __bili_space_user.get_user_space_dynamic_id(isPubLotUser=isPubLotUser, SpareTime=self.SpareTime,
+                                                            succ_counter=self.space_succ_counter)
             )
             self.space_succ_counter.succ_count += 1
 

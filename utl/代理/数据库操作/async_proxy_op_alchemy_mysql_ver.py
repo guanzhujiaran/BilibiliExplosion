@@ -10,6 +10,8 @@ import random
 import time
 from enum import Enum
 from typing import List, Literal, Callable
+from zoneinfo import ZoneInfo
+
 import pytz
 from sqlalchemy import select, func, update, and_, or_, delete
 from sqlalchemy.exc import InternalError
@@ -279,7 +281,7 @@ class SQLHelperClass:
         self.schd = GLOBAL_SCHEDULER
         self.schd.add_job(self.refresh_proxy, 'interval', seconds=600, next_run_time=datetime.datetime.now(),
                           misfire_grace_time=600)
-        self.schd.add_job(self.sync_proxy_database_redis, 'interval', seconds=1 * 60 * 60,
+        self.schd.add_job(self.sync_proxy_database_redis, 'interval', seconds=0.5 * 60 * 60,
                           next_run_time=datetime.datetime.now(),
                           misfire_grace_time=600)
         self.sub_redis_store = SubRedisStore()
@@ -312,7 +314,7 @@ class SQLHelperClass:
                 redis_sync_ts = await self.sub_redis_store.get_sync_ts()
                 if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:
                     sql_log.critical(
-                        f'上次同步时间：{datetime.datetime.fromtimestamp(redis_sync_ts, tz=pytz.UTC)}\n开始同步redis和mysql数据库')
+                        f'上次同步时间：{datetime.datetime.fromtimestamp(redis_sync_ts, tz=ZoneInfo("Asia/Shanghai"))}\n开始同步redis和mysql数据库')
                     start_ts = int(time.time())
                     sql_log.debug('开始将redis数据同步至MySQL中')
                     await self.sync_2_database()
@@ -343,7 +345,7 @@ class SQLHelperClass:
                 sql_log.critical(f'同步redis和mysql数据库任结束！')
         else:
             sql_log.debug(
-                f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_ts, tz=pytz.UTC)}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
+                f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_ts, tz=ZoneInfo("Asia/Shanghai"))}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
 
     @lock_wrapper
     async def clear_unusable_proxy(self) -> Callable[[], int]:
@@ -479,7 +481,6 @@ class SQLHelperClass:
             async with session.begin():
                 # async with self.async_lock:
                 result = await session.execute(sql)
-                updated_proxy_tab = result.scalars().all()
         return True
 
     @lock_wrapper
@@ -570,9 +571,7 @@ class SQLHelperClass:
                 avaliable_score = -50
                 available_status = 0
                 now = int(time.time())
-                unavaliable_status = -412
                 _412_sep_time = self._412_sep_time
-                nums = 0
                 # async with self.session() as session:
                 #     async with session.begin():
                 #         del_num = 0
@@ -603,11 +602,10 @@ class SQLHelperClass:
                 )
                 async with self.session() as session:
                     async with session.begin():
-                        nums += (await session.execute(___sql)).rowcount  # 刷新超过两小时的412风控代理 不改变分数，只改变status
-                        nums += (await session.execute(__sql)).rowcount  # 刷新超过12小时的无效代理，改变status和score
+                        await session.execute(___sql) # 刷新超过两小时的412风控代理 不改变分数，只改变status
+                        await session.execute(__sql) # 刷新超过12小时的无效代理，改变status和score
                         await session.commit()
-                sql_log.debug(f'【刷新代理池】\t刷新代理，影响数量：{nums}个！')
-                return nums
+                return
             except Exception as e:
                 sql_log.exception(e)
 
@@ -645,4 +643,6 @@ class SQLHelperClass:
 
 SQLHelper = SQLHelperClass()
 
+if __name__ == "__main__":
+    asyncio.run(SQLHelper.check_redis_data(True))
 

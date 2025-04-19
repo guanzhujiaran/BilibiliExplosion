@@ -33,7 +33,7 @@ def start_background_service(show_log: bool):
     topic_scrapy_class = 定时获取话题抽奖
 
     from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
-    from src.monitor import bili_live_async_monitor
+    from fastapi接口.service.bili_live_monitor.src.monitor import bili_live_async_monitor
     back_ground_tasks.append(asyncio.create_task(bili_space_monitor.main(show_log=show_log)))
     back_ground_tasks.append(asyncio.create_task(
         定时获取所有动态以及发布充电和官方抽奖专栏.async_schedule_get_official_lot_main(show_log=show_log)))

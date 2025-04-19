@@ -21,7 +21,7 @@ def __preprocess_content(content: str) -> str:
         ipv4 = ""
     ipv4 = f'http://{ipv4}:23333/docs'
     try:
-        ipv6 = requests.get('https://6.ipw.cn/').text
+        ipv6 = requests.get('https://test.ipw.cn/', allow_redirects=True).text
         ipv6 = f'http://[{ipv6}]:23333/docs'
         content += f'\n{datetime.datetime.now()}当前服务器ip信息：\n{ipv4}\n{ipv6}'
     except Exception as e:

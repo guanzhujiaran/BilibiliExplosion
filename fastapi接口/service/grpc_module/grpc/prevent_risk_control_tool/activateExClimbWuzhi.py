@@ -495,21 +495,20 @@ class ExClimbWuzhi:
         cookie.append("=".join(['_uuid', apiExClimbWuzhi.uuid]))
         cookie.append("=".join(['b_nut', str(int(time.time()))]))
         try:
-            response = (await MyAsyncReq.request(method="get",
+            response = await MyAsyncReq.request(method="get",
                                                  url=apiExClimbWuzhi.spi,
                                                  headers={
                                                      "referer": 'https://www.bilibili.com/',
                                                      "user-agent": apiExClimbWuzhi.ua,
                                                      "cookie": "; ".join(cookie),
-                                                 }, proxies={
-                    'https': ExClimbWuzhi.proxy_ip,
-                    'http': ExClimbWuzhi.proxy_ip,
-                })).json()
-            cookie.append("=".join(['buvid3', quote(response['data']['b_3'], safe='')]))
-            cookie.append("=".join(['buvid4', quote(response['data']['b_4'], safe='')]))
+                                                 })
+            response_dict = response.json()
+            cookie.append("=".join(['buvid3', quote(response_dict['data']['b_3'], safe='')]))
+            cookie.append("=".join(['buvid4', quote(response_dict['data']['b_4'], safe='')]))
         except Exception as e:
             activeExclimbWuzhi_logger.exception(f"获取buvid3和buvid4失败: {e}")
             ExClimbWuzhi.proxy_ip = None
+        apiExClimbWuzhi.cookie = "; ".join(cookie)
         try:
             if apiExClimbWuzhi.bili_ticket and apiExClimbWuzhi.bili_ticket_expires:
                 cookie.append("=".join(['bili_ticket', apiExClimbWuzhi.bili_ticket]))
@@ -520,7 +519,7 @@ class ExClimbWuzhi:
                     cookie.append("=".join([k, str(v)]))
         except Exception as e:
             activeExclimbWuzhi_logger.error(f"获取bili_ticket失败:{e}")
-
+        apiExClimbWuzhi.cookie = "; ".join(cookie)
         return "; ".join(cookie)
 
     @staticmethod
@@ -533,16 +532,13 @@ class ExClimbWuzhi:
             "csrf": ''
         }
         headers = {
-            'user-agent': apiExClimbWuzhi.ua
+            'user-agent': apiExClimbWuzhi.ua,
+            'cookie': apiExClimbWuzhi.cookie
         }
         resp = await MyAsyncReq.request(url=apiExClimbWuzhi.GenWebTicket,
                                         method='post',
                                         params=params,
                                         headers=headers,
-                                        proxies={
-                                            'https': ExClimbWuzhi.proxy_ip,
-                                            'http': ExClimbWuzhi.proxy_ip,
-                                        }
                                         )
         resp_json = resp.json()
         return {
@@ -560,8 +556,8 @@ class ExClimbWuzhi:
             raise Exception(f"MYCFG type is not an APIExClimbWuzi!\n{my_cfg}")
         if not my_cfg.ua:
             my_cfg = APIExClimbWuzhi()
-        my_cfg.renderer_id = renderer_id = f"#X{''.join([random.choice(string.ascii_letters + '123456789') for x in range(9)])}" if not my_cfg.renderer_id else my_cfg.renderer_id
-        my_cfg.renderer = renderer = f"ANGLE (NVIDIA, NVIDIA GeForce RTX {random.choice('34')}0{random.choice('56789')}0 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11) {renderer_id}" if not my_cfg.renderer else my_cfg.renderer
+        my_cfg.renderer_id = f"#X{''.join([random.choice(string.ascii_letters + '123456789') for x in range(9)])}" if not my_cfg.renderer_id else my_cfg.renderer_id
+        my_cfg.renderer = f"ANGLE (NVIDIA, NVIDIA GeForce RTX {random.choice('12345')}0{random.choice('56789')}0 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11) {my_cfg.renderer_id}" if not my_cfg.renderer else my_cfg.renderer
         payload = BuvidFp.gen_payload(my_cfg)
 
         if not my_cfg.cookie:
@@ -603,23 +599,20 @@ class ExClimbWuzhi:
             for i in cookie.split(';'):
                 headers += (('cookie', i.strip(),),)
         try:
-            resp_json = await MyAsyncReq.request(url=my_cfg.giaGateWayExClimbWuzhi,
+            resp = await MyAsyncReq.request(url=my_cfg.giaGateWayExClimbWuzhi,
                                                  method='post',
                                                  data=payload,
-                                                 headers=headers,
-                                                 proxies={
-                                                     'https': ExClimbWuzhi.proxy_ip,
-                                                     'http': ExClimbWuzhi.proxy_ip,
-                                                 }
+                                                 headers=headers
                                                  )
-            resp = resp_json.json()
-            activeExclimbWuzhi_logger.debug(f'ExClimbWuzhi提交响应：{resp}')
-            if resp.get('code') != 0:
-                activeExclimbWuzhi_logger.error(f'{resp} ExClimbWuzhi提交失败！参数：\n{payload}')
+            resp_dict = resp.json()
+            activeExclimbWuzhi_logger.debug(f'ExClimbWuzhi提交响应：{resp_dict}')
+            if resp_dict.get('code') != 0:
+                activeExclimbWuzhi_logger.error(f'{resp_dict} ExClimbWuzhi提交失败！参数：\n{payload}')
         except Exception as e:
             activeExclimbWuzhi_logger.exception(f'ExClimbWuzhi提交失败！参数：\n{payload}\n错误信息：{type(e)}{e}')
         return cookie
 
 
 if __name__ == "__main__":
-    print(BuvidFp._gen_key_from_compoonents(BuvidFp.gen_payload()))
+    import asyncio
+    print(asyncio.run(ExClimbWuzhi.verifyExClimbWuzhi()))

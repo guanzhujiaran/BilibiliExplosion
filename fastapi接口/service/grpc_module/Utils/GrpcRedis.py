@@ -15,6 +15,9 @@ MAX_USABLE_PROXY_NUM = 300
 
 
 class GrpcProxyRedis(RedisManagerBase):
+    """
+    这里面的都是放的可用的，不管它是352还是412，只要能访问，得到数据就存在这里，不停等待352或412的冷却时间
+    """
     class RedisMap(str, Enum):
         accessible_ip_zset = 'accessible_ip_zset'  # 只保存ip地址的集合 20分的是可用的，减分是正在被使用的次数，负分是不能用的或者次数用完了的
         score_refresh_ts = 'score_refresh_ts'
@@ -68,6 +71,9 @@ class GrpcProxyRedis(RedisManagerBase):
     async def init_ip_status(self, ip_status: GrpcProxyStatus):
         await self._zadd(self.RedisMap.accessible_ip_zset.value,
                          {ip_status.ip: self.INIT_SCORE})  # 每个都设置成20分，用完就检查分数
+        await self._hmset(ip_status.ip, ip_status.to_redis_data())
+
+    async def redis_set_ip_status(self,ip_status:GrpcProxyStatus):
         await self._hmset(ip_status.ip, ip_status.to_redis_data())
 
     async def del_ip(self, ip: str):
@@ -163,7 +169,8 @@ class GrpcProxyTools:
                     ip_status.latest_352_ts = now
                 case -412:
                     ip_status.max_counter_ts = now
-            await grpc_proxy_redis.init_ip_status(ip_status)  # 可用的就刷新
+            # await grpc_proxy_redis.init_ip_status(ip_status)  # 可用的就刷新 这里不刷新，等待后台任务每10分钟自动刷新
+            await grpc_proxy_redis.redis_set_ip_status(ip_status)
             self.__ip_str_set.add(ip_status.ip)
 
     async def get_ip_status_by_ip(self, ip: str) -> GrpcProxyStatus:
@@ -193,24 +200,22 @@ class GrpcProxyTools:
             self._ip_list_clear_ts = int(time.time())
         avalible_num = self.available_num
         if avalible_num > MIN_USABLE_PROXY_NUM and self.use_good_proxy_flag:
-            retry_times = 0
-            while retry_times < 3:
-                retry_times += 1
-                _ = await grpc_proxy_redis.get_accessible_ips(start=0, num=30)
-                if len(_) == 30:
-                    picked_ip = random.choice(_)
-                    ip_status = await grpc_proxy_redis.get_ip_status(picked_ip)
-                    if not ip_status.available:
-                        await grpc_proxy_redis.del_ip(ip_status.ip)
-                        redis_logger.debug(f'这个代理不太行，删了！{ip_status}')
-                        continue
-                    if ip_status.is_usable_before_use(False):
-                        await grpc_proxy_redis.change_ip_score(picked_ip, -1)  # 每随机到一次就扣分，让这个最前面的列表不停地变化，不需要管这个代理是不是能用
-                        ip_status.is_usable_before_use(True)
-                        return ip_status
-                else:
-                    redis_logger.debug(f'没有好用的代理')
+
+            _ = await grpc_proxy_redis.get_accessible_ips(start=0, num=30)
+            if len(_) == 30:
+                picked_ip = random.choice(_)
+                ip_status = await grpc_proxy_redis.get_ip_status(picked_ip)
+                if not ip_status.available:
+                    await grpc_proxy_redis.del_ip(ip_status.ip)
+                    redis_logger.debug(f'这个代理不太行，删了！{ip_status}')
                     return None
+                if ip_status.is_usable_before_use(False):
+                    await grpc_proxy_redis.change_ip_score(picked_ip, -1)  # 每随机到一次就扣分，让这个最前面的列表不停地变化，不需要管这个代理是不是能用
+                    ip_status.is_usable_before_use(True)
+                    return ip_status
+            else:
+                redis_logger.debug(f'没有好用的代理')
+                return None
             redis_logger.debug(f'没有好用的代理')
             return None
         else:

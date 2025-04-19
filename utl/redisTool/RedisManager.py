@@ -289,8 +289,15 @@ class RedisManagerBase:
     @retry
     async def _zadd(self, key, mapping: dict):
         if mapping:
+            insert_map = {}
+            for k, v in mapping.items():
+                if type(k) in [bytes, memoryview, str, int] and type(v) in [bytes, memoryview, str, int, float]:
+                    insert_map[k] = v
+                else:
+                    redis_logger.critical(f"zadd name:{key} key:{k} value:{v} error")
             async with _redis_client_factory(pool=self.pool) as r:
-                return await r.zadd(key, mapping, )
+                return await r.zadd(key, insert_map, )
+        return None
 
     @retry
     async def _zscore_change(self, key, element, score_change: int):
