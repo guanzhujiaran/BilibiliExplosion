@@ -3,16 +3,18 @@ import base64
 
 import grpc
 import httpx
-from bilibili.metadata.restriction.restriction_pb2 import Restriction
-from bilibili.app.dynamic.v2.dynamic_pb2 import Config
-from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
+
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.network.network_pb2 import Network
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.restriction.restriction_pb2 import Restriction
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2 import Config
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
-from bilibili.metadata.device.device_pb2 import Device
-from bilibili.metadata.metadata_pb2 import Metadata
-from bilibili.app.dynamic.v2.dynamic_pb2 import DynSpaceReq, DynDetailReq
-from bilibili.api.ticket.v1.ticket_pb2 import GetTicketRequest, GetTicketResponse
-from bilibili.metadata.locale.locale_pb2 import Locale
-from bilibili.metadata.fawkes.fawkes_pb2 import FawkesReq
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.device.device_pb2 import Device
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.metadata_pb2 import Metadata
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2 import DynSpaceReq, DynDetailReq
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.api.ticket.v1.ticket_pb2 import GetTicketRequest, GetTicketResponse
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.locale.locale_pb2 import Locale
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.fawkes.fawkes_pb2 import FawkesReq
 
 
 def b64decode(encoded_str):
@@ -30,9 +32,7 @@ def b64decode(encoded_str):
     return decoded_bytes
 
 
-grpc_msg_encoded = "CAEQ/J3wAxolWFlDMTIwNkM4NEI1MkNFNEUxNjk3MDI3RTQ3MjM0RjEyQjlGRCIHYW5kcm9pZCoHYW5kcm9pZDoGbWFzdGVyQgRTb255SghTTS1HNjEwTFIFOC4xLjBaQDNjNDYwMGE5ZmQwMzhiZWY1ZTAzY2E0YzY0ZDc0NGU2MjAyNDA5MTQxNTI0MTQ5OTQzNDBjNjRkOWQ3YzBkODRiQDNjNDYwMGE5ZmQwMzhiZWY1ZTAzY2E0YzY0ZDc0NGU2MjAyNDA5MTQxNTIzMjdjYmNhMzExNzRmODllMmVmYzdqBjguMTMuMHJAM2M0NjAwYTlmZDAzOGJlZjVlMDNjYTRjNjRkNzQ0ZTYyMDI0MDkxNDE1MjMyN2NiY2EzMTE3NGY4OWUyZWZjN3jv85S3Bg"
-
-
+grpc_msg_encoded = "CAEaBTQ2MDAw"
 
 
 
@@ -40,11 +40,7 @@ from google.protobuf import text_format
 
 grpc_msg = b64decode(grpc_msg_encoded)
 print(grpc_msg)
-msg = Device()
+msg = Network()
 msg.ParseFromString(grpc_msg)
 
 print(msg)
-
-my_msg = Device(
-)
-print(my_msg.SerializeToString())

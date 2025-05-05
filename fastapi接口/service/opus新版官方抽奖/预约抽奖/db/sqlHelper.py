@@ -35,7 +35,8 @@ class _SqlHelper:
                                            **CONFIG.sql_alchemy_config.engine_config
                                            )
         self._session = async_sessionmaker(
-            self._engine, expire_on_commit=False, class_=AsyncSession,
+            self._engine,
+            **CONFIG.sql_alchemy_config.session_config
         )
         self.reserve_info_column_names = [
         ]

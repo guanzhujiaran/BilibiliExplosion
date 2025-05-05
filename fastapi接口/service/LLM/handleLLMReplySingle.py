@@ -9,5 +9,8 @@ class ChatGpt3_5(BaseLLM):
             chain = myChains.single_chain(self.OpenAIClient.OpenAiclient)
             return await chain.ainvoke(inputs)
         except Exception as e:
-            self.OpenAIClient.isAvailable = False
+            if '127.0.0.1' in self.OpenAIClient.base_url or '192.168' in self.OpenAIClient.base_url:
+                ...  # 本地部署的大模型不需要设置出错
+            else:
+                self.OpenAIClient.isAvailable = False
             raise e

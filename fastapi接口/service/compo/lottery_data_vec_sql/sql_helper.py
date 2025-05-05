@@ -4,7 +4,7 @@ from enum import Enum
 from typing import List
 from fastapi接口.log.base_log import milvus_db_logger
 from fastapi接口.models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
-from fastapi接口.utils.Common import _lock_retry_wrapper
+from fastapi接口.utils.Common import lock_retry_wrapper
 
 
 class Sqlhelper:
@@ -21,12 +21,12 @@ class Sqlhelper:
             self.__client = AsyncMilvusClient(db_name='default')
         return self.__client
 
-    @_lock_retry_wrapper
+    @lock_retry_wrapper
     async def upsert_bili_lot_data(self, data_ls: List[BiliLotData]):
         return await self._client.upsert(collection_name=self.Collections.bili_lot_data,
                                          data=[x.model_dump() for x in data_ls])
 
-    @_lock_retry_wrapper
+    @lock_retry_wrapper
     async def search_bili_lot_data(self, query_vec: list[float], limit: int = 10):
         res = await self._client.search(
             collection_name=self.Collections.bili_lot_data,  # 用你的集合的实际名称替换
@@ -40,7 +40,7 @@ class Sqlhelper:
         )
         return res
 
-    @_lock_retry_wrapper
+    @lock_retry_wrapper
     async def del_outdated_bili_lottery_data(self):
         result = await self._client.delete(
             collection_name=self.Collections.bili_lot_data,

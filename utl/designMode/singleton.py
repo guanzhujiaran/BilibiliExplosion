@@ -1,3 +1,6 @@
+import asyncio
+
+_lock = asyncio.Lock()
 class Singleton:
 
     """
@@ -20,7 +23,7 @@ class Singleton:
         print(s1 is s2)
 
     """
-
+    _instance = None
     def __init__(self, cls):
         """ 需要的参数是一个类 """
         self._cls = cls
@@ -29,12 +32,12 @@ class Singleton:
         """
         返回真正的实例
         """
-        try:
-            return self._instance
-        except AttributeError:
-            self._instance = self._cls()
-            return self._instance
-
+        if not self._instance:
+            async with _lock:
+                if not self._instance:
+                    self._instance = self._cls()
+                    return self._instance
+        return self._instance
     def __call__(self):
         raise TypeError('Singletons must be accessed through `Instance()`.')
 

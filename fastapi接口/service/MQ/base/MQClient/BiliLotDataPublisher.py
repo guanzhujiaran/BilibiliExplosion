@@ -1,8 +1,44 @@
+from faststream.rabbit.fastapi import RabbitBroker
+from CONFIG import CONFIG
+from fastapi接口.models.MQ.BaseMQModel import MQPropBase
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from fastapi接口.service.MQ.base.BasicAsyncClient import _mq_retry_wrapper
-import fastapi接口.service.MQ.base.MQClient.BiliLotDataFastStream as BiliLotDataFastStream
-from fastapi接口.service.grpc_module.Utils.GrpcProxyModel import GrpcProxyStatus
-from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
+from fastapi接口.service.MQ.base.MQClient.base import official_reserve_charge_lot_mq_prop, \
+    upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
+    upsert_milvus_bili_lot_data_prop
+from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+
+
+class RabbitBrokerContextManager:
+    def __init__(self, broker_url: str):
+        self.broker_url = broker_url
+        self.broker = None
+
+    async def __aenter__(self):
+        self.broker = RabbitBroker(url=CONFIG.RabbitMQConfig.broker_url)
+        await self.broker.connect(url=self.broker_url)
+        return self.broker
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self.broker and await self.broker.close()
+
+
+def publisher_producer(mq_props: MQPropBase):
+    async def publisher(message, extra_routing_key: str = ""):
+        async with RabbitBrokerContextManager(CONFIG.RabbitMQConfig.broker_url) as broker:
+            if extra_routing_key and type(extra_routing_key) is str:
+                routing_key = mq_props.routing_key_name + "." + extra_routing_key
+            else:
+                routing_key = mq_props.routing_key_name
+            await broker.publish(
+                message=message,
+                queue=mq_props.rabbit_queue,
+                exchange=mq_props.exchange,
+                routing_key=routing_key
+            )
+
+    return publisher
 
 
 class BiliLotDataPublisher:
@@ -18,8 +54,9 @@ class BiliLotDataPublisher:
     ):
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
-        return await BiliLotDataFastStream.official_reserve_charge_lot.publish(
-            body=LotDataReq(
+        publisher = publisher_producer(official_reserve_charge_lot_mq_prop)
+        return await publisher(
+            message=LotDataReq(
                 business_type=business_type,
                 business_id=business_id,
                 origin_dynamic_id=origin_dynamic_id,
@@ -27,17 +64,6 @@ class BiliLotDataPublisher:
             ),
             extra_routing_key=extra_routing_key
         )
-        # 老版本的，已经弃用
-        # return await asyncio.to_thread(
-        #     OfficialReserveChargeLotMQ.publish_message,
-        #     LotDataReq(
-        #         business_type=business_type,
-        #         business_id=business_id,
-        #         origin_dynamic_id=origin_dynamic_id,
-        #         **kwargs
-        #     ),
-        #     extra_routing_key=extra_routing_key,
-        # )
 
     @staticmethod
     @_mq_retry_wrapper(max_retries=-1)
@@ -47,8 +73,9 @@ class BiliLotDataPublisher:
             *args,
             **kwargs
     ):
-        return await BiliLotDataFastStream.upsert_official_reserve_charge_lot.publish(
-            newly_lot_data=da,
+        publisher = publisher_producer(upsert_official_reserve_charge_lot_mq_prop)
+        return await publisher(
+            message=da,
             extra_routing_key=extra_routing_key
         )
         # return await asyncio.to_thread(UpsertOfficialReserveChargeLotMQ.publish_message, da, extra_routing_key)
@@ -64,10 +91,10 @@ class BiliLotDataPublisher:
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
         da = LotDataDynamicReq(dynamic_id=dynamic_id, **kwargs)
-        return await BiliLotDataFastStream.upsert_lot_data_by_dynamic_id.publish(
-            lot_data_dynamic_req=da, extra_routing_key=extra_routing_key
+        publisher = publisher_producer(upsert_lot_data_by_dynamic_id_prop)
+        return await publisher(
+            message=da, extra_routing_key=extra_routing_key
         )
-        # return await asyncio.to_thread(UpsertLotDataByDynamicIdMQ.publish_message, )
 
     @staticmethod
     @_mq_retry_wrapper(max_retries=-1)
@@ -80,27 +107,24 @@ class BiliLotDataPublisher:
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
         da = TopicLotData(topic_id=topic_id, **kwargs)
-        return await BiliLotDataFastStream.upsert_topic_lot.publish(
-            body=da, extra_routing_key=extra_routing_key
+        publisher = publisher_producer(mq_props=upsert_topic_lot_prop)
+        return await publisher(
+            message=da, extra_routing_key=extra_routing_key
         )
         # return await asyncio.to_thread(UpsertTopicLotMQ.publish_message, da, extra_routing_key)
 
     @staticmethod
     @_mq_retry_wrapper(max_retries=-1)
-    async def pub_upsert_proxy_info(
-            ip_status: GrpcProxyStatus,
-            proxy_tab: ProxyTab,
-            change_score_num: int,
+    async def pub_upsert_milvus_bili_lot_data(
+            body: Lotdata,
             extra_routing_key: str = "",
             *args,
             **kwargs
     ):
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
-        return await BiliLotDataFastStream.upsert_proxy_info.publish(
-            ip_status=ip_status,
-            proxy_tab=proxy_tab,
-            change_score_num=change_score_num,
-            extra_routing_key=extra_routing_key
+        publisher = publisher_producer(mq_props=upsert_milvus_bili_lot_data_prop)
+        return await publisher(
+            message=sqlalchemy_model_2_dict(body), extra_routing_key=extra_routing_key
         )
 

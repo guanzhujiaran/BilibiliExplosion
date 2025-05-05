@@ -6,7 +6,6 @@ import json
 import os.path
 import time
 import bs4
-from CONFIG import CONFIG
 from fastapi接口.log.base_log import zhihu_api_logger
 import fastapi接口.service.zhihu.zhihu_src.zhihu_utl as zhihu_utl
 from Bilibili_methods.all_methods import methods
@@ -220,6 +219,8 @@ class LotScrapy:
                 if moment_pins_resp_json.get(
                         'code') == 10003:  # {'error': {'message': '请求参数异常，请升级客户端后重试。', 'code': 10003}}
                     raise ValueError(f'用户{uname}的请求参数异常\t{moment_pins_resp_json}')
+                if moment_pins_resp_json.get('code') is not None:
+                    raise ValueError(f'用户{uname}的请求参数异常\t{moment_pins_resp_json}')
         self.recorded_users_pins.update({uname: newest_pins[-20:]})  # 更新最新获取的空间信息
 
     def end_write(self):
@@ -253,7 +254,7 @@ class LotScrapy:
                    header=False)
 
     async def main(self):
-        self.log.info(f'获取过的所有{len(self.all_pins)}条pin:{self.all_pins}')
+        # self.log.info(f'获取过的所有{len(self.all_pins)}条pin:{self.all_pins}')
         await asyncio.gather(*[asyncio.create_task(self.get_all_pins(u)) for u in self.uname_list])
         self.end_write()
 
@@ -307,3 +308,6 @@ class LotScrapy:
 
 
 zhihu_lotScrapy = LotScrapy()
+
+if __name__ == "__main__":
+    asyncio.run(zhihu_lotScrapy.api_get_all_pins())

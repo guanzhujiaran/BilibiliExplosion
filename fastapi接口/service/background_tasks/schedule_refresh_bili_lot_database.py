@@ -149,10 +149,3 @@ async def async_schedule_refresh_bili_lotdata_database(schedule_mark: bool = Tru
     else:
         await _async_run(None, schedule_mark)
 
-
-if __name__ == "__main__":
-    async def _test():
-        await asyncio.gather(*[__sync_2_redis(i) for i in BiliLotStatisticLotTypeEnum])
-
-
-    asyncio.run(_test())

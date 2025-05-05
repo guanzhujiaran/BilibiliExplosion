@@ -15,32 +15,22 @@ import asyncio
 from CONFIG import CONFIG
 from utl.代理.SealedRequests import my_async_httpx as myreq
 
-import fastapi接口.service.grpc_module.Models.GrpcApiBaseModel as GrpcApiBaseModel
-import fastapi接口.service.grpc_module.grpc.bapi.biliapi as biliapi
-import fastapi接口.service.grpc_module.Utils.CONST as CONST
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.api.ticket.v1.ticket_pb2 as ticket_pb2
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.device.device_pb2 as device_pb2
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.fawkes.fawkes_pb2 as fawkes_pb2
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.locale.locale_pb2 as locale_pb2
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.metadata_pb2 as metadata_pb2
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.network.network_pb2 as network_pb2
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.restriction.restriction_pb2 as restriction_pb2
-import \
-    fastapi接口.service.grpc_module.grpc.grpc_proto.datacenter.hakase.protobuf.android_device_info_pb2 as android_device_info_pb2
-import fastapi接口.log.base_log as base_log
-
-BiliGrpcApi_logger = base_log.BiliGrpcApi_logger
-Restriction = restriction_pb2.Restriction
-Network, NetworkType = network_pb2.Network, network_pb2.NetworkType
-Metadata = metadata_pb2.Metadata
-Locale, LocaleIds = locale_pb2.Locale, locale_pb2.LocaleIds
-FawkesReq = fawkes_pb2.FawkesReq
-Device = device_pb2.Device
-MemSizes, CPUFreqs, ProductDevices, Languages, Countries, NetworkTypes, UsbStates, \
-    CPUAbiLists, CPUHardwares, ANDROID_VERSIONS, BatteryStates, ANDROID_KERNELS, ScreenDPIs = CONST.MemSizes, CONST.CPUFreqs, CONST.ProductDevices, CONST.Languages, CONST.Countries, CONST.NetworkTypes, \
-    CONST.UsbStates, CONST.CPUAbiLists, CONST.CPUHardwares, CONST.ANDROID_VERSIONS, CONST.BatteryStates, CONST.ANDROID_KERNELS, CONST.ScreenDPIs
-appsign = biliapi.appsign
-MetaDataBasicInfo = GrpcApiBaseModel.MetaDataBasicInfo
+from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataBasicInfo
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign
+from fastapi接口.service.grpc_module.Utils.CONST import MemSizes, CPUFreqs, ProductDevices, Languages, Countries, \
+    NetworkTypes, UsbStates, \
+    CPUAbiLists, CPUHardwares, ANDROID_VERSIONS, BatteryStates, ANDROID_KERNELS, ScreenDPIs
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.api.ticket.v1.ticket_pb2 import GetTicketResponse, \
+    GetTicketRequest
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.device.device_pb2 import Device
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.fawkes.fawkes_pb2 import FawkesReq
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.locale.locale_pb2 import Locale, LocaleIds
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.metadata_pb2 import Metadata
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.network.network_pb2 import Network, NetworkType
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.restriction.restriction_pb2 import Restriction
+from fastapi接口.service.grpc_module.grpc.grpc_proto.datacenter.hakase.protobuf.android_device_info_pb2 import \
+    AndroidDeviceInfo
+from fastapi接口.log.base_log import BiliGrpcApi_logger
 
 
 class Fp:
@@ -196,7 +186,7 @@ async def make_metadata(
         channel='bili',
         proxy=None,
         mid=0
-) -> tuple[tuple, ticket_pb2.GetTicketResponse | None, MetaDataBasicInfo]:
+) -> tuple[tuple, GetTicketResponse | None, MetaDataBasicInfo]:
     '''
     根据ua自动生成包含ua信息的MetaData
     :param mid:
@@ -232,9 +222,8 @@ async def make_metadata(
         "channel": metaDataNeedInfo.channel,
         "brand": metaDataNeedInfo.brand,
         "model": device_model,
-        # "device": "phone",
         "osver": metaDataNeedInfo.osver,
-        "fp_local": fp_local,
+        "fp_local": fp_remote,  # 三个保持一致
         "fp_remote": fp_remote,
         "version_name": metaDataNeedInfo.version_name,
         "fp": fp_remote,
@@ -250,32 +239,20 @@ async def make_metadata(
         "platform": "android"
     }
     metadata: tuple = (
-        ("accept-encoding", "identity"),
-        ("grpc-encoding", "gzip"),
+        ("accept", "*/*"),
+        ("accept-encoding", "gzip, deflate, br"),
+        ("app-key", "android64"),
+        ("bili-http-engine", "ignet"),
+        ("buvid", BUVID),
+        ("content-type", "application/grpc"),
+        ("env", "prod"),
         ("grpc-accept-encoding", "identity, gzip"),
-        ("env", "prod"),
-        ("app-key", "android"),
-        ("env", "prod"),
-        ("app-key", "android"),
-        ('user-agent', metaDataNeedInfo.ua),
-        ("x-bili-trace-id", gen_trace_id()),
-        ("x-bili-aurora-eid", gen_aurora_eid(mid) if mid and access_key else ""),
-        ("x-bili-mid", str(mid) if mid else ""),
-        ("x-bili-aurora-zone", ""),
-        ("x-bili-gaia-vtoken", ""),
-        ('x-bili-ticket', ""),
-        ("x-bili-metadata-bin", Metadata(**metadata_params).SerializeToString()),
+        ("grpc-encoding", "gzip"),
+        ("user-agent", metaDataNeedInfo.ua),
         ("x-bili-device-bin", device_info_bytes),
-        ("x-bili-network-bin", Network(type=NetworkType.WIFI, oid=random.choice(['46000',
-                                                                                 '46002',
-                                                                                 '46007',
-                                                                                 '46008'
-                                                                                 ])).SerializeToString()),
-        ("x-bili-restriction-bin", Restriction(unknown1=16).SerializeToString()
-         # Restriction(
-         #     # teenagers_mode=False, lessons_mode=False, mode=ModeType.NORMAL, review=True, disable_rcmd=False
-         # ).SerializeToString()
-         ),
+        ("x-bili-fawkes-req-bin", FawkesReq(
+            appkey="android64", env="prod", session_id=random_id()
+        ).SerializeToString()),
         ("x-bili-locale-bin", Locale(
             c_locale=LocaleIds(
                 language='zh',
@@ -286,15 +263,16 @@ async def make_metadata(
                 region='CN'
             ),
         ).SerializeToString()),
-        ("x-bili-exps-bin", ""
-         # Exps().SerializeToString()
-         ),
-        ("buvid", BUVID),
-        ("x-bili-fawkes-req-bin", FawkesReq(
-            appkey="android", env="prod", session_id=random_id()
-        ).SerializeToString()),
-        ('content-type', "application/grpc"),
-        # "x-bili-ticket":gen_random_x_bili_ticket(BUVID), # ticket没有搞明白怎么获取，应该是发一个请求，然后将这个请求的string作为参数，不变
+        ("x-bili-metadata-bin", Metadata(**metadata_params).SerializeToString()),
+        ("x-bili-metadata-ip-region", "CN"),
+        ("x-bili-network-bin", Network(type=NetworkType.WIFI, oid=random.choice(['46000',
+                                                                                 '46002',
+                                                                                 '46007',
+                                                                                 '46008'
+                                                                                 ])).SerializeToString()),
+        ("x-bili-restriction-bin", Restriction(unknown1=16).SerializeToString()),
+        ('x-bili-ticket', ""),
+        ("x-bili-trace-id", gen_trace_id())
     )
     try:
         await active_buvid(
@@ -549,7 +527,7 @@ async def get_bili_ticket(device_info: bytes,
                           fp_local: str,
                           md,
                           proxy=None
-                          ) -> ticket_pb2.GetTicketResponse | None:
+                          ) -> GetTicketResponse | None:
     android_build_id_moc = f"{''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(4))}.{(datetime.now() - timedelta(days=random.randint(365, 365 * 5))).strftime('%y%m%d')}.{str(random.randint(10000000, 99999999))}"
     rand_memory = MemSizes[random.choice(list(MemSizes.keys()))]
     rand_boot_id = random.randint(100000, 948576)
@@ -574,7 +552,7 @@ async def get_bili_ticket(device_info: bytes,
     rand_battery = random.randint(30, 100)
     rand_screen = random.choice(ScreenDPIs)
     rand_light_intensity = str(round(random.uniform(50.0, 600.0), 3))
-    x_fingerprint = android_device_info_pb2.AndroidDeviceInfo()
+    x_fingerprint = AndroidDeviceInfo()
     x_fingerprint.sdkver = '0.2.4'
     x_fingerprint.app_id = '1'
     x_fingerprint.app_version = app_version
@@ -708,7 +686,7 @@ async def get_bili_ticket(device_info: bytes,
         fingerprint=x_fingerprint.SerializeToString(),
         exbadbasket=b''
     ).gen()
-    reqdata = ticket_pb2.GetTicketRequest(
+    reqdata = GetTicketRequest(
         context={
             'x-fingerprint': x_fingerprint.SerializeToString(),
             'x-exbadbasket': b''
@@ -735,13 +713,13 @@ async def get_bili_ticket(device_info: bytes,
                 method='post',
                 data=data,
                 headers=tuple(new_headers),
-                proxies={
-                    'http': proxy['proxy']['http'],
-                    'https': proxy['proxy']['https']
-                } if proxy else None,
+                # proxies={
+                #     'http': proxy['proxy']['http'],
+                #     'https': proxy['proxy']['https']
+                # } if proxy else CONFIG.custom_proxy,
                 verify=False
             )
-            gresp = ticket_pb2.GetTicketResponse()
+            gresp = GetTicketResponse()
             if 'gzip' in dict(new_headers).get('grpc-encoding'):
                 gresp.ParseFromString(gzip.decompress(resp.content[5:]))
             else:
@@ -750,7 +728,7 @@ async def get_bili_ticket(device_info: bytes,
                 BiliGrpcApi_logger.error(f'获取ticket失败！\n{resp.content}\n{resp.headers}')
             return gresp
         except Exception as e:
-            BiliGrpcApi_logger.exception(f'使用代理 {proxy} 获取bili_ticket失败！\n{type(e)}\t{e}')
+            BiliGrpcApi_logger.exception(f'获取bili_ticket失败！\n{type(e)}\t{e}')
             await asyncio.sleep(30)
             if not proxy:
                 proxy = {'proxy':
@@ -807,7 +785,7 @@ async def active_buvid(brand, build, buvid, channel, app_version_build, app_vers
 
     req = await myreq.request(url=url, method='post', data=signed_data, headers=headers, proxies={
         'http': proxy['proxy']['http'],
-        'https': proxy['proxy']['https']} if proxy else None, verify=False)
+        'https': proxy['proxy']['https']} if proxy else CONFIG.custom_proxy, verify=False)
     BiliGrpcApi_logger.debug(f' {url} 激活buvid：{req.text}')
 
 

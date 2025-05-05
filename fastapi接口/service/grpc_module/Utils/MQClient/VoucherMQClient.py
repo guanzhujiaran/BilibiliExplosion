@@ -35,7 +35,6 @@ class VoucherMQClient(BasicMQServer):
                     voucher_info.version,
                     voucher_info.session_id,
                     False,
-                    True
                 )
             except Exception as e:
                 # pushme('-352Voucher出错', traceback.format_exc())

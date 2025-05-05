@@ -15,10 +15,8 @@ import time
 import ast
 import sqlite_utils
 from CONFIG import CONFIG
-import fastapi接口.service.grpc_module.src.SQLObject.models as models
+from fastapi接口.service.grpc_module.src.SQLObject.models import Bilidyndetail, Lotdata
 import json
-
-Bilidyndetail, Lotdata = models.Bilidyndetail, models.Lotdata
 
 sql_log = myfastapi_logger
 
@@ -52,7 +50,8 @@ class SQLHelper:
             **CONFIG.sql_alchemy_config.engine_config
         )
         self._session = async_sessionmaker(
-            self._engine, expire_on_commit=False
+            self._engine,
+            **CONFIG.sql_alchemy_config.session_config
         )
 
         self.main_table_name = main_table_name
@@ -125,7 +124,7 @@ class SQLHelper:
     # region 查询相关信息
     @lock_wrapper
     async def get_lost_lots(self, limit_ts: int = 7 * 3600 * 24) -> Sequence[
-        Union[models.Bilidyndetail, models.Lotdata]]:
+        Union[Bilidyndetail, Lotdata]]:
         """
         获取主表中lot_id存在，但抽奖信息表中不存在数据的lot_id和rid信息
         :return:
@@ -162,19 +161,19 @@ class SQLHelper:
         async with self._session() as session:
             # 子查询：获取最近的30万条记录
             subquery = (
-                select(Bilidyndetail.rid)
-                .order_by(Bilidyndetail.rid.desc())
+                select(Bilidyndetail.rid_int)
+                .order_by(Bilidyndetail.rid_int.desc())
                 .limit(300000)
                 .alias('t1')
             )
             # 主查询：查找缺失的rid值
             query = (
-                select((subquery.c.rid + 1).label('x'))
+                select((subquery.c.rid_int + 1).label('x'))
                 .where(
                     and_(
-                        ~exists().where(Bilidyndetail.rid == (subquery.c.rid + 1)),
-                        (subquery.c.rid + 1) > 0,
-                        func.length(func.cast(subquery.c.rid + 1, String)) < 18
+                        ~exists().where(Bilidyndetail.rid_int == (subquery.c.rid_int + 1)),
+                        (subquery.c.rid_int + 1) > 0,
+                        func.length(func.cast(subquery.c.rid_int + 1, String)) < 18
                     )
                 )
                 .order_by('x')
@@ -194,7 +193,7 @@ class SQLHelper:
         :return:[{...}, {...}] dynAllDetail dict
         '''
         async with self._session() as session:
-            sql = select(Bilidyndetail).where(Bilidyndetail.dynamic_id == dynamic_id).limit(1)
+            sql = select(Bilidyndetail).where(Bilidyndetail.dynamic_id_int == int(dynamic_id)).limit(1)
             result = await session.execute(sql)
             return result.scalars().first()
 
@@ -206,7 +205,7 @@ class SQLHelper:
         :return: Bilidyndetail
         '''
         async with self._session() as session:
-            sql = select(Bilidyndetail).where(Bilidyndetail.rid == rid).limit(1)
+            sql = select(Bilidyndetail).where(Bilidyndetail.rid_int == int(rid)).limit(1)
             result = await session.execute(sql)
             return result.scalars().first()
 
@@ -866,7 +865,7 @@ grpc_sql_helper = SQLHelper()
 if __name__ == "__main__":
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.get_all_lot_with_no_business_id()
+        result = await grpc_sql_helper.get_discountious_rids()
         sql_log.debug(len(result))
 
 

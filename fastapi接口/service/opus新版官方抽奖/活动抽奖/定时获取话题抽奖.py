@@ -77,10 +77,6 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     '''
     global topic_robot
     topic_robot = TopicRobot()
-    if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
-        topic_robot.sem = asyncio.Semaphore(30)
-    else:
-        topic_robot.sem = asyncio.Semaphore(15)
     await topic_robot.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():

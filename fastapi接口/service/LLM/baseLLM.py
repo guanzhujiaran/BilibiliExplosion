@@ -20,10 +20,14 @@ class BaseLLM:
         for x in CONFIG.chat_gpt_configs
     ]
 
-    def reset_llm_status(self, url):
+    def reset_llm_status(self, url:str):
         nums = 0
         for i in self._OpenAiclients:
-            if i.base_url == url:
+            if not url:
+                i.isAvailable = True
+                i.latestUseDate = datetime.now()
+                nums += 1
+            elif i.base_url == url:
                 i.isAvailable = True
                 i.latestUseDate = datetime.now()
                 nums += 1
@@ -54,7 +58,7 @@ class BaseLLM:
         raise Exception("No OpenAiClient is available")
 
     def read_openai_client_from_json(self):
-        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chatgpt/conf.json')
+        file_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'chatgpt/conf.json')
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
                 json_obj = json.loads(f.read())

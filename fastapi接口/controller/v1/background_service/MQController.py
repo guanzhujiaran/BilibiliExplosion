@@ -1,13 +1,14 @@
-import asyncio
 from typing import Dict
 from fastapi接口.log.base_log import MQ_logger
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataFastStream import official_reserve_charge_lot, \
-    upsert_official_reserve_charge_lot, upsert_lot_data_by_dynamic_id, upsert_topic_lot, router, exch, \
-    upsert_milvus_bili_lot_data, upsert_proxy_info, proxy_exch
+    upsert_official_reserve_charge_lot, upsert_lot_data_by_dynamic_id, upsert_topic_lot, router, \
+    upsert_milvus_bili_lot_data
 from faststream.rabbit.fastapi import RabbitMessage
 
-@router.subscriber(queue=official_reserve_charge_lot.queue, exchange=exch, retry=True)
+
+@router.subscriber(queue=official_reserve_charge_lot.mq_props.rabbit_queue,
+                   exchange=official_reserve_charge_lot.mq_props.exchange, retry=True)
 async def handle_official_reserve_charge_lot(
         body: LotDataReq,
         msg: RabbitMessage,
@@ -19,7 +20,8 @@ async def handle_official_reserve_charge_lot(
     )
 
 
-@router.subscriber(queue=upsert_official_reserve_charge_lot.queue, exchange=exch, retry=True)
+@router.subscriber(queue=upsert_official_reserve_charge_lot.mq_props.rabbit_queue,
+                   exchange=upsert_official_reserve_charge_lot.mq_props.exchange, retry=True)
 async def handle_upsert_official_reserve_charge_lot(
         newly_lot_data: Dict,
         msg: RabbitMessage,
@@ -31,7 +33,8 @@ async def handle_upsert_official_reserve_charge_lot(
     )
 
 
-@router.subscriber(queue=upsert_lot_data_by_dynamic_id.queue, exchange=exch, retry=True)
+@router.subscriber(queue=upsert_lot_data_by_dynamic_id.mq_props.rabbit_queue,
+                   exchange=upsert_lot_data_by_dynamic_id.mq_props.exchange, retry=True)
 async def handle_upsert_lot_data_by_dynamic_id(
         lot_data_dynamic_req: LotDataDynamicReq,
         msg: RabbitMessage,
@@ -43,7 +46,8 @@ async def handle_upsert_lot_data_by_dynamic_id(
     )
 
 
-@router.subscriber(queue=upsert_topic_lot.queue, exchange=exch, retry=True)
+@router.subscriber(queue=upsert_topic_lot.mq_props.rabbit_queue, exchange=upsert_topic_lot.mq_props.exchange,
+                   retry=True)
 async def handle_upsert_topic_lot(
         body: TopicLotData,
         msg: RabbitMessage,
@@ -55,7 +59,8 @@ async def handle_upsert_topic_lot(
     )
 
 
-@router.subscriber(queue=upsert_milvus_bili_lot_data.queue, exchange=exch, retry=True)
+@router.subscriber(queue=upsert_milvus_bili_lot_data.mq_props.rabbit_queue,
+                   exchange=upsert_milvus_bili_lot_data.mq_props.exchange, retry=True)
 async def handle_upsert_milvus_bili_lot_data(
         body: Dict,
         msg: RabbitMessage,
@@ -66,23 +71,3 @@ async def handle_upsert_milvus_bili_lot_data(
         msg,
     )
 
-
-@router.subscriber(queue=upsert_proxy_info.queue, exchange=proxy_exch, retry=True)
-async def handle_upsert_proxy_info(
-        body: Dict,
-        msg: RabbitMessage,
-) -> None:
-    await upsert_proxy_info.consume(
-        body,
-        msg
-    )
-
-
-if __name__ == "__main__":
-    import fastapi
-
-    app = fastapi.FastAPI()
-    app.include_router(router)
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -4,7 +4,7 @@ from fastapi接口.log.base_log import toutiao_api_logger
 from fastapi接口.service.toutiao.src.Tools.Common.ZlibToos import BlobToStr
 from fastapi接口.service.toutiao.src.ToutiaoSetting import CONFIG
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import sessionmaker
 import asyncio
 
@@ -37,8 +37,8 @@ class SqlHelperSpaceFeedDataDb:
             echo=False,  # 是否打印sql日志
             future=True
         )
-        self.AsyncSession = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False,
-                                         autoflush=True)  # 每次操作的时候将session实例化一下
+        self.AsyncSession = async_sessionmaker(engine,
+            **CONFIG.sql_alchemy_config.session_config)  # 每次操作的时候将session实例化一下
 
     @retry_on_error()
     async def add_feed_data(self, data: TFEEDDATA):

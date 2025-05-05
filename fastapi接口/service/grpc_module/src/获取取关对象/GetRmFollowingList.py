@@ -1,3 +1,4 @@
+# TODO:完善这个函数，不然会爆内存
 import asyncio
 import json
 import os
@@ -5,7 +6,6 @@ import random
 import time
 from datetime import datetime
 from typing import Union, Sequence
-
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from Bilibili_methods.all_methods import methods
@@ -14,12 +14,18 @@ from fastapi接口.log.base_log import get_rm_following_list_logger
 from fastapi接口.service.grpc_module.Utils.GrpcDynamicRespUtils import DynTool, ObjDynInfo
 from fastapi接口.service.grpc_module.src.获取取关对象.db.models import UserInfo, SpaceDyn
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
+from fastapi接口.utils.Common import sem_retry_wrapper, sem_gen
+
 current_dir = os.path.dirname(__file__)
-def get_file_path(relative_path:str):
+
+
+def get_file_path(relative_path: str):
     return os.path.join(current_dir, relative_path)
+
+
 class GetRmFollowingListV1:
     def __init__(self, ):
-        self.space_sem = asyncio.Semaphore(100)
+        self.space_sem = sem_gen(100)
         self.sql_lock = asyncio.Lock()
         self.logger = get_rm_following_list_logger
         self.lucky_up_list = []
@@ -31,8 +37,7 @@ class GetRmFollowingListV1:
         )
         self.AsyncSession = async_sessionmaker(
             engine,
-            expire_on_commit=False,
-            autoflush=True
+            **CONFIG.sql_alchemy_config.session_config
         )  # 每次操作的时候将session实例化一下
         self.check_up_sep_days = 7  # 最多隔7天检查一遍是否发了新动态
         self.BAPI = methods()
@@ -129,7 +134,7 @@ class GetRmFollowingListV1:
         async with self.space_sem:
             try:
                 uid = int(uid)
-            except:
+            except Exception:
                 self.logger.error("Invalid uid: {}".format(uid))
                 return
             checking_mark = False
@@ -260,7 +265,8 @@ class GetRmFollowingListV1:
                             break
             except Exception as e:
                 self.logger.exception(f'Exception while check is lot up!{uid}\n{e}')
-
+    
+    @sem_retry_wrapper
     async def check_db_exist_up(self, uid: Union[int, str]) -> bool:
         """
         检查数据库中是否存在up，并返回数据库中的up是否为抽奖up
@@ -306,7 +312,7 @@ class GetRmFollowingListV1:
             if running_task_num := len([x for x in tasks if x.done()]) == 0:
                 break
             else:
-                self.logger.info(
+                self.logger.critical(
                     f'当前正在检查关注列表：{len(following_list) - running_task_num}/{len(following_list)}个！')
                 await asyncio.sleep(10)
         results = await asyncio.gather(*tasks)
@@ -330,6 +336,5 @@ class GetRmFollowingListV1:
         resp_list = await self.check_lot_up(following_list)
         return resp_list
 
+
 get_rm_following_list = GetRmFollowingListV1()
-
-

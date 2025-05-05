@@ -1,5 +1,5 @@
 import asyncio
-
+import gc
 from fastapi接口.controller.common.base import new_router
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserveInfo
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn
@@ -29,7 +29,6 @@ async def v1_get_live_lots(
             if b'Lock' in k:
                 continue
             res = r.get(k)
-            myfastapi_logger.info(f'获取到直播抽奖信息：【{k}:{res}】')
             if res:
                 ret_list.append(json.loads(res))
         return ret_list
@@ -43,6 +42,11 @@ async def v1_get_live_lots(
 async def app_avaliable_api():
     await asyncio.sleep(1)
     return 'Service is running!'
+@router.get('/gc')
+async def app_avaliable_api():
+    await asyncio.to_thread(gc.collect)
+    return 'gc完成！'
+
 
 
 # endregion

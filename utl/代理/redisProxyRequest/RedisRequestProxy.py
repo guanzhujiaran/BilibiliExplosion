@@ -2,7 +2,6 @@
 # 由redis和mysql实现数据的统一
 import asyncio
 import json
-import os
 import random
 import time
 from dataclasses import dataclass
@@ -11,6 +10,8 @@ from enum import Enum
 from functools import reduce
 from json import JSONDecodeError
 from typing import Union
+
+import curl_cffi
 from exceptiongroup import ExceptionGroup
 from loguru import logger
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
@@ -24,23 +25,17 @@ from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelpe
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
     WriteError, NetworkError, TooManyRedirects
 from ssl import SSLError
-
-import fastapi接口.log.base_log as base_log
-import fastapi接口.service.MQ.base.MQServer.VoucherMQServer as VoucherMQServer
-import fastapi接口.utils.Common as Common
-import fastapi接口.utils.ProxyEvent as ProxyEvent
-import fastapi接口.utils.SqlalchemyTool as SqlalchemyTool
-import fastapi接口.service.grpc_module.Models.CustomRequestErrorModel as CustomRequestErrorModel
-import fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi as activateExClimbWuzhi
+from fastapi接口.log.base_log import request_with_proxy_logger
+from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import voucher_rabbit_mq
+from fastapi接口.utils.Common import GLOBAL_SCHEDULER, sem_wrapper
+from utl.代理.数据库操作.ProxyEvent import handle_proxy_412, handle_proxy_352, handle_proxy_request_fail, \
+    handle_proxy_succ
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request412Error, Request352Error, \
+    RequestProxyResponseError
+from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, \
+    APIExClimbWuzhi
 from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
-
-ExClimbWuzhi, APIExClimbWuzhi = activateExClimbWuzhi.ExClimbWuzhi, activateExClimbWuzhi.APIExClimbWuzhi
-Request412Error, Request352Error, RequestProxyResponseError = CustomRequestErrorModel.Request412Error, \
-    CustomRequestErrorModel.Request352Error, CustomRequestErrorModel.RequestProxyResponseError
-sqlalchemy_model_2_dict = SqlalchemyTool.sqlalchemy_model_2_dict
-request_with_proxy_logger = base_log.request_with_proxy_logger
-VoucherRabbitMQ = VoucherMQServer.VoucherRabbitMQ
-GLOBAL_SCHEDULER, _sem_wrapper = Common.GLOBAL_SCHEDULER, Common._sem_wrapper
 
 
 @dataclass
@@ -98,20 +93,17 @@ class RequestWithProxy:
         self.log = request_with_proxy_logger
         self.check_proxy_time: CheckProxyTime = CheckProxyTime()
         self.__dir_path = CONFIG.root_dir + 'utl/代理/'
-        self.timeout = 10
+        self.timeout = 30
+        self.available_proxy_timeout = 10
         self.mode = 'rand'  # single || rand # 默认是rand，改成single之后从分数最高的代理开始用，这样获取响应特别快
         self.mode_fixed = True  # 是否固定mode (已丢弃的功能)
-        self.proxy_apikey = ''
-        if os.path.exists(self.__dir_path + '代理api_key.txt'):
-            with open(self.__dir_path + '代理api_key.txt', 'r', encoding='utf-8') as f:
-                self.proxy_apikey = f.read().strip()
-
         #  self.s = session()
         self.fake_cookie_list: list[CookieWrapper] = []
         self.cookie_queue_num = 0
-        self._352MQServer = VoucherRabbitMQ.Instance()
+        self._352MQServer = voucher_rabbit_mq
         self.schd = GLOBAL_SCHEDULER
         self.schd.add_job(self.background_service, 'interval', seconds=2 * 3600, next_run_time=datetime.now(),
+                          # 每两个小时获取一次网络上的代理
                           misfire_grace_time=600)
 
     async def background_service(self):
@@ -131,7 +123,7 @@ class RequestWithProxy:
         :return:
         """
         cookie_data = None
-        if self.cookie_queue_num <= 20:
+        if self.cookie_queue_num <= 200:
             self.cookie_queue_num += 1
             cookie_data: Union[CookieWrapper, None] = None
         else:
@@ -166,32 +158,26 @@ class RequestWithProxy:
     async def get_one_rand_proxy(self) -> ProxyTab:
         return await SQLHelper.select_proxy('rand', channel=self.channel)
 
-    @_sem_wrapper
-    async def request_with_proxy(self, *args, **kwargs) -> dict | list[dict]:
+    async def request_with_proxy(self, is_use_available_proxy: bool = False, **kwargs) -> dict | list[dict]:
         """
+        :param is_use_available_proxy:
         :param args:
         :param kwargs:
         :mode single|rand 设置代理是否选择最高的单一代理还是随机
         :hybrid 是否将本地ipv6代理加入随机选择中
         :return:
         """
-        kwargs.update(*args)
-        args = ()
         real_proxy_weights = 1
         ipv6_proxy_weights = 1000
-        if 'mode' in kwargs.keys():
-            kwargs.pop('mode')
-        if 'hybrid' in kwargs.keys():
-            kwargs.pop('hybrid')
         status = 0
         ua = kwargs.get('headers', {}).get('user-agent', '') or kwargs.get('headers', {}).get('User-Agent',
                                                                                               '') or CONFIG.rand_ua
         origin = kwargs.get('headers', {}).get('origin', 'https://www.bilibili.com')
         referer = kwargs.get('headers', {}).get('referer', 'https://www.bilibili.com/')
         kwargs.get('headers').update({'user-agent': ua})
-        use_cookie_flag = False
+        cookie_data = None
+        used_available_proxy = False
         while 1:
-            cookie_data = await self.Get_Bili_Cookie(ua)
             proxy_flag: bool = random.choices([True, False], weights=[
                 real_proxy_weights if real_proxy_weights >= 0 else 0,
                 ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
@@ -199,11 +185,13 @@ class RequestWithProxy:
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
                 'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
+                cookie_data = await self.Get_Bili_Cookie(ua)
                 kwargs.get('headers').update({'cookie': cookie_data.ck, 'user-agent': cookie_data.ua})
-                use_cookie_flag = True
+            else:
+                kwargs.get('headers', {}).update({'cookie': ''})
             if not proxy_flag or status != 0:
                 real_proxy_weights += 1
-                proxy: ProxyTab = await get_available_proxy()
+                proxy, used_available_proxy = await get_available_proxy(is_use_available_proxy)
                 if not proxy:
                     self.log.warning('获取代理失败！')
                     await get_proxy_methods.get_proxy()
@@ -212,47 +200,48 @@ class RequestWithProxy:
                 ipv6_proxy_weights += 20
                 proxy: ProxyTab = ProxyTab(
                     **{
-                        'proxy_id': -1,
-                        'proxy': {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr},
+                        'proxy_id': 1,
+                        'proxy': CONFIG.custom_proxy,
                         'status': 0,
                         'update_ts': 0,
-                        'score': 0,
+                        'score': 10000,
                         'add_ts': 0,
-                        'success_times': 0,
-                        'zhihu_status': 0
+                        'success_times': 10000,
+                        'zhihu_status': 0,
+                        'computed_proxy_str': CONFIG.my_ipv6_addr
                     }
                 )
             req_dict = False
             req_text = ''
-            self.log.debug(f"全都准备好了，开始获取请求：\nURL={kwargs.get('url')}\n Proxy={proxy.proxy}")
             try:
-                req = await asyncio.wait_for(
-                    my_async_httpx.request(*args, **kwargs, timeout=self.timeout, proxies=proxy.proxy), self.timeout)
+                req = await my_async_httpx.request( **kwargs,
+                                                   timeout=self.timeout if not used_available_proxy else self.available_proxy_timeout,
+                                                   proxies=proxy.proxy)
                 req_text = req.text
-                self.log.debug(f"url:{kwargs.get('url')} 获取到请求结果！\n{proxy.proxy}\n{req.text[0:200]}\n")
-                if 'code' not in req_text and 'bili' in req.url.host:  # 如果返回的不是json那么就打印出来看看是什么
+                if 'code' not in req_text and 'bili' in req.url:  # 如果返回的不是json那么就打印出来看看是什么
                     self.log.info(req_text.replace('\n', ''))
                 if '<div class="txt-item err-text">由于触发哔哩哔哩安全风控策略，该次访问请求被拒绝。</div>' in req_text:
                     raise Request412Error(req_text, -412)
                 req_dict = req.json()
                 if type(req_dict) is list:
                     if proxy:
-                        await ProxyEvent.handle_proxy_succ(
+                        # self.log.critical(
+                        #     f'获取请求成功代理：{proxy.proxy}\n{kwargs.get("url")}')
+                        await handle_proxy_succ(
                             proxy_tab=proxy,
                         )
                     return req_dict
                 if type(req_dict) is not dict:
-                    self.log.warning(f'请求获取的req_dict类型出错！{req_dict}')
+                    self.log.critical(f'请求获取的req_dict类型出错！{req_dict}')
                 if ((req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict == {'code': 5,
                                                                                                            'message': 'Not Found'}) or req_dict.get(
                     'msg') == 'system error' and 'bili' in req.url.host):
-                    raise RequestProxyResponseError(f'代理返回真实响应错误！\n{req.text}\n{args}\n{kwargs}\n', -500)
+                    raise RequestProxyResponseError(f'代理返回真实响应错误！\n{req.text}\n{kwargs}\n', -500)
 
                 if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
-                    if use_cookie_flag:
-                        cookie_data.times_352 += 1
+                    if cookie_data: cookie_data.times_352 += 1
                     status = -412
-                    err_msg = f'{req_dict.get("code")}报错,换个ip\t{proxy}\t{self._timeshift(time.time())}\t{req_dict}\n{args}\t{kwargs}\n{req.headers}'
+                    err_msg = f'{req_dict.get("code")}报错,换个ip\t{proxy}\t{self._timeshift(time.time())}\t{req_dict}\n{kwargs}\n{req.headers}'
                     if req_dict.get('code') == 65539:
                         pass
                     if req_dict.get('code') == -412:
@@ -262,7 +251,7 @@ class RequestWithProxy:
                         ua = req.request.headers.get('user-agent')
                         self._352MQServer.push_voucher_info(voucher=voucher,
                                                             ua=ua,
-                                                            ck=cookie_data.ck if use_cookie_flag else "",
+                                                            ck=cookie_data.ck if cookie_data else "",
                                                             origin=origin,
                                                             referer=referer,
                                                             ticket='',
@@ -271,41 +260,45 @@ class RequestWithProxy:
                         raise Request352Error(err_msg, -352)
                     raise Request412Error(err_msg, req_dict.get('code'))
             except (Request412Error, Request352Error) as _err:
-                self.log.debug(
-                    f'{_err}\n请求：\n{kwargs}\n结束，报错了！\n{type(_err)}\t{sqlalchemy_model_2_dict(proxy)}\n{req_text}')
                 if proxy:
                     match (_err.code):
                         case -412:
-                            await ProxyEvent.handle_proxy_412(
+                            await handle_proxy_412(
                                 proxy_tab=proxy,
                             )
                         case -352:
-                            await ProxyEvent.handle_proxy_352(
+                            await handle_proxy_352(
                                 proxy_tab=proxy,
                             )
                         case _:
-                            await ProxyEvent.handle_proxy_request_fail(
+                            await handle_proxy_request_fail(
                                 proxy_tab=proxy,
                             )
+                continue
             except (
                     TooManyRedirects, SSLError, JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError,
                     ConnectTimeout,
                     ReadTimeout, ReadError, WriteError, InvalidURL, NetworkError, RequestProxyResponseError,
                     ExceptionGroup, ProxyConnectionError, ProxyTimeoutError, SocksProxyError,
-                    ValueError, ProtocolError, asyncio.exceptions.TimeoutError
+                    ValueError, ProtocolError, curl_cffi.requests.exceptions.ConnectionError,
+                    curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
+                    curl_cffi.requests.exceptions.Timeout,curl_cffi.requests.exceptions.HTTPError
             ) as _err:
-                self.log.debug(
-                    f'{_err}\n请求：\n{kwargs}\n结束，报错了！\n{type(_err)}\t{sqlalchemy_model_2_dict(proxy)}\n{req_text}')
+                self.log.debug(f'请求时发生网络错误：{type(_err)}\n{_err}')
                 if proxy:
-                    await ProxyEvent.handle_proxy_request_fail(
+                    await handle_proxy_request_fail(
                         proxy_tab=proxy,
                     )
                     ipv6_proxy_weights += 1
                 else:
                     real_proxy_weights += 20
                 continue
-            except  AttributeError as _err:
-                self.log.error(f'请求时出错，一般错误：{_err}')
+            except AttributeError as _err:
+                self.log.exception(f'请求时出错，一般错误：{_err}')
+                if proxy:
+                    await handle_proxy_request_fail(
+                        proxy_tab=proxy,
+                    )
                 continue
             except Exception as _err:
                 self.log.exception(
@@ -315,15 +308,16 @@ class RequestWithProxy:
                     f'\t{sqlalchemy_model_2_dict(proxy)}'
                     f'\n{_err}\n{req_text}')
                 if proxy:
-                    await ProxyEvent.handle_proxy_request_fail(
+                    await handle_proxy_request_fail(
                         proxy_tab=proxy,
                     )
                 continue
-
             if req_dict is False:
                 continue
             if proxy:
-                await ProxyEvent.handle_proxy_succ(
+                # self.log.critical(
+                #     f'获取请求成功代理：{proxy.proxy}\n{kwargs.get("url")}')
+                await handle_proxy_succ(
                     proxy_tab=proxy,
                 )
             return req_dict

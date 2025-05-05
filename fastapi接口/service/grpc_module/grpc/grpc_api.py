@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
 # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
+import string
+from ssl import SSLError
+
+import curl_cffi
+from google.protobuf.message import DecodeError, EncodeError
 from google.protobuf.json_format import MessageToDict  # 这是第三方包，不用管
 import gzip
 import asyncio
@@ -17,38 +22,24 @@ from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout,
     Response, WriteError, NetworkError
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2 as dynamic_pb2
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2_grpc as dynamic_pb2_grpc
-import fastapi接口.log.base_log as base_log
-import fastapi接口.utils.SqlalchemyTool as SqlalchemyTool
-import fastapi接口.service.grpc_module.Models.CustomRequestErrorModel as CustomRequestErrorModel
-import fastapi接口.service.grpc_module.Models.GrpcApiBaseModel as GrpcApiBaseModel
-import fastapi接口.service.MQ.base.MQServer.VoucherMQServer as VoucherMQServer
-import fastapi接口.utils.ProxyEvent as ProxyEvent
-import fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.archive.middleware.v1.preload_pb2 as preload_pb2
-import fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 as jiyan
-import fastapi接口.service.grpc_module.grpc.bapi.biliapi as biliapi
-import fastapi接口.service.grpc_module.grpc.bapi.models as biliapi_models
-import fastapi接口.service.grpc_module.Utils.metadata.makeMetaData as makeMetaData
-import fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi as activateExClimbWuzhi
-import utl.designMode.asyncPool as asyncPool
-import fastapi接口.service.grpc_module.Utils.GrpcRedis as GrpcRedis
-
-grpc_proxy_tools = GrpcRedis.grpc_proxy_tools
-BaseAsyncPool = asyncPool.BaseAsyncPool
-ExClimbWuzhi, APIExClimbWuzhi = activateExClimbWuzhi.ExClimbWuzhi, activateExClimbWuzhi.APIExClimbWuzhi
-make_metadata, is_useable_Dalvik, gen_trace_id = makeMetaData.make_metadata, makeMetaData.is_useable_Dalvik, makeMetaData.gen_trace_id
-LatestVersionBuild = biliapi_models.LatestVersionBuild
-get_latest_version_builds, resource_abtest_abserver = biliapi.get_latest_version_builds, biliapi.resource_abtest_abserver
-GeetestV3Breaker = jiyan.GeetestV3Breaker
-Config = dynamic_pb2.Config
-PlayerArgs = preload_pb2.PlayerArgs
-BiliGrpcApi_logger = base_log.BiliGrpcApi_logger
-handle_proxy_succ, handle_proxy_request_fail, handle_proxy_352, handle_proxy_unknown_err = ProxyEvent.handle_proxy_succ, ProxyEvent.handle_proxy_request_fail, ProxyEvent.handle_proxy_352, ProxyEvent.handle_proxy_unknown_err
-VoucherRabbitMQ = VoucherMQServer.VoucherRabbitMQ
-Request352Error = CustomRequestErrorModel.Request352Error
-MetaDataWrapper = GrpcApiBaseModel.MetaDataWrapper
-
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2 import Config, AdParam, \
+    DynDetailReq, DynDetailReply, DynDetailsReq, DynSpaceReq, DynSpaceRsp
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2_grpc import DynamicStub
+from fastapi接口.log.base_log import BiliGrpcApi_logger
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request352Error
+from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataWrapper
+from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import voucher_rabbit_mq
+from utl.代理.数据库操作.ProxyEvent import handle_proxy_succ, handle_proxy_request_fail, handle_proxy_352, \
+    handle_proxy_unknown_err
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
+from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import GeetestV3Breaker
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_latest_version_builds, resource_abtest_abserver
+from fastapi接口.service.grpc_module.grpc.bapi.models import LatestVersionBuild
+from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
+from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, \
+    APIExClimbWuzhi
+from utl.designMode.asyncPool import BaseAsyncPool
 from utl.代理.request_with_proxy import request_with_proxy
 from CONFIG import CONFIG
 from utl.代理.SealedRequests import my_async_httpx
@@ -59,10 +50,8 @@ from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
 
 current_file_path = os.path.abspath(__file__)
-print()
 
 
-# Handle gRPC errors
 def grpc_error(err):
     status = grpc.StatusCode.UNKNOWN
     details = str(err)
@@ -82,7 +71,7 @@ class BiliGrpc:
         self.my_proxy_addr = CONFIG.my_ipv6_addr
         self.grpc_api_any_log = BiliGrpcApi_logger
         # 版本号根据 ```https://app.bilibili.com/x/v2/version?mobi_app=android```这个api获取
-        self.version_name_build_list: [LatestVersionBuild] = [LatestVersionBuild(**x) for x in [
+        self.version_name_build_list: list[LatestVersionBuild] = [LatestVersionBuild(**x) for x in [
             {
                 "build": 8000200,
                 "version": "8.0.0"
@@ -133,7 +122,7 @@ class BiliGrpc:
             }
         ]]
         try:
-            self.version_name_build_list: [LatestVersionBuild] = get_latest_version_builds()[:5]  # 获取最新的build
+            self.version_name_build_list: list[LatestVersionBuild] = get_latest_version_builds()[:70]  # 获取最新的build
         except Exception as e:
             self.grpc_api_any_log.exception(e)
         self.ua = ("Dalvik/2.1.0 (Linux; U; Android 13; 22081212C Build/TQ2A.230505.002.A1) 7.63.0 os/android "
@@ -156,11 +145,11 @@ class BiliGrpc:
         self.channel = None
         self.proxy: ProxyTab | None = None
 
-        self.timeout = 10
+        self.timeout = 30
         self.cookies = None
         self.cookies_ts = 0
         self.latest_352_ts = 0
-        self._352MQServer = VoucherRabbitMQ.Instance()
+        self._352MQServer = voucher_rabbit_mq
         self.GeetestV3BreakerPool = BaseAsyncPool(10, GeetestV3Breaker, 'a_validate_form_voucher_ua')
 
     @property
@@ -203,8 +192,9 @@ class BiliGrpc:
             self.grpc_api_any_log.exception(e)
             return await self.__get_available_cookies()
 
-    async def _get_random_channel(self, is_need_channel: bool = False) -> tuple[ProxyTab, grpc.aio.Channel | None]:
-        proxy_tab = await get_available_proxy()
+    async def _get_random_channel(self, is_need_channel: bool = False, is_use_available_proxy: bool = False) -> tuple[
+        ProxyTab, grpc.aio.Channel | None]:
+        proxy_tab, _ = await get_available_proxy(is_use_available_proxy)
         channel = None
         if is_need_channel:
             channel = grpc.aio.secure_channel('grpc.biliapi.net:443', grpc.ssl_channel_credentials(),
@@ -356,7 +346,6 @@ class BiliGrpc:
                 proxy_flag = False
             if int(time.time()) - self.latest_352_ts <= 30 * 60:
                 proxy_flag = True
-            ip_status = None
             cookies = None
             if proxy_flag:
                 proxy, channel = await self._get_random_channel()
@@ -365,29 +354,26 @@ class BiliGrpc:
             else:
                 proxy: ProxyTab = ProxyTab(
                     **{
-                        'proxy_id': -1,
-                        'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr},
+                        'proxy_id': 1,
+                        'proxy': CONFIG.custom_proxy,
                         'status': 0,
                         'update_ts': 0,
-                        'score': 0,
+                        'score': 10000,
                         'add_ts': 0,
-                        'success_times': 0,
-                        'zhihu_status': 0
+                        'success_times': 10000,
+                        'zhihu_status': 0,
+                        'computed_proxy_str': CONFIG.my_ipv6_addr
                     }
                 )
 
                 if cookie_flag:
-                    self.cookies = await ExClimbWuzhi.verifyExClimbWuzhi(use_proxy=False, my_cfg=APIExClimbWuzhi(
+                    self.cookies = await ExClimbWuzhi.verifyExClimbWuzhi(use_proxy=True, my_cfg=APIExClimbWuzhi(
                         ua=self.ua
                     ))
                     cookies = self.cookies
 
             if force_non_proxy or not proxy:
                 proxy_flag = False
-            else:
-                ip_status = await grpc_proxy_tools.get_ip_status_by_ip(
-                    get_scheme_ip_port_form_proxy_dict(proxy.proxy)
-                )
             msg = grpc_req_message
             proto_bytes = msg.SerializeToString()
             headers = {
@@ -430,7 +416,6 @@ class BiliGrpc:
             #     new_headers += (('cookie', i.strip(),),)
             resp = Response(status_code=114514)
             try:
-                # self.grpc_api_any_log.debug(f'使用ip:{ip_status.to_dict() if ip_status else proxy}进行请求，url:{url}')
                 if 'gzip' in headers.get('grpc-encoding'):
                     compressed_proto_bytes = gzip.compress(proto_bytes, compresslevel=6)
                     data = b"\01" + len(compressed_proto_bytes).to_bytes(4, "big") + compressed_proto_bytes
@@ -465,7 +450,7 @@ class BiliGrpc:
                     #     version=md.version_name
                     # )
                     if not validate_token:
-                        self.grpc_api_any_log.debug(f'未携带validate_token报错-352')
+                        # self.grpc_api_any_log.debug(f'未携带validate_token报错-352')
                         parsed_url = urlparse(url)
                         validate_token, _ = await asyncio.gather(
                             *[self.GeetestV3BreakerPool.do(
@@ -490,7 +475,7 @@ class BiliGrpc:
                             continue
                         else:
                             self.grpc_api_any_log.critical(
-                                f'\n未获取到-352验证token:{validate_token}\n{SqlalchemyTool.sqlalchemy_model_2_dict(proxy)}')
+                                f'\n未获取到-352验证token:{validate_token}\n{sqlalchemy_model_2_dict(proxy)}')
                             raise Request352Error(
                                 f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，遇到-352，未获取到-352验证token',
                                 -352
@@ -507,41 +492,32 @@ class BiliGrpc:
                 else:
                     gresp.ParseFromString(resp.content[5:])
                 resp_dict = MessageToDict(gresp)
-                if proxy_flag:
+                if proxy:
                     await handle_proxy_succ(proxy_tab=proxy, )
-                self.grpc_api_any_log.info(
-                    f'{func_name}\t{url} \n获取grpc动态请求成功代理：{proxy.proxy} \n{grpc_req_message}\n{new_headers}'
-                    f'\n当前可用代理数量：{grpc_proxy_tools.available_num}/{grpc_proxy_tools.allNum}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
+                # self.grpc_api_any_log.critical(
+                #     f'{func_name}\t{url} \n获取grpc动态请求成功代理：{proxy.proxy} \n{grpc_req_message}\n{new_headers}')  # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
                 md.times_352 = 0
                 return resp_dict
             except (
                     ConnectionError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,
                     ReadError, WriteError,
                     InvalidURL, NetworkError, ValueError, OverflowError, ExceptionGroup, ProxyConnectionError,
-                    ProxyTimeoutError, SocksProxyError, ProtocolError
+                    ProxyTimeoutError, SocksProxyError, ProtocolError, SSLError,
+                    curl_cffi.requests.exceptions.ConnectionError,
+                    curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
+                    curl_cffi.requests.exceptions.Timeout,curl_cffi.requests.exceptions.HTTPError
+
             ) as httpx_err:
-                # self.grpc_api_any_log.debug(
-                #     f'请求失败！{traceback.format_exc(0)}ip:{ip_status.to_dict() if ip_status else proxy}进行请求，url:{url}')
                 if proxy_flag:
                     await handle_proxy_request_fail(proxy_tab=proxy, )
                     ipv6_proxy_weights += 1
                 else:
                     real_proxy_weights += 20
             except Request352Error as _352_err:
-                score_change = 10
-                if cookie_flag:
-                    if ip_status and ip_status.counter > 10:
-                        pass
-                    else:
-                        if cookies == self.cookies:
-                            self.cookies = None
-                            await self.__set_available_cookies(None, useProxy=True)
                 md.times_352 += 1  # -352报错就增加一次352次数，满了之后舍弃
                 ipv6_proxy_weights -= 10
-                if proxy_flag:
-                    if get_scheme_ip_port_form_proxy_dict(proxy.proxy) != self.my_proxy_addr:
-                        ...
-                    else:
+                if proxy:
+                    if get_scheme_ip_port_form_proxy_dict(proxy.proxy) == self.my_proxy_addr:
                         self.latest_352_ts = int(time.time())
                         self.grpc_api_any_log.debug(f'设置本地代理最后-352时间为：{self.latest_352_ts}')
                     await handle_proxy_352(
@@ -551,15 +527,18 @@ class BiliGrpc:
                 else:
                     real_proxy_weights += 20
             except Exception as err:
-                if str(err) == 'Error parsing message':
+                if type(err) == DecodeError or type(err) == EncodeError:
                     self.grpc_api_any_log.error(
-                        f'{func_name}\t解析grpc消息失败！\n{resp.text}\n{resp.content.hex()}')
+                        f'{func_name}\t解析grpc消息失败！\n{url}\n{grpc_req_message}\n{resp.text}\n{resp.content.hex()}')
+                    if proxy:
+                        await handle_proxy_succ(proxy_tab=proxy, )
                     return {}
+
                 self.grpc_api_any_log.exception(
-                    f"{func_name}\t{url} grpc_get_dynamic_detail_by_type_and_rid\nBiliGRPC error: {err}\n"
+                    f"{func_name}\n{grpc_req_message}\n{proxy.proxy}\n{url} grpc_get_dynamic_detail_by_type_and_rid\nBiliGRPC error: {err}\n"
                     f"{new_headers}\n"
                     f"{proxy.proxy}")
-                if proxy_flag:
+                if proxy:
                     await handle_proxy_unknown_err(proxy_tab=proxy, )
                     ipv6_proxy_weights += 1
                 else:
@@ -587,11 +566,11 @@ class BiliGrpc:
 
         while 1:
             proxy, channel, cookies = await self._prepare_ck_proxy()
-            dyn_details_req = dynamic_pb2.DynDetailsReq(
+            dyn_details_req = DynDetailsReq(
                 dynamic_ids=json.dumps({'dyn_ids': dyn_ids}),
             )
             try:
-                dynamic_client = dynamic_pb2_grpc.DynamicStub(channel)
+                dynamic_client = DynamicStub(channel)
                 # print(dyn_details_req.SerializeToString())
                 # ack = gen_random_access_key()
                 ack = ''
@@ -650,19 +629,18 @@ class BiliGrpc:
             # 'uid': random.randint(1, 3537105317792299),
             'dyn_type': dynamic_type,
             'rid': rid,
-            # "ad_param": AdParam(
-            #     # ad_extra='E86F4CFF1F8FA890A75155EEAA51E6AE4FA9DBE62FCE708186D0CE5EF37B86948620D8BA1D991685B1288E2EDE09C6D52F8C2D33D59872EAE1EB776D11F71523CE1AF2112D8A950B98F6A1A48F848BC65E3D1B2687A17E44CDDEF6F0174F5E6548175C99B236CB32EBBE9DD7819D2DA0E272638B4DD5D4B27AD4119C056FA5362A495A2A482E35BBDD264A1829624B4446583ACCDDC6F867B3B7D0A53A7E6863D8425D19899FF591BAF3205F2A2051DDF7D60C649D9DE5221DFC48D8F592FB31DB4A72ABD8960A8DA289EAFE1C5E61334854717F0627A8DD6A897240F3847F517ED311FDCC904D4A2B4183944BEB5C9E4080BD059A3B56D25219D4115F8861E8745D65144C4A7D906CE3A4C1BAD79D9F2E80D86CA43052937843D6A841FCE72295389B8428B90743BA06685D3880D342A51B8CCEF21C5D7BF64BB1917A245E8CBB20F79B40A08D4380CCD603179D6AD77F9ED906CE0007A3F1AEF1CD6703B739A245A81820550CE06FCA780D3F0A9C098FFAB6BEF2AC1C8D3448ACB27079E623C50AE141DEE943F26DCA8E8EDF32299A7BF8935E496CD3708ACA16114149C85C99E8A7B9B1EB5188620F531EB13A89254E0AC941706CC14F31C776DFB7D329F6DA649A425E058B4187D5EA0117C2107D518D10ADE56CA721DCFA53CD8688D4ADC151C338A2C74CA8DE46CB736D0743F7706C7D273CFB847FA3CE51BE6D976EF4739A6C3488199E15A4463DD7522DF5A43E8207BE32906748A59EF28AB065961B4D69AD1E000D2601C58EA27126A5A7A7D3E3DBCA9E743F75657FB53FED2391244D3A7331C8D08CA712D9E73BFBB45F41FA0DA2A4087C6148C0D78731EE9BBE877227EFC2633FC5D113ED7EF3300335151B5E65C5D493A9A6BDFEB8D317BDBE4DA1A2B433B3CDE87FFE40B3B2C1DCB316'
-            #     # ad_extra=''.joi n(random.choices(string.ascii_uppercase + string.digits,
-            #     #                                 k=random.choice([x for x in range(1300, 1350)])))
-            # ),
+            "ad_param": AdParam(
+                ad_extra=''.join(random.choices(string.ascii_uppercase + string.digits,
+                                                k=random.choice([x for x in range(1300, 1350)])))
+            ),
             'player_args': PlayerArgs(qn=32, fnval=272, voice_balance=1, voice_any=1),
             'share_id': 'dt.dt-detail.0.0.pv',
             'share_mode': 3,
             'local_time': 8,
             'config': Config()
         }
-        msg = dynamic_pb2.DynDetailReq(**data_dict)
-        gresp = dynamic_pb2.DynDetailReply()
+        msg = DynDetailReq(**data_dict)
+        gresp = DynDetailReply()
         return await self.handle_grpc_request(url, msg, gresp, cookie_flag, force_proxy=force_proxy)
 
     async def grpc_get_dynamic_detail_by_dynamic_id(self, dynamic_id: int | str,
@@ -696,8 +674,8 @@ class BiliGrpc:
             'local_time': 8,
             'config': Config()
         }
-        msg = dynamic_pb2.DynDetailReq(**data_dict)
-        gresp = dynamic_pb2.DynDetailReply()
+        msg = DynDetailReq(**data_dict)
+        gresp = DynDetailReply()
         return await self.handle_grpc_request(url, msg, gresp, cookie_flag, force_proxy=force_proxy)
 
     async def grpc_get_space_dyn_by_uid(self, uid: Union[str, int], history_offset: str = '', page: int = 1,
@@ -724,8 +702,8 @@ class BiliGrpc:
             'page': page,
             'from': 'space'
         }
-        msg = dynamic_pb2.DynSpaceReq(**data_dict)
-        gresp = dynamic_pb2.DynSpaceRsp()
+        msg = DynSpaceReq(**data_dict)
+        gresp = DynSpaceRsp()
         return await self.handle_grpc_request(url, msg, gresp, False, 'grpc_get_space_dyn_by_uid',
                                               force_non_proxy=force_non_proxy)
 

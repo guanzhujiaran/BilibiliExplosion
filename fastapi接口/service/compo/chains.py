@@ -1,7 +1,7 @@
 import re
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.output_parsers import StrOutputParser, BaseTransformOutputParser
+from langchain_core.output_parsers import  BaseTransformOutputParser
 from typing import List
 
 class CustomStrOutputParser(BaseTransformOutputParser[str]):

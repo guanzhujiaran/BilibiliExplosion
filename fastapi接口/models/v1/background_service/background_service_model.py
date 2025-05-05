@@ -69,6 +69,7 @@ class ProxyStatusResp(CustomBaseModel):
     mysql_sync_redis_ts: int = 0
     free_proxy_fetch_ts: int = 0
     sync_ts: int = 0  # 同步到redis的时间
+    sem_value: int = 0
 
     def is_need_sync(self) -> bool:
         return not (bool(self.sync_ts) and self.sync_ts > int(time.time()) - 600)

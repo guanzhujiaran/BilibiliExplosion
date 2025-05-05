@@ -4,10 +4,8 @@ from dataclasses import asdict
 import fastapi接口.log.base_log as base_log
 import fastapi接口.service.grpc_module.Models.RabbitmqModel as RabbitmqModel
 import fastapi接口.service.MQ.base.BasicMQ as BasicMQ
-import utl.designMode.singleton as singleton
 
 
-@singleton.Singleton
 class VoucherRabbitMQ(BasicMQ.BasicMQServer):
 
     def __init__(self):
@@ -32,3 +30,5 @@ class VoucherRabbitMQ(BasicMQ.BasicMQServer):
         except Exception as e:
             self.log.error(f"推送352数据至MQ失败: {e}")
             self.log.exception(e)
+
+voucher_rabbit_mq = VoucherRabbitMQ()

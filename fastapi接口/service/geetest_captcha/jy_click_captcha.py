@@ -1,5 +1,4 @@
 import asyncio
-
 import numpy as np
 from curl_cffi import requests
 from fastapi接口.service.geetest_captcha.textselect.src.method.jy_click import JYClick

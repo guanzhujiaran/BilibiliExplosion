@@ -3,7 +3,9 @@
 """
 import os
 import time
-from typing import Union
+from typing import Union, Literal
+
+import aiofiles
 from fastapi import Query, Body
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.common import CommonResponseModel
@@ -29,12 +31,15 @@ async def reply_single(reply_req: ReplyReq):
             answer=answer,
             ts=int(time.time())
         )
-        log_path = os.path.join(_current_dir, '../../../log/chatgpt_single.log')
-        write_mode = 'a+'
-        if not os.path.exists(log_path):
-            write_mode = 'w'
-        with open(log_path, write_mode, encoding='utf-8') as f:
-            f.write(f'|{reply_req.question}|\n|{reply_res.answer}|\n-----\n')
+        try:
+            log_path = os.path.join(_current_dir, '../../../log/chatgpt_single.log')
+            write_mode:Literal['a+','w'] = 'a+'
+            if not os.path.exists(log_path):
+                write_mode = 'w'
+            async with aiofiles.open(file=log_path, mode=write_mode, encoding='utf-8') as f:
+                await f.write(f'|{reply_req.question}|\n|{reply_res.answer}|\n-----\n')
+        except Exception as e:
+            myfastapi_logger.error(f'写入日志失败！{e} ')
         return CommonResponseModel(data=reply_res)
     except Exception as e:
         myfastapi_logger.error(f'AI回复失败！{e} ')
@@ -48,7 +53,7 @@ async def get_llm_status():
 
 
 @router.post('ResetLLMStatus', response_model=CommonResponseModel)
-async def reset_llm_status(base_url: str = Body(..., min_length=1)):
+async def reset_llm_status(base_url: str | None = Body(...)):
     return CommonResponseModel(msg=chatgpt.reset_llm_status(base_url))
 
 

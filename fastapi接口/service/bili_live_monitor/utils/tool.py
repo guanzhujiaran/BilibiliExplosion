@@ -1,14 +1,11 @@
 import datetime
 import requests
-import CONFIG
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import live_monitor_logger
 from utl.代理.SealedRequests import my_async_httpx
 
-__proxies__ = {
-    'http': CONFIG.CONFIG.my_ipv6_addr,
-    'https': CONFIG.CONFIG.my_ipv6_addr,
-}
-request_retry_times = 3
+__proxies__ = None
+request_retry_times = 30
 
 class Tool:
     @staticmethod
@@ -17,7 +14,7 @@ class Tool:
         headers = {
             "Content-Type": "application/json",
             "Connection": "close",
-            'User-Agent': CONFIG.CONFIG.rand_ua
+            'User-Agent': CONFIG.rand_ua
         }
         req: list[dict] = requests.request(method="GET", url=url, headers=headers,
                                            proxies=__proxies__).json()
@@ -36,7 +33,7 @@ class Tool:
         }
         headers = {
             'Referer': f'https://live.bilibili.com/{roomid}', 'Connection': 'close',
-            'User-Agent': CONFIG.CONFIG.rand_ua
+            'User-Agent': CONFIG.rand_ua
         }
         req = requests.request(method="GET", url=url, headers=headers, params=params, proxies=__proxies__).json()
         return req
@@ -54,7 +51,7 @@ class Tool:
         }
         headers = {
             'Referer': f'https://live.bilibili.com/{roomid}', 'Connection': 'close',
-            'User-Agent': CONFIG.CONFIG.rand_ua
+            'User-Agent': CONFIG.rand_ua
         }
         req = requests.request(method="GET", url=url, headers=headers, params=params, proxies=__proxies__).json()
         return req
@@ -76,7 +73,7 @@ class Tool:
             'sec-fetch-site': 'none',
             'sec-fetch-user': '?1',
             'upgrade-insecure-requests': '1',
-            'user-agent': CONFIG.CONFIG.rand_ua,
+            'user-agent': CONFIG.rand_ua,
         }
         params = {
             'roomid': room_id,
@@ -103,7 +100,7 @@ class Tool:
         headers = {
             "Content-Type": "application/json",
             "Connection": "close",
-            'User-Agent': CONFIG.CONFIG.rand_ua
+            'User-Agent':CONFIG.rand_ua
         }
         req: list[dict] = requests.request(method="GET", url=url, headers=headers,
                                            proxies=__proxies__
@@ -114,7 +111,7 @@ class Tool:
 class AsyncTool:
 
     @staticmethod
-    async def get_data_from_server() -> list[dict]:
+    async def get_data_from_server() -> list[dict]|None:
         p = __proxies__
         for _ in range(request_retry_times):
             try:
@@ -122,15 +119,14 @@ class AsyncTool:
                 headers = {
                     "Content-Type": "application/json",
                     "Connection": "close",
-                    'User-Agent': CONFIG.CONFIG.rand_ua
+                    'User-Agent': CONFIG.rand_ua
                 }
                 req: list[dict] = (await my_async_httpx.request(method="GET", url=url, headers=headers,
                                                                   proxies=p)).json()
                 return req
             except Exception as e:
-                if p is None:
-                    raise ConnectionError(f'发送请求失败！')
-                p = None
+                p = CONFIG.custom_proxy
+        return None
 
     @staticmethod
     async def RedPocketGetWinners(lot_id: int,room_id:int) -> dict:
@@ -144,16 +140,14 @@ class AsyncTool:
                 }
                 headers = {
                     'Referer': f'https://live.bilibili.com/{room_id}', 'Connection': 'close',
-                    'User-Agent': CONFIG.CONFIG.rand_ua
+                    'User-Agent': CONFIG.rand_ua
                 }
                 req = (
                     await my_async_httpx.request(method="GET", url=url, headers=headers, params=params,
                                                    proxies=p)).json()
                 return req
             except Exception as e:
-                if p is None:
-                    raise e
-                p = None
+                p = CONFIG.custom_proxy
 
     @staticmethod
     async def getLotteryInfoWeb(roomid) -> dict:
@@ -171,16 +165,14 @@ class AsyncTool:
                 }
                 headers = {
                     'Referer': f'https://live.bilibili.com/{roomid}', 'Connection': 'close',
-                    'User-Agent': CONFIG.CONFIG.rand_ua
+                    'User-Agent': CONFIG.rand_ua
                 }
                 req = (
                     await my_async_httpx.request(method="GET", url=url, headers=headers, params=params,
                                                    proxies=p)).json()
                 return req
             except Exception as e:
-                if p is None:
-                    raise e
-                p = None
+                p = CONFIG.custom_proxy
 
     @staticmethod
     async def getLotteryInterfaceV1AnchorCheck(room_id) -> dict:
@@ -198,16 +190,14 @@ class AsyncTool:
                 }
                 headers = {
                     'Referer': f'https://live.bilibili.com/{room_id}', 'Connection': 'close',
-                    'User-Agent': CONFIG.CONFIG.rand_ua
+                    'User-Agent': CONFIG.rand_ua
                 }
                 req = (
                     await my_async_httpx.request(method="GET", url=url, headers=headers, params=params,
                                                    proxies=p)).json()
                 return req
             except Exception as e:
-                if p is None:
-                    raise e
-                p = None
+                p = CONFIG.custom_proxy
 
     @staticmethod
     async def get_roomid_2_uid(room_id):
@@ -229,7 +219,7 @@ class AsyncTool:
                     'sec-fetch-site': 'none',
                     'sec-fetch-user': '?1',
                     'upgrade-insecure-requests': '1',
-                    'user-agent': CONFIG.CONFIG.rand_ua,
+                    'user-agent': CONFIG.rand_ua,
                 }
                 params = {
                     'roomid': room_id,
@@ -244,9 +234,7 @@ class AsyncTool:
                     live_monitor_logger.critical(f'获取room_id对应uid信息失败！响应：{req_dict}')
                 return uid
             except Exception as e:
-                if p is None:
-                    raise e
-                p = None
+                p = CONFIG.custom_proxy
 
     @staticmethod
     def str_2_DateTime(date_string: str, date_format: str = '%Y-%m-%dT%H:%M:%S', time_zone_offset=0) -> datetime:
@@ -263,13 +251,15 @@ class AsyncTool:
                 headers = {
                     "Content-Type": "application/json",
                     "Connection": "close",
-                    'User-Agent': CONFIG.CONFIG.rand_ua
+                    'User-Agent': CONFIG.rand_ua
                 }
                 req: list[dict] = (await my_async_httpx.request(method="GET", url=url, headers=headers,
                                                                   proxies=p
                                                                   )).json()
                 return req
             except Exception as e:
-                if p is None:
-                    raise e
-                p = None
+                p = CONFIG.custom_proxy
+
+if __name__ == "__main__":
+
+    ...

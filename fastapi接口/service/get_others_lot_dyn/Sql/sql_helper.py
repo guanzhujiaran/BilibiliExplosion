@@ -4,12 +4,12 @@ import json
 from datetime import datetime
 import random
 from enum import Enum
-from typing import Union, Callable, List, Any, Coroutine, Sequence
+from typing import Union, Callable, List, Sequence
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, InternalError
 
 from fastapi接口.log.base_log import get_others_lot_logger
-from sqlalchemy import select, and_, insert
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotdyninfo, \
     TLotuserspaceresp, TRiddynid
@@ -24,12 +24,12 @@ def lock_wrapper(func: Callable) -> Callable:
             try:
                 res = await func(*args, **kwargs)
                 return res
-            except IntegrityError as e:
+            except (IntegrityError, InternalError) as e:
                 get_others_lot_logger.exception(e)
                 await asyncio.sleep(random.choice([5, 6, 7]))
                 continue
             except Exception as e:
-                get_others_lot_logger.critical(e)
+                get_others_lot_logger.exception(e)
                 await asyncio.sleep(random.choice([5, 6, 7]))
                 continue
 
@@ -72,7 +72,7 @@ class __SqlHelper:
             **CONFIG.sql_alchemy_config.engine_config
         )
         self._session = async_sessionmaker(self._engine,
-                                           expire_on_commit=False,
+            **CONFIG.sql_alchemy_config.session_config
                                            )
 
     @lock_wrapper
@@ -87,13 +87,12 @@ class __SqlHelper:
     @lock_wrapper
     async def setDynIdByRidType(self, dynamic_id: int, rid: int, dynamic_type: int):
         async with self._session() as session:
-            async with session.begin():
-                await session.merge(TRiddynid(
-                    dynamic_id=dynamic_id,
-                    rid=rid,
-                    dynamic_type=dynamic_type
-                ))
-
+            await session.merge(TRiddynid(
+                dynamic_id=int(dynamic_id),
+                rid=int(rid),
+                dynamic_type=int(dynamic_type)
+            ))
+            await session.commit()
     # region 获取抽奖轮次信息相关
     @lock_wrapper
     async def getLatestFinishedRound(self) -> Union[TLotmaininfo, None]:
@@ -212,8 +211,8 @@ class __SqlHelper:
         :return:
         """
         async with self._session() as session:
-            async with session.begin():
-                await session.merge(DynInfo)
+            await session.merge(DynInfo)
+            await session.commit()
 
     @lock_wrapper
     async def getDynInfoByDynamicId(self, dynamic_id: int | str) -> TLotdyninfo | None:
@@ -244,12 +243,27 @@ class __SqlHelper:
     @lock_wrapper
     async def addLotUserInfo(self, LotUserInfo: TLotuserinfo):
         async with self._session() as session:
-            async with session.begin():
-                await session.merge(LotUserInfo)
-
+            await session.merge(LotUserInfo)
+            await session.commit()
     # endregion
 
     # region 空间响应的增删改查
+    @lock_wrapper
+    async def getSpaceRespByRoundId(self, round_id: int | str) -> Sequence[TLotuserspaceresp]:
+        """
+        获取所有比offset值大的动态，也就是获取offset值之后发布的动态
+        :param uid:
+        :param offset:
+        :return:
+        """
+        async with self._session() as session:
+            sql = select(TLotuserspaceresp).filter(
+                TLotuserspaceresp.dynLotRound_id == round_id
+            ).order_by(TLotuserspaceresp.spaceOffset.desc())
+            res = await session.execute(sql)
+            ret= res.scalars().all()
+            return ret
+
     @lock_wrapper
     async def getSpaceRespTillOffset(self, uid: Union[int, str], offset: Union[int, str]) -> list[dict]:
         """
@@ -272,9 +286,8 @@ class __SqlHelper:
     @lock_wrapper
     async def addSpaceResp(self, LotUserSpaceResp: TLotuserspaceresp):
         async with self._session() as session:
-            async with session.begin():
-                await session.merge(LotUserSpaceResp)
-
+            await session.merge(LotUserSpaceResp)
+            await session.commit()
     @lock_wrapper
     async def getOldestSpaceDynInfoByUid(self, uid: int) -> int:
         async with self._session() as session:
@@ -304,7 +317,7 @@ class __SqlHelper:
         async with self._session() as session:
             sql = select(TLotuserspaceresp).filter(
                 and_(
-                TLotuserspaceresp.spaceUid == uid,
+                    TLotuserspaceresp.spaceUid == uid,
                     TLotuserspaceresp.dynLotRound_id == round_id)).order_by(
                 TLotuserspaceresp.spaceOffset.asc()).limit(1)
             res = await session.execute(sql)

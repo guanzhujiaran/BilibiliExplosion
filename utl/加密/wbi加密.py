@@ -212,6 +212,10 @@ async def get_wbi_params(params: dict) -> Dict[Literal["w_rid", "wts"], str]:
 def gen_dm_args(params: dict):
     """reference: https://github.com/SocialSisterYi/bilibili-API-collect/issues/868"""
 
+    def gen_dm_img():
+        return {"x": random.randint(0, 1920), "y": random.randint(0, 1080), "z": random.randint(0, 200),
+                "timestamp": random.randint(0, 400), "k": random.randint(0, 100), "type": 0}
+
     def get_dm_cover_img_str(num=650):
         num = random.randrange(350, 651)
         sss = f'ANGLE (Intel Inc., Intel(R) Iris(TM) Plus Graphics {num}, OpenGL 4.1)Google Inc. (Intel Inc.)'
@@ -219,12 +223,33 @@ def gen_dm_args(params: dict):
         return _dm_cover_img_str
 
     dm_rand = 'ABCDEFGHIJK'
-    dm_img_list = json.dumps([], separators=(',', ':'))
-    dm_img_str = ''.join(random.sample(dm_rand, 2))  # 'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ'
-    dm_cover_img_str = ''.join(random.sample(dm_rand,
-                                             2))  # "QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyA2MzAgKDB4MDAwMDU5MUIpIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEpR29vZ2xlIEluYy4gKEludGVsKQ"
-    dm_img_inter = '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}'
-
+    dm_img_list = json.dumps([gen_dm_img() for _ in range(random.randint(1, 3))],
+                             separators=(',', ':'))
+    dm_img_str = ''.join(
+        random.choices(dm_rand,
+                       k=random.randint(2,
+                                        50)
+                       )
+    )  # 'V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ'
+    dm_cover_img_str = ''.join(random.choices(dm_rand,
+                                              k=random.randint(2,
+                                                               150)
+                                              )
+                               )  # "QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyA2MzAgKDB4MDAwMDU5MUIpIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEpR29vZ2xlIEluYy4gKEludGVsKQ"
+    same_of = random.randint(300, 500)
+    dm_img_inter = json.dumps({
+        "ds": [],
+        "wh": [
+            random.randint(1800, 1920),
+            random.randint(950, 1080),
+            random.randint(40, 100)
+        ],
+        "of": [
+            same_of,
+            random.randint(600, 900),
+            same_of]
+    },
+        separators=(',', ':'))
     params.update(
         {
             "dm_img_list": dm_img_list,

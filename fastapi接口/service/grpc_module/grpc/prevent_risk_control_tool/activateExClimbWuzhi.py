@@ -8,7 +8,7 @@ import struct
 from dataclasses import dataclass
 from typing import Optional, Literal
 from urllib.parse import quote
-import CONFIG
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import activeExclimbWuzhi_logger
 from utl.加密 import utils
 import random
@@ -469,7 +469,7 @@ def hmac_sha256(key, message):
 
 
 class ExClimbWuzhi:
-    proxy_ip = CONFIG.CONFIG.my_ipv6_addr
+    proxy_ip = CONFIG.custom_proxy
 
     # proxy_ip = None
     @staticmethod
@@ -496,12 +496,14 @@ class ExClimbWuzhi:
         cookie.append("=".join(['b_nut', str(int(time.time()))]))
         try:
             response = await MyAsyncReq.request(method="get",
-                                                 url=apiExClimbWuzhi.spi,
-                                                 headers={
-                                                     "referer": 'https://www.bilibili.com/',
-                                                     "user-agent": apiExClimbWuzhi.ua,
-                                                     "cookie": "; ".join(cookie),
-                                                 })
+                                                url=apiExClimbWuzhi.spi,
+                                                headers={
+                                                    "referer": 'https://www.bilibili.com/',
+                                                    "user-agent": apiExClimbWuzhi.ua,
+                                                    "cookie": "; ".join(cookie),
+                                                },
+                                                proxies=ExClimbWuzhi.proxy_ip
+                                                )
             response_dict = response.json()
             cookie.append("=".join(['buvid3', quote(response_dict['data']['b_3'], safe='')]))
             cookie.append("=".join(['buvid4', quote(response_dict['data']['b_4'], safe='')]))
@@ -538,7 +540,7 @@ class ExClimbWuzhi:
         resp = await MyAsyncReq.request(url=apiExClimbWuzhi.GenWebTicket,
                                         method='post',
                                         params=params,
-                                        headers=headers,
+                                        headers=headers, proxies=ExClimbWuzhi.proxy_ip
                                         )
         resp_json = resp.json()
         return {
@@ -561,8 +563,12 @@ class ExClimbWuzhi:
         payload = BuvidFp.gen_payload(my_cfg)
 
         if not my_cfg.cookie:
-            cookie = await ExClimbWuzhi._get_b3_b4_buvidfp_ticket_Cookie(payload, my_cfg, useProxy=use_proxy,
-                                                                         _from=_from)
+            cookie = await ExClimbWuzhi._get_b3_b4_buvidfp_ticket_Cookie(
+                payload,
+                my_cfg,
+                useProxy=use_proxy,
+                _from=_from
+            )
             my_cfg.cookie = cookie
         else:
             cookie = my_cfg.cookie
@@ -599,13 +605,14 @@ class ExClimbWuzhi:
             for i in cookie.split(';'):
                 headers += (('cookie', i.strip(),),)
         try:
-            resp = await MyAsyncReq.request(url=my_cfg.giaGateWayExClimbWuzhi,
-                                                 method='post',
-                                                 data=payload,
-                                                 headers=headers
-                                                 )
+            resp = await MyAsyncReq.request(
+                url=my_cfg.giaGateWayExClimbWuzhi,
+                method='post',
+                data=payload,
+                headers=headers,
+                proxies=ExClimbWuzhi.proxy_ip
+            )
             resp_dict = resp.json()
-            activeExclimbWuzhi_logger.debug(f'ExClimbWuzhi提交响应：{resp_dict}')
             if resp_dict.get('code') != 0:
                 activeExclimbWuzhi_logger.error(f'{resp_dict} ExClimbWuzhi提交失败！参数：\n{payload}')
         except Exception as e:
@@ -615,4 +622,5 @@ class ExClimbWuzhi:
 
 if __name__ == "__main__":
     import asyncio
+
     print(asyncio.run(ExClimbWuzhi.verifyExClimbWuzhi()))

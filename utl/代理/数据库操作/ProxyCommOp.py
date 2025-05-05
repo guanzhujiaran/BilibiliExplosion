@@ -1,22 +1,72 @@
+import asyncio
+from typing import Optional
+
 from fastapi接口.log.base_log import sql_log
 from utl.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods
-from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
-from fastapi接口.service.grpc_module.Utils.GrpcRedis import grpc_proxy_tools
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, AvailableProxy
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
+from utl.代理.数据库操作.available_proxy_sql_helper import sql_helper
+
+__available_proxy_num: int = 0
+__lock = asyncio.Lock()
 
 
-async def get_available_proxy() -> ProxyTab | None:
-    while 1:
-        available_ip_status = await grpc_proxy_tools.get_rand_available_ip_status()
-        proxy: ProxyTab | None = None
-        if available_ip_status:
-            proxy = await SQLHelper.get_proxy_by_ip(available_ip_status.ip)
-        if not proxy:
-            sql_log.debug(f'获取随机代理失败！正在尝试从全部的代理Redis中获取！')
-            proxy = await SQLHelper.select_proxy('rand')
-        if proxy:
-            sql_log.debug(f'成功获取到代理{proxy.proxy}')
-            return proxy
-        sql_log.debug(f'获取随机代理失败！正在尝试重新获取！')
-        await get_proxy_methods.get_proxy()
-        await SQLHelper.check_redis_data()
+async def get_available_proxy(
+        is_use_available_proxy: bool = False,
+        initial_retry_delay_seconds: int = 10  # Base delay between retries when no proxy is found
+) -> tuple[ProxyTab, bool]:
+    """
+    Continuously attempts to get a usable proxy from the database.
+    If none is found, triggers proxy acquisition and waits before retrying.
+    This function is designed to block/wait indefinitely until a proxy
+    is successfully retrieved and returned.
+
+    :param is_use_available_proxy: Whether to prioritize using proxies from the AvailableProxy table.
+    :param initial_retry_delay_seconds: The base delay in seconds before retrying after acquisition fails or finds no new proxies.
+    :return: A ProxyTab object. This function will not return None.
+    """
+    global __available_proxy_num
+    attempt = -1  # Keep track of attempts for logging and backoff
+    used_available_proxy = False
+    if __available_proxy_num == 0:
+        async with __lock:
+            if __available_proxy_num == 0:
+                __available_proxy_num = await sql_helper.get_num(is_available=True)
+    while True:  # Loop indefinitely until a proxy is found
+        attempt += 1
+        proxy_tab: Optional[ProxyTab] = None
+        # --- Attempt 1: Use AvailableProxy table (if requested) ---
+        if is_use_available_proxy or __available_proxy_num > 1000: # 1千个以上随便用
+            try:
+                # This function now selects AND updates the chosen AvailableProxy
+                available_proxy:Optional[AvailableProxy]
+                available_proxy, __available_proxy_num = await sql_helper.get_rand_available_proxy_sql()
+                if available_proxy and available_proxy.proxy_tab:
+                    # Successfully got an AvailableProxy and its associated ProxyTab is loaded
+                    proxy_tab = available_proxy.proxy_tab
+                    used_available_proxy = True
+            except Exception as e:
+                sql_log.exception(f"Attempt {attempt}: Error getting from AvailableProxy: {e}", exc_info=True)
+
+        # --- Attempt 2: Fallback to general ProxyTab table ---
+        if not proxy_tab:  # Only if Attempt 1 failed or wasn't requested
+            try:
+                # Assuming select_proxy tries to get a potentially usable one from the general pool
+                proxy_tab = await SQLHelper.select_proxy("rand")  # Or 'rand_potentially_good' if you adapt it
+            except Exception as e:
+                sql_log.exception(f"Attempt {attempt}: Error getting from ProxyTab: {e}")
+
+        # --- Check Result ---
+        if proxy_tab:
+            # Found a proxy, exit the infinite loop and return it
+            return proxy_tab, used_available_proxy
+        else:
+            try:
+                await get_proxy_methods.get_proxy()  # Fetch new proxies (likely puts into Redis)
+                await SQLHelper.check_redis_data()
+            except Exception as e:
+                sql_log.exception(f"Attempt {attempt}: Error during proxy acquisition process: {e}", exc_info=True)
+            await asyncio.sleep(initial_retry_delay_seconds)
+
+    # The while True loop ensures this point is never reached if a proxy is eventually found.
+    # If acquisition *never* yields a proxy, this function will wait forever.

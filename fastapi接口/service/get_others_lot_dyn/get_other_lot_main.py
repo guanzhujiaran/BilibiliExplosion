@@ -366,11 +366,12 @@ manual_reply_judge = ctx.eval("""
 					);
 				}
             """, )
+_is_use_available_proxy = True
 
 
 class FileMap(str, Enum):
-    current_file_path: str = os.path.dirname(os.path.abspath(__file__))
-    github_bili_upload: str = os.path.join(current_file_path, '../../../github/bili_upload')
+    current_file_path = os.path.dirname(os.path.abspath(__file__))
+    github_bili_upload = os.path.join(current_file_path, '../../../github/bili_upload')
 
 
 class OfficialLotType(str, Enum):
@@ -392,13 +393,17 @@ class BiliDynamicItem:
     dynamic_id: int | str = field(default=0, )  # 动态类型
     dynamic_type: int | str = field(default=2, )  # 动态类型
     dynamic_rid: int | str = field(default=0, )  # 动态rid
-    dynamic_raw_resp: dict = field(default_factory=dict, )  # 返回的响应
-
+    dynamic_raw_resp: dict = field(default_factory=dict, )  # 返回的响应，带code和data的dict
     dynamic_raw_detail: dict = field(default_factory=dict)  # 放解析下来的请求的字典，不高兴搞成class了
     bili_judge_lottery_result: BiliDynamicItemJudgeLotteryResult = field(
         default_factory=BiliDynamicItemJudgeLotteryResult)
 
     is_lot_orig: bool = field(default=False)  # 是否是抽奖动态的原动态
+
+    def __post_init__(self):
+        if not self.dynamic_id and not (self.dynamic_rid and self.dynamic_type):
+            get_others_lot_log.critical(f'没有有效的动态信息！')
+            raise ValueError('没有有效的动态信息！')
 
     def __hash__(self):
         if self.dynamic_id:
@@ -455,8 +460,9 @@ class BiliDynamicItem:
             '_': time.time()
         }
         try:
-            pinglunreq = await proxy_req.request_with_proxy(method="GET", url=pinglunurl, data=pinglundata,
-                                                            headers=pinglunheader, mode='single', hybrid='1')
+            pinglunreq = await proxy_req.request_with_proxy(
+                is_use_available_proxy=_is_use_available_proxy, method="GET", url=pinglunurl, data=pinglundata,
+                headers=pinglunheader, mode='single', hybrid='1')
         except:
             traceback.print_exc()
             get_others_lot_log.info(f'{pinglunurl}\t获取评论失败')
@@ -598,9 +604,9 @@ class BiliDynamicItem:
             author_name = dynamic_item.get('modules').get('module_author').get('name')
             # pub_time = dynamic_item.get('modules').get('module_author').get('pub_time') # 这个遇到一些电视剧，番剧之类的特殊响应会无法获取到
             pub_time = datetime.datetime.fromtimestamp(
-                dynamic_id_2_ts(dynamic_data_dynamic_id)).strftime('%Y年%m月%d日 %H:%M')
+                dynamic_id_2_ts(dynamic_data_dynamic_id)).strftime(
+                '%Y年%m月%d日 %H:%M') if dynamic_data_dynamic_id else datetime.datetime.fromtimestamp(100000)
             pub_ts = dynamic_item.get('modules').get('module_author').get('pub_ts')
-            self.dynamic_id = dynamic_data_dynamic_id
             self.dynamic_rid = dynamic_rid
             try:
                 official_verify_type = dynamic_item.get('modules').get('module_author').get(
@@ -609,9 +615,14 @@ class BiliDynamicItem:
                     official_verify_type = 1
             except Exception as e:
                 official_verify_type = -1
-            comment_count = dynamic_item.get('modules').get('module_stat').get('comment').get('count')
-            forward_count = dynamic_item.get('modules').get('module_stat').get('forward').get('count')
-            like_count = dynamic_item.get('modules').get('module_stat').get('like').get('count')
+            try:
+                comment_count = dynamic_item.get('modules').get('module_stat').get('comment').get('count')
+                forward_count = dynamic_item.get('modules').get('module_stat').get('forward').get('count')
+                like_count = dynamic_item.get('modules').get('module_stat').get('like').get('count')
+            except Exception:
+                comment_count = -2
+                forward_count = -2
+                like_count = -2
             dynamic_content1 = ''
             if dynamic_item.get('modules').get('module_dynamic').get('desc'):
                 dynamic_content1 += dynamic_item.get('modules').get('module_dynamic').get('desc').get(
@@ -645,11 +656,7 @@ class BiliDynamicItem:
                 relation = 1
             else:
                 relation = 0
-            is_liked = dynamic_item.get('modules').get('module_stat').get('like').get('status')
-            if is_liked:
-                is_liked = 1
-            else:
-                is_liked = 0
+            is_liked = 0
             if relation != 1:
                 get_others_lot_log.info(
                     f'未关注的response\nhttps://space.bilibili.com/{author_uid}\n{dynamic_data_dynamic_id}')
@@ -762,7 +769,11 @@ class BiliDynamicItem:
         except Exception as e:
             get_others_lot_log.exception(f"解析动态失败！\n{dynamic_req}\n{e}")
         if not self.dynamic_id:
-            await SqlHelper.setDynIdByRidType(dynamic_data_dynamic_id, dynamic_type, dynamic_rid)
+            if self.dynamic_rid and self.dynamic_type:
+                await SqlHelper.setDynIdByRidType(dynamic_data_dynamic_id, dynamic_rid, dynamic_type)
+                self.dynamic_id = dynamic_data_dynamic_id
+            else:
+                get_others_lot_log.critical(f'动态解析失败！\n{dynamic_req}')
         structure = {
             'rawJSON': dynamic_item,  # 原始的item数据
             'dynamic_id': dynamic_data_dynamic_id,
@@ -802,7 +813,7 @@ class BiliDynamicItem:
         return structure
 
     async def solve_dynamic_item_detail(self):
-        if not self.dynamic_raw_resp or not self.dynamic_raw_resp.get('data', {}).get('module_stat'):
+        if not self.dynamic_raw_resp:
             await self._get_dyn_detail_resp()
         dynamic_raw_detail = await self.__solve_dynamic_item_detail(self.dynamic_raw_resp)
         self.dynamic_raw_detail = dynamic_raw_detail
@@ -825,37 +836,54 @@ class BiliDynamicItem:
         if self.dynamic_id and not force_api:
             is_dyn_exist = await SqlHelper.isExistDynInfoByDynId(self.dynamic_id)  # 看动态数据库里面有没有
             if is_dyn_exist:
-                if is_dyn_exist.officialLotType != OfficialLotType.lot_dyn_origin_dyn.value:
-                    dynamic_detail_resp = is_dyn_exist.rawJsonStr
-                    if dynamic_detail_resp is not None:
-                        dynamic_req = {
-                            'code': 0,
-                            'data': {
-                                "item": dynamic_detail_resp
-                            }
+                dynamic_detail_resp = is_dyn_exist.rawJsonStr
+                if dynamic_detail_resp is not None:
+                    get_others_lot_log.debug(f'动态【{self.dynamic_id}】在动态数据库中，使用数据库数据')
+                    dynamic_req = {
+                        'code': 0,
+                        'data': {
+                            "item": dynamic_detail_resp
                         }
-            if not bool(dynamic_detail_resp and dynamic_detail_resp.get('modules', {}).get(
-                    'module_state')):  # 如果动态数据库里面的还是需要获取api，那就查看空间数据库的内容
+                    }
+                else:
+                    get_others_lot_log.debug(
+                        f'动态【{self.dynamic_id}】在动态数据库中，但是类型【{is_dyn_exist.officialLotType}】需要使用api获取')
+            else:
+                get_others_lot_log.warning(
+                    f'动态【{self.dynamic_id}】不在动态数据库中，检查空间动态')
+
+            if not bool(dynamic_detail_resp):  # 如果动态数据库里面的还是需要获取api，那就查看空间数据库的内容
                 is_space_exist = await SqlHelper.isExistSpaceInfoByDynId(self.dynamic_id)  # 看空间里面有没有
                 if is_space_exist:
                     # get_others_lot_log.critical(f'存在过的动态！！！{isDynExist.__dict__}')
                     dynamic_detail_resp = is_space_exist.spaceRespJson
                     if dynamic_detail_resp is not None:
+                        get_others_lot_log.debug(f'动态【{self.dynamic_id}】在空间数据库中，使用数据库数据')
                         dynamic_req = {
                             'code': 0,
                             'data': {
                                 "item": dynamic_detail_resp
                             }
                         }
-        force_api = not bool(
-            dynamic_detail_resp and dynamic_detail_resp.get('modules', {}).get('module_state'))  # 查看是否缺少模块，缺少模块就强制重新获取
+                    else:
+                        get_others_lot_log.warning(
+                            f'动态【{self.dynamic_id}】在空间数据库中，但空间spaceRespJson为None，需要使用api获取')
+                else:
+                    get_others_lot_log.warning(
+                        f'动态【{self.dynamic_id}】不在空间数据库中，需要使用api获取')
+
+        force_api = not bool(dynamic_detail_resp)  # 查看是否缺少模块，缺少模块就强制重新获取
         try:
             if not dynamic_req or force_api:
+                get_others_lot_log.debug(
+                    f'动态【{self.dynamic_id}】使用api获取\n{dynamic_req}\n{dynamic_detail_resp}')
                 if str(self.dynamic_type) != '2' and not self.dynamic_id:
                     dynamic_req = await get_polymer_web_dynamic_detail(rid=self.dynamic_rid,
-                                                                       dynamic_type=self.dynamic_type)
+                                                                       dynamic_type=self.dynamic_type,
+                                                                       is_use_available_proxy=_is_use_available_proxy)
                 else:
-                    dynamic_req = await get_polymer_web_dynamic_detail(dynamic_id=self.dynamic_id)
+                    dynamic_req = await get_polymer_web_dynamic_detail(dynamic_id=self.dynamic_id,
+                                                                       is_use_available_proxy=_is_use_available_proxy)
         except Exception as e:
             get_others_lot_log.exception(e)
             await asyncio.sleep(30)
@@ -926,7 +954,6 @@ class BiliDynamicItem:
                     return self.bili_judge_lottery_result
         await self.solve_dynamic_item_detail()
         dynamic_detail = self.dynamic_raw_detail
-
         try:
             if dynamic_detail and dynamic_detail.get('dynamic_id'):
                 dynamic_detail_dynamic_id = dynamic_detail['dynamic_id']  # 获取正确的动态id，不然可能会是rid或者aid
@@ -982,16 +1009,6 @@ class BiliDynamicItem:
                         f'https://t.bilibili.com/{dynamic_detail_dynamic_id}?type={self.dynamic_type}\t动态内容为空!')
                     deadline = None
                 premsg = BAPI.pre_msg_processing(dynamic_content)
-                if comment_count > 300:
-                    dynamic_content += await self.get_topcomment_with_proxy(str(dynamic_detail_dynamic_id), str(rid),
-                                                                            str(0), _type,
-                                                                            author_uid)
-                elif str(dynamic_detail.get('type')) == '8':
-                    if comment_count > 100:
-                        dynamic_content += await self.get_topcomment_with_proxy(str(dynamic_detail_dynamic_id),
-                                                                                str(rid),
-                                                                                str(0), _type,
-                                                                                author_uid)
                 ret_url = f'https://t.bilibili.com/{dynamic_detail_dynamic_id}'
                 if BAPI.zhuanfapanduan(dynamic_content):
                     ret_url += '?tab=2'
@@ -1096,13 +1113,16 @@ class BiliDynamicItem:
                                     'type') == 'ADDITIONAL_TYPE_UGC':
                                 ugc = dynamic_detail.get('module_dynamic').get('additional').get('ugc')
                                 aid_str = ugc.get('id_str')
-                                aid_dynamic_item = BiliDynamicItem(
-                                    dynamic_rid=aid_str,
-                                    dynamic_type=8,
-                                    is_lot_orig=True
-                                )
-                                await aid_dynamic_item.judge_lottery(high_lights_list, lotRound_id)
-                                attached_card = aid_dynamic_item.bili_judge_lottery_result.cur_dynamic if aid_dynamic_item.bili_judge_lottery_result else None
+                                if aid_str:
+                                    aid_dynamic_item = BiliDynamicItem(
+                                        dynamic_rid=aid_str,
+                                        dynamic_type=8,
+                                        is_lot_orig=True
+                                    )
+                                    await aid_dynamic_item.judge_lottery(high_lights_list, lotRound_id)
+                                    attached_card = aid_dynamic_item.bili_judge_lottery_result.cur_dynamic if aid_dynamic_item.bili_judge_lottery_result else None
+                                else:
+                                    get_others_lot_log.critical(f'动态没有附加id_str\n{dynamic_detail}')
             else:
                 get_others_lot_log.info(f'失效动态：https://t.bilibili.com/{self.dynamic_id}')
                 cur_dynamic = TLotdyninfo(
@@ -1128,8 +1148,6 @@ class BiliDynamicItem:
                 await SqlHelper.addDynInfo(
                     cur_dynamic
                 )
-
-
         except Exception as e:
             get_others_lot_log.exception(f'解析动态失败！！！{e}\n{dynamic_detail}')
             await asyncio.sleep(30)
@@ -1252,7 +1270,10 @@ class BiliSpaceUserItem:
                     f'当前UID：https://space.bilibili.com/{self.uid}/dynamic\n从半当中开始接着获取动态，获取到时间在{origin_offset}之后的动态，共计{len(items)}条，之后沿着该offset继续从B站接口获取空间动态')
                 first_get_dynamic_flag = False
             else:
-                dyreq_dict = await get_space_dynamic_req_with_proxy(self.uid, cur_offset if cur_offset else "")
+                start_ts= time.time()
+                get_others_lot_log.debug(f'正在前往获取用户【{self.uid}】空间动态请求！')
+                dyreq_dict = await get_space_dynamic_req_with_proxy(self.uid, cur_offset if cur_offset else "",
+                                                                    is_use_available_proxy=_is_use_available_proxy)
                 code = dyreq_dict.get('code')
                 if code != 0:
                     get_others_lot_log.critical(
@@ -1263,7 +1284,7 @@ class BiliSpaceUserItem:
                         f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}',
                         'text'
                     )
-                # get_others_lot_log.debug(f'获取用户【{self.uid}】空间动态请求返回：{dyreq_dict}')
+                get_others_lot_log.info(f'获取用户【{self.uid}】空间动态请求成功！耗时：{time.time()-start_ts}秒\n响应：\n{dyreq_dict}')
                 resp_dyn_ids = await self.__add_space_card_to_db(dyreq_dict)
                 if not first_dynamic_id and resp_dyn_ids:
                     first_dynamic_id = resp_dyn_ids[0]
@@ -1413,10 +1434,11 @@ class BiliSpaceUserItem:
                             }
                     }
                     bili_dynamic_item = BiliDynamicItem(dynamic_id=dynamic_id_str, dynamic_raw_resp=single_dynamic_resp)
-                    self.dynamic_infos.add(bili_dynamic_item)
+                    if isPubLotUser:  # 只添加发布抽奖动态的人的原始动态，如果是转发抽奖的抽奖号，那么他的转发抽奖的转发动态是不需要加入检查动态set的
+                        self.dynamic_infos.add(bili_dynamic_item)
                 else:
                     if dynamic_item.get('type') == 'DYNAMIC_TYPE_FORWARD':
-                        orig_dynamic_item = dynamic_item.get('orig')
+                        orig_dynamic_item = dynamic_item.get('orig', {})
                         orig_dynamic_id_str = orig_dynamic_item.get('id_str')
                         orig_single_dynamic_resp = {
                             'code': 0,
@@ -1425,9 +1447,13 @@ class BiliSpaceUserItem:
                                     "item": orig_dynamic_item
                                 }
                         }
-                        orig_bili_dynamic_item = BiliDynamicItem(dynamic_id=orig_dynamic_id_str,
-                                                                 dynamic_raw_resp=orig_single_dynamic_resp)
-                        self.dynamic_infos.add(orig_bili_dynamic_item)
+                        if orig_dynamic_id_str and orig_dynamic_item.get('type') != 'DYNAMIC_TYPE_NONE':
+                            orig_bili_dynamic_item = BiliDynamicItem(dynamic_id=orig_dynamic_id_str,
+                                                                     dynamic_raw_resp=orig_single_dynamic_resp)
+                            self.dynamic_infos.add(orig_bili_dynamic_item)
+                        else:
+                            if orig_dynamic_item and orig_dynamic_item.get('type') != 'DYNAMIC_TYPE_NONE':
+                                get_others_lot_log.critical(f'遇到转发动态，但是没有找到原始动态！\n{dynamic_item}')
                         module_dynamic = dynamic_item.get('modules').get('module_dynamic')
                         rich_text_nodes = module_dynamic.get('desc').get('rich_text_nodes')
                         dynamic_text = module_dynamic.get('desc').get('text')
@@ -1459,7 +1485,7 @@ class GetOthersLotDynRobot:
     """
 
     def __init__(self):
-        self._sem = asyncio.Semaphore(100)
+        self._sem = asyncio.Semaphore(300)
         self.isPreviousRoundFinished = False  # 上一轮抽奖是否结束
         self.nowRound: TLotmaininfo = TLotmaininfo()
         self.username = ''
@@ -1514,6 +1540,7 @@ class GetOthersLotDynRobot:
         self.scrapy_info = RobotScrapyInfo()
         self.space_succ_counter = ProgressCounter()
         self.dyn_succ_counter = ProgressCounter()
+        self.goto_check_dynamic_item_set = set()
 
     # region 获取gitee抽奖动态id
     async def solve_gitee_file_content(self, file_content) -> list[BiliDynamicItem]:
@@ -1594,12 +1621,9 @@ class GetOthersLotDynRobot:
     # region 获取uidlist中的空间动态
 
     async def __do_space_task(self, __bili_space_user: BiliSpaceUserItem, isPubLotUser: bool):
-        async with self._sem:
-            await asyncio.create_task(
-                __bili_space_user.get_user_space_dynamic_id(isPubLotUser=isPubLotUser, SpareTime=self.SpareTime,
-                                                            succ_counter=self.space_succ_counter)
-            )
-            self.space_succ_counter.succ_count += 1
+        await __bili_space_user.get_user_space_dynamic_id(isPubLotUser=isPubLotUser, SpareTime=self.SpareTime,
+                                                          succ_counter=self.space_succ_counter)
+        self.space_succ_counter.succ_count += 1
 
     async def get_all_space_dyn_id(self, bili_space_user_items: Set[BiliSpaceUserItem], isPubLotUser=False):
         self.space_succ_counter.total_num = len(bili_space_user_items)
@@ -1607,7 +1631,8 @@ class GetOthersLotDynRobot:
         for i in bili_space_user_items:
             task = asyncio.create_task(self.__do_space_task(i, isPubLotUser))
             tasks.add(task)
-        await asyncio.gather(*tasks, return_exceptions=True)
+            task.add_done_callback(tasks.discard)
+        await asyncio.gather(*tasks)
         get_others_lot_log.info(f'{len(bili_space_user_items)}个空间获取完成')
         self.space_succ_counter.is_running = False
 
@@ -1718,50 +1743,37 @@ class GetOthersLotDynRobot:
             await item.judge_lottery(highlight_word_list=highlight_word_list, lotRound_id=lotRound_id)
             self.dyn_succ_counter.succ_count += 1
 
-    def __unzip_lot_uid_set_from_bili_space_user_items_set(self, bili_space_user_items_set: Set[BiliSpaceUserItem]):
-        goto_check_bili_dynamic_item_set: Set[BiliDynamicItem] = set()
-        before_filter_dynamic_id_list = []
-        goto_check_bili_dynamic_id_set = set()
-        for x in bili_space_user_items_set:
-            for _ in x.dynamic_infos:
-                if _.dynamic_id not in goto_check_bili_dynamic_item_set:
-                    goto_check_bili_dynamic_item_set.add(_)
-                    goto_check_bili_dynamic_id_set.add(_.dynamic_id)
-                before_filter_dynamic_id_list.append(_.dynamic_id)
-            for y in x.pub_lot_users:
-                for _ in y.dynamic_infos:
-                    if _.dynamic_id not in goto_check_bili_dynamic_item_set:
-                        goto_check_bili_dynamic_item_set.add(_)
-                        goto_check_bili_dynamic_id_set.add(_.dynamic_id)
-                    before_filter_dynamic_id_list.append(_.dynamic_id)
-
-        return goto_check_bili_dynamic_item_set, before_filter_dynamic_id_list, goto_check_bili_dynamic_id_set
-
     async def main(self):
         await self.__init()
         await asyncio.to_thread(self.fetch_gitee_info)
 
         self.bili_dynamic_items_set.update(await self.get_gitee_lot_dynid())  # 添加gitee动态id
-        await self.get_all_space_dyn_id(self.bili_space_user_items_set, isPubLotUser=False)
+        await self.get_all_space_dyn_id(self.bili_space_user_items_set, isPubLotUser=False)  # 获取抽奖号的空间
         pub_lot_uid_set: Set[BiliSpaceUserItem] = set()
         for x in self.bili_space_user_items_set:
             pub_lot_uid_set.update(x.pub_lot_users)
-        get_others_lot_log.debug(f'总共要获取{len(pub_lot_uid_set)}个发起抽奖用户的空间！')
-        await self.get_all_space_dyn_id(pub_lot_uid_set, isPubLotUser=True)
+        get_others_lot_log.critical(f'总共要获取{len(pub_lot_uid_set)}个发起抽奖用户的空间！')
+        await self.get_all_space_dyn_id(pub_lot_uid_set, isPubLotUser=True)  # 获取那些发起抽奖的人的空间
         total_lot_uid_set: Set[BiliSpaceUserItem] = set()
         total_lot_uid_set.update(self.bili_space_user_items_set)
         total_lot_uid_set.update(pub_lot_uid_set)
-        get_others_lot_log.debug(f'总共获取了{len(pub_lot_uid_set)}个发起抽奖用户的空间！')
-        goto_check_bili_dynamic_item_set, before_filter_dynamic_id_list, goto_check_bili_dynamic_id_set = self.__unzip_lot_uid_set_from_bili_space_user_items_set(
-            total_lot_uid_set)
+        get_others_lot_log.critical(f'总共获取了{len(pub_lot_uid_set)}个发起抽奖用户的空间！')
+        for x in total_lot_uid_set:
+            self.goto_check_dynamic_item_set.update(x.dynamic_infos)
+            for y in x.pub_lot_users:
+                self.goto_check_dynamic_item_set.update(y.dynamic_infos)
 
-        get_others_lot_log.critical(f'去重过滤前{len(before_filter_dynamic_id_list)}条待检查动态')
-        get_others_lot_log.critical(f'去重过滤后{len(goto_check_bili_dynamic_item_set)}条待检查动态')
-        self.dyn_succ_counter.total_num = len(goto_check_bili_dynamic_item_set)
-
+        get_others_lot_log.critical(f'{len(self.goto_check_dynamic_item_set)}条待检查动态')
+        self.dyn_succ_counter.total_num = len(self.goto_check_dynamic_item_set)
+        tasks = set()
+        for x in self.goto_check_dynamic_item_set:
+            task = asyncio.create_task(
+                self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id)
+            )
+            tasks.add(task)
+            task.add_done_callback(tasks.discard)
         await asyncio.gather(
-            *[self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id) for x in
-              goto_check_bili_dynamic_item_set], return_exceptions=True)
+            *tasks)
 
         await self._after_scrapy()
         self.nowRound.isRoundFinished = 1

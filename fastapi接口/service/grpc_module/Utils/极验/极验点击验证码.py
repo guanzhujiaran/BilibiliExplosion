@@ -14,19 +14,14 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from CONFIG import CONFIG
-import fastapi接口.log.base_log as base_log
-import fastapi接口.service.geetest_captcha.jy_click_captcha as jy_click_captcha
-import fastapi接口.service.grpc_module.Utils.UserAgentParser as UserAgentParser
-import fastapi接口.service.grpc_module.Utils.极验.models.captcha_models as captcha_models
-import fastapi接口.service.grpc_module.grpc.bapi.biliapi as biliapi
-import fastapi接口.service.grpc_module.Utils.metadata.makeMetaData as makeMetaData
+from fastapi接口.log.base_log import Voucher352_logger
+from fastapi接口.service.geetest_captcha.jy_click_captcha import jy_click
+from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
+from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, \
+    GeetestSuccessTimeCalc
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign, get_geetest_reg_info, validate_geetest
+from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import gen_trace_id
 
-gen_trace_id = makeMetaData.gen_trace_id
-appsign, get_geetest_reg_info, validate_geetest = biliapi.appsign, biliapi.get_geetest_reg_info, biliapi.validate_geetest
-CaptchaResultInfo, GeetestRegInfo, GeetestSuccessTimeCalc = captcha_models.CaptchaResultInfo, captcha_models.GeetestRegInfo, captcha_models.GeetestSuccessTimeCalc
-UserAgentParser = UserAgentParser.UserAgentParser
-jy_click = jy_click_captcha.jy_click
-Voucher352_logger = base_log.Voucher352_logger
 
 class GeetestV3Breaker:
     def __init__(self):
@@ -34,18 +29,11 @@ class GeetestV3Breaker:
         self.current_file_root_dir = os.path.dirname(os.path.abspath(__file__))  # 就是当前文件的路径目录
         self.driver = None
         self.wait = None
-        self.captcha_detector = None
         self.geetest_validator_html_path = "file://" + os.path.join(self.current_file_root_dir,
                                                                     'Geetest_html/geetest-validator/index.html')
         # 本地极验校验工具的路径
         self.succ_stats = GeetestSuccessTimeCalc()
         self.click = None
-
-    def init_det(self):
-        if not self.captcha_detector:
-            from fastapi接口.service.grpc_module.Utils.极验.util.utils_get_target_center_position import \
-                captcha_detector
-            self.captcha_detector = captcha_detector
 
     def init_browser(self, headless: bool = True):
         self.log.info('初始化了一个selenium')
@@ -70,22 +58,19 @@ class GeetestV3Breaker:
         captcha_btn = self.driver.find_element(By.CSS_SELECTOR, '.geetest_radar_tip')
         captcha_btn.click()  # 点击生成验证码modal，弹出验证码界面
 
-    def _step3_break_geetest_validation(self, use_jy_click: bool) -> CaptchaResultInfo:
+    def _step3_break_geetest_validation(self) -> CaptchaResultInfo:
         geetest_item_img = self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".geetest_item_img")),
                                            message="极验验证码加载失败")
         geetest_tip_img = self.driver.find_element(By.CSS_SELECTOR, '.geetest_tip_img')
         tip_img_style = geetest_tip_img.get_attribute('style')
         picurl = tip_img_style[tip_img_style.find('https'):tip_img_style.find('");')]
-        if use_jy_click:
-            captcha_result_info: CaptchaResultInfo = jy_click(picurl)
-        else:
-            captcha_result_info: CaptchaResultInfo = self.captcha_detector.detect(picurl)
+        captcha_result_info: CaptchaResultInfo = jy_click(picurl)
         if captcha_result_info.target_centers is None:
             self.log.error(f'验证码识别失败，请重新尝试，错误信息：{captcha_result_info.img_name}')
             geetest_refresh = self.driver.find_element(By.CSS_SELECTOR, '.geetest_refresh')
             geetest_refresh.click()
             self.succ_stats.total_time += 1
-            return self._step3_break_geetest_validation(use_jy_click)
+            return self._step3_break_geetest_validation()
         ac = ActionChains(self.driver)
         ac.move_to_element_with_offset(geetest_item_img, -geetest_item_img.rect['width'] / 2,
                                        -geetest_item_img.rect['height'] / 2).pause(0.1)
@@ -121,7 +106,7 @@ class GeetestV3Breaker:
 
         return None
 
-    def break_geetest(self, gt, challenge, use_jy_click=False) -> Union[str, None]:
+    def break_geetest(self, gt, challenge) -> Union[str, None]:
         if not self.driver.current_window_handle:
             self.driver = webdriver.Edge()
         if 'file' not in self.driver.current_url:
@@ -130,15 +115,12 @@ class GeetestV3Breaker:
         time.sleep(0.5)
         self._step2_click_generate_btn()
         time.sleep(0.5)
-        captcha_result_info = self._step3_break_geetest_validation(use_jy_click)
+        captcha_result_info = self._step3_break_geetest_validation()
         if captcha_result_info.target_centers is None:
             self.log.warning(f'识别验证码失败！')
             return None
         if validattion := self._step4_get_validation():
             return validattion
-
-        self.captcha_detector.save_draw_rectangle(captcha_result_info.origin_img, captcha_result_info.bboxes,
-                                                  self.captcha_detector.log_path.detect_failed_pic + f'geetest_validate_fail_{captcha_result_info.img_name}')
         return None
 
     # region 静态方法，获取极验信息和验证用
@@ -292,16 +274,12 @@ class GeetestV3Breaker:
                                  version: str = "",
                                  session_id: str = "",
                                  use_bili_ticket_gt=True,
-                                 use_jy_click_selenium=False
-                                 ) -> str:
+                                 ):
         h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
         if self.driver is None:
-            if use_bili_ticket_gt or use_jy_click_selenium:
-                self.init_browser()
-            if use_bili_ticket_gt:
-                self.init_det()
+            self.init_browser()
         try:
             geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
                                                                      version=version)
@@ -334,7 +312,6 @@ class GeetestV3Breaker:
                     if validation := self.break_geetest(
                             geetest_reg_info.geetest_gt,
                             geetest_reg_info.geetest_challenge,
-                            use_jy_click=use_jy_click_selenium
                     ):
                         validate_result = GeetestV3Breaker.validate_geetest(
                             challenge=geetest_reg_info.geetest_challenge,
@@ -372,16 +349,12 @@ class GeetestV3Breaker:
                                          ticket: str = "",
                                          version: str = "",
                                          session_id: str = "",
-                                         use_bili_ticket_gt=True,
-                                         use_jy_click_selenium=False):
+                                         use_bili_ticket_gt=True,):
         h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
         if self.driver is None:
-            if use_bili_ticket_gt or use_jy_click_selenium:
-                await asyncio.to_thread(self.init_browser)
-            if use_bili_ticket_gt:
-                await asyncio.to_thread(self.init_det)
+            await asyncio.to_thread(self.init_browser)
         try:
             geetest_reg_info = await get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
                                                           version=version)
@@ -414,7 +387,6 @@ class GeetestV3Breaker:
                     if validation := await asyncio.to_thread(self.break_geetest,
                                                              geetest_reg_info.geetest_gt,
                                                              geetest_reg_info.geetest_challenge,
-                                                             use_jy_click_selenium,
                                                              ):
                         validate_result = await validate_geetest(
                             challenge=geetest_reg_info.geetest_challenge,

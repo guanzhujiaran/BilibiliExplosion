@@ -5,7 +5,6 @@ from typing import Union
 import asyncio
 import time
 from datetime import datetime, timedelta
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi接口.log.base_log import official_lot_logger as log
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
@@ -70,10 +69,6 @@ class pubArticleInfo(CustomBaseModel):
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     global dyn_detail_scrapy
     dyn_detail_scrapy = DynDetailScrapy()
-    if time.time() - pub_article_info.lastPubDate.timestamp() > 8 * 3600:
-        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(50)
-    else:
-        dyn_detail_scrapy.scrapy_sem = asyncio.Semaphore(100)
     await dyn_detail_scrapy.main()
     log.error('这轮跑完了！使用内置定时器,开启定时任务,等待时间到达后执行')
     if not schedule_mark or pub_article_info.is_need_to_publish():

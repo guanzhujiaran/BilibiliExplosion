@@ -12,23 +12,15 @@ from utl.代理.SealedRequests import my_async_httpx as _my_sealed_req
 from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
 from utl.pushme.pushme import pushme
 
-import utl.代理.request_with_proxy as RequestWithProxy
-import fastapi接口.log.base_log as base_log
-import fastapi接口.service.grpc_module.Utils.UserAgentParser as UserAgentParser
-import fastapi接口.service.grpc_module.Utils.response.check_resp as check_resp
-import fastapi接口.service.grpc_module.Utils.极验.models.captcha_models   as captcha_models
-import fastapi接口.service.grpc_module.grpc.bapi.models as bapi_models
+from utl.代理.request_with_proxy import request_with_proxy
+from fastapi接口.log.base_log import bapi_log
+from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
+from fastapi接口.service.grpc_module.Utils.response.check_resp import check_reserve_relation_info
+from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import GeetestRegInfo
+from fastapi接口.service.grpc_module.grpc.bapi.models import LatestVersionBuild
 
-
-LatestVersionBuild = bapi_models.LatestVersionBuild
-GeetestRegInfo=captcha_models.GeetestRegInfo
-check_reserve_relation_info = check_resp.check_reserve_relation_info
-bapi_log = base_log.bapi_log
-UserAgentParser = UserAgentParser.UserAgentParser
-
-
-proxy_req = RequestWithProxy.request_with_proxy()
-_custom_proxy = {'http': CONFIG.my_ipv6_addr, 'https': CONFIG.my_ipv6_addr}
+proxy_req = request_with_proxy()
+_custom_proxy = CONFIG.custom_proxy
 black_code_list = [-412, -352]  # 异常代码，需要重试的
 
 
@@ -38,8 +30,6 @@ def _request_wrapper(func):
             try:
                 resp_dict = await func(*args, **kwargs)
                 if resp_dict.get('code') is None or resp_dict.get('code') in black_code_list:
-                    if kwargs.get('use_custom_proxy') is True:
-                        kwargs.update({'use_custom_proxy': False})
                     raise ValueError(f'请求失败！检查响应：{resp_dict}')
                 return resp_dict
             except Exception as e:
@@ -86,7 +76,7 @@ def appsign(params, appkey='1d8b6e7d45233436', appsec='560c52ccd288fed045859ed18
     return params
 
 
-def get_latest_version_builds() -> [LatestVersionBuild]:
+def get_latest_version_builds() -> list[LatestVersionBuild]:
     url = "https://app.bilibili.com/x/v2/version"
     resp = requests.get(url, impersonate=random.choice(list(BrowserType)).value)
     resp_dict = resp.json()
@@ -123,11 +113,11 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
         if resp.get('code') != 0:
             pushme('get_lot_notice',
                    f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type={business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            bapi_log.error(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            bapi_log.error(f'get_lot_notice响应代码错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             if resp.get('code') == -9999:
                 return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
             await asyncio.sleep(10)
-            bapi_log.critical(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            bapi_log.critical(f'get_lot_notice响应代码错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             pushme('get_lot_notice响应代码错误！',
                    f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
                    f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
@@ -135,14 +125,14 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
         resp_business_id = resp.get('data', {}).get('business_id')
         resp_business_type = resp.get('data', {}).get('business_type')
         if str(business_type) != '2' and str(business_id) != str(resp_business_id):  # 非图片动态响应才使用business_id判断
-            bapi_log.error(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             pushme(f'get_lot_notice响应内容错误，business_type{business_type}！',
                    f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
                    f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             await asyncio.sleep(10)
             continue
         if str(business_type) == '2' and origin_dynamic_id and str(origin_dynamic_id) != str(resp_business_id):
-            bapi_log.error(f'get_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             pushme(f'get_lot_notice响应内容错误，business_type{business_type}！',
                    f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
                    f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
@@ -188,9 +178,11 @@ async def reserve_relation_info(ids: int | str, use_custom_proxy=False) -> dict:
 
 
 @_request_wrapper
-async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_custom_proxy=False):
+async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_custom_proxy=False,
+                                           is_use_available_proxy=False):
     """
     offset不能为0，需要为0的时候传入空字符串即可
+    :param is_use_available_proxy:
     :param hostuid:
     :param offset:
     :param use_custom_proxy:
@@ -209,13 +201,13 @@ async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_
             'host_mid': hostuid,
             'timezone_offset': -480,
             'platform': 'web',
-            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,forwardListHidden,ugcDelete,onlyfansQaCard',
-            'web_location': "333.999",
+            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,forwardListHidden,decorationCard,commentsNewVersion,onlyfansAssetsV2,ugcDelete,onlyfansQaCard',
+            'web_location': "333.1387",
         }
         dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
         dongtaidata.update({
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
-            "x-bili-web-req-json": json.dumps({"spm_id": "333.999"}, separators=(',', ':'))
+            "x-bili-web-req-json": json.dumps({"spm_id": "333.1387"}, separators=(',', ':'))
         })
         wbi_sign = await get_wbi_params(dongtaidata)
         dongtaidata.update({
@@ -233,17 +225,19 @@ async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_
                                                                             proxies=_custom_proxy
                                                                             )
         else:
-            req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET',
-                                                                            url=url_params,
-                                                                            headers=headers,
-                                                                            mode='rand',
-                                                                            )
+            req = await get_request_func(use_custom_proxy=use_custom_proxy)(
+                is_use_available_proxy=is_use_available_proxy,
+                method='GET',
+                url=url_params,
+                headers=headers,
+            )
         return req
 
 
 @_request_wrapper
 async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, rid: str | int | None = None,
-                                         dynamic_type: str | int | None = None, use_custom_proxy=False):
+                                         dynamic_type: str | int | None = None, use_custom_proxy=False,
+                                         is_use_available_proxy=False):
     url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail'
     headers = _gen_headers({
         "origin": "https://t.bilibili.com",
@@ -257,7 +251,7 @@ async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, ri
             'platform': 'web',
             'gaia_source': 'main_web',
             'id': dynamic_id,
-            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,commentsNewVersion',
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible',
             'web_location': '333.1368',
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
             "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
@@ -269,7 +263,7 @@ async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, ri
             'gaia_source': 'main_web',
             'rid': rid,
             'type': dynamic_type,
-            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,commentsNewVersion',
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible',
             'web_location': '333.1368',
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
             "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
@@ -281,16 +275,20 @@ async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, ri
     })
     url_with_params = url + '?' + urllib.parse.urlencode(data, safe='[],:')
     if use_custom_proxy:
-        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url_with_params,
-                                                                                headers=headers,
-                                                                                mode='single',
-                                                                                proxies=_custom_proxy
-                                                                                )
+        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(
+            method='GET',
+            url=url_with_params,
+            headers=headers,
+            proxies=_custom_proxy
+        )
     else:
-        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url_with_params,
-                                                                                headers=headers,
-                                                                                mode='single',
-                                                                                )
+        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(
+            is_use_available_proxy=is_use_available_proxy,
+            method='GET',
+            url=url_with_params,
+            headers=headers,
+            mode='single',
+        )
     return dynamic_req
 
 

@@ -87,10 +87,6 @@ async def async_run(schedulers: Union[None, AsyncIOScheduler], pub_article_info:
 async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     global reserve_robot
     reserve_robot = ReserveScrapyRobot()
-    if time.time() - pub_article_info.lastPubDate.timestamp() > 1 * 24 * 3600:
-        reserve_robot.sem = asyncio.Semaphore(300)
-    else:
-        reserve_robot.sem = asyncio.Semaphore(150)
     try:
         await reserve_robot.get_reserve_concurrency()
         await reserve_robot.refresh_not_drawn_lottery()

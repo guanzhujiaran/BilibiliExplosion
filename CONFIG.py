@@ -65,7 +65,7 @@ class database:
         bili_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
         bili_reserve_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bili_reserve?charset=utf8mb4&autocommit=true'
         get_other_lot_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
-        dyn_detail:str= 'mysql+aiomysql://root:114514@127.0.0.1:3306/dynDetail?charset=utf8mb4&autocommit=true'
+        dyn_detail: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/dynDetail?charset=utf8mb4&autocommit=true'
 
     @dataclass
     class _REDISINFO:
@@ -99,6 +99,9 @@ class SqlAlchemyConfig:
         future=True,
         pool_pre_ping=True,
     )
+    session_config = dict(
+        expire_on_commit=False,
+    )
 
 
 class RabbitMQConfig:
@@ -110,8 +113,9 @@ class RabbitMQConfig:
     port = 5672
     user = 'Xingtong'
     pwd = '114514'
+    protocol = 'amqp'
     queue_name_list = [x.value for x in QueueName]
-    broker_url = f"amqp://{user}:{pwd}@{host}:{port}/"
+    broker_url = f"{protocol}://{user}:{pwd}@{host}:{port}/"
 
 
 class _SeleniumConfig:
@@ -158,8 +162,6 @@ class _CONFIG:
         ),
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
-    # my_ipv6_addr = 'http://127.0.0.1:1919'
-    # my_ipv6_addr=None
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()
     sql_alchemy_config = SqlAlchemyConfig()
@@ -174,6 +176,14 @@ class _CONFIG:
     @property
     def rand_ua_mobile(self):
         return self._mobile_ua.random
+
+    @property
+    def custom_proxy(self):
+        return {'http': self.my_ipv6_addr, 'https': self.my_ipv6_addr}
+
+    @property
+    def custom_v2ray_proxy(self):
+        return {'http': self.V2ray_proxy, 'https': self.V2ray_proxy}
 
 
 CONFIG = _CONFIG()

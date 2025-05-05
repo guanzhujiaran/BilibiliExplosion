@@ -1,6 +1,6 @@
+from dataclasses import dataclass
 from enum import Enum
-
-from fastapi接口.models.base.custom_pydantic import CustomBaseModel
+from faststream.rabbit import RabbitQueue, RabbitExchange
 
 
 class QueueName(str, Enum):
@@ -8,12 +8,11 @@ class QueueName(str, Enum):
     UpsertOfficialReserveChargeLotMQ = "UpsertOfficialReserveChargeLotQueue"
     UpsertLotDataByDynamicIdMQ = "UpsertLotDataByDynamicIdQueue"
     UpsertTopicLotMQ = "UpsertTopicLotMQ"
-    UpsertMilvusBiliLotDataMQ="UpsertMilvusBiliLotDataMQ"
-    UpsertProxyInfoMQ="UpsertProxyInfoMQ"
+    UpsertMilvusBiliLotDataMQ = "UpsertMilvusBiliLotDataMQ"
+
 
 class ExchangeName(str, Enum):
     bili_data = "bili_data"
-    proxy='proxy'
 
 
 # 定义一个名为RoutingKey的类，继承自str和Enum
@@ -26,12 +25,21 @@ class RoutingKey(str, Enum):
     UpsertLotDataByDynamicIdMQ = "BiliData.UpsertLotDataByDynamicIdMQ"
     # 定义一个名为UpsertTopicLotMQ的枚举值，值为"BiliData.UpsertTopicLotMQ"
     UpsertTopicLotMQ = "BiliData.UpsertTopicLotMQ"
-    UpsertMilvusBiliLotDataMQ="Milvus.BiliLotDataMQ"
-    UpsertProxyInfoMQ="Proxy.UpsertProxyInfoMQ"
+    UpsertMilvusBiliLotDataMQ = "Milvus.BiliLotDataMQ"
 
-class RabbitMQConfig(CustomBaseModel):
-    host: str
-    port: int
-    username: str
-    password: str
-    protocol: str
+
+@dataclass
+class MQPropBase:
+    queue_name: QueueName
+    routing_key_name: RoutingKey
+    exchange: RabbitExchange
+    _rabbit_queue: RabbitQueue | None = None
+
+    def __post_init__(self):
+        self._rabbit_queue = RabbitQueue(
+            name=self.queue_name,
+            routing_key=self.routing_key_name + '.#')
+
+    @property
+    def rabbit_queue(self) -> RabbitQueue:
+        return self._rabbit_queue

@@ -233,14 +233,6 @@ def bxor(x, y):
 
 class ZhiHuEncrypt:
     my_ipv6_proxy = {'http': CONFIG.CONFIG.my_ipv6_addr, "https": CONFIG.CONFIG.my_ipv6_addr}
-    headers = {
-        'x-zse-93': x_zse_93,
-        'x-api-version': '3.0.91',
-        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
-        'x-zse-96': '2.0_',
-        'accept': '*/*',
-    }
-
     def __init__(self):
         pass
 

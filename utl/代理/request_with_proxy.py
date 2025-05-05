@@ -4,7 +4,7 @@
 
 import asyncio
 import traceback
-import utl.代理.redisProxyRequest.RedisRequestProxy as RedisRequestProxy
+from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 from typing import Union
 from fastapi接口.log.base_log import request_with_proxy_logger
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
@@ -19,9 +19,10 @@ class request_with_proxy:
         self.post_localhost_timeout = None
         self.post_localhost_timeout = None
         self.log = request_with_proxy_logger
-        self.redis_request_with_proxy = RedisRequestProxy.request_with_proxy_internal
+        self.redis_request_with_proxy = request_with_proxy_internal
 
-    async def request_with_proxy(self, *args, **kwargs) -> Union[dict, list[dict]]:
+    async def request_with_proxy(self, is_use_available_proxy: bool = False, *args, **kwargs) -> Union[
+        dict, list[dict]]:
         """
         :param args:
         :param kwargs:
@@ -31,7 +32,11 @@ class request_with_proxy:
         """
         while 1:
             try:
-                resp = await self.redis_request_with_proxy.request_with_proxy(*args, **kwargs)
+                resp = await self.redis_request_with_proxy.request_with_proxy(
+                    is_use_available_proxy=is_use_available_proxy,
+                    *args,
+                    **kwargs
+                )
                 return resp
             except Exception as e:
                 request_with_proxy_logger.exception(e)
@@ -82,7 +87,7 @@ class request_with_proxy:
     #             traceback.print_exc()
     #             await asyncio.sleep(10)
 
-    async def get_proxy_by_ip(self, ip: str)->ProxyTab | None:
+    async def get_proxy_by_ip(self, ip: str) -> ProxyTab | None:
         ret_time = 0
         while True:
             ret_time += 1

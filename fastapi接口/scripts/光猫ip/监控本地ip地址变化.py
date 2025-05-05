@@ -7,12 +7,11 @@ import time
 from typing import Literal
 from fastapi接口.log.base_log import ipv6_monitor_logger
 from fastapi接口.service.ipinfo.get_ipv6 import set_ipv6_to_redis, get_ipv6_from_redis
-from fastapi接口.service.MQ.base.MQServer.Ipv6ChangeMQServer import Ipv6ChangeRabbitMQ
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from fastapi接口.scripts.光猫ip.获取本机ipv6 import ipv6Obj
 import subprocess
 
-net_adapter_name_list = ['"vEthernet (wsl-bg)"', '"以太网"']
+net_adapter_name_list = ['"vEthernet (bridge)"', '"以太网"']
 _loop = asyncio.new_event_loop()
 
 def run_cmd(command):
@@ -118,7 +117,6 @@ def change_ipv6_config(now_ipv6_prefix: str, latest_ipv6_prefix: str = ''):
     ipv6_monitor_logger.info(p)
 
 
-ipv6_change_mq = Ipv6ChangeRabbitMQ.Instance()
 
 
 @pushme_try_catch_decorator
@@ -135,7 +133,6 @@ def monitor_ipv6_address_changes():
         if current_ipv6_prefix != previous_ipv6_prefix:  # 只判断前缀
             ipv6_monitor_logger.info("IPv6地址发生变化：", current_ipv6_address, int(time.time()))
             change_ipv6_config(':'.join(current_ipv6_address.split(':')[0:4]), previous_ipv6_prefix)
-            # ipv6_change_mq.push_ipv6_change(previous_ipv6_address, current_ipv6_address)
             try:
                 pushme(f'IPv6地址发生变化！{time.strftime("%Y-%m-%d %H:%M:%S")}',
                        f'原地址：{previous_ipv6_address}\n现地址：{current_ipv6_address}')

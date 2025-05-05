@@ -5,8 +5,10 @@ from CONFIG import CONFIG
 from fastapi接口.log.base_log import topic_lot_logger
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, TTrafficCard, \
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, \
+    TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic, TCapsule
+from fastapi接口.utils.Common import  sem_gen
 from utl.pushme.pushme import pushme
 from utl.代理.request_with_proxy import request_with_proxy
 
@@ -27,6 +29,7 @@ class SuccCounter(BaseSuccCounter):
 
 class TopicRobot:
     def __init__(self):
+        self.sem_limit = 100
         self.start_topic_id = 1  # 开始的话题id
         self.min_sep_ts = 2 * 3600  # 最小的间隔时间
         self.baseurl = 'https://app.bilibili.com/x/topic/web/details/top'
@@ -36,8 +39,7 @@ class TopicRobot:
         self.__max_stop_times = 5  # 遇到超过时间的话题次数
         self._cur_stop_times: int = 0
         self.sql = topic_sqlhelper
-        self.sem_limit = 10
-        self.sem = asyncio.Semaphore(self.sem_limit)
+        self.sem = sem_gen(self.sem_limit )
         self._stop_counter = 0  # 连续遇到没有的就加1
         self._max_stop_count = 300
         self._max_stop_timestamp = 4 * 3600  # 距离当前时间超过12小时就停止
@@ -218,7 +220,7 @@ class TopicRobot:
             while not self.stop_flag:
                 self.start_topic_id += 1
                 await self.sem.acquire()
-                task = asyncio.create_task(self.pipeline(self.start_topic_id),name=str(self.start_topic_id))
+                task = asyncio.create_task(self.pipeline(self.start_topic_id), name=str(self.start_topic_id))
                 task_list.add(task)
                 task.add_done_callback(task_list.discard)
                 while [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]:
@@ -231,19 +233,3 @@ class TopicRobot:
             pushme(title=f'爬取话题异常', content=str(e))
         finally:
             self.succ_counter.is_running = False
-
-
-def run():
-    a = TopicRobot()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(a.main())
-
-
-async def _test_get_topic_info():
-    topic_id = 1258933
-    _a = TopicRobot()
-    await _a.pipeline(topic_id)
-
-
-if __name__ == "__main__":
-    asyncio.run(_test_get_topic_info())

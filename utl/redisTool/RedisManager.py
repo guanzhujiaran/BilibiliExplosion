@@ -2,18 +2,54 @@ import asyncio
 import random
 import time
 import traceback
-from typing import Union, Any, List, Dict
+from typing import Union, Any, List, Dict, AsyncIterator
 from datetime import timedelta
 from redis import asyncio as redis
 from enum import Enum
 from redis.typing import KeyT
-from redis.exceptions import ConnectionError
+from redis.exceptions import ConnectionError, BusyLoadingError
 from CONFIG import CONFIG
 import redis as sync_redis
 from fastapi接口.log.base_log import redis_logger
 
 _MAX_SEM_NUM = 1024
 _sem = asyncio.Semaphore(_MAX_SEM_NUM)
+def retry_async_generator(func):
+    """
+    装饰器，用于重试异步生成器函数。
+    如果在迭代过程中发生指定错误，会从头开始重试整个生成过程。
+    """
+    async def wrapper_generator(*args, **kwargs):
+        while True: # 外层循环用于重试整个生成过程
+            async with _sem: # 在尝试获取并迭代生成器前获取信号量
+                try:
+                    # 1. 调用原始函数获取异步生成器对象
+                    gen = func(*args, **kwargs)
+                    # 2. 迭代原始生成器，并将值 yield 给调用方
+                    # 这个 async for 循环会在 gen 完成 (StopAsyncIteration) 或抛出异常时结束
+                    async for item in gen:
+                        # 如果成功从原始生成器获取到值，就 yield 给外部调用方
+                        yield item
+                    # 3. 如果 async for 循环正常结束，说明生成器运行完毕，跳出重试循环
+                    break # 成功完成，退出重试循环
+                except ConnectionError as e:
+                    redis_logger.exception(f'Redis连接错误 during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                    # 信号量在 'async with' 块结束时自动释放
+                    await asyncio.sleep(30)
+                    # while True 循环继续，尝试获取信号量并重新开始
+
+                except Exception as e:
+                    # 捕获其他异常
+                    redis_logger.exception(f'An unexpected error occurred during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                    # 信号量在 'async with' 块结束时自动释放
+                    await asyncio.sleep(30)
+                    # while True 循环继续，尝试获取信号量并重新开始
+
+                # Note: StopAsyncIteration 是正常结束标志，会被 async for 内部处理，
+                # 不会到达这里的 except 块
+
+    # 返回这个 wrapper 生成器函数
+    return wrapper_generator
 
 
 def retry(func):
@@ -22,6 +58,8 @@ def retry(func):
             async with _sem:
                 try:
                     return await func(*args, **kwargs)
+                except BusyLoadingError as e:
+                    await asyncio.sleep(30)
                 except ConnectionError as e:
                     redis_logger.exception(f'Redis连接错误，重试中...{e}')
                     await asyncio.sleep(30)
@@ -43,7 +81,7 @@ def sync_retry(func):
         while 1:
             try:
                 return func(*args, **kwargs)
-            except:
+            except Exception:
                 traceback.print_exc()
                 time.sleep(3)
 
@@ -148,42 +186,74 @@ class RedisManagerBase:
         )
         self.RedisTimeout = 30
 
-    @retry
-    async def __get_keys_with_prefix(self, prefix, count=100) -> List[Any]:
-        cursor = '0'
-        matched_keys = []
+    # region 批量操作
+    @retry_async_generator
+    async def _scan_keys_with_prefix_iter(self, prefix: str, chunk_size: int = 1000) -> AsyncIterator[List[bytes]]:
+        """
+        使用 SCAN 迭代获取带有指定前缀的 keys，逐批返回 key 列表。
+        避免一次性加载所有 key 到内存。
+        """
+        cursor = 0
         async with _redis_client_factory(pool=self.pool) as r:
-            while cursor:
-                cursor, keys = await r.scan(cursor=cursor, match=f'{prefix}:*',
-                                            count=count)
+            while True:
+                # SCAN 命令返回的 cursor 在没有更多匹配 key 时会变为 0
+                cursor, keys = await r.scan(cursor=cursor, match=f'{prefix}:*', count=chunk_size)
                 if keys:
-                    matched_keys.extend(keys)
-
-        return matched_keys
-
-    @retry
-    async def _del_keys_with_prefix(self, prefix: str):
-        keys = await self.__get_keys_with_prefix(prefix)
-        if not keys:
-            return []
-        async with _redis_client_factory(pool=self.pool) as r:
-            async with r.pipeline() as pipe:
-                for key in keys:
-                    await pipe.delete(key)
-                values = await pipe.execute()
-        return values
+                    yield keys
+                if cursor == 0:
+                    break
 
     @retry
-    async def _get_all_val_with_prefix(self, prefix: str) -> List[Any]:
-        keys = await self.__get_keys_with_prefix(prefix)
-        if not keys:
-            return []
-        async with _redis_client_factory(pool=self.pool) as r:
-            async with r.pipeline() as pipe:
-                for key in keys:
-                    await pipe.get(key)
-                values = await pipe.execute()
-        return values
+    async def _del_keys_with_prefix(self, prefix: str, batch_size: int = 1000):
+        """
+        批量删除带有指定前缀的 keys，使用 UNLINK 和 Pipeline。
+        通过迭代器获取 key，避免内存问题。
+        """
+        deleted_count = 0
+        # 使用 scan_keys_with_prefix_iter 迭代器逐批获取 key
+        async for key_batch in self._scan_keys_with_prefix_iter(prefix, chunk_size=batch_size):
+            if not key_batch:
+                continue
+
+            # 对每一批 key 执行 Pipeline UNLINK
+            async with _redis_client_factory(pool=self.pool) as r:
+                async with r.pipeline() as pipe:
+                    for key in key_batch:
+                        await pipe.unlink(key)  # 使用 UNLINK 代替 DEL
+                    # 执行当前批次的删除命令
+                    results = await pipe.execute()
+                    # 可以选择处理 results，例如统计成功删除的数量
+                    # 注意：unlink 成功返回 1，失败（key 不存在）返回 0
+                    deleted_count += sum(results)  # 简单的统计
+
+        # 可以选择返回总共删除的数量，或者 None
+        return deleted_count  # 返回总共尝试删除成功的 key 数量
+
+    @retry_async_generator
+    async def _get_all_val_with_prefix(self, prefix: str, batch_size: int = 1000) -> AsyncIterator[Any]:
+        """
+        批量获取带有指定前缀的 keys 对应的 values，使用 MGET 和 Pipeline。
+        通过迭代器获取 key 并生成 value，避免内存问题。
+        """
+        # 使用 scan_keys_with_prefix_iter 迭代器逐批获取 key
+        async for key_batch in self._scan_keys_with_prefix_iter(prefix, chunk_size=batch_size):
+            if not key_batch:
+                continue
+
+            # 对每一批 key 执行 Pipeline MGET
+            async with _redis_client_factory(pool=self.pool) as r:
+                # redis-py MGET 可以接受 list of keys
+                values_batch = await r.mget(key_batch)  # MGET 在 Pipeline 中执行效率更高
+
+                # 逐个生成获取到的 value
+                for value in values_batch:
+                    # 注意：如果 key 不存在，MGET 返回的对应位置是 None
+                    # 根据需要决定是否跳过 None 值
+                    if value is not None:
+                        yield value
+                    # else: yield None # 或者保留 None 值
+
+    # endregion
 
     @retry
     async def exists(self, key: Any) -> int:

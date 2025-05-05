@@ -5,34 +5,22 @@ import asyncio
 import copy
 import datetime
 import json
-import os
 import random
 import time
 import urllib.parse
 from typing import Any
 from CONFIG import CONFIG
+from fastapi接口.utils.Common import sem_gen
 from utl.pushme.pushme import pushme
 from utl.代理.request_with_proxy import request_with_proxy
-
-import fastapi接口.log.base_log as base_log
-import fastapi接口.service.common_utils.dynamic_id_caculate as dynamic_id_caculate
-import fastapi接口.service.grpc_module.grpc.bapi.biliapi as biliapi
-import fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
-import fastapi接口.service.grpc_module.grpc.grpc_api as grpc_api
-import fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel as BaseLotModel
-import fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper as sqlHelper
-
-import fastapi接口.service.grpc_module.src.DynObjectClass as DynObjectClass
-
-
-dynAllDetail = DynObjectClass.dynAllDetail
-official_lot_logger = base_log.official_lot_logger
-bili_reserve_sqlhelper = sqlHelper.bili_reserve_sqlhelper
-BaseSuccCounter, BaseStopCounter = BaseLotModel.BaseSuccCounter, BaseLotModel.BaseStopCounter
-bili_grpc = grpc_api.bili_grpc
-grpc_sql_helper = DynDetailSqlHelperMysqlVer.grpc_sql_helper
-dynamic_id_2_ts = dynamic_id_caculate.dynamic_id_2_ts
-appsign, get_lot_notice, reserve_relation_info = biliapi.appsign, biliapi.get_lot_notice, biliapi.reserve_relation_info
+from fastapi接口.log.base_log import official_lot_logger
+from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign, get_lot_notice, reserve_relation_info
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
+from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
+from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
+from fastapi接口.service.grpc_module.src.DynObjectClass import dynAllDetail
 
 
 class StopCounter(BaseStopCounter):
@@ -73,7 +61,7 @@ class DynDetailScrapy:
         self.Sqlhelper = grpc_sql_helper
         self.stop_counter: StopCounter = StopCounter()  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = asyncio.Semaphore(100)  # 同时运行的协程数量
+        self.scrapy_sem = sem_gen(100)  # 同时运行的协程数量
         self.stop_limit_time = 2 * 3600  # 提前多少时间停止
         self.log = official_lot_logger
 

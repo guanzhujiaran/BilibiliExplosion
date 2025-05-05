@@ -9,6 +9,7 @@ from fastapi接口.log.base_log import reserve_lot_logger
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import reserve_relation_info
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, ProgressCounter
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
+from fastapi接口.utils.Common import sem_gen
 from utl.代理.request_with_proxy import request_with_proxy
 import time
 import os
@@ -48,10 +49,10 @@ class ReserveScrapyRobot:
         # {"proxy":{"http":1.1.1.1},"status":"可用|-412|失效","update_ts":time.time(), }
         self.EndTimeSeconds = 3 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
         self.null_time_quit = 150  # 遇到连续100条data为None的sid 则退出
-        self.sem_max_val = 150  # 最大同时运行的线程数
-        self.sem = asyncio.Semaphore(self.sem_max_val)
+        self.sem_limit = 100
+        self.sem = sem_gen(self.sem_limit)
         self.null_timer = 0
-        self.null_list: list[dict[int:bool]] = []
+        self.null_list = []
         self.rollback_num = 100  # 获取完之后的回滚数量
         self.null_timer_lock = asyncio.Lock()
         self.dynamic_ts_lock = asyncio.Lock()
@@ -325,7 +326,7 @@ class ReserveScrapyRobot:
                 # if len(task_list) > self.sem_max_val:
                 #     for task in task_list:
                 #         await task
-                if await self._get_checking_number() > self.sem_max_val + 5:
+                if await self._get_checking_number() > self.sem_limit + 5:
                     await asyncio.gather(*task_list)
             task_list = list(filter(lambda x: not x.done(), task_list))
             reserve_lot_logger.debug(f'任务已经完成，当前线程存活数量：{len(task_list)}，正在等待剩余线程完成任务')

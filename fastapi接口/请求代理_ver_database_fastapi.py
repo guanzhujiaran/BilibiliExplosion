@@ -8,8 +8,6 @@ sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG�
 current_dir = os.path.dirname(__file__)
 grpc_dir = os.path.join(current_dir, 'service/grpc_module/grpc/grpc_proto')
 sys.path.append(grpc_dir)
-from CONFIG import CONFIG
-
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from loguru import logger
 import argparse
@@ -25,6 +23,7 @@ if not args.logger:
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 import asyncio
+asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
 from starlette.requests import Request
 from starlette.responses import Response
 import traceback
@@ -44,13 +43,12 @@ from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
 from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
 from fastapi接口.controller.v1.ip_info import get_ip_info
-from fastapi接口.controller.v1.background_service import BackgroundService, MQController
+from fastapi接口.controller.v1.background_service import BackgroundService
 from fastapi接口.controller.common import CommonRouter
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
     myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
     GLOBAL_SCHEDULER.start()
     show_log = False
@@ -66,7 +64,6 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(lifespan=lifespan, debug=True)
 fastapi_cdn_host.patch_docs(app)
-app.include_router(MQController.router)
 app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)
 app.include_router(LotteryData.router)
@@ -119,8 +116,7 @@ async def global_middleware(request: Request, call_next):
             "request_method": request.method,
             "client_host": request_ip
         }
-        myfastapi_logger.error(f"FastAPI请求异常: {error_detail}")
-        myfastapi_logger.exception(err)
+        myfastapi_logger.exception(f"FastAPI请求异常: {error_detail}")
         err_title = str(err).replace("\n", "")
         await asyncio.to_thread(
             pushme,
@@ -137,7 +133,7 @@ async def global_middleware(request: Request, call_next):
 
 if __name__ == '__main__':
     import uvicorn
-
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     uvicorn.run(
         app,
         # host="",

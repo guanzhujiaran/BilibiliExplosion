@@ -1,11 +1,7 @@
 import json
-
 from fastapi接口.log.base_log import MQ_logger
 from fastapi接口.service.MQ.base.BasicMQ import BasicMQServer
-from utl.designMode.singleton import Singleton
 
-
-@Singleton
 class Ipv6ChangeRabbitMQ(BasicMQServer):
 
     def __init__(self):
@@ -29,5 +25,4 @@ class Ipv6ChangeRabbitMQ(BasicMQServer):
             self.log.exception(e)
 
 
-if __name__ == '__main__':
-    ipv6_change_mq = Ipv6ChangeRabbitMQ.Instance()
+ipv6_change_rabbit_mq = Ipv6ChangeRabbitMQ()

@@ -13,5 +13,5 @@ class GeetestDetectPicRes(CustomBaseModel):
     """
     ai回复内容
     """
-    target_position: List[List[int]]
+    target_position: List[List[int|float]]|None
     ts: int

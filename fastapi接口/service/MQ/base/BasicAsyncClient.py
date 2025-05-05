@@ -6,17 +6,15 @@ from typing import Dict, Coroutine, Callable, Any
 import msgpack
 import pika
 from pika.exchange_type import ExchangeType
-import CONFIG
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import MQ_logger
-from fastapi接口.models.MQ.BaseMQModel import RabbitMQConfig, QueueName, ExchangeName, RoutingKey
+from fastapi接口.models.MQ.BaseMQModel import QueueName, ExchangeName, RoutingKey
 from utl.pushme.pushme import pushme
 
 
 def _mq_retry_wrapper(max_retries: int = 5, delay: int = 10):
     """
     异步重试装饰器：在函数执行异常时进行重试
-
-    :param func: 被装饰的异步函数
     :param max_retries: 最大重试次数，默认为 5 次
     :param delay: 每次重试的延迟时间，单位秒，默认为 10 秒
     """
@@ -72,13 +70,7 @@ class BasicMessageReceiver:
                  EXCHANGE_TYPE: ExchangeType,
                  QUEUE: QueueName,
                  ROUTING_KEY: RoutingKey,
-                 rabbit_mq_config: RabbitMQConfig = RabbitMQConfig(
-                     host=CONFIG.RabbitMQConfig.host,
-                     port=CONFIG.RabbitMQConfig.port,
-                     username=CONFIG.RabbitMQConfig.user,
-                     password=CONFIG.RabbitMQConfig.pwd,
-                     protocol='amqp'
-                 )):
+                 rabbit_mq_config=CONFIG.RabbitMQConfig):
         self._stopping = None
         self.EXCHANGE = EXCHANGE or self.EXCHANGE
         self.EXCHANGE_TYPE = EXCHANGE_TYPE or self.EXCHANGE_TYPE
@@ -93,7 +85,7 @@ class BasicMessageReceiver:
         self._channel = None
         self._closing = False
         self._consumer_tag = None
-        self._url = f'{rabbit_mq_config.protocol}://{rabbit_mq_config.username}:{rabbit_mq_config.password}@{rabbit_mq_config.host}:{rabbit_mq_config.port}/'
+        self._url = rabbit_mq_config.broker_url
         self._consuming = False
         # In production, experiment with higher prefetch values
         # for higher consumer throughput
@@ -318,19 +310,13 @@ class BasicMessageSender:
                  EXCHANGE_TYPE: ExchangeType,
                  QUEUE: QueueName,
                  ROUTING_KEY: RoutingKey,
-                 rabbit_mq_config: RabbitMQConfig = RabbitMQConfig(
-                     host=CONFIG.RabbitMQConfig.host,
-                     port=CONFIG.RabbitMQConfig.port,
-                     username=CONFIG.RabbitMQConfig.user,
-                     password=CONFIG.RabbitMQConfig.pwd,
-                     protocol='amqp'
-                 )):
+                 rabbit_mq_config=CONFIG.RabbitMQConfig):
         self._channel = None
         self.EXCHANGE = EXCHANGE or self.EXCHANGE
         self.EXCHANGE_TYPE = EXCHANGE_TYPE or self.EXCHANGE_TYPE
         self.QUEUE = QUEUE or self.QUEUE
         self.ROUTING_KEY = ROUTING_KEY or self.ROUTING_KEY
-        self._url = f'{rabbit_mq_config.protocol}://{rabbit_mq_config.username}:{rabbit_mq_config.password}@{rabbit_mq_config.host}:{rabbit_mq_config.port}/'
+        self._url = rabbit_mq_config.broker_url
         self._connection = None
 
     def connection(self):
