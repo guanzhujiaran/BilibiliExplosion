@@ -19,6 +19,7 @@ users.yaml
 .git/
 /github/*
 !/github/my_operator/
+!requirements.txt
 /b站app/bilireq/
 *.pt
 *.jpg
