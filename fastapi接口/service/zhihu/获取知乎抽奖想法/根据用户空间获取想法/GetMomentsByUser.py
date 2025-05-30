@@ -221,6 +221,7 @@ class LotScrapy:
                     raise ValueError(f'用户{uname}的请求参数异常\t{moment_pins_resp_json}')
                 if moment_pins_resp_json.get('code') is not None:
                     raise ValueError(f'用户{uname}的请求参数异常\t{moment_pins_resp_json}')
+                raise ValueError(f'未知错误:{moment_pins_resp_json}')
         self.recorded_users_pins.update({uname: newest_pins[-20:]})  # 更新最新获取的空间信息
 
     def end_write(self):
@@ -264,7 +265,9 @@ class LotScrapy:
             self.get_pin_ts = ts
             f.writelines(f'{ts}')
 
-    async def api_get_all_pins(self):
+    async def api_get_all_pins(self)->list[str]:
+        self.log.critical(f'api加密有变化，正在修复中，暂时不使用')
+        return []
         while self.is_getting_dyn_flag:
             self.log.debug('正在获取用户空间，请稍等...')
             await asyncio.sleep(30)

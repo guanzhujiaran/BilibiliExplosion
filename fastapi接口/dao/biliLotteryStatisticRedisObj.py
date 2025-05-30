@@ -40,7 +40,20 @@ class LotteryDataStatisticRedis(RedisManagerBase):
             lot_type: BiliLotStatisticLotTypeEnum,
             rank_type: BiliLotStatisticRankTypeEnum,
             uid_atari_count_dict: dict):
-        """设置抽奖统计信息"""
+        """
+        设置抽奖统计信息，每次设置之前先清除上一轮的
+        :param date:
+        :param lot_type:
+        :param rank_type:
+        :param uid_atari_count_dict:
+        :return:
+        """
+        await self._del(
+            self.RedisMap.get_lot_type_rank_name(
+                date=date,
+                lot_type=lot_type,
+                rank_type=rank_type)
+        )
         return await self._zadd(self.RedisMap.get_lot_type_rank_name(
             date=date,
             lot_type=lot_type,
@@ -164,9 +177,8 @@ lottery_data_statistic_redis = LotteryDataStatisticRedis()
 if __name__ == '__main__':
     async def _test():
         await lottery_data_statistic_redis._zadd(
-            '114514',{1:1}
+            '114514', {1: 1}
         )
-
 
 
     asyncio.run(_test())

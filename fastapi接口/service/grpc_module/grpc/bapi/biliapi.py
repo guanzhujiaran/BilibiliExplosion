@@ -142,7 +142,11 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
 
 
 @_request_wrapper
-async def reserve_relation_info(ids: int | str, use_custom_proxy=False) -> dict:
+async def reserve_relation_info(
+        ids: int | str,
+        use_custom_proxy=False,
+        is_use_available_proxy=False
+) -> dict:
     url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
     # ua = random.choice(BAPI.User_Agent_List)
     headers = {
@@ -172,6 +176,7 @@ async def reserve_relation_info(ids: int | str, use_custom_proxy=False) -> dict:
     else:
         req_dict = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
                                                                              headers=headers,
+                                                                             is_use_available_proxy=is_use_available_proxy,
                                                                              )
     check_reserve_relation_info(req_dict, ids=ids)
     return req_dict

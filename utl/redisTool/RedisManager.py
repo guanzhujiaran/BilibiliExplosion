@@ -4,7 +4,7 @@ import time
 import traceback
 from typing import Union, Any, List, Dict, AsyncIterator
 from datetime import timedelta
-from redis import asyncio as redis
+import redis.asyncio as redis
 from enum import Enum
 from redis.typing import KeyT
 from redis.exceptions import ConnectionError, BusyLoadingError

@@ -1,9 +1,9 @@
 import asyncio
 import random
+from typing import Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.exc import InternalError
-
 from fastapi接口.log.base_log import myfastapi_logger, sql_log
 import concurrent.futures
 
@@ -94,7 +94,7 @@ async def run_in_executor(func, *args):
         future = loop.run_in_executor(pool, func, *args)
         return await future
 
-def sql_retry_wrapper(_func: callable) -> callable:
+def sql_retry_wrapper(_func: Callable) -> Callable:
     async def wrapper(*args, **kwargs):
         while True:
             try:

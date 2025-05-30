@@ -1,14 +1,15 @@
 import time
 import asyncio
-from typing import Union, List
+from typing import Union, List, AsyncGenerator
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import topic_lot_logger
+from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler, ParamsType
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, \
     TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic, TCapsule
-from fastapi接口.utils.Common import  sem_gen
+from fastapi接口.utils.Common import sem_gen
 from utl.pushme.pushme import pushme
 from utl.代理.request_with_proxy import request_with_proxy
 
@@ -27,7 +28,18 @@ class SuccCounter(BaseSuccCounter):
         super().__init__()
 
 
-class TopicRobot:
+class TopicRobot(UnlimitedCrawler):
+    async def is_stop(self) -> bool:
+        return self.stop_flag
+
+    async def key_params_gen(self, params: int) -> AsyncGenerator[int, None]:
+        while 1:
+            yield params
+            params += 1
+
+    async def handle_fetch(self, params: int):
+        await self.pipeline(params)
+
     def __init__(self):
         self.sem_limit = 100
         self.start_topic_id = 1  # 开始的话题id
@@ -39,12 +51,16 @@ class TopicRobot:
         self.__max_stop_times = 5  # 遇到超过时间的话题次数
         self._cur_stop_times: int = 0
         self.sql = topic_sqlhelper
-        self.sem = sem_gen(self.sem_limit )
         self._stop_counter = 0  # 连续遇到没有的就加1
         self._max_stop_count = 300
         self._max_stop_timestamp = 4 * 3600  # 距离当前时间超过12小时就停止
         self._latest_topic_id = 0
         self._traffic_card_lock = asyncio.Lock()  # 活动数据锁
+
+        super().__init__(
+            max_sem=self.sem_limit,
+            _logger=topic_lot_logger
+        )
 
     @property
     def cur_stop_times(self):
@@ -214,22 +230,14 @@ class TopicRobot:
             else:
                 self.start_topic_id = await self.sql.get_max_topic_id()
             # endregion
-            topic_lot_logger.info(f'开始从{self.start_topic_id + 1}开始获取话题！')
             self.succ_counter.first_topic_id = self.start_topic_id + 1
-            task_list = set()
-            while not self.stop_flag:
-                self.start_topic_id += 1
-                await self.sem.acquire()
-                task = asyncio.create_task(self.pipeline(self.start_topic_id), name=str(self.start_topic_id))
-                task_list.add(task)
-                task.add_done_callback(task_list.discard)
-                while [i for i in task_list if int(i.get_name()) < self.start_topic_id - self.sem_limit]:
-                    await asyncio.sleep(1)
-                # await asyncio.gather(*last_sem_list)
-            topic_lot_logger.info(f'获取完成！等待任务列表剩余【{len([x for x in task_list if not x.done()])}】个任务！')
-            await asyncio.gather(*task_list)
+            await self.run(self.start_topic_id + 1)
         except Exception as e:
             topic_lot_logger.error(f'发生异常！{e}')
             pushme(title=f'爬取话题异常', content=str(e))
         finally:
             self.succ_counter.is_running = False
+
+if __name__ == "__main__":
+    a = TopicRobot()
+    asyncio.run(a.main())

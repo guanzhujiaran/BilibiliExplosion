@@ -4,7 +4,7 @@ import datetime
 from copy import deepcopy
 from typing import Literal, List, Sequence, Union, Optional
 import numpy as np
-from sqlalchemy import select, and_, exists, func, String, text, or_
+from sqlalchemy import select, and_, exists, func, String, text, or_, JSON
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
@@ -606,7 +606,7 @@ JSON_VALID(lotData.lottery_result)
 ) AS combined_uids
 WHERE uid IS NOT NULL
 GROUP BY uid
-ORDER BY atari_count DESC, uid DESC;
+ORDER BY atari_count DESC,uid DESC;
                     """)
                 result = await session.execute(query,
                                                {"business_type": business_type, 'start_ts': start_ts, 'end_ts': end_ts})
@@ -634,7 +634,7 @@ GROUP BY
 	jt.uid
 ORDER BY
 	atari_count DESC,
-	jt.uid;
+	jt.uid DESC;
                     """)
                 result = await session.execute(query,
                                                {"business_type": business_type, 'start_ts': start_ts, 'end_ts': end_ts})
@@ -643,7 +643,8 @@ ORDER BY
 
     @lock_wrapper
     async def get_lottery_result(
-            self, uid: int | str,
+            self,
+            uid: int | str,
             start_ts: int = 0,
             end_ts: int = 0,
             business_type: Literal[1, 10, 12, 0] = None,
@@ -655,7 +656,7 @@ ORDER BY
         # 使用async with语句创建一个异步的session
         async with self._session() as session:
             # 将uid转换为整数
-            uid_num = int(uid)
+            uid_int = int(uid)
 
             # 创建一个查询Lotdata表的查询对象
             query = select(Lotdata)
@@ -670,7 +671,7 @@ ORDER BY
                 # 创建条件
                 condition = func.json_contains(
                     func.json_extract(Lotdata.lottery_result, json_path),
-                    func.json_array(uid_num)
+                    func.cast(uid_int,JSON)
                 )
                 # 将条件添加到查询对象中
                 query = query.where(
@@ -689,7 +690,7 @@ ORDER BY
                     conditions.append(
                         func.json_contains(
                             func.json_extract(Lotdata.lottery_result, json_path),
-                            func.json_array(uid_num)
+                            func.cast(uid_int,JSON)
                         )
                     )
                 # 将条件添加到查询对象中
@@ -865,7 +866,9 @@ grpc_sql_helper = SQLHelper()
 if __name__ == "__main__":
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.get_discountious_rids()
+        result = await grpc_sql_helper.query_official_lottery_by_timelimit(
+            time_limit=30 * 24 * 3600,
+        )
         sql_log.debug(len(result))
 
 

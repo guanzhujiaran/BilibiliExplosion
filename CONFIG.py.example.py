@@ -14,13 +14,13 @@ class DBINFO:
 @dataclass
 class ChatGptSettings:
     baseurl: str = "https://api.chatanywhere.tech/v1"
-    open_ai_api_key: str = 'sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
+    open_ai_api_key: str = 'sk-xxx'
 
 
 # region 基本配置
 class pushme:
     _url = "https://push.i-i.me"
-    _token = "JxxpCXIZZZFThYcUmRce"
+    _token = "xxx"
 
     @property
     def url(self):
@@ -42,7 +42,7 @@ class pushnotify:
         push_template = pushme()
         self._pushme = copy.deepcopy(push_template)
         push_template.set_url('http://www.pushplus.plus/send')
-        push_template.set_token('044b3325295b47228409452e0e7aeef7')
+        push_template.set_token('xxx')
         self._pushplus = copy.deepcopy(push_template)
 
     @property
@@ -129,32 +129,8 @@ class _CONFIG:
     chat_gpt_configs = [
         ChatGptSettings(
             baseurl="https://api.chatanywhere.tech/v1",
-            open_ai_api_key='sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
-        ),
-        ChatGptSettings(
-            baseurl="https://api.chatanywhere.tech/v1",
-            open_ai_api_key='sk-15uefwaxlC3ik3Rzc6olDUUJ9pzDl8fFiesHJvTEXdz66Gba'
-        ),
-        ChatGptSettings(
-            baseurl='https://happyapi.org/v1',
-            open_ai_api_key='sk-B0JwJwpkzqhlwh3qC2638d73De5042C3Aa02951313Bd1e39'
-        ),
-        ChatGptSettings(
-            baseurl='https://happyapi.org/v1',
-            open_ai_api_key='sk-rooVNOUA9Xs2AqtpE9445cC879F3467b9f6a97B6De2219C1'
-        ),
-        ChatGptSettings(
-            baseurl='https://api.openai-hk.com/v1',
-            open_ai_api_key='hk-reurs910000380223c324e435ac8ef84f5d0a75f22a4e6c0'
-        ),
-        ChatGptSettings(
-            baseurl='https://api.openai-hk.com/v1',
-            open_ai_api_key='hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25'
-        ),
-        ChatGptSettings(
-            baseurl='http://127.0.0.1:1234/v1',
-            open_ai_api_key='114514',
-        ),
+            open_ai_api_key='sk-xxx'
+        )
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
     # my_ipv6_addr = 'http://127.0.0.1:8080'

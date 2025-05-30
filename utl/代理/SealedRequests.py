@@ -3,7 +3,7 @@ import random
 import typing
 from typing import Union
 
-from curl_cffi import CurlHttpVersion
+from curl_cffi import CurlHttpVersion, Response
 from curl_cffi.requests import AsyncSession, BrowserTypeLiteral
 from httpx import AsyncClient
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
@@ -85,12 +85,9 @@ def format_httpx_proxy(request_proxy: dict | None) -> str | None:
     if not request_proxy:
         return None
     if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
-        ...
-        # if 'sock4' in format_ip_str or 'socks4' in format_ip_str:
-        #     return None
+        return format_ip_str.replace('https', 'http')
     else:
-        format_ip_str = None
-    return format_ip_str.replace('https', 'http')
+        return None
 
 
 # class MYASYNCHTTPX:
@@ -234,7 +231,7 @@ def format_httpx_proxy(request_proxy: dict | None) -> str | None:
 class MYASYNCHTTPX:
     @comm_wrapper
     async def get(self, url, headers=None, verify=False, proxies: Union[dict, None] = None, timeout=10, params=None,
-                  *args, **kwargs):
+                  *args, **kwargs) -> Response:
         """
 
         :param url:
@@ -265,7 +262,6 @@ class MYASYNCHTTPX:
             client.headers.clear()
             resp = await client.get(url=url, headers=headers, timeout=timeout,
                                     params=params,
-                                    proxies=proxies,
                                     proxy=format_proxy_str,
                                     verify=False,
                                     default_headers=False,
@@ -273,25 +269,27 @@ class MYASYNCHTTPX:
         return resp
 
     @comm_wrapper
-    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10, *args, **kwargs):
+    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10,
+                   json: dict | list | None = None, *args, **kwargs) -> Response:
         format_proxy_str = format_httpx_proxy(proxies)
         if type(headers) is tuple:
             headers = list(headers)
         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
         async with AsyncSession(
                 impersonate=impersonate,
-                # extra_fp=fp,
                 default_headers=False,
                 timeout=timeout,
                 verify=False,
-                http_version=CurlHttpVersion.V2TLS
+                http_version=CurlHttpVersion.V2TLS,
+                allow_redirects=True,
+                max_redirects=-1,
         ) as client:
             client.headers.clear()
             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout,
-                                     proxies=proxies,
                                      proxy=format_proxy_str,
                                      verify=False,
                                      default_headers=False,
+                                     json=json
                                      )
         return resp
 
@@ -308,7 +306,7 @@ class MYASYNCHTTPX:
                       json: typing.Optional[typing.Any] = None,
                       params: typing.Optional[QueryParamTypes] = None,
                       cookies: typing.Optional[CookieTypes] = None,
-                      extensions: typing.Optional[dict] = None, *args, **kwargs):
+                      extensions: typing.Optional[dict] = None, *args, **kwargs) -> Response:
         """
 
         :param url:
@@ -366,7 +364,7 @@ class MYASYNCHTTPX:
                            cookies: typing.Optional[CookieTypes] = None,
                            *args,
                            **kwargs
-                           ):
+                           ) -> Response:
         if type(headers) is tuple:
             headers = list(headers)
         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
@@ -381,7 +379,6 @@ class MYASYNCHTTPX:
             client.headers.clear()
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
                                         files=files, json=json, params=params, cookies=cookies,
-                                        proxies=proxies,
                                         verify=False,
                                         default_headers=False,
                                         )

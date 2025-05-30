@@ -36,6 +36,7 @@ class dynamic_timestamp_info:
 
 class ReserveScrapyRobot:
     def __init__(self):
+        self._is_use_available_proxy = True  # 是否套用急需完成的api的那套设置
         self.succ_counter = SuccCounter()
         self.sqlHlper = bili_reserve_sqlhelper
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -50,7 +51,8 @@ class ReserveScrapyRobot:
         self.EndTimeSeconds = 3 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
         self.null_time_quit = 150  # 遇到连续100条data为None的sid 则退出
         self.sem_limit = 100
-        self.sem = sem_gen(self.sem_limit)
+        self.sem = sem_gen(self.sem_limit / 2)
+        self.ids_queue = asyncio.Queue(maxsize=int(self.sem_limit / 2))
         self.null_timer = 0
         self.null_list = []
         self.rollback_num = 100  # 获取完之后的回滚数量
@@ -69,12 +71,9 @@ class ReserveScrapyRobot:
         self.dynamic_timestamp: dynamic_timestamp_info = dynamic_timestamp_info()
         self.getfail = None  # 文件
         self.unknown = None  # 文件
-
         # 文件
-
         self.list_getfail = list()
         self.list_unknown = list()
-
         # 内容
         self.file_list_lock = asyncio.Lock()
 
@@ -92,9 +91,8 @@ class ReserveScrapyRobot:
         if self.list_unknown:
             my_write(self.unknown, self.list_unknown)
 
-    async def resolve_reserve_with_sem(self, sid: int, is_refresh=False):
+    async def resolve_reserve(self, sid: int, is_refresh=False):
         await self.resolve_reserve_by_sid(sid, is_refresh=is_refresh)
-        self.sem.release()
         if self.refresh_progress_counter and self.refresh_progress_counter.is_running:
             self.refresh_progress_counter.succ_count += 1
 
@@ -115,7 +113,10 @@ class ReserveScrapyRobot:
             if not is_force_api and has_reserve_relation_ids and has_reserve_relation_ids.code == 0 and has_reserve_relation_ids.sid is not None:
                 req1_dict = has_reserve_relation_ids.raw_JSON
             else:
-                req1_dict = await reserve_relation_info(sid)
+                req1_dict = await reserve_relation_info(
+                    sid,
+                    is_use_available_proxy=self._is_use_available_proxy
+                )
                 req1_dict.update({'ids': sid})
                 await self.sqlHlper.add_reserve_info_by_resp_dict(req1_dict, self.now_round_id)  # 添加预约json到数据库
             if is_refresh:
@@ -137,16 +138,14 @@ class ReserveScrapyRobot:
                     async with self.null_timer_lock:
                         self.null_timer += 1
                         reserve_lot_logger.info(
-                            '\n\t\t\t\t第' + str(self.times) + '次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
-                                                                                                  time.localtime()) +
-                            '\t\t\t\trid:{}'.format(sid) + '\n'
-                            + f'当前已经有{self.null_timer}条data为None的sid，最近的动态时间距离现在{self.dynamic_timestamp.get_time_str_until_now()}！')
+                            f"\n\t\t\t\t第{str(self.times)}次获取直播预约\t{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\t\t\t\trid:{sid}\n"
+                            f'当前已经有{self.null_timer}条data为None的sid，最近的动态时间距离现在{self.dynamic_timestamp.get_time_str_until_now()}！')
                         list(filter(lambda x: list(x.keys())[0] == sid, self.null_list))[0].update({sid: False})
                     if await self.check_null_timer(self.null_time_quit):
                         async with self.null_timer_lock:
                             async with self.dynamic_ts_lock:
                                 if int(time.time()) - self.dynamic_timestamp.dynamic_timestamp <= self.EndTimeSeconds:  # 如果超过了最大data
-                                    if self.null_timer > 300:
+                                    if self.null_timer > 30:
                                         await self.quit()
                                 else:
                                     reserve_lot_logger.debug(
@@ -189,11 +188,7 @@ class ReserveScrapyRobot:
                                 self.dynamic_timestamp.ids = sid
                         reserve_lot_logger.info(
                             f"\n\t\t\t\t第{str(self.times)}次获取直播预约\t{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\t\t\t\trid:{sid}\n直播预约[{sid}]获取成功，直播预约创建时间：{BAPI.timeshift(self.dynamic_timestamp.dynamic_timestamp)}")
-                        # with self.dynamic_ts_lock:
-                        #     if int(time.time()) - self.dynamic_timestamp <= self.EndTimeSeconds and int(time.time()) - self.dynamic_timestamp>=0:
-                        #         self.quit()
                     except Exception as e:
-                        # self.dynamic_timestamp = 0
                         reserve_lot_logger.info(
                             f'\n\t\t\t\t第{self.times}次获取直播预约\t' + time.strftime('%Y-%m-%d %H:%M:%S',
                                                                                         time.localtime()) +
@@ -225,18 +220,10 @@ class ReserveScrapyRobot:
         except Exception as e:
             reserve_lot_logger.exception(f'未知类型代码：{dycode}')
         if dycode == -412:
-            # time.sleep(eval(input('输入等待时间')))
             return -412
         elif dycode != 'None' and dycode != 500207 and \
                 dycode != 500205 and dycode != 404 and dycode != -412 and self.dynamic_timestamp.dynamic_timestamp != 'None':
             pass
-            # with self.dynamic_ts_lock:
-            #     if int(time.time()) - self.dynamic_timestamp <= self.EndTimeSeconds and int(time.time()) - self.dynamic_timestamp >= 0:
-            #         if not self.quit_Flag:
-            #             self.quit_Flag = True
-            #             self.quit()
-            #         else:
-            #             return 0
 
     async def quit(self):
         """
@@ -248,12 +235,9 @@ class ReserveScrapyRobot:
                     self.file_remove_repeat_contents(self.unknown)
                 if os.path.exists(self.getfail):
                     self.file_remove_repeat_contents(self.getfail)
-
-                # reserve_lot_log.info(f'已获取到最近{self.EndTimeSeconds // 60}分钟为止的动态')
                 async with self.ids_change_lock:
                     reserve_lot_logger.info(f'退出抽奖！当前ids：{self.ids}')
                     self.ids = None
-
                 reserve_lot_logger.info('共' + str(self.times - 1) + '次获取动态')
                 reserve_lot_logger.info('其中' + str(self.n) + '个有效动态')
             else:
@@ -267,13 +251,26 @@ class ReserveScrapyRobot:
         run_function = lambda x, y: x if y in x else x + [y]
         return reduce(run_function, [[], ] + list_dict_data)
 
+    async def _sid_gen(self):
+        while 1:
+            ids = self.ids
+            async with self.ids_change_lock:
+                if self.ids is not None:
+                    self.ids += 1
+            yield ids
+
+    async def worker(self):
+        async with self.sem:  # 达到指定数量之后就不会再从dis的queue里面取数据出来了，这时候queue如果满了，那么就会等待了
+            sid = await self.ids_queue.get()
+            await self.resolve_reserve(sid)
+
     async def get_reserve_concurrency(self):
         await self._init()
         now_round: TReserveRoundInfo = await self.sqlHlper.get_latest_reserve_round()
         round_start_ts = int(time.time()) if now_round.is_finished else now_round.round_start_ts
         self.now_round_id = now_round.round_id + 1 if now_round.is_finished else now_round.round_id
         none_num1 = 0
-        task_list: list[asyncio.Task] = []
+        task_set: set[asyncio.Task] = set()
         for ids_index in range(len(self.ids_list)):
             none_num1 = await self._get_None_data_number()
             async with self.ids_change_lock:
@@ -287,53 +284,33 @@ class ReserveScrapyRobot:
                 self.dynamic_timestamp = dynamic_timestamp_info()
             latest_rid = None
             self.succ_counter.first_reserve_id = self.ids_list[ids_index]
-            while 1:
-                # self.resolve_dynamic(self.ids)  # 每次开启一轮多线程前先测试是否可用
-                async with self.ids_change_lock:
-                    if self.ids is not None:
-                        # with self.ids_change_lock:
-                        #     self.ids += 1  # 每次多线程前先测试是否会412
-                        #     latest_rid += 1
-                        latest_rid = self.ids
-                        pass
-                    else:
-                        self.ids_list[ids_index] = latest_rid - self.null_timer
-                        break
+            async for sid in self._sid_gen():
+                if sid is not None:
+                    latest_rid = sid
+                    reserve_lot_logger.debug(f'添加当前rid:{sid}进入队列')
+                    await self.ids_queue.put(sid)
+                else:
+                    self.ids_list[ids_index] = latest_rid - self.null_timer
+                    break
                 if self.quit_Flag:
                     self.ids_list[ids_index] = latest_rid - self.null_timer
                     break
-                thread_num = 100
-
-                for t in range(thread_num):
-                    await self.sem.acquire()
-                    async with self.ids_change_lock:
-                        async with self.null_timer_lock:
-                            if not self.ids:
-                                break
-                            self.null_list.append({
-                                self.ids: None
-                            })
-                    task = asyncio.create_task(self.resolve_reserve_with_sem(self.ids))
-                    async with self.ids_change_lock:
-                        if not self.ids:
-                            break
-                        self.ids += 1
-                    task_list.append(task)
-
-                task_list = list(filter(lambda x: not x.done(), task_list))
-
-                reserve_lot_logger.debug(f'当前线程存活数量：{len(task_list)}')
-                # if len(task_list) > self.sem_max_val:
-                #     for task in task_list:
-                #         await task
-                if await self._get_checking_number() > self.sem_limit + 5:
-                    await asyncio.gather(*task_list)
-            task_list = list(filter(lambda x: not x.done(), task_list))
-            reserve_lot_logger.debug(f'任务已经完成，当前线程存活数量：{len(task_list)}，正在等待剩余线程完成任务')
-            await asyncio.gather(*task_list)
-            # if len(self.list_all_reserve_relation) > 1000:
-            #     self.write_in_file()
-            #     log.info('\n\n\t\t\t\t写入文件\n')
+                async with self.null_timer_lock:
+                    if not self.ids:
+                        break
+                    self.null_list.append({
+                        self.ids: None
+                    })
+                task = asyncio.create_task(self.worker())
+                task_set.add(task)
+                task.add_done_callback(
+                    lambda _t: task_set.remove(_t)
+                )
+                reserve_lot_logger.debug(f'当前线程存活数量：{len(task_set)}')  # 最大是 sem + asyncio.queue的数量
+                if not self.ids:
+                    break
+            reserve_lot_logger.debug(f'任务已经完成，当前线程存活数量：{len(task_set)}，正在等待剩余线程完成任务')
+            await asyncio.gather(*task_set)
         none_num2 = await self._get_None_data_number()
         reserve_lot_logger.info(
             f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{self.dynamic_timestamp.get_time_str_until_now()}秒，退出！')
@@ -347,7 +324,6 @@ class ReserveScrapyRobot:
         ridstartfile.write("\n".join(
             finnal_rid_list))
         ridstartfile.close()
-
         self.write_in_file()
         reserve_lot_logger.info('\n\n\t\t\t\t写入文件\n')
         latest_reserve_lots = await self.generate_update_reserve_lotterys_by_round_id(self.now_round_id)
@@ -407,8 +383,7 @@ class ReserveScrapyRobot:
         reserve_lot_logger.debug(f'开始刷新未开奖的预约内容，共计{all_num}条')
         task_list = []
         for reserve_lottery in all_not_drawn_reserve_lottery:
-            await self.sem.acquire()
-            task = asyncio.create_task(self.resolve_reserve_with_sem(reserve_lottery.sid, is_refresh=True))
+            task = asyncio.create_task(self.resolve_reserve(reserve_lottery.sid, is_refresh=True))
             task_list.append(task)
             running_num += 1
         await asyncio.gather(*task_list)
@@ -452,14 +427,6 @@ class ReserveScrapyRobot:
             result = list(map(lambda x: list(x.values())[0], self.null_list))
 
             return any(all(i is False for i in sublist) for sublist in zip(*[iter(result)] * null_quit_time))
-
-    async def _get_checking_number(self) -> int:
-        '''
-        获取正在查询的数量
-        :return:
-        '''
-        result = list(map(lambda x: list(x.values())[0], self.null_list))
-        return len(list(filter(lambda x: x is None, result)))
 
     async def _get_None_data_number(self) -> int:
         '''

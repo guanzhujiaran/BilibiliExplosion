@@ -311,4 +311,4 @@ class BiliLotStatisticRankDateTypeEnum(str, Enum):
 
 
 if __name__ == '__main__':
-    print(BiliLotStatisticRankDateTypeEnum.month.get_start_end_ts())
+    print(BiliLotStatisticRankDateTypeEnum.pre_month.get_start_end_ts())

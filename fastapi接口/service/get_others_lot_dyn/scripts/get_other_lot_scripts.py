@@ -4,8 +4,9 @@ from typing import Sequence
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotuserspaceresp
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper,get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import BiliDynamicItem
+from fastapi接口.utils.Common import sem_gen
 
-_sem = asyncio.Semaphore(1000)
+_sem = sem_gen()
 
 async def get_other_lot_by_lot_round_id(lot_round_id):
     space_lots:Sequence[TLotuserspaceresp] = await SqlHelper.getSpaceRespByRoundId(lot_round_id)

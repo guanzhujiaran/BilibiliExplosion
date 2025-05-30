@@ -2,10 +2,12 @@ import os
 import uuid
 from enum import Enum
 from loguru import logger
+from loguru._logger import Logger
 from CONFIG import CONFIG
 
 
 class UserMap(Enum):
+    samsclub_logger = "samsclub_logger"
     httpx = "httpx"
     background_task = 'background_task'
     live_monitor_logger = "live_monitor_logger"
@@ -37,7 +39,7 @@ class UserMap(Enum):
     milvus_db_logger = "milvus_db_logger"
 
 
-def create_logger(user: UserMap) -> logger:
+def create_logger(user: UserMap) -> Logger:
     user_uq_value = uuid.uuid4().hex + user.value
     _user_logger = logger.bind(user=user_uq_value)
     _user_logger.add(
@@ -52,7 +54,6 @@ def create_logger(user: UserMap) -> logger:
 
     )
     return _user_logger
-
 
 sql_log = create_logger(UserMap.MysqlProxy)
 myfastapi_logger = create_logger(UserMap.fastapi)
@@ -78,6 +79,7 @@ topic_lot_logger = create_logger(UserMap.topic_lot_logger)
 official_lot_logger = create_logger(UserMap.official_lot_logger)
 reserve_lot_logger = create_logger(UserMap.reserve_lot_logger)
 milvus_db_logger = create_logger(UserMap.milvus_db_logger)
+sams_club_logger = create_logger(UserMap.samsclub_logger)
 
 pushme_logger = create_logger(UserMap.pushme_logger)
 request_with_proxy_logger = create_logger(UserMap.request_with_proxy_logger)

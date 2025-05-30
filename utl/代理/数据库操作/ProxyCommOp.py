@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Optional
 
 from fastapi接口.log.base_log import sql_log
@@ -8,6 +9,7 @@ from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelpe
 from utl.代理.数据库操作.available_proxy_sql_helper import sql_helper
 
 __available_proxy_num: int = 0
+__latest_sync_ts: int = 0
 __lock = asyncio.Lock()
 
 
@@ -25,21 +27,22 @@ async def get_available_proxy(
     :param initial_retry_delay_seconds: The base delay in seconds before retrying after acquisition fails or finds no new proxies.
     :return: A ProxyTab object. This function will not return None.
     """
-    global __available_proxy_num
+    global __available_proxy_num, __latest_sync_ts
     attempt = -1  # Keep track of attempts for logging and backoff
     used_available_proxy = False
-    if __available_proxy_num == 0:
+    if __available_proxy_num == 0 or __latest_sync_ts < int(time.time()) - 1 * 3600:
         async with __lock:
-            if __available_proxy_num == 0:
+            if __available_proxy_num == 0 or __latest_sync_ts < int(time.time()) - 1 * 3600:
                 __available_proxy_num = await sql_helper.get_num(is_available=True)
+                __latest_sync_ts = int(time.time())
     while True:  # Loop indefinitely until a proxy is found
         attempt += 1
         proxy_tab: Optional[ProxyTab] = None
         # --- Attempt 1: Use AvailableProxy table (if requested) ---
-        if is_use_available_proxy or __available_proxy_num > 1000: # 1千个以上随便用
+        if is_use_available_proxy or __available_proxy_num > 300:  # 1千个以上随便用
             try:
                 # This function now selects AND updates the chosen AvailableProxy
-                available_proxy:Optional[AvailableProxy]
+                available_proxy: Optional[AvailableProxy]
                 available_proxy, __available_proxy_num = await sql_helper.get_rand_available_proxy_sql()
                 if available_proxy and available_proxy.proxy_tab:
                     # Successfully got an AvailableProxy and its associated ProxyTab is loaded

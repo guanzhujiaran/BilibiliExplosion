@@ -11,7 +11,7 @@ from typing import Union
 import bs4
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import sql_log
-from fastapi接口.utils.Common import sem_wrapper, GLOBAL_SEM
+from fastapi接口.utils.Common import sem_wrapper, sem_gen
 from utl.代理.SealedRequests import my_async_httpx
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
@@ -31,7 +31,7 @@ class GetProxyMethods:
     get_proxy_sep_time = 2 * 3600  # 获取代理的间隔
     check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
     GetProxy_Flag = False
-    _sem = asyncio.Semaphore(300)
+    _sem = sem_gen()
 
     # region a从代理网站获取代理
 

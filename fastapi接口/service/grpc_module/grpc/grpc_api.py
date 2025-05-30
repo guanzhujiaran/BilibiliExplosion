@@ -428,7 +428,8 @@ class BiliGrpc:
                                                     headers=tuple(new_headers),
                                                     # headers=dict(new_headers),
                                                     timeout=self.timeout,
-                                                    proxies=proxy.proxy,
+                                                    proxies=proxy.proxy if not force_proxy else {
+                                                        'http': self.my_proxy_addr, 'https': self.my_proxy_addr},
                                                     )
                 resp.raise_for_status()
                 md.able(num_add=True)
@@ -505,7 +506,7 @@ class BiliGrpc:
                     ProxyTimeoutError, SocksProxyError, ProtocolError, SSLError,
                     curl_cffi.requests.exceptions.ConnectionError,
                     curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
-                    curl_cffi.requests.exceptions.Timeout,curl_cffi.requests.exceptions.HTTPError
+                    curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError
 
             ) as httpx_err:
                 if proxy_flag:
@@ -718,9 +719,9 @@ bili_grpc = BiliGrpc()
 
 if __name__ == '__main__':
     async def _test():
-        t = BiliGrpc()
-        t.debug_mode = False
-        result1 = await t._get_random_channel()
+        bili_grpc.my_proxy_addr = 'http://127.0.0.1:8080'  # mitm代理默认地址
+        result1 = await bili_grpc.grpc_get_dynamic_detail_by_type_and_rid(dynamic_type=2, rid=343543865,
+                                                                          force_proxy=True)
         print(result1)
 
 

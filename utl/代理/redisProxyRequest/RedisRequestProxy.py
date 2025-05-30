@@ -94,7 +94,7 @@ class RequestWithProxy:
         self.check_proxy_time: CheckProxyTime = CheckProxyTime()
         self.__dir_path = CONFIG.root_dir + 'utl/代理/'
         self.timeout = 30
-        self.available_proxy_timeout = 10
+        self.available_proxy_timeout = 30
         self.mode = 'rand'  # single || rand # 默认是rand，改成single之后从分数最高的代理开始用，这样获取响应特别快
         self.mode_fixed = True  # 是否固定mode (已丢弃的功能)
         #  self.s = session()
@@ -167,8 +167,8 @@ class RequestWithProxy:
         :hybrid 是否将本地ipv6代理加入随机选择中
         :return:
         """
-        real_proxy_weights = 1
-        ipv6_proxy_weights = 1000
+        use_my_ipv6_proxy_pool_weights = 10  # 使用自己的ipv6代理池的权重
+        use_real_proxy_weights = 1000  # 使用抓取的代理的权重
         status = 0
         ua = kwargs.get('headers', {}).get('user-agent', '') or kwargs.get('headers', {}).get('User-Agent',
                                                                                               '') or CONFIG.rand_ua
@@ -179,8 +179,8 @@ class RequestWithProxy:
         used_available_proxy = False
         while 1:
             proxy_flag: bool = random.choices([True, False], weights=[
-                real_proxy_weights if real_proxy_weights >= 0 else 0,
-                ipv6_proxy_weights * 2 if ipv6_proxy_weights >= 0 else 0
+                use_my_ipv6_proxy_pool_weights if use_my_ipv6_proxy_pool_weights >= 0 else 0,
+                use_real_proxy_weights if use_real_proxy_weights >= 0 else 0
             ], k=1)[0]
             if kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
                     'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
@@ -190,14 +190,14 @@ class RequestWithProxy:
             else:
                 kwargs.get('headers', {}).update({'cookie': ''})
             if not proxy_flag or status != 0:
-                real_proxy_weights += 1
+                use_my_ipv6_proxy_pool_weights += 1
                 proxy, used_available_proxy = await get_available_proxy(is_use_available_proxy)
                 if not proxy:
                     self.log.warning('获取代理失败！')
                     await get_proxy_methods.get_proxy()
                     continue
             else:
-                ipv6_proxy_weights += 20
+                use_real_proxy_weights += 20
                 proxy: ProxyTab = ProxyTab(
                     **{
                         'proxy_id': 1,
@@ -214,7 +214,7 @@ class RequestWithProxy:
             req_dict = False
             req_text = ''
             try:
-                req = await my_async_httpx.request( **kwargs,
+                req = await my_async_httpx.request(**kwargs,
                                                    timeout=self.timeout if not used_available_proxy else self.available_proxy_timeout,
                                                    proxies=proxy.proxy)
                 req_text = req.text
@@ -282,16 +282,16 @@ class RequestWithProxy:
                     ExceptionGroup, ProxyConnectionError, ProxyTimeoutError, SocksProxyError,
                     ValueError, ProtocolError, curl_cffi.requests.exceptions.ConnectionError,
                     curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
-                    curl_cffi.requests.exceptions.Timeout,curl_cffi.requests.exceptions.HTTPError
+                    curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError
             ) as _err:
                 self.log.debug(f'请求时发生网络错误：{type(_err)}\n{_err}')
                 if proxy:
                     await handle_proxy_request_fail(
                         proxy_tab=proxy,
                     )
-                    ipv6_proxy_weights += 1
+                    use_real_proxy_weights += 1
                 else:
-                    real_proxy_weights += 20
+                    use_my_ipv6_proxy_pool_weights += 20
                 continue
             except AttributeError as _err:
                 self.log.exception(f'请求时出错，一般错误：{_err}')

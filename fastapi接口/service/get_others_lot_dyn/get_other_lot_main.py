@@ -19,6 +19,7 @@ from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TL
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
+from fastapi接口.utils.Common import sem_gen
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
@@ -1270,7 +1271,7 @@ class BiliSpaceUserItem:
                     f'当前UID：https://space.bilibili.com/{self.uid}/dynamic\n从半当中开始接着获取动态，获取到时间在{origin_offset}之后的动态，共计{len(items)}条，之后沿着该offset继续从B站接口获取空间动态')
                 first_get_dynamic_flag = False
             else:
-                start_ts= time.time()
+                start_ts = time.time()
                 get_others_lot_log.debug(f'正在前往获取用户【{self.uid}】空间动态请求！')
                 dyreq_dict = await get_space_dynamic_req_with_proxy(self.uid, cur_offset if cur_offset else "",
                                                                     is_use_available_proxy=_is_use_available_proxy)
@@ -1284,7 +1285,8 @@ class BiliSpaceUserItem:
                         f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}',
                         'text'
                     )
-                get_others_lot_log.info(f'获取用户【{self.uid}】空间动态请求成功！耗时：{time.time()-start_ts}秒\n响应：\n{dyreq_dict}')
+                get_others_lot_log.info(
+                    f'获取用户【{self.uid}】空间动态请求成功！耗时：{time.time() - start_ts}秒\n响应：\n{dyreq_dict}')
                 resp_dyn_ids = await self.__add_space_card_to_db(dyreq_dict)
                 if not first_dynamic_id and resp_dyn_ids:
                     first_dynamic_id = resp_dyn_ids[0]
@@ -1485,7 +1487,7 @@ class GetOthersLotDynRobot:
     """
 
     def __init__(self):
-        self._sem = asyncio.Semaphore(300)
+        self._sem = sem_gen()
         self.isPreviousRoundFinished = False  # 上一轮抽奖是否结束
         self.nowRound: TLotmaininfo = TLotmaininfo()
         self.username = ''
@@ -1837,10 +1839,7 @@ class GetOthersLotDyn:
             self.robot = GetOthersLotDynRobot()
             await self.robot.main()
             await get_other_lot_redis_manager.set_get_dyn_ts(int(time.time()))
-
         self.is_getting_dyn_flag = False
-        if self.robot and self.robot.nowRound:
-            return await self.solve_return_lot(self.robot.nowRound.lotRound_id)
         return await self.solve_return_lot(0)
 
     async def get_official_lot_dyn(self) -> list[str]:
@@ -1981,7 +1980,7 @@ class GetOthersLotDyn:
             return False
         if int(self.get_dyn_ts - pub_ts) <= 2 * 3600:  # 获取时间和发布时间间隔小于2小时的不按照评论转发数量过滤
             return True
-        if comment_count != 'None':
+        if comment_count is not None and comment_count > 0:
             if int(comment_count) < 20 and int(rep_count) < 20:
                 return False
         if official_verify != 1:
@@ -2027,4 +2026,4 @@ get_others_lot_dyn = GetOthersLotDyn()
 
 if __name__ == '__main__':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    asyncio.run(get_others_lot_dyn.get_new_dyn())
+    asyncio.run(get_others_lot_dyn.solve_return_lot(0))

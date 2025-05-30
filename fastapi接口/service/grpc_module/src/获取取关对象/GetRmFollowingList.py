@@ -25,7 +25,7 @@ def get_file_path(relative_path: str):
 
 class GetRmFollowingListV1:
     def __init__(self, ):
-        self.space_sem = sem_gen(100)
+        self.space_sem = sem_gen()
         self.sql_lock = asyncio.Lock()
         self.logger = get_rm_following_list_logger
         self.lucky_up_list = []

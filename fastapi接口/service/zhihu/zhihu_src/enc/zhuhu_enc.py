@@ -17,116 +17,6 @@ import requests
 import CONFIG
 
 # 知乎加密逻辑复现
-"""
-    url_path = /api/v4/members/longgegege/followees?include=data%5B*%5D.answer_count%2Carticles_count%2Cgender%2Cfollower_count%2Cis_followed%2Cis_following%2Cbadge%5B%3F%28type%3Dbest_answerer%29%5D.topics&offset=20&limit=20
-    x-zse-93 = 101_3_3.0
-    # d_c0由cookie中获取，经测试这个参数依旧可以在不登录下获取，显然知乎并没有更改（乐），如果想要自动获取可以尝试使用selenium自动获取
-    d_c0 = AABXNY7FGxKPTukiyJlJ_u_0H4vILACn1L0=|1603881372 
-    # x-zst-81=3_2.0aR_sn77yn6O92wOB8hPZnQr0EMYxc4f18wNBUgpTQ6nxERFZ8XY0-4Lm-h3_tufIwJS8gcxTgJS_AuPZNcXCTwxI78YxEM20s4PGDwN8gGcYAupMWufIeQuK7AFpS6O1vukyQ_R0rRnsyukMGvxBEqeCiRnxEL2ZZrxmDucmqhPXnXFMTAoTF6RhRuLPF0VGsQNG8hoLZqSMTGg01ugBTwLyiUX_aDNfxCoL26N8cCxKSANf5DNCDcSTvLe12cxMgGOqnwN0Q_cpnGVmmR3LrvHLcHwfbhwBAqLffBL_tJxmFGpmDwOCFcOMXcLxHhoGpBe1bAL_twtVXuC1BGcYwqCCCgYYYuYL-Dxm-D9_Vq39Oqfz3GoMErSYiGFMUh2VEDg8jqH9kBc_chwq1TNKLU3Ct9X1xwH_qwYBQ6CKUBCVph3_WbxB3ce9xbSprqe9Y8x9zCSM8ce8DCgBKweL24p0iUOYwwXOWrOC
-    其中x-zst-81一般是没有的，经测试只有被限制之后，登录账号后可能出现，所以下面的加密中默认不使用该参数
-"""
-"""
-基础逻辑：
-    1. A_v = x-zse-93+"+"+url_path+"+"+d_c0
-    2. B_v = md5(A_v)
-    3. C_v = ord(B_v)  # 这里是对上面的32位MD5加密每个字符做了一个ord，得到一个32位数组
-    # 将C_v与固定值组成一个48位的新的数组。其中C_v和D_v的关系应该是extends，否则会形成一个二维数组。其中的127是一个固定值
-    4. D_v = [127 * random.random(), 0, C_v, 14,14,14,14,14,14,14,14,14,14,14,14,14,14] 
-    5. E_v = D_v[0:15]
-    6. F_v = D_v[16:48] # 这个值就是后面计算中至关重要的一个参数G[0]，结果F_v是一个32位的数组
-    # 这里的base_arr是一个固定的16位数组：[48, 53, 57, 48, 53, 51, 102, 55, 100, 49, 53, 101, 48, 49, 100, 55]
-    7. J_v = [ E_v[i] ^ base_arr[i] ^ 42 for i in range(len(E_v)) ]
-    8. K_v = __g.r(J_v) # 这个值就是后面计算中至关重要的一个参数G[1]，结果K_v是一个16位的数组。
-    9. L_v = __g.x(F_v,K_v) # 这里就是上面说的至关重要的函数，结果L_v是一个32位的数组。
-    10. M_v= K_v + L_v # 这里就得到了最终用于加密的48位数字数组。
-    11. 基础计算流程（M_v）
-
-基础计算流程【很多jsvm的加密最终用的都是类似的这个流程，如头条，抖音】：
-    encrypt_str=""
-    for i in range(len(M_v)-1, -1, -3):
-        # 这里有四种算法，分别对应[0,24,16,8]的顺序循环，具体见下面代码实现，下面流程中给出的是循环流程中0对应的算法
-        1. A_v = (M_v[i] ^ 58) + (M_v[i-1] << 8) + (M_v[i-2] << 16) # 此处M_v为基础逻辑中计算得出
-        2. B_v = A_v & 63
-        3. encrypt_str += base_str[B_v]
-        4. C_v = A_v >> 6 & 63
-        5. encrypt_str += base_str[C_v]
-        6. D_v = A_v >> 12 & 63
-        7. encrypt_str += base_str[D_v]
-        8. E_v = A_v >> 18
-        9. encrypt_str += base_str[E_v]
-    return encrypt_str
-
-__g.x(tt, te)【核心函数1，js定位方式，检索（注意空格也是需要的）：__webpack_unused_export__】:
-参数说明：
-    1. tt：即基础逻辑中传入的G[0]，是一个32位的数字数组，结尾是14个14
-    2. te：即基础逻辑中传入的G[1]，是一个16位的数字数组，是通过__g.r(tt)进行过一轮计算得到的。
-流程复现：
-    tr=[]
-    for i in range(0,2):
-        tu = tt[i*16:(i+1)*16] # 将32位数组切分，16个元素为一组
-        tc = [None for _ in range(0,16)]
-        for j in range(0,16):
-            tc[j] = tu[j] ^ te[j]
-        te = __g.r(tc)
-        tr = tr.extends(te)
-    return tr
-
-__g.r(tt)【核心函数2，js定位方式，检索（注意空格也是需要的）：__webpack_unused_export__】:
-参数说明：
-    1. tt：即基础逻辑中传入的J_v，亦或是__g.x中传入的tc
-流程复现：
-    te = [0 for _ in range(0,16)]
-    tr = [0 for _ in range(0,36)]
-    tr[0] = B_f(tt, 0)
-    tr[1] = B_f(tt, 4)
-    tr[2] = B_f(tt, 8)
-    tr[3] = B_f(tt, 12)
-    for i in range(0,32):
-        ta = G_f(tr[i+1] ^ tr[i+2] ^ tr[i+3] ^ h_zk[i]) # 这里的h_zk同样也是一个固定的32位数组
-        tr[ti + 4] =tr[i] ^ ta
-    i_f(tr[35],te,0)
-    i_f(tr[34],te,4)
-    i_f(tr[33],te,8)
-    i_f(tr[32],te,12)
-    return te
-
-__g.r(tt)中参与计算的相关函数：
-    B_f(tt, te)参数说明：
-        1. tt：16位数字数组 
-        2. te：常数0,4,8,12
-    B_f(tt, te)流程复现:
-        return (255 & tt[te]) << 24 | (255 & tt[te + 1]) << 16 | (255 & tt[te + 2]) << 8 | 255 & tt[te + 3]
-
-    G_f(tt)参数说明：
-        1. 通过__g.r(tt)一系列亦或运算得到的一个大整数
-    G_f(tt)流程复现:
-        te = [0 for _ in range(0,4)]
-        tr = [0 for _ in range(0,4)]
-        i_f(tt, te, 0)
-        # 下方的h_zb是一个固定的256位的数字数组
-        tr[0] = h_zb[255 & te[0]]
-        tr[1] = h_zb[255 & te[1]]
-        tr[2] = h_zb[255 & te[2]]
-        tr[3] = h_zb[255 & te[3]]
-        ti = B_f(tr, 0)
-        return ti ^ Q_f(ti, 2) ^ Q_f(ti, 10) ^ Q_f(ti, 18) ^ Q_f(ti, 24)
-
-    Q_f(tt, te)参数说明:
-        1. tt：通过B_f计算后得到的一个大整数
-        2. te：常数2,10,18,24
-    Q_f(tt, te)流程复现:
-        return (4294967295 & tt) << te | tt >>> 32 - te
-
-    i_f(tt, te, tr)参数说明：
-        1. tt：大整数
-        2. te：数组
-        3. tr：常数0,4,8,12
-    i_f(tt, te, tr)流程复现：
-        te[tr] = 255 & tt >>> 24
-        te[tr + 1] = 255 & tt >>> 16
-        te[tr + 2] = 255 & tt >>> 8
-        te[tr + 3] = 255 & tt
-"""
 x_zse_93 = "101_3_3.0"
 
 # 基础加密字符串，每次从中选择一个字母，最终拼接成加密结果
@@ -233,6 +123,7 @@ def bxor(x, y):
 
 class ZhiHuEncrypt:
     my_ipv6_proxy = {'http': CONFIG.CONFIG.my_ipv6_addr, "https": CONFIG.CONFIG.my_ipv6_addr}
+
     def __init__(self):
         pass
 

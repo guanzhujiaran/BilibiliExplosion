@@ -18,12 +18,12 @@ from fastapi接口.models.v1.background_service.background_service_model import 
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER, sql_retry_wrapper, GLOBAL_SEM
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from utl.redisTool.RedisManager import RedisManagerBase
-from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, AvailableProxy
 from utl.代理.数据库操作.available_proxy_sql_helper import sql_helper
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 
-MIN_REFRESH_SUCCESS_TIME = -5  # 最低允许刷新状态的代理获取请求成功次数
-MIN_REFRESH_SCORE = -10  # 最低允许刷新状态的代理分数
+MIN_REFRESH_SUCCESS_TIME = -3  # 最低允许刷新状态的代理获取请求成功次数
+MIN_REFRESH_SCORE = 0  # 最低允许刷新状态的代理分数
 DEFAULT_CHUNK_SIZE = 1000  # Adjust as needed
 
 
@@ -393,16 +393,34 @@ class SQLHelperClass:
                             f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_ts, tz=ZoneInfo("Asia/Shanghai"))}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
 
     @sql_retry_wrapper
-    async def clear_unusable_proxy(self) -> Callable[[], int]:
+    async def clear_unusable_proxy(self):
         """
         清除数据库中的不可用的代理，根据score和success_times判断
         主要用于同步到redis之前，将不可用的清理掉
         :return:
         """
         async with self.session() as session:
-            sql = delete(ProxyTab).where(
-                or_(ProxyTab.score <= MIN_REFRESH_SCORE, ProxyTab.success_times < MIN_REFRESH_SUCCESS_TIME))  # 负分就删除了
-            res = await session.execute(sql)
+            # 查找所有将要被删除的 proxy_tab_id
+            stmt = select(ProxyTab.proxy_id).where(
+                or_(ProxyTab.score <= MIN_REFRESH_SCORE, ProxyTab.success_times < MIN_REFRESH_SUCCESS_TIME)
+            )
+            result = await session.execute(stmt)
+            proxy_ids_to_delete = [row[0] for row in result.all()]
+
+            if not proxy_ids_to_delete:
+                return 0
+            # 先删除子表数据
+            delete_available_proxy = delete(AvailableProxy).where(
+                AvailableProxy.proxy_tab_id.in_(proxy_ids_to_delete)
+            )
+            await session.execute(delete_available_proxy)
+
+            # 再删除父表数据
+            delete_proxy_tab = delete(ProxyTab).where(
+                ProxyTab.proxy_id.in_(proxy_ids_to_delete)
+            )
+            res = await session.execute(delete_proxy_tab)
+
             await session.commit()
             return res.rowcount
 
@@ -694,9 +712,7 @@ SQLHelper = SQLHelperClass()
 if __name__ == "__main__":
     print(int(time.time()))
     print(asyncio.run(
-        SQLHelper.select_proxy(
-            'rand'
-        )
+        SQLHelper.clear_unusable_proxy()
     )
     )
     print(int(time.time()))

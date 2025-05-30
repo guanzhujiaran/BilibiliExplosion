@@ -540,7 +540,8 @@ class ExClimbWuzhi:
         resp = await MyAsyncReq.request(url=apiExClimbWuzhi.GenWebTicket,
                                         method='post',
                                         params=params,
-                                        headers=headers, proxies=ExClimbWuzhi.proxy_ip
+                                        headers=headers,
+                                        proxies=ExClimbWuzhi.proxy_ip
                                         )
         resp_json = resp.json()
         return {
