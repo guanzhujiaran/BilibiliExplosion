@@ -24,6 +24,7 @@ users.yaml
 *.jpg
 *.png
 *.pkl
+/models
 /NUL
 /github/ChatGLM2-6B/.idea/inspectionProfiles/profiles_settings.xml
 /github/ChatGLM2-6B/.idea/inspectionProfiles/Project_Default.xml
