@@ -1,4 +1,3 @@
-import asyncio
 from typing import Callable, Dict
 from faststream.rabbit.fastapi import RabbitRouter
 from faststream.rabbit.annotations import RabbitMessage

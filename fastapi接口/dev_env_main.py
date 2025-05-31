@@ -4,13 +4,11 @@
 """
 import asyncio
 from contextlib import asynccontextmanager
-
 import objgraph
 from fastapi_cache.backends.inmemory import InMemoryBackend
 import uvicorn
 from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
-
 from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 import fastapi_cdn_host
 from fastapi接口.models.common import CommonResponseModel

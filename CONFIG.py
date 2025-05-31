@@ -1,14 +1,9 @@
 import copy
+import os
 from dataclasses import dataclass
 from enum import Enum
 from fake_useragent import UserAgent
 from sqlalchemy import AsyncAdaptedQueuePool
-
-
-@dataclass
-class DBINFO:
-    DB_path: str
-    DB_URI: str
 
 
 @dataclass
@@ -53,29 +48,28 @@ class pushnotify:
     def pushplus(self):
         return self._pushplus
 
+
 class database:
     @dataclass
     class _MYSQL:
-        proxy_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/proxy_db?charset=utf8mb4&autocommit=true'
-        bili_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
-        bili_reserve_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bili_reserve?charset=utf8mb4&autocommit=true'
-        get_other_lot_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
-        dyn_detail: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/dynDetail?charset=utf8mb4&autocommit=true'
-        sams_club_URI:str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/samsClub?charset=utf8mb4&autocommit=true'
+        _base_url: str = '192.168.1.200:3306'
+        proxy_db_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true'
+        bili_db_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
+        bili_reserve_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
+        get_other_lot_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
+        dyn_detail: str = f'mysql+aiomysql://minato:114514@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
+        sams_club_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
 
     @dataclass
     class _REDISINFO:
         def __init__(self, db: int = 15):
-            self.host: str = '127.0.0.1'
+            self.host: str = '192.168.1.200'
             self.port: int = 11451
             self.db: int = db
+            self.pwd: str = '114514'
 
-    dynDetail = "H:/database/dynDetail.db"
-    proxy_db = "K:/sqlite_database/proxy_database/proxy_db.db"
-    proxy_db_URI = 'sqlite+aiosqlite:///K:/sqlite_database/proxy_database/proxy_db.db?check_same_thread=False'
-    followingup_db_RUI = 'sqlite+aiosqlite:///G:/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
-    bili_live_monitor_db_URI = fr'sqlite:///H:\liveLotMonitorDB\Bili_live_database.db''?check_same_thread=False'  # b站直播数据库
-    aiobili_live_monitor_db_URI = fr'sqlite+aiosqlite:///H:\liveLotMonitorDB\Bili_live_database.db''?check_same_thread=False'
+    followingup_db_RUI = 'sqlite+aiosqlite:////mnt/g/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
+    aiobili_live_monitor_db_URI = fr'sqlite+aiosqlite:////mnt/h/liveLotMonitorDB/Bili_live_database.db''?check_same_thread=False'
     MYSQL = _MYSQL()
     proxyRedis = _REDISINFO(15)
     proxySubRedis = _REDISINFO(6)
@@ -105,7 +99,7 @@ class RabbitMQConfig:
         bili_352_voucher = 'bili_352_voucher'
         ipv6_change = 'ipv6_change'
 
-    host = '127.0.0.1'
+    host = '192.168.1.200'
     port = 5672
     user = 'Xingtong'
     pwd = '114514'
@@ -116,14 +110,16 @@ class RabbitMQConfig:
 
 class _SeleniumConfig:
     edge_path = 'C:/WebDriver/bin/msedgedriver.exe'
+    linux_edge_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webDriver/linux/msedgedriver')
 
 
 # endregion
 
 
 class _CONFIG:
-    root_dir = 'K:/python test/'  # b站代码的根目录
-    V2ray_proxy = 'http://127.0.0.1:10809'  # socks端口+1
+    root_dir = os.path.dirname(os.path.abspath(__file__))  # 代码的根目录
+    V2ray_proxy = 'http://192.168.1.200:10809'  # socks端口+1
+    lm_studio_url = 'http://192.168.1.200:1234'
     pushnotify = pushnotify()  # 推送设置
     database = database()
     chat_gpt_configs = [
@@ -152,13 +148,13 @@ class _CONFIG:
             open_ai_api_key='hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25'
         ),
         ChatGptSettings(
-            baseurl='http://127.0.0.1:1234/v1',
+            baseurl='http://192.168.1.200:1234/v1',
             open_ai_api_key='114514',
         ),
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
     # my_ipv6_addr = 'http://127.0.0.1:8080'
-    unidbg_addr = "http://127.0.0.1:23335"
+    unidbg_addr = "http://192.168.1.200:23335"
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()
     sql_alchemy_config = SqlAlchemyConfig()
@@ -168,7 +164,7 @@ class _CONFIG:
 
     @property
     def rand_ua(self):
-        return CONFIG._pc_ua.random
+        return self._pc_ua.random
 
     @property
     def rand_ua_mobile(self):

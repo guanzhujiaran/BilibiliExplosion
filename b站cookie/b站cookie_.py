@@ -228,7 +228,7 @@ class t:
         return s
 
 
-cookie_file_name_list = os.listdir(CONFIG.root_dir+'b站cookie/cookie_path')
+cookie_file_name_list = os.listdir(os.path.join(CONFIG.root_dir,'b站cookie/cookie_path'))
 cookie_file_name_list=sorted(cookie_file_name_list,key=lambda x:int(x[6:-4]))
 print(cookie_file_name_list)
 t = t()

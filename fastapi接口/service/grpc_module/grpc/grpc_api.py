@@ -49,7 +49,7 @@ from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
 
-current_file_path = os.path.abspath(__file__)
+current_file_path = os.path.abspath(os.path.dirname(__file__))
 
 
 def grpc_error(err):
@@ -130,7 +130,7 @@ class BiliGrpc:
         self.channel_list = ['master', '360', 'bili', 'xiaomi', 'google']  # 渠道包列表
         with open(os.path.join(
                 current_file_path,
-                '../', '../', 'Utils/user-agents_dalvik_application_2-1.json'
+                '../Utils/user-agents_dalvik_application_2-1.json'
         ), 'r',
                 encoding='utf-8') as f:
             self.Dalvik_list = json.loads(f.read())

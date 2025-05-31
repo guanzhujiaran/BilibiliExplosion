@@ -95,7 +95,11 @@ class CvContentOps(CustomBaseModel):
     insert: Union[str, CutOff]
 
 
-with open(os.path.join(__file__, '../read_editor.js'), 'r', encoding='utf-8') as f:
+with open(
+        os.path.join(
+            os.path.dirname(__file__),
+            'read_editor.js'
+        ), 'r', encoding='utf-8') as f:
     toOpusContent = execjs.compile(
         f.read()
     )

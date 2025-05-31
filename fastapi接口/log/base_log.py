@@ -43,7 +43,9 @@ def create_logger(user: UserMap) -> Logger:
     user_uq_value = uuid.uuid4().hex + user.value
     _user_logger = logger.bind(user=user_uq_value)
     _user_logger.add(
-        os.path.join(CONFIG.root_dir, f"fastapi接口/scripts/log/error_{user.value}_log.log"),
+        os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            f"../scripts/log/error_{user.value}_log.log"),
         level="WARNING",
         encoding="utf-8",
         enqueue=True,
@@ -54,6 +56,7 @@ def create_logger(user: UserMap) -> Logger:
 
     )
     return _user_logger
+
 
 sql_log = create_logger(UserMap.MysqlProxy)
 myfastapi_logger = create_logger(UserMap.fastapi)

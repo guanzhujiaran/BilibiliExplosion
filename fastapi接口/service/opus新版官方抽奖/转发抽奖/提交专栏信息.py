@@ -90,7 +90,7 @@ class ExtractOfficialLottery:
             df2 = pd.DataFrame(self.last_update_offcial_lots)
             df2.to_csv(os.path.join(self.__dir, 'result/更新的转发抽奖.csv'), index=False, sep=self.csv_sep_letter)
 
-        with open(os.path.join(self.__dir, 'idsstart.txt'), 'w', encoding='utf-8') as f:
+        with open(os.path.join(self.__dir, 'idsstart'), 'w', encoding='utf-8') as f:
             f.write(str(self.latest_rid))
 
     async def update_lot_notice(self, original_lot_notice: List[Lotdata]) -> List[Lotdata]:

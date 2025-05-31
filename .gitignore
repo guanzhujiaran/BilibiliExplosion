@@ -18,13 +18,11 @@ users.yaml
 /utl/nlpcda_model/
 .git/
 /github/*
-!/github/my_operator/
 !requirements.txt
 /b站app/bilireq/
 *.pt
 *.jpg
 *.png
-*.pkl
 /models
 /NUL
 /github/ChatGLM2-6B/.idea/inspectionProfiles/profiles_settings.xml
@@ -48,3 +46,4 @@ users.yaml
 /github/ChatGLM2-6B/ptuning/output/微调模型chat.py
 /github/ChatGLM2-6B/ptuning/train.sh
 !/fastapi接口/service/grpc_module/Utils/user-agents_dalvik_application_2-1.json
+CONFIG.py

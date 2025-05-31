@@ -20,7 +20,7 @@ class pubArticleInfo(CustomBaseModel):
 
     def __init__(self):
         super().__init__()
-        setting_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log/')
+        setting_path = os.path.join(os.path.dirname(__file__), 'log/')
         if not os.path.exists(setting_path):
             os.mkdir(setting_path)
         try:

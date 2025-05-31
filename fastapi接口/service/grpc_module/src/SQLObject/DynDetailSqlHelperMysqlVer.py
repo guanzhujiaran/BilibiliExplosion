@@ -42,8 +42,7 @@ def lock_wrapper(_func: callable) -> callable:
 
 
 class SQLHelper:
-    def __init__(self, db_path: str = CONFIG.database.dynDetail,
-                 main_table_name: str = 'biliDynDetail'):
+    def __init__(self):
         _SQLURI = CONFIG.database.MYSQL.dyn_detail
         self._engine = create_async_engine(
             _SQLURI,
@@ -53,15 +52,6 @@ class SQLHelper:
             self._engine,
             **CONFIG.sql_alchemy_config.session_config
         )
-
-        self.main_table_name = main_table_name
-        self.lot_table_name = 'lotData'
-        self._underscore_spe_time = 8 * 3600 * 3 * 2  # 0分以下的无响应代理休眠时间
-        self._412_sep_time = 2 * 3600 * 2  # 0分以上但是"-412"风控的代理休眠时间
-        self.db_path = db_path
-        self.op_db = sqlite_utils.Database(self.db_path)
-        self.op_db_table = self.op_db[self.main_table_name]
-        self.op_lot_table = self.op_db[self.lot_table_name]
 
     # region 返回和提交内容预处理
 

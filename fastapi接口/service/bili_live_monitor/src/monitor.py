@@ -23,8 +23,8 @@ from fastapi接口.log.base_log import live_monitor_logger
 from fastapi接口.service.bili_live_monitor.utils import tool
 from fastapi接口.service.bili_live_monitor.utils.models import *
 from fastapi接口.service.bili_live_monitor.utils.tool import AsyncTool
-from fastapi接口.utils.Common import retry_wrapper
-from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
+from fastapi接口.utils.Common import retry_wrapper, sql_retry_wrapper
+from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
 from utl.redisTool.RedisManager import SyncRedisManagerBase, RedisManagerBase
 
 sqlhelper_lock = threading.Lock()
@@ -58,7 +58,7 @@ class AsyncBiliLiveLotRedisManager(RedisManagerBase):
         all_live_lot = 'all_live_lot'
 
     def __init__(self):
-        super().__init__(host='localhost', port=11451, db=0)
+        super().__init__(db=0)
 
     async def get_goldbox_info(self):
         return await self._get(BiliLiveLotRedisManager.RedisMap.goldbox.value)
@@ -162,21 +162,6 @@ def _async_sql_helper_wrapper(func: Callable) -> Callable:
 
     return wrapper
 
-
-def _sql_helper_wrapper(func: Callable) -> Callable:
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        while 1:
-            try:
-                with sqlhelper_lock:
-                    return func(*args, **kwargs)
-            except Exception as e:
-                live_monitor_logger.exception(e)
-                time.sleep(1)
-
-    return wrapper
-
-
 class AsyncSqlHelper:
     def __init__(self):
         engine = create_async_engine(
@@ -188,57 +173,57 @@ class AsyncSqlHelper:
             **CONFIG.sql_alchemy_config.session_config
         )  # 每次操作的时候将session实例化一下
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def get_anchor_by_server_data_id(self, server_data_id: int) -> Optional[Anchor]:
         async with self.Session() as session:
             db_anchor = await session.execute(
                 select(Anchor).filter(text("server_data_id=:id")).params(id=server_data_id))
             return db_anchor.scalars().first()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def add_redpacket_winner(self, popularity_red_pocket_winner: PopularityRedPocketWinner):
         async with self.Session() as session:
             session.add(popularity_red_pocket_winner)
             await session.commit()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def add_anchor(self, anchor: Anchor):
         async with self.Session() as session:
             session.add(anchor)
             await session.commit()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def get_popularity_red_package_by_lot_id(self, lot_id: int) -> Optional[PopularityRedPocket]:
         async with self.Session() as session:
             red_pocket = await session.execute(select(PopularityRedPocket).filter(text("lot_id=:id")).params(
                 id=lot_id))
             return red_pocket.scalars().first()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def add_popularity_red_package(self, pop: PopularityRedPocket):
         async with self.Session() as session:
             session.add(pop)
             await session.commit()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def get_room_uid_by_room_id(self, room_id: int) -> Optional[TRoomUid]:
         async with self.Session() as session:
             res = await session.execute(select(TRoomUid).filter(TRoomUid.room_id == room_id))
             return res.scalars().first()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def add_room_uid(self, room_id_2_uid: TRoomUid):
         async with self.Session() as session:
             session.add(room_id_2_uid)  # 添加上去
             await session.commit()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def get_server_data_by_id(self, _id: int) -> Optional[ServerData]:
         async with self.Session() as session:
             db_data = await session.execute(select(ServerData).filter(text("id=:id")).params(id=_id))
             return db_data.scalars().first()
 
-    @_async_sql_helper_wrapper
+    @sql_retry_wrapper
     async def add_server_data(self, server_data: ServerData):
         async with self.Session() as session:
             session.add(server_data)
@@ -785,4 +770,4 @@ if __name__ == '__main__':
         print(result)
 
 
-    asyncio.run(_test())
+    asyncio.run(_test_sql())

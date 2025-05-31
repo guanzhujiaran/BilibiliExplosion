@@ -1,5 +1,6 @@
 import asyncio
 import random
+import sys
 import time
 import requests
 import base64
@@ -25,7 +26,11 @@ class ipv6Obj:
             # 添加无痕模式参数
             opts.add_argument('--incognito')
             opts.add_experimental_option("prefs", prefs)
-            self.edge = webdriver.WebDriver(service=Service(CONFIG.selenium_config.edge_path), options=opts)
+            if sys.platform.startswith('linux'):
+                edge_path = CONFIG.selenium_config.linux_edge_path
+            else:
+                edge_path = CONFIG.selenium_config.edge_path
+            self.edge = webdriver.WebDriver(service=Service(edge_path), options=opts)
             self.edge.implicitly_wait(30)
 
     def _get_register_result(self) -> dict:

@@ -9,12 +9,13 @@ import bs4
 from fastapi接口.log.base_log import zhihu_api_logger
 import fastapi接口.service.zhihu.zhihu_src.zhihu_utl as zhihu_utl
 from Bilibili_methods.all_methods import methods
+import pandas
 
-current_dir = os.path.abspath(__file__)
+current_dir = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_file_p(file_relative_p: str):
-    return os.path.join(current_dir, '../', file_relative_p)
+    return os.path.join(current_dir, file_relative_p)
 
 
 get_pin_ts_txt_p = get_file_p('get_pin_ts.txt')
@@ -225,7 +226,6 @@ class LotScrapy:
         self.recorded_users_pins.update({uname: newest_pins[-20:]})  # 更新最新获取的空间信息
 
     def end_write(self):
-        import pandas
         if len(self.all_pins) >= 10000:
             self.all_pins = self.all_pins[2000:-1]
         with open(get_file_p('records/获取过的pins.txt'), 'w', encoding='utf-8') as f:
@@ -265,7 +265,7 @@ class LotScrapy:
             self.get_pin_ts = ts
             f.writelines(f'{ts}')
 
-    async def api_get_all_pins(self)->list[str]:
+    async def api_get_all_pins(self) -> list[str]:
         self.log.critical(f'api加密有变化，正在修复中，暂时不使用')
         return []
         while self.is_getting_dyn_flag:

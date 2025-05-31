@@ -3,6 +3,7 @@ import asyncio
 import os.path
 import re
 import socket
+import sys
 import time
 from typing import Literal
 from fastapi接口.log.base_log import ipv6_monitor_logger
@@ -14,8 +15,10 @@ import subprocess
 net_adapter_name_list = ['"vEthernet (bridge)"', '"以太网"']
 _loop = asyncio.new_event_loop()
 
+
 def run_cmd(command):
     return subprocess.call(command, creationflags=0x08000000)
+
 
 def bat_gen(prefix: str, operation: Literal['del', 'add'], bat_file_path):
     bat_file = open(bat_file_path, "w", encoding="utf-8")
@@ -93,7 +96,6 @@ def change_ipv6_config(now_ipv6_prefix: str, latest_ipv6_prefix: str = ''):
     with open(ipv6_bat_example_path, 'r', encoding='utf-8') as f:
         ipv6_bat_example = f.read()
     for net_adapter_name in net_adapter_name_list:
-
         ipv6_bat_add = ipv6_bat_example.format(net_adapter_name=net_adapter_name, ipv6_prefix=now_ipv6_prefix)
         # latest_ipv6_list = [x for x in latest_ipv6_list if latest_ipv6_prefix in x]
         # now_ipv6_list = list(map(lambda x: x.replace(latest_ipv6_prefix, now_ipv6_prefix), latest_ipv6_list))
@@ -115,8 +117,6 @@ def change_ipv6_config(now_ipv6_prefix: str, latest_ipv6_prefix: str = ''):
     p = run_cmd(
         'C:/Squid/bin/squid -k parse')
     ipv6_monitor_logger.info(p)
-
-
 
 
 @pushme_try_catch_decorator
@@ -146,6 +146,8 @@ def monitor_ipv6_address_changes():
 
 @async_pushme_try_catch_decorator
 async def async_monitor_ipv6_address_changes():
+    if not sys.platform.startswith('windows'):
+        return
     ipv6_monitor_logger.info('启动监控本地ipv6地址程序！！！')
     my_ipv6 = ipv6Obj()
     # previous_ipv6_address = await get_ipv6_from_redis()

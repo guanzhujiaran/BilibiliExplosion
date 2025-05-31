@@ -6,9 +6,12 @@ import fastapi接口.models.lottery_database.milvusModel.biliMilvusModel as bili
 import fastapi接口.service.compo.lottery_data_vec_sql.sql_helper as sql_helper
 import fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
 import fastapi接口.service.grpc_module.src.SQLObject.models as models
-_client = AsyncOpenAI(base_url='http://127.0.0.1:1234/v1', api_key="your-api-key-here")
+from CONFIG import CONFIG
+
+_client = AsyncOpenAI(base_url=f'{CONFIG.lm_studio_url}/v1', api_key="your-api-key-here")
 
 _model_name = 'text-embedding-multilingual-e5-base'
+
 
 @cache(8 * 3600)
 async def _create_embeddings(text: list[str | None], model: str = _model_name) -> list[list[float] | None]:

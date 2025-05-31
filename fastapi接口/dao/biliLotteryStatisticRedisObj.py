@@ -176,9 +176,10 @@ lottery_data_statistic_redis = LotteryDataStatisticRedis()
 
 if __name__ == '__main__':
     async def _test():
-        await lottery_data_statistic_redis._zadd(
-            '114514', {1: 1}
+        res = await lottery_data_statistic_redis.get_bili_user_info(
+            '4127378'
         )
+        print(res)
 
 
     asyncio.run(_test())

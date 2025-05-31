@@ -14,14 +14,17 @@ from fastapi接口.log.base_log import redis_logger
 
 _MAX_SEM_NUM = 1024
 _sem = asyncio.Semaphore(_MAX_SEM_NUM)
+
+
 def retry_async_generator(func):
     """
     装饰器，用于重试异步生成器函数。
     如果在迭代过程中发生指定错误，会从头开始重试整个生成过程。
     """
+
     async def wrapper_generator(*args, **kwargs):
-        while True: # 外层循环用于重试整个生成过程
-            async with _sem: # 在尝试获取并迭代生成器前获取信号量
+        while True:  # 外层循环用于重试整个生成过程
+            async with _sem:  # 在尝试获取并迭代生成器前获取信号量
                 try:
                     # 1. 调用原始函数获取异步生成器对象
                     gen = func(*args, **kwargs)
@@ -31,16 +34,18 @@ def retry_async_generator(func):
                         # 如果成功从原始生成器获取到值，就 yield 给外部调用方
                         yield item
                     # 3. 如果 async for 循环正常结束，说明生成器运行完毕，跳出重试循环
-                    break # 成功完成，退出重试循环
+                    break  # 成功完成，退出重试循环
                 except ConnectionError as e:
-                    redis_logger.exception(f'Redis连接错误 during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                    redis_logger.exception(
+                        f'Redis连接错误 during generator iteration for {func.__name__}, retrying in 30s... {e}')
                     # 信号量在 'async with' 块结束时自动释放
                     await asyncio.sleep(30)
                     # while True 循环继续，尝试获取信号量并重新开始
 
                 except Exception as e:
                     # 捕获其他异常
-                    redis_logger.exception(f'An unexpected error occurred during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                    redis_logger.exception(
+                        f'An unexpected error occurred during generator iteration for {func.__name__}, retrying in 30s... {e}')
                     # 信号量在 'async with' 块结束时自动释放
                     await asyncio.sleep(30)
                     # while True 循环继续，尝试获取信号量并重新开始
@@ -97,15 +102,17 @@ class SyncRedisManagerBase:
     class RedisMap(str, Enum):
         pass
 
-    def __init__(self, host: str = CONFIG.database.proxyRedis.host,
+    def __init__(self,
+                 host: str = CONFIG.database.proxyRedis.host,
                  port: int = CONFIG.database.proxyRedis.port,
-                 db: int = CONFIG.database.proxyRedis.db
+                 db: int = CONFIG.database.proxyRedis.db,
+                 pwd: str = CONFIG.database.proxyRedis.pwd
                  ):
         self.host = host
         self.port = port
         self.db = db
         self.pool = sync_redis.connection.ConnectionPool.from_url(
-            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True&retry_on_timeout=30&socket_timeout=30',
+            url=f'redis://:{pwd}@{self.host}:{self.port}/{self.db}?decode_responses=True&retry_on_timeout=30&socket_timeout=30',
             max_connections=_MAX_SEM_NUM
         )
         self.RedisTimeout = 30
@@ -175,13 +182,14 @@ class RedisManagerBase:
 
     def __init__(self, host: str = CONFIG.database.proxyRedis.host,
                  port: int = CONFIG.database.proxyRedis.port,
-                 db: int = CONFIG.database.proxyRedis.db
+                 db: int = CONFIG.database.proxyRedis.db,
+                 pwd: str = CONFIG.database.proxyRedis.pwd
                  ):
         self.host = host
         self.port = port
         self.db = db
         self.pool = redis.ConnectionPool.from_url(
-            url=f'redis://{self.host}:{self.port}/{self.db}?decode_responses=True&health_check_interval=30&retry_on_timeout=30&socket_timeout=30',
+            url=f'redis://:{pwd}@{self.host}:{self.port}/{self.db}?decode_responses=True&health_check_interval=30&retry_on_timeout=30&socket_timeout=30',
             max_connections=_MAX_SEM_NUM
         )
         self.RedisTimeout = 30

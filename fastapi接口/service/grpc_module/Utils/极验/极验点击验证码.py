@@ -9,13 +9,9 @@ import bili_ticket_gt_python
 from selenium import webdriver
 from selenium.webdriver.edge.options import Options
 from selenium.webdriver.edge.service import Service
-from selenium.webdriver import ActionChains
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import Voucher352_logger
-from fastapi接口.service.geetest_captcha.jy_click_captcha import jy_click
 from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
 from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, \
     GeetestSuccessTimeCalc
@@ -42,86 +38,6 @@ class GeetestV3Breaker:
             options.add_argument('--headless')
         self.driver = webdriver.Edge(service=Service(CONFIG.selenium_config.edge_path), options=options)
         self.wait = WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5)
-
-    def _step1_input_gt_challenge(self, gt, challenge):
-        gt_text_box = self.driver.find_element(By.CSS_SELECTOR, '.inp[id=gt]')
-        gt_text_box.clear()
-        gt_text_box.send_keys(gt)
-        challeng_text_box = self.driver.find_element(By.CSS_SELECTOR, '.inp[id=challenge]')
-        challeng_text_box.clear()
-        challeng_text_box.send_keys(challenge)
-
-    def _step2_click_generate_btn(self):
-        generate_btn = self.driver.find_element(By.CSS_SELECTOR, '.btn[id=btn-gen]')
-        generate_btn.click()
-        self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".geetest_radar_tip")))  # 等待验证码生成
-        captcha_btn = self.driver.find_element(By.CSS_SELECTOR, '.geetest_radar_tip')
-        captcha_btn.click()  # 点击生成验证码modal，弹出验证码界面
-
-    def _step3_break_geetest_validation(self) -> CaptchaResultInfo:
-        geetest_item_img = self.wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, ".geetest_item_img")),
-                                           message="极验验证码加载失败")
-        geetest_tip_img = self.driver.find_element(By.CSS_SELECTOR, '.geetest_tip_img')
-        tip_img_style = geetest_tip_img.get_attribute('style')
-        picurl = tip_img_style[tip_img_style.find('https'):tip_img_style.find('");')]
-        captcha_result_info: CaptchaResultInfo = jy_click(picurl)
-        if captcha_result_info.target_centers is None:
-            self.log.error(f'验证码识别失败，请重新尝试，错误信息：{captcha_result_info.img_name}')
-            geetest_refresh = self.driver.find_element(By.CSS_SELECTOR, '.geetest_refresh')
-            geetest_refresh.click()
-            self.succ_stats.total_time += 1
-            return self._step3_break_geetest_validation()
-        ac = ActionChains(self.driver)
-        ac.move_to_element_with_offset(geetest_item_img, -geetest_item_img.rect['width'] / 2,
-                                       -geetest_item_img.rect['height'] / 2).pause(0.1)
-        c_x, c_y = 0, 0
-        for x, y in captcha_result_info.target_centers:
-            path_x, path_y = x - c_x, y - c_y
-            print(f'移动距离：{path_x}，{path_y}')
-            ac = ac.move_by_offset(path_x, path_y).click().pause(0.1)
-            c_x, c_y = x, y
-
-        ac.perform()
-        geetest_commit_tip = self.driver.find_element(By.CSS_SELECTOR, '.geetest_commit_tip')
-        geetest_commit_tip.click()
-        return captcha_result_info
-
-    def _step4_get_validation(self) -> Union[str, None]:
-        """
-        获取最终结果
-        :return:
-        """
-        geetest_success_radar_tip_content = self.wait.until(
-            EC.visibility_of_element_located((By.CSS_SELECTOR, ".geetest_success_radar_tip_content")),
-            message='等待`极验成功提示`失败！可能是验证码识别错了！')
-        tip_content = geetest_success_radar_tip_content.text
-        print(tip_content)
-
-        if tip_content == '验证成功':
-            time.sleep(1)
-            btn_result = self.driver.find_element(By.CSS_SELECTOR, '#btn-result')
-            btn_result.click()
-            validate = self.driver.find_element(By.CSS_SELECTOR, '#validate')
-            return validate.get_property('value')
-
-        return None
-
-    def break_geetest(self, gt, challenge) -> Union[str, None]:
-        if not self.driver.current_window_handle:
-            self.driver = webdriver.Edge()
-        if 'file' not in self.driver.current_url:
-            self.driver.get(self.geetest_validator_html_path)
-        self._step1_input_gt_challenge(gt, challenge)
-        time.sleep(0.5)
-        self._step2_click_generate_btn()
-        time.sleep(0.5)
-        captcha_result_info = self._step3_break_geetest_validation()
-        if captcha_result_info.target_centers is None:
-            self.log.warning(f'识别验证码失败！')
-            return None
-        if validattion := self._step4_get_validation():
-            return validattion
-        return None
 
     # region 静态方法，获取极验信息和验证用
     @staticmethod
@@ -287,7 +203,7 @@ class GeetestV3Breaker:
                 return ""
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
-            if use_bili_ticket_gt:
+            if 1 or use_bili_ticket_gt:
                 if not self.click:
                     self.click = bili_ticket_gt_python.ClickPy()
                 if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
@@ -307,29 +223,6 @@ class GeetestV3Breaker:
                     if validate_result:
                         self.succ_stats.succ_time += 1
                     return validate_result
-            else:
-                if geetest_reg_info:
-                    if validation := self.break_geetest(
-                            geetest_reg_info.geetest_gt,
-                            geetest_reg_info.geetest_challenge,
-                    ):
-                        validate_result = GeetestV3Breaker.validate_geetest(
-                            challenge=geetest_reg_info.geetest_challenge,
-                            token=geetest_reg_info.token,
-                            validate=validation,
-                            ua=h5_ua,
-                            ck=ck,
-                            ori=ori,
-                            ref=ref,
-                            ticket=ticket,
-                            version=version
-                        )
-                        if validate_result:
-                            self.succ_stats.succ_time += 1
-                        return validate_result
-                elif not geetest_reg_info:
-                    self.succ_stats.total_time -= 1
-                    return ''
         except Exception as e:
             if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
                 return ''
@@ -362,7 +255,7 @@ class GeetestV3Breaker:
                 return ''
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
-            if use_bili_ticket_gt:
+            if 1 or use_bili_ticket_gt:
                 if not self.click:
                     self.click = bili_ticket_gt_python.ClickPy()
                 if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
@@ -382,29 +275,6 @@ class GeetestV3Breaker:
                     if validate_result:
                         self.succ_stats.succ_time += 1
                     return validate_result
-            else:
-                if geetest_reg_info:
-                    if validation := await asyncio.to_thread(self.break_geetest,
-                                                             geetest_reg_info.geetest_gt,
-                                                             geetest_reg_info.geetest_challenge,
-                                                             ):
-                        validate_result = await validate_geetest(
-                            challenge=geetest_reg_info.geetest_challenge,
-                            token=geetest_reg_info.token,
-                            validate=validation,
-                            h5_ua=h5_ua,
-                            buvid=ck,
-                            ori=ori,
-                            ref=ref,
-                            ticket=ticket,
-                            version=version
-                        )
-                        if validate_result:
-                            self.succ_stats.succ_time += 1
-                        return validate_result
-                elif not geetest_reg_info:
-                    self.succ_stats.total_time -= 1
-                    return ''
         except Exception as e:
             if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
                 return ''

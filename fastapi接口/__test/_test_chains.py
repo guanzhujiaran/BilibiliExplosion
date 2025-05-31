@@ -43,9 +43,9 @@ Option C: 一杯奶茶(<2$)
         ocm = OpenAiClientModel(
             OpenAiclient=ChatOpenAI(
                 openai_api_key='114514',
-                openai_api_base='http://127.0.0.1:1234/v1',
+                openai_api_base='http://192.168.1.200:1234/v1',
             ),
-            base_url='http://127.0.0.1:1234/v1'
+            base_url='http://192.168.1.200:1234/v1'
         )
         chain = myChains.single_chain(ocm.OpenAiclient)
         resp = await chain.ainvoke(inputs)

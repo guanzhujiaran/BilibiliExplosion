@@ -4,44 +4,44 @@ import io
 import os
 import sys
 import objgraph
-sys.path.append(os.path.dirname(os.path.join(__file__, '../../')))  # 将CONFIG导入
-current_dir = os.path.dirname(__file__)
-grpc_dir = os.path.join(current_dir, 'service/grpc_module/grpc/grpc_proto')
-sys.path.append(grpc_dir)
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-from loguru import logger
-import argparse
-parser = argparse.ArgumentParser(
-    prog='lot_fastapi',  # 程序名
-    description='lottery info fastapi backend',  # 描述
-)
-parser.add_argument('-l', '--logger', type=int, default=1, choices=[0, 1])
-args = parser.parse_args()
-print(f'运行 args:{args}')
-if not args.logger:
-    print('关闭日志输出')
-    logger.remove()
-    logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 import asyncio
-asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
-from starlette.requests import Request
-from starlette.responses import Response
-import traceback
-from fastapi接口.log.base_log import myfastapi_logger
+from loguru import logger
 from contextlib import asynccontextmanager
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 import fastapi_cdn_host
 from fastapi import FastAPI, HTTPException
+from starlette.requests import Request
+from starlette.responses import Response
+import traceback
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '../'))  # 将CONFIG导入
+current_dir = os.path.dirname(__file__)
+grpc_dir = os.path.join(current_dir, 'service/grpc_module/grpc/grpc_proto')
+sys.path.append(grpc_dir)
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+from fastapi接口.utils.argParse import parse
+
+args = parse()
+print(f'运行 args:{args}')
+if not args.logger:
+    print('关闭日志输出')
+    logger.remove()
+    logger.add(sink=sys.stdout, level="ERROR", colorize=True)
+if sys.platform.startswith('windows'):
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
+else:
+    import uvloop
+
+    print('使用uvloop')
+    uvloop.install()
+from fastapi接口.log.base_log import myfastapi_logger
 from utl.pushme.pushme import pushme
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER
-
-
 from fastapi接口.controller.damo import DamoML
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
 from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
-from fastapi接口.controller.v1.GeetestDet import GetV3ClickTarget
 from fastapi接口.controller.v1.ip_info import get_ip_info
 from fastapi接口.controller.v1.background_service import BackgroundService
 from fastapi接口.controller.common import CommonRouter
@@ -68,7 +68,6 @@ app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)
 app.include_router(LotteryData.router)
 app.include_router(LotteryStatistic.router)
-app.include_router(GetV3ClickTarget.router)
 app.include_router(get_ip_info.router)
 app.include_router(BackgroundService.router)
 app.include_router(CommonRouter.router)
@@ -133,7 +132,7 @@ async def global_middleware(request: Request, call_next):
 
 if __name__ == '__main__':
     import uvicorn
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
     uvicorn.run(
         app,
         # host="",

@@ -316,7 +316,7 @@ class ReserveScrapyRobot:
             f'已经达到{self.null_timer}/{self.null_time_quit}条data为null信息或者最近预约时间只剩{self.dynamic_timestamp.get_time_str_until_now()}秒，退出！')
         reserve_lot_logger.info(
             f'当前rid记录分别回滚{self.rollback_num + none_num1}和{self.rollback_num + none_num2}条')
-        ridstartfile = open(os.path.join(self.current_dir, 'idsstart.txt'), 'w', encoding='utf-8')
+        ridstartfile = open(os.path.join(self.current_dir, 'idsstart'), 'w', encoding='utf-8')
         finnal_rid_list = [
             str(self.ids_list[0] - self.rollback_num - none_num1),
             str(self.ids_list[1] - self.rollback_num - none_num2)
@@ -403,7 +403,7 @@ class ReserveScrapyRobot:
         self.getfail = os.path.join(self.current_dir, 'log/获取失败.csv')
 
         try:
-            ridstartfile = open(os.path.join(self.current_dir, 'idsstart.txt'), 'r', encoding='utf-8')
+            ridstartfile = open(os.path.join(self.current_dir, 'idsstart'), 'r', encoding='utf-8')
             async with self.ids_change_lock:
                 self.ids_list.extend([int(x) for x in ridstartfile.readlines()])
                 self.ids = self.ids_list[0]
