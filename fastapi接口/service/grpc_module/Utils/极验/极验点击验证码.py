@@ -6,11 +6,6 @@ from typing import Union
 import requests
 import httpx
 import bili_ticket_gt_python
-from selenium import webdriver
-from selenium.webdriver.edge.options import Options
-from selenium.webdriver.edge.service import Service
-from selenium.webdriver.support.wait import WebDriverWait
-from CONFIG import CONFIG
 from fastapi接口.log.base_log import Voucher352_logger
 from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
 from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, \
@@ -23,21 +18,9 @@ class GeetestV3Breaker:
     def __init__(self):
         self.log = Voucher352_logger
         self.current_file_root_dir = os.path.dirname(os.path.abspath(__file__))  # 就是当前文件的路径目录
-        self.driver = None
-        self.wait = None
-        self.geetest_validator_html_path = "file://" + os.path.join(self.current_file_root_dir,
-                                                                    'Geetest_html/geetest-validator/index.html')
         # 本地极验校验工具的路径
         self.succ_stats = GeetestSuccessTimeCalc()
-        self.click = None
-
-    def init_browser(self, headless: bool = True):
-        self.log.info('初始化了一个selenium')
-        options = Options()
-        if headless:
-            options.add_argument('--headless')
-        self.driver = webdriver.Edge(service=Service(CONFIG.selenium_config.edge_path), options=options)
-        self.wait = WebDriverWait(driver=self.driver, timeout=10, poll_frequency=0.5)
+        self.click = bili_ticket_gt_python.ClickPy()
 
     # region 静态方法，获取极验信息和验证用
     @staticmethod
@@ -194,8 +177,6 @@ class GeetestV3Breaker:
         h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
-        if self.driver is None:
-            self.init_browser()
         try:
             geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
                                                                      version=version)
@@ -229,10 +210,7 @@ class GeetestV3Breaker:
             self.log.error(f'极验验证失败！{e}')
             self.succ_stats.total_time -= 1
         finally:
-            if use_bili_ticket_gt:
-                pass
-            else:
-                self.driver.refresh()  # 用本地的html，不管成功还是失败，每次执行结束都直接刷新
+            ...
 
     async def a_validate_form_voucher_ua(self, v_voucher: str,
                                          ua: str = "Dalvik/2.1.0 (Linux; U; Android 9; PCRT00 Build/PQ3A.190605.05081124) 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 channel/master innerVer/8130300 osVer/9 network/2",
@@ -246,8 +224,6 @@ class GeetestV3Breaker:
         h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
-        if self.driver is None:
-            await asyncio.to_thread(self.init_browser)
         try:
             geetest_reg_info = await get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
                                                           version=version)
@@ -281,10 +257,7 @@ class GeetestV3Breaker:
             self.log.debug(e)
             self.succ_stats.total_time -= 1
         finally:
-            if use_bili_ticket_gt:
-                pass
-            else:
-                self.driver.refresh()  # 用本地的html，不管成功还是失败，每次执行结束都直接刷新
+            ...
 
 
 if __name__ == '__main__':
