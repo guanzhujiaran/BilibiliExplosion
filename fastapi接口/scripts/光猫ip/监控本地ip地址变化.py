@@ -146,7 +146,7 @@ def monitor_ipv6_address_changes():
 
 @async_pushme_try_catch_decorator
 async def async_monitor_ipv6_address_changes():
-    if not sys.platform.startswith('windows'):
+    if not sys.platform.startswith('win'):
         return
     ipv6_monitor_logger.info('启动监控本地ipv6地址程序！！！')
     my_ipv6 = ipv6Obj()
@@ -182,7 +182,7 @@ async def async_monitor_ipv6_address_changes():
 
 
 if __name__ == '__main__':
-    # asyncio.run(async_monitor_ipv6_address_changes())
-    now_ipv6 = '2409:8a1e:2e93:9490'
-    latest_ipv6 = '2409:8a1e:2e9a:b040'
-    change_ipv6_config(now_ipv6, latest_ipv6)
+    asyncio.run(async_monitor_ipv6_address_changes())
+    # now_ipv6 = '2409:8a1e:2e93:9490'
+    # latest_ipv6 = '2409:8a1e:2e9a:b040'
+    # change_ipv6_config(now_ipv6, latest_ipv6)
