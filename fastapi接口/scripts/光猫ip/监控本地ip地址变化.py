@@ -182,7 +182,7 @@ async def async_monitor_ipv6_address_changes():
 
 
 if __name__ == '__main__':
-    asyncio.run(async_monitor_ipv6_address_changes())
+    asyncio.run(async_monitor_ipv6_address_changes()) # 这个只能在自己win上面跑
     # now_ipv6 = '2409:8a1e:2e93:9490'
     # latest_ipv6 = '2409:8a1e:2e9a:b040'
     # change_ipv6_config(now_ipv6, latest_ipv6)
