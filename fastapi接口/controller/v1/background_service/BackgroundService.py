@@ -1,6 +1,3 @@
-"""
-单轮回复
-"""
 import asyncio
 from typing import Literal, Union
 from fastapi接口.models.common import CommonResponseModel
@@ -92,15 +89,15 @@ def get_scrapy_status(scrapy_type: Literal[
         case 'reserve':
             if reserve_scrapy_class and reserve_scrapy_class.reserve_robot is not None:
                 return ReserveScrapyStatusResp(
-                    succ_count=reserve_scrapy_class.reserve_robot.succ_counter.succ_count,
-                    cur_stop_num=reserve_scrapy_class.reserve_robot.null_timer,
-                    start_ts=reserve_scrapy_class.reserve_robot.succ_counter.start_ts,
-                    freq=reserve_scrapy_class.reserve_robot.succ_counter.show_pace(),
-                    is_running=reserve_scrapy_class.reserve_robot.succ_counter.is_running,
-                    latest_succ_reserve_id=reserve_scrapy_class.reserve_robot.succ_counter.latest_succ_reserve_id,
-                    first_reserve_id=reserve_scrapy_class.reserve_robot.succ_counter.first_reserve_id,
-                    latest_reserve_id=reserve_scrapy_class.reserve_robot.succ_counter.latest_reserve_id,
-                    update_ts=reserve_scrapy_class.reserve_robot.succ_counter.update_ts
+                    succ_count=reserve_scrapy_class.reserve_robot.stats_plugin.processed_items_count,
+                    cur_stop_num=reserve_scrapy_class.reserve_robot.null_stop_plugin.sequential_null_count,
+                    start_ts=int(reserve_scrapy_class.reserve_robot.stats_plugin.start_time),
+                    freq=reserve_scrapy_class.reserve_robot.stats_plugin.crawling_speed(),
+                    is_running=reserve_scrapy_class.reserve_robot.stats_plugin.is_running,
+                    latest_succ_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.end_success_params,
+                    first_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.init_params,
+                    latest_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.end_params,
+                    update_ts=int(reserve_scrapy_class.reserve_robot.stats_plugin.last_update_time)
                 )
             else:
                 return ReserveScrapyStatusResp()
@@ -218,5 +215,5 @@ async def get_refresh_bili_reserve_status():
             )
 async def get_proxy_status():
     return CommonResponseModel(data=
-                               await SQLHelper.sub_redis_store.get_proxy_database_redis()
+                               await SQLHelper.get_proxy_database_redis()
                                )

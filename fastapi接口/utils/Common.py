@@ -12,8 +12,10 @@ GLOBAL_SEM_LIMIT_NUM = 500
 GLOBAL_SEM = asyncio.Semaphore(GLOBAL_SEM_LIMIT_NUM)
 _comm_lock = asyncio.Lock()
 
-def sem_gen(sem_limit=100):
+
+def sem_gen(sem_limit=500):
     return asyncio.Semaphore(sem_limit)
+
 
 def ensure_asyncio_loop():
     if asyncio.get_event_loop():
@@ -39,6 +41,17 @@ def comm_wrapper(func):
     return wrapper
 
 
+def comm_sem_wrapper(sem_limit=100):
+    sem = sem_gen(sem_limit)
+    def wrapper_outter(func):
+        async def wrapper(*args, **kwargs):
+            async with sem:
+                res = await func(*args, **kwargs)
+                return res
+
+        return wrapper
+    return wrapper_outter
+
 def sem_wrapper(func):
     async def wrapper(*args, **kwargs):
         async with GLOBAL_SEM:
@@ -60,6 +73,7 @@ def lock_retry_wrapper(func):
                 await asyncio.sleep(10)
 
     return wrapper
+
 
 def retry_wrapper(func):
     async def wrapper(*args, **kwargs):
@@ -93,6 +107,7 @@ async def run_in_executor(func, *args):
     with concurrent.futures.ThreadPoolExecutor() as pool:
         future = loop.run_in_executor(pool, func, *args)
         return await future
+
 
 def sql_retry_wrapper(_func: Callable) -> Callable:
     async def wrapper(*args, **kwargs):

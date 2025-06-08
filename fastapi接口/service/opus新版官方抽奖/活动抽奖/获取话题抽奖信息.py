@@ -22,7 +22,8 @@ from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import C
     CvContentAttr, CutOff
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficCard
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.model.EraBlackBoard import EraTask, EraLotteryConfig, EraVideoSourceCONFIG, \
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.model.EraBlackBoard import EraTask, EraLotteryConfig, \
+    EraVideoSourceCONFIG, \
     H5ActivityLottery, H5ActivityLotteryGiftSource, MatchLotteryTask, MatchLottery, EvaContainerTruck
 from utl.pushme.pushme import pushme
 import asyncio
@@ -478,11 +479,13 @@ class ExtractTopicLottery:
             topic_lot_logger.error(f'{url}\t未知话题类型！\n{data}')
             return 3
 
-    async def spider_all_unread_traffic_card(self, status_list=[0, None]) -> (bool, int, Sequence[TTrafficCard]):
+    async def spider_all_unread_traffic_card(self, status_list:list=None) -> (bool, int, Sequence[TTrafficCard]):
         """
         获取所有未读的traffic_card，解析活动类型
         :return: 是否有新增的
         """
+        if status_list is None:
+            status_list = [0, None]
         all_unread_traffic_card = [item for l in
                                    [await self.sql.get_all_available_traffic_info_by_status(status=x) for x in
                                     status_list] for item in l
@@ -490,9 +493,11 @@ class ExtractTopicLottery:
         if all_unread_traffic_card:
             for x in all_unread_traffic_card:
                 try:
-                    result = await self.handle_topic_lottery_url(x.jump_url, x.id)
+                    jump_url = copy.deepcopy(x.jump_url)
+                    _id = copy.deepcopy(x.id)
+                    result = await self.handle_topic_lottery_url(jump_url, _id)
                 except Exception as e:
-                    topic_lot_logger.exception(f'ErrorError！！！处理话题抽奖信息失败！\n{e}')
+                    topic_lot_logger.exception(f'{x.jump_url}\n{x.id}ErrorError！！！处理话题抽奖信息失败！\n{e}')
                     pushme('处理话题抽奖信息失败！', f'ErrorError！！！处理话题抽奖信息失败！\n{e}')
                     result = 3
                 topic_lot_logger.info(f'{x.jump_url}\t当前traffic_card:{x.id}，状态：{result}')
@@ -534,4 +539,4 @@ async def _test_generate_cv():
 
 
 if __name__ == "__main__":
-    asyncio.run(_test_generate_cv())
+    asyncio.run(_test())

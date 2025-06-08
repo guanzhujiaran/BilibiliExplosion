@@ -8,7 +8,7 @@ import httpx
 import bili_ticket_gt_python
 from fastapi接口.log.base_log import Voucher352_logger
 from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
-from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import CaptchaResultInfo, GeetestRegInfo, \
+from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import GeetestRegInfo, \
     GeetestSuccessTimeCalc
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign, get_geetest_reg_info, validate_geetest
 from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import gen_trace_id
@@ -185,8 +185,6 @@ class GeetestV3Breaker:
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
             if 1 or use_bili_ticket_gt:
-                if not self.click:
-                    self.click = bili_ticket_gt_python.ClickPy()
                 if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
                                                                geetest_reg_info.geetest_challenge):
                     self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
@@ -232,8 +230,6 @@ class GeetestV3Breaker:
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
             if 1 or use_bili_ticket_gt:
-                if not self.click:
-                    self.click = bili_ticket_gt_python.ClickPy()
                 if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
                                                                geetest_reg_info.geetest_challenge):
                     self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')

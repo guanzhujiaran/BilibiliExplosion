@@ -1544,82 +1544,6 @@ class GetOthersLotDynRobot:
         self.dyn_succ_counter = ProgressCounter()
         self.goto_check_dynamic_item_set = set()
 
-    # region 获取gitee抽奖动态id
-    async def solve_gitee_file_content(self, file_content) -> list[BiliDynamicItem]:
-        """
-        解析gitee获取的别人的抽奖动态id
-        :param allqueried_dynamnic_id: 所有获取过的动态id
-        :param file_content:
-        :return:
-        """
-
-        def is_valid_date(_str):
-            '''判断是否是一个有效的日期字符串'''
-            try:
-                time.strptime(_str, "%Y-%m-%d")
-                return True
-            except Exception:
-                try:
-                    time.strptime(_str, "%m-%d-%Y")
-                    return True
-                except Exception:
-                    return False
-
-        ret_list = []
-        now_date = datetime.datetime.now()
-        file_split = file_content.split(',')
-        file_split.reverse()
-        for ___ in file_split:
-            if is_valid_date(___):
-                try:
-                    lottery_update_date = datetime.datetime.strptime(___, '%Y-%m-%d')
-                except Exception as e:
-                    lottery_update_date = datetime.datetime.strptime(___, "%m-%d-%Y")
-                if (now_date - lottery_update_date).days >= 4:  # 多少天前的跳过
-                    get_others_lot_log.info(f'gitee中文件更新时间太久，跳过！{lottery_update_date}')
-                    return ret_list
-            else:
-                if ___.strip():
-                    is_exist = await SqlHelper.isExistDynInfoByDynId(___.strip())
-                    if is_exist:
-                        ...
-                    else:
-                        item = BiliDynamicItem(dynamic_id=___.strip())
-                        ret_list.append(item)
-        return ret_list
-
-    def fetch_gitee_info(self):
-        os.system(f'cd "{FileMap.github_bili_upload.value}" && git fetch --all && git reset --hard && git pull')
-
-    async def get_gitee_lot_dynid(self) -> list[BiliDynamicItem]:
-        path = FileMap.github_bili_upload.value
-        datanames = os.listdir(path)
-        path_dir_name = []
-        for i in datanames:
-            if str.isdigit(i):
-                path_dir_name.append(i)
-
-        effective_files_content_list = []
-
-        for i in path_dir_name:
-            async with aiofiles.open(os.path.join(FileMap.github_bili_upload.value, f'{i}/dyid.txt'), 'r',
-                                     encoding='utf-8') as f:
-                effective_files_content_list.append(''.join(await f.readlines()))
-        ret_list = list(
-            itertools.chain.from_iterable(
-                await asyncio.gather(
-                    *[
-                        self.solve_gitee_file_content(i) for i in effective_files_content_list
-                    ]
-                )
-            )
-        )
-        get_others_lot_log.critical(
-            f'共获取{len(path_dir_name)}个文件，新增{len(ret_list)}条抽奖！')
-        return ret_list
-
-        # endregion
-
     # region 获取uidlist中的空间动态
 
     async def __do_space_task(self, __bili_space_user: BiliSpaceUserItem, isPubLotUser: bool):
@@ -1633,7 +1557,6 @@ class GetOthersLotDynRobot:
         for i in bili_space_user_items:
             task = asyncio.create_task(self.__do_space_task(i, isPubLotUser))
             tasks.add(task)
-            task.add_done_callback(tasks.discard)
         await asyncio.gather(*tasks)
         get_others_lot_log.info(f'{len(bili_space_user_items)}个空间获取完成')
         self.space_succ_counter.is_running = False
@@ -1747,9 +1670,7 @@ class GetOthersLotDynRobot:
 
     async def main(self):
         await self.__init()
-        await asyncio.to_thread(self.fetch_gitee_info)
 
-        self.bili_dynamic_items_set.update(await self.get_gitee_lot_dynid())  # 添加gitee动态id
         await self.get_all_space_dyn_id(self.bili_space_user_items_set, isPubLotUser=False)  # 获取抽奖号的空间
         pub_lot_uid_set: Set[BiliSpaceUserItem] = set()
         for x in self.bili_space_user_items_set:
@@ -1773,9 +1694,7 @@ class GetOthersLotDynRobot:
                 self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id)
             )
             tasks.add(task)
-            task.add_done_callback(tasks.discard)
-        await asyncio.gather(
-            *tasks)
+        await asyncio.gather(*tasks)
 
         await self._after_scrapy()
         self.nowRound.isRoundFinished = 1

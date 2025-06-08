@@ -17,8 +17,8 @@ class SamsClubHeadersModel(CustomBaseModel):
     treq_id: str = Field(..., alias="treq-id")
     auth_token: str = Field(...,
         alias="auth-token")
-    longitude: str = Field("121.463922")
-    latitude: str = Field("31.258577")
+    longitude: str = Field("121.38286")
+    latitude: str = Field("31.315798")
     p: str = Field("1656120205")
     t: str = Field(...)
     n: str = Field(...)
@@ -27,8 +27,8 @@ class SamsClubHeadersModel(CustomBaseModel):
     sny: str = "c"
     rcs: str = "1"
     spv: str = "2.0"
-    Local_Longitude: str = Field("121.463922", alias="Local-Longitude")
-    Local_Latitude: str = Field("31.258577", alias="Local-Latitude")
+    Local_Longitude: str = Field("121.463992", alias="Local-Longitude")
+    Local_Latitude: str = Field("31.258575", alias="Local-Latitude")
     zoneType: str = "1"
     content_type: str = Field("application/json;charset=utf-8", alias="Content-Type")
     Host: str = "api-sams.walmartmobile.cn"

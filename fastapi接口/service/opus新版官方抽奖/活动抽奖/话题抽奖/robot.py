@@ -37,6 +37,7 @@ class TopicRobot(UnlimitedCrawler):
             yield params
             params += 1
 
+
     async def handle_fetch(self, params: int):
         await self.pipeline(params)
 
@@ -223,7 +224,6 @@ class TopicRobot(UnlimitedCrawler):
                 await self.sem.acquire()
                 task = asyncio.create_task(self.pipeline(i, is_get_recent_failed_topic=True))
                 _task_list.add(task)
-                task.add_done_callback(_task_list.discard)
             await asyncio.gather(*_task_list)
             if start_topic_id:
                 self.start_topic_id = start_topic_id

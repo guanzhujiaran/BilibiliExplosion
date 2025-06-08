@@ -261,7 +261,7 @@ class SQLHelper:
             ]
 
     @sql_retry_wrapper
-    async def get_grouping_info_by_category_id(self, category_id) -> GroupingInfo|None:
+    async def get_grouping_info_by_category_id(self, category_id) -> GroupingInfo | None:
         """
         查询所有未完成的任务（is_finished != 1）
         返回 [ {first_category_id: int, second_category_id: int}, ... ]
@@ -276,7 +276,17 @@ class SQLHelper:
         return res
 
     @sql_retry_wrapper
-    async def get_grouping_infos_by_level(self, level:int) -> List[GroupingInfo]:
+    async def get_grouping_infos_by_parent_grouping_id(self, paren_grouping_id: int | str) -> List[GroupingInfo]:
+        async with self.async_session() as db:
+            result = await db.execute(
+                select(GroupingInfo)
+                .where(GroupingInfo.parentGroupingId == paren_grouping_id)
+            )
+            res = result.scalars().all()
+        return res
+
+    @sql_retry_wrapper
+    async def get_grouping_infos_by_level(self, level: int) -> List[GroupingInfo]:
         """
         查询所有未完成的任务（is_finished != 1）
         返回 [ {first_category_id: int, second_category_id: int}, ... ]
@@ -349,13 +359,30 @@ class SQLHelper:
 
             return task
 
+    async def get_front_category_ids(self, firstCategoryId, secondCategoryId):
+        second_grouping_info = await self.get_grouping_info_by_category_id(secondCategoryId)
+        if second_grouping_info.title != '为您推荐':
+            frontCategoryIds = [int(secondCategoryId)] + [int(child.get('groupingId')) for child in
+                                                          second_grouping_info.children]
+        else:
+            second_grouping_infos = await self.get_grouping_infos_by_parent_grouping_id(firstCategoryId)
+            frontCategoryIds = []
+            for second_grouping_info in second_grouping_infos:
+                second_category_id = second_grouping_info.groupingIdInt
+                frontCategoryIds.extend([int(second_category_id)] + [int(child.get('groupingId')) for child in
+                                                                     second_grouping_info.children])
+        return frontCategoryIds
+
 
 sql_helper = SQLHelper()
 
 if __name__ == '__main__':
     import asyncio
+
+
     async def _test():
-        res = await sql_helper.get_grouping_info(333015)
-        print(res.children)
+        res = await sql_helper.get_grouping_infos_by_level(2)
+        print(res)
+
 
     asyncio.run(_test())

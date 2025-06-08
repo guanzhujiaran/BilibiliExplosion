@@ -60,7 +60,7 @@ class DynDetailScrapy(UnlimitedCrawler):
         return self.stop_counter.stop_flag
 
     def __init__(self):
-        max_sem = 100
+        max_sem = 500
         self.offset = 10  # 每次获取rid的数量，数值最好不要超过10，太大的话传输会出问题
         self.proxy_req = request_with_proxy()
         self.BiliGrpc = bili_grpc
@@ -565,7 +565,7 @@ class DynDetailScrapy(UnlimitedCrawler):
         latest_rid = int(await self.Sqlhelper.get_latest_rid())
         self.succ_counter = SuccCounter()
         self.log.info(1)
-        asyncio.get_event_loop().call_later(10,self.stop_counter.set_max_stop_num,)
+        asyncio.get_event_loop().call_later(10, self.stop_counter.set_max_stop_num, )
         self.log.info(2)
         await asyncio.create_task(self.run(latest_rid))
 

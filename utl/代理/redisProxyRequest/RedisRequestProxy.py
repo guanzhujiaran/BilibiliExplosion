@@ -109,10 +109,9 @@ class RequestWithProxy:
     async def background_service(self):
         start_ts = int(time.time())
         request_with_proxy_logger.critical('开始后台定时任务')
+        task1 = asyncio.create_task(get_proxy_methods.get_proxy())
         await asyncio.gather(
-            *[
-                get_proxy_methods.get_proxy()
-            ]
+            task1
         )
         request_with_proxy_logger.critical(f'定时任务执行完毕，耗时：{int(time.time()) - start_ts}秒')
 

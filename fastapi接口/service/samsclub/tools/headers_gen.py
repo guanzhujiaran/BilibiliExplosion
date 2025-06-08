@@ -1,12 +1,12 @@
 import asyncio
-import random
 import time
 import uuid
+
+from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.models.v1.samsclub.samsclub_model import SamsClubHeadersModel, SamsClubEncryptModel, \
     SamsClubGetDoEncryptReqModel
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import get_st, get_do_encrypt_result_str
 import random
-
 from fastapi接口.service.samsclub.tools.java_rand_gen import F65205aRandomIntGenerator
 from fastapi接口.utils.Common import retry_wrapper
 
@@ -55,35 +55,26 @@ class SamsClubHeadersGen:
     treq_uuid = uuid.uuid4().hex.replace("-", "")
     device_os_version = "11"
     device_name = "OnePlus_ONEPLUS+A6000"
-    auth_token = "740d926b981716f4212cb48a4fb7591f9f984d92ee660d51c96d8d402b42c7c76ee0b888cd5d2c248f9d1a3f88fb7dfaa15f93acdd7cd654"
     device_str = "d3e9907ab1881aac891aff90100016e1950c"
-    version_str = "5.0.121"
-
+    version_str = "5.0.122"
+    auth_token = ""
     _counter = 100
     _lock = asyncio.Lock()
 
     def __init__(self,
+                 auth_token,
                  treq_uuid=treq_uuid,
                  device_os_version=device_os_version,
                  device_name=device_name,
-                 auth_token=auth_token,
                  device_str=device_str,
                  version_str=version_str,
                  ):
         self.treq_uuid = treq_uuid
         self.device_os_version = device_os_version
         self.device_name = device_name
-        self._auth_token = auth_token
+        self.auth_token = auth_token
         self.device_str = device_str
         self.version_str = version_str
-
-    @property
-    def auth_token(self):
-        return self._auth_token
-
-    @auth_token.setter
-    def auth_token(self, value: str):
-        self._auth_token = value
 
     async def _get_counter(self):
         async with self._lock:
@@ -97,11 +88,6 @@ class SamsClubHeadersGen:
     async def gen_headers(
             self,
             body: str,
-            device_id: str = device_str,
-            device_os_version: str = device_os_version,
-            version_str: str = version_str,
-            device_name: str = device_name,
-            auth_token: str = auth_token
     ) -> SamsClubHeadersModel:
         cnt = await self._get_counter()
         ts = int(time.time() * 1000)  # 模拟Java的System.currentTimeMillis() 方法，返回当前时间的毫秒数
@@ -112,32 +98,32 @@ class SamsClubHeadersGen:
         fake_n = uuid.uuid4().hex.replace("-", "")
         st = get_st(
             SamsClubEncryptModel(
-                device_id_str=device_id,
-                version_str=version_str,
-                device_name=device_name,
+                device_id_str=self.device_str,
+                version_str=self.version_str,
+                device_name=self.device_name,
                 do_encrypt_result_str=await get_do_encrypt_result_str(
                     SamsClubGetDoEncryptReqModel(
                         timestampStr=ts_str,
                         bodyStr=body,
                         uuidStr=fake_n,
-                        tokenStr=auth_token
+                        tokenStr=self.auth_token
                     )
                 ),
             )
         )
         if not st:
             raise Exception("st is None")
+        sams_club_logger.debug(f"st: {st}")
         headers_dict = {
-            "device-id": device_id,
-            "device-os-version": device_os_version,
-            "device-name": device_name,
-            "auth-token": auth_token,
+            "device-id": self.device_str,
+            "device-os-version": self.device_os_version,
+            "device-name": self.device_name,
+            "auth-token": self.auth_token,
             "treq-id": fake_treq_id,
             "t": ts_str,
             "n": fake_n,
             "st": st,
-            "app-version": version_str
-
+            "app-version": self.version_str
         }
         return SamsClubHeadersModel(
             **headers_dict

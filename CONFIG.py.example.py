@@ -53,15 +53,17 @@ class pushnotify:
     def pushplus(self):
         return self._pushplus
 
+
 class database:
     @dataclass
     class _MYSQL:
-        proxy_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/proxy_db?charset=utf8mb4&autocommit=true'
-        bili_db_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
-        bili_reserve_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/bili_reserve?charset=utf8mb4&autocommit=true'
-        get_other_lot_URI: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/BiliOpusDb?charset=utf8mb4&autocommit=true'
-        dyn_detail: str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/dynDetail?charset=utf8mb4&autocommit=true'
-        sams_club_URI:str = 'mysql+aiomysql://root:114514@127.0.0.1:3306/samsClub?charset=utf8mb4&autocommit=true'
+        _base_url = '127.0.0.1:3306'
+        proxy_db_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true'
+        bili_db_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
+        bili_reserve_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
+        get_other_lot_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
+        dyn_detail: str = f'mysql+aiomysql://root:114514@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
+        sams_club_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
 
     @dataclass
     class _REDISINFO:

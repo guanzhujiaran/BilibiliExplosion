@@ -8,7 +8,11 @@ import pickle
 from sklearn.feature_extraction.text import TfidfVectorizer
 from CONFIG import CONFIG
 
-
+current_file_dir = os.path.dirname(__file__)
+with open(os.path.join(current_file_dir, 'svm_model.pkl'), 'rb') as file:
+    loaded_model = pickle.load(file)
+with open(os.path.join(current_file_dir, 'svm_vectorizer.pkl'), 'rb') as file:
+    loaded_vector = pickle.load(file)
 # 或者使用pickle加载模型
 def preprocess_text(text):
     text.replace('预约有奖：', '')
@@ -21,11 +25,7 @@ def preprocess_text(text):
 def big_reserve_predict(da_list: list[str]) -> list[int]:
     if len(da_list) == 0:
         return []
-    current_file_dir = os.path.dirname(__file__)
-    with open(os.path.join(current_file_dir, 'svm_model.pkl'), 'rb') as file:
-        loaded_model = pickle.load(file)
-    with open(os.path.join(current_file_dir, 'svm_vectorizer.pkl'), 'rb') as file:
-        loaded_vector = pickle.load(file)
+
     X_list = []
     for i in da_list:
         X_list.append(preprocess_text(i))

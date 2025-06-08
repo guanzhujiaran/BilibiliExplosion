@@ -7,6 +7,7 @@ from utl.代理.SealedRequests import my_async_httpx
 __proxies__ = None
 request_retry_times = 30
 
+
 class Tool:
     @staticmethod
     def get_data_from_server() -> list[dict]:
@@ -100,7 +101,7 @@ class Tool:
         headers = {
             "Content-Type": "application/json",
             "Connection": "close",
-            'User-Agent':CONFIG.rand_ua
+            'User-Agent': CONFIG.rand_ua
         }
         req: list[dict] = requests.request(method="GET", url=url, headers=headers,
                                            proxies=__proxies__
@@ -111,7 +112,7 @@ class Tool:
 class AsyncTool:
 
     @staticmethod
-    async def get_data_from_server() -> list[dict]|None:
+    async def get_data_from_server() -> list[dict] | None:
         p = __proxies__
         for _ in range(request_retry_times):
             try:
@@ -122,14 +123,14 @@ class AsyncTool:
                     'User-Agent': CONFIG.rand_ua
                 }
                 req: list[dict] = (await my_async_httpx.request(method="GET", url=url, headers=headers,
-                                                                  proxies=p)).json()
+                                                                proxies=p)).json()
                 return req
             except Exception as e:
                 p = CONFIG.custom_proxy
         return None
 
     @staticmethod
-    async def RedPocketGetWinners(lot_id: int,room_id:int) -> dict:
+    async def RedPocketGetWinners(lot_id: int, room_id: int) -> dict:
         p = __proxies__
         for _ in range(request_retry_times):
             try:
@@ -144,7 +145,7 @@ class AsyncTool:
                 }
                 req = (
                     await my_async_httpx.request(method="GET", url=url, headers=headers, params=params,
-                                                   proxies=p)).json()
+                                                 proxies=p)).json()
                 return req
             except Exception as e:
                 p = CONFIG.custom_proxy
@@ -169,7 +170,7 @@ class AsyncTool:
                 }
                 req = (
                     await my_async_httpx.request(method="GET", url=url, headers=headers, params=params,
-                                                   proxies=p)).json()
+                                                 proxies=p)).json()
                 return req
             except Exception as e:
                 p = CONFIG.custom_proxy
@@ -194,7 +195,7 @@ class AsyncTool:
                 }
                 req = (
                     await my_async_httpx.request(method="GET", url=url, headers=headers, params=params,
-                                                   proxies=p)).json()
+                                                 proxies=p)).json()
                 return req
             except Exception as e:
                 p = CONFIG.custom_proxy
@@ -225,7 +226,7 @@ class AsyncTool:
                     'roomid': room_id,
                 }
                 response = await my_async_httpx.request(url, params=params, headers=headers,
-                                                          proxies=p)
+                                                        proxies=p)
                 req_dict = response.json()
                 uid = 0
                 if req_dict.get('code') == 0:
@@ -243,7 +244,7 @@ class AsyncTool:
         return datetime_object
 
     @staticmethod
-    async def get_goldbox_data() -> list[dict]|None:
+    async def get_goldbox_data() -> list[dict] | None:
         p = __proxies__
         for _ in range(request_retry_times):
             try:
@@ -254,12 +255,12 @@ class AsyncTool:
                     'User-Agent': CONFIG.rand_ua
                 }
                 req: list[dict] = (await my_async_httpx.request(method="GET", url=url, headers=headers,
-                                                                  proxies=p
-                                                                  )).json()
+                                                                proxies=p
+                                                                )).json()
                 return req
             except Exception as e:
                 p = CONFIG.custom_proxy
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     ...

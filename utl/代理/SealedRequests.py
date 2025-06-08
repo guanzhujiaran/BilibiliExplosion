@@ -2,13 +2,10 @@ import asyncio
 import random
 import typing
 from typing import Union
-
 from curl_cffi import CurlHttpVersion, Response
 from curl_cffi.requests import AsyncSession, BrowserTypeLiteral
-from httpx import AsyncClient
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
 import ssl
-from fastapi接口.utils.Common import comm_wrapper
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 
 
@@ -70,7 +67,6 @@ class SSLFactory:
 
 
 sslgen = SSLFactory()
-
 
 def format_transport(request_proxy: dict | None):
     # if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
@@ -229,7 +225,6 @@ def format_httpx_proxy(request_proxy: dict | None) -> str | None:
 
 
 class MYASYNCHTTPX:
-    @comm_wrapper
     async def get(self, url, headers=None, verify=False, proxies: Union[dict, None] = None, timeout=10, params=None,
                   *args, **kwargs) -> Response:
         """
@@ -257,7 +252,8 @@ class MYASYNCHTTPX:
                 default_headers=False,
                 timeout=timeout,
                 verify=False,
-                http_version=CurlHttpVersion.V2TLS
+                http_version=CurlHttpVersion.V2TLS,
+                allow_redirects=True
         ) as client:
             client.headers.clear()
             resp = await client.get(url=url, headers=headers, timeout=timeout,
@@ -268,8 +264,7 @@ class MYASYNCHTTPX:
                                     )
         return resp
 
-    @comm_wrapper
-    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10,
+    async def post(self, url, data=None, headers=None, verify=False, proxies:dict=None, timeout=10,
                    json: dict | list | None = None, *args, **kwargs) -> Response:
         format_proxy_str = format_httpx_proxy(proxies)
         if type(headers) is tuple:
@@ -293,7 +288,6 @@ class MYASYNCHTTPX:
                                      )
         return resp
 
-    @comm_wrapper
     async def request(self, url,
                       data: typing.Optional[RequestData] = None,
                       method='GET',
@@ -340,7 +334,8 @@ class MYASYNCHTTPX:
                 default_headers=False,
                 timeout=timeout,
                 verify=False,
-                http_version=CurlHttpVersion.V2TLS
+                http_version=CurlHttpVersion.V2TLS,
+                allow_redirects=True
         ) as client:
             client.headers.clear()
             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,

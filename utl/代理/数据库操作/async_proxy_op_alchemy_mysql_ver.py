@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 异步sqlalchemy操作方法
-'''
+"""
 import ast
 import asyncio
 import datetime
 import json
 import time
 from enum import Enum
-from typing import List, Literal, Callable, Any, Coroutine
+from typing import List, Literal
 from zoneinfo import ZoneInfo
 from sqlalchemy import select, func, update, and_, or_, delete
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -201,6 +201,7 @@ class SubRedisStore(RedisManagerBase):
                 self.RedisMap.bili_proxy_zset.value,
                 {get_scheme_ip_port_form_proxy_dict(proxy_info_dict=redis_data.proxy): redis_data.score})
 
+
     @sql_retry_wrapper
     async def redis_clear_all_proxy(self):
         # await self._zdel_range(self.RedisMap.bili_proxy_zset.value, 0, -1)
@@ -208,41 +209,13 @@ class SubRedisStore(RedisManagerBase):
         await self.redis_clear_black_proxy()
         await self.redis_clear_changed_proxy()
 
+
     async def redis_clear_black_proxy(self):
         return await self._del_keys_with_prefix(self.RedisMap.bili_proxy_black.value)
 
+
     async def redis_clear_changed_proxy(self):
         return await self._del_keys_with_prefix(self.RedisMap.bili_proxy_changed.value)
-
-    async def get_proxy_database_redis(self) -> ProxyStatusResp:
-        # 使用asyncio.gather并行获取MySQL和Redis中的代理状态
-        (
-            mysql_sync_redis_ts,
-            proxy_black_count,
-            proxy_unknown_count,
-            free_proxy_fetch_ts,
-            proxy_usable_count
-        ) = await asyncio.gather(
-            self.get_sync_ts(),
-            self._get_redis_count_by_prefix(self.RedisMap.bili_proxy_black),
-            self.redis_bili_proxy_zset_count(),
-            SQLHelper.get_latest_add_ts(),
-            sql_helper.get_num(True),  # 获取可用代理的数量
-            return_exceptions=True
-        )
-        sem_value = GLOBAL_SEM._value
-        # 将获取到的代理状态转换为ProxyStatusResp对象
-        ret_model = ProxyStatusResp(
-            mysql_sync_redis_ts=mysql_sync_redis_ts,
-            proxy_total_count=proxy_black_count + proxy_unknown_count,
-            proxy_black_count=proxy_black_count,
-            proxy_unknown_count=proxy_unknown_count,
-            proxy_usable_count=proxy_usable_count,
-            free_proxy_fetch_ts=free_proxy_fetch_ts,
-            sync_ts=int(time.time()),
-            sem_value=sem_value
-        )
-        return ret_model
 
 
 class SQLHelperClass:
@@ -331,12 +304,12 @@ class SQLHelperClass:
                     tasks.add(asyncio.create_task(_update_single(_)))
                 await asyncio.gather(*tasks)
                 sql_log.critical(f"Successfully updated {total_proxies_to_update} proxies in the database.")
-            except Exception as e:
+            except Exception as err:
                 # Catch other potential errors during processing
-                sql_log.error(f"An unexpected error occurred: {e}", exc_info=True)
-        except Exception as e:
+                sql_log.error(f"An unexpected error occurred: {err}", exc_info=True)
+        except Exception as err:
             # Catch errors during Redis fetch or initial data processing
-            sql_log.error(f"Error during sync_2_database setup: {e}", exc_info=True)
+            sql_log.error(f"Error during sync_2_database setup: {err}", exc_info=True)
             # Handle error appropriately
 
     async def check_redis_data(self, force=False):
@@ -493,7 +466,7 @@ class SQLHelperClass:
         proxy_str = get_scheme_ip_port_form_proxy_dict(proxy)
         sql = select(func.count(ProxyTab.proxy_id)).where(
             ProxyTab.computed_proxy_str == proxy_str
-        ).limit(1)
+        )
         async with self.session() as session:
             res = await session.execute(sql)
             exist_num = res.scalars().first()
@@ -544,7 +517,7 @@ class SQLHelperClass:
         async with self.session() as session:
             async with session.begin():
                 # async with self.async_lock:
-                result = await session.execute(sql)
+                await session.execute(sql)
         return True
 
     @sql_retry_wrapper
@@ -566,11 +539,11 @@ class SQLHelperClass:
 
     @sql_retry_wrapper
     async def remove_proxy(self, proxy_tab: ProxyTab):
-        '''
+        """
         删除
         :param proxy_tab:
         :return:
-        '''
+        """
         async with self.session() as session:
             sql = select(ProxyTab).where(ProxyTab.proxy_id == proxy_tab.proxy_id)  # 删除无效代理，暂时先不用
             async with session.begin():
@@ -706,13 +679,43 @@ class SQLHelperClass:
         else:
             return None
 
+    async def get_proxy_database_redis(self) -> ProxyStatusResp:
+        # 使用asyncio.gather并行获取MySQL和Redis中的代理状态
+        (
+            mysql_sync_redis_ts,
+            proxy_black_count,
+            proxy_unknown_count,
+            free_proxy_fetch_ts,
+            proxy_usable_count
+        ) = await asyncio.gather(
+            self.sub_redis_store.get_sync_ts(),
+            self.sub_redis_store._get_redis_count_by_prefix(self.sub_redis_store.RedisMap.bili_proxy_black),
+            self.sub_redis_store.redis_bili_proxy_zset_count(),
+            SQLHelper.get_latest_add_ts(),
+            sql_helper.get_num(True),  # 获取可用代理的数量
+            return_exceptions=True
+        )
+        sem_value = GLOBAL_SEM._value
+        # 将获取到的代理状态转换为ProxyStatusResp对象
+        ret_model = ProxyStatusResp(
+            mysql_sync_redis_ts=mysql_sync_redis_ts,
+            proxy_total_count=proxy_black_count + proxy_unknown_count,
+            proxy_black_count=proxy_black_count,
+            proxy_unknown_count=proxy_unknown_count,
+            proxy_usable_count=proxy_usable_count,
+            free_proxy_fetch_ts=free_proxy_fetch_ts,
+            sync_ts=int(time.time()),
+            sem_value=sem_value
+        )
+        return ret_model
+
 
 SQLHelper = SQLHelperClass()
 
 if __name__ == "__main__":
     print(int(time.time()))
     print(asyncio.run(
-        SQLHelper.clear_unusable_proxy()
+        SQLHelper.check_redis_data()
     )
     )
     print(int(time.time()))

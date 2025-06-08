@@ -53,12 +53,12 @@ class database:
     @dataclass
     class _MYSQL:
         _base_url: str = '192.168.1.200:3306'
-        proxy_db_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true'
-        bili_db_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
-        bili_reserve_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
-        get_other_lot_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
-        dyn_detail: str = f'mysql+aiomysql://minato:114514@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
-        sams_club_URI: str = f'mysql+aiomysql://minato:114514@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
+        proxy_db_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true'
+        bili_db_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
+        bili_reserve_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
+        get_other_lot_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
+        dyn_detail: str = f'mysql+aiomysql://root:114514@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
+        sams_club_URI: str = f'mysql+aiomysql://root:114514@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
 
     @dataclass
     class _REDISINFO:
@@ -82,8 +82,8 @@ class SqlAlchemyConfig:
     engine_config = dict(
         echo=False,
         poolclass=AsyncAdaptedQueuePool,
-        pool_size=500,  # 默认是5
-        max_overflow=100,
+        pool_size=100,  # 默认是5
+        max_overflow=-1,
         pool_recycle=True,
         pool_timeout=30,
         future=True,
@@ -159,7 +159,7 @@ class _CONFIG:
     selenium_config = _SeleniumConfig()
     sql_alchemy_config = SqlAlchemyConfig()
 
-    _pc_ua = UserAgent(platforms=["pc", "tablet"])
+    _pc_ua = UserAgent(platforms=["desktop", "tablet"])
     _mobile_ua = UserAgent(platforms=["mobile"])
 
     @property

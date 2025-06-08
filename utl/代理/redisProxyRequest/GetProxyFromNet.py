@@ -7,11 +7,10 @@ import json
 import re
 import time
 from datetime import datetime
-from typing import Union
 import bs4
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import sql_log
-from fastapi接口.utils.Common import sem_wrapper, sem_gen
+from fastapi接口.utils.Common import sem_wrapper, sem_gen, retry_wrapper
 from utl.代理.SealedRequests import my_async_httpx
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
@@ -27,7 +26,7 @@ class GetProxyMethods:
     get_proxy_page = 10
     log = sql_log
     get_proxy_timestamp = 0
-    timeout = 30
+    timeout = 10
     get_proxy_sep_time = 2 * 3600  # 获取代理的间隔
     check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
     GetProxy_Flag = False
@@ -50,13 +49,7 @@ class GetProxyMethods:
 
             url = f'https://cn.proxy-tools.com/proxy?page={page}'
             headers.update({'Referer': url})
-            try:
-                req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except Exception:
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
             if req:
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
                 td = html.select('tr>td')
@@ -94,18 +87,12 @@ class GetProxyMethods:
 
             url = f'https://www.kuaidaili.com/free/dps/{page}'
             headers.update({'Referer': url})
-            try:
-                req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except Exception:
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
             if req:
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
                 script = html.select('script[type="text/javascript"]')
                 json_str = ''
-                for x in filter(lambda x: x.text and 'valid_minute' in x.text, script):
+                for x in filter(lambda y: y.text and 'valid_minute' in x.text, script):
                     json_str = ''.join(re.findall('const fpsList =(.*);', x.text))
                 proxies = json.loads(json_str)
 
@@ -138,38 +125,28 @@ class GetProxyMethods:
         for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.kuaidaili.com/free/fps/{page}'
             headers.update({'Referer': url})
-            try:
-                req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except Exception:
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
+            if req:
+                html = bs4.BeautifulSoup(req.text, 'html.parser')
+                script = html.select('script[type="text/javascript"]')
+                json_str = ''
+                for x in filter(lambda y: y.text and 'last_check_time' in x.text, script):
+                    json_str = ''.join(re.findall('const fpsList =(.*);', x.text))
+                proxies = json.loads(json_str)
+                for i in proxies:
+                    if i:
+                        append_dict = format_proxy(f"{i.get('ip')}:{i.get('port')}", protocol='http')
+                        if not append_dict:
+                            self.log.exception(f'代理格式错误！{i}')
+                            continue
+                        # if append_dict not in have_proxy:
+                        proxy_queue.append(append_dict)
+                if len(proxy_queue) < 10:
+                    self.log.info(f'代理获取失败！\n{req.text}, {url}')
+                self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+            else:
+                self.log.info(f'{req.text}, {url}')
                 get_proxy_success = False
-                return proxy_queue, get_proxy_success
-            try:
-                if req:
-                    html = bs4.BeautifulSoup(req.text, 'html.parser')
-                    script = html.select('script[type="text/javascript"]')
-                    json_str = ''
-                    for x in filter(lambda x: x.text and 'last_check_time' in x.text, script):
-                        json_str = ''.join(re.findall('const fpsList =(.*);', x.text))
-                    proxies = json.loads(json_str)
-                    for i in proxies:
-                        if i:
-                            append_dict = format_proxy(f"{i.get('ip')}:{i.get('port')}", protocol='http')
-                            if not append_dict:
-                                self.log.exception(f'代理格式错误！{i}')
-                                continue
-                            # if append_dict not in have_proxy:
-                            proxy_queue.append(append_dict)
-                    if len(proxy_queue) < 10:
-                        self.log.info(f'代理获取失败！\n{req.text}, {url}')
-                    self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
-                else:
-                    self.log.info(f'{req.text}, {url}')
-                    get_proxy_success = False
-            except Exception as e:
-                self.log.info(f'{e}代理获取失败！\n{req.text}, {url}')
-
             await asyncio.sleep(6)
         return proxy_queue, get_proxy_success
 
@@ -182,14 +159,8 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.zdaye.com/free/{page}/'
-            try:
-                req = await my_async_httpx.get(url=url, headers=headers, verify=False,
-                                               proxies=(await SQLHelper.select_score_top_proxy()).proxy)
-            except Exception:
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                           proxies=(await SQLHelper.select_score_top_proxy()).proxy)
             if req.status_code == 200:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -225,18 +196,10 @@ class GetProxyMethods:
         for page in range(1, self.get_proxy_page + 1):
 
             url = f'http://www.66ip.cn/{page}.html'
-            try:
-                req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                               proxies=(await SQLHelper.select_score_top_proxy()).proxy
-                                               )
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                           proxies=(await SQLHelper.select_score_top_proxy()).proxy
+                                           )
 
-                self.log.info(url)
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
             if req:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -317,16 +280,8 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.89ip.cn/index_{page}.html'
-            try:
-                req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
 
-                self.log.info(url)
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
             if req:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -362,15 +317,8 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.ip3366.net/free/?stype=1&page={page}'
-            try:
-                req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
 
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
             if req:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -406,15 +354,7 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.ip3366.net/free/?stype=2&page={page}'
-            try:
-                req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
             if req:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -451,15 +391,8 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.qiyunip.com/freeProxy/{page}.html'
-            try:
-                req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
 
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
             if req:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -500,15 +433,8 @@ class GetProxyMethods:
         }
         get_proxy_success = True
         proxy_queue = []
-        url = f'https://ip.ihuan.me/'   
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        url = f'https://ip.ihuan.me/'
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         if req:
             html = bs4.BeautifulSoup(req.text, 'html.parser')
             td = html.select('tr>td')
@@ -546,15 +472,8 @@ class GetProxyMethods:
         gmt = datetime.now().strftime(gmt_format)
 
         url = f'https://www.docip.net/data/free.json?t={gmt}'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
 
             for i in req.json().get('data'):
@@ -582,15 +501,8 @@ class GetProxyMethods:
         get_proxy_success = True
         proxy_queue = []
         url = f'https://openproxylist.xyz/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
 
             proxies = []
@@ -623,16 +535,8 @@ class GetProxyMethods:
 
             url = f'https://proxyhub.me/'
             headers.update({"cookie": f"page={page};"})
-            try:
-                req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
 
-                self.log.info(url)
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
             if req:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -671,16 +575,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://proxy.scdn.io/text.php'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -707,16 +603,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://www.proxy-list.download/api/v1/get?type=http'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -743,16 +631,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://www.proxy-list.download/api/v1/get?type=socks5'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -779,16 +659,9 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/sunny9577/proxy-scraper/refs/heads/master/generated/socks5_proxies.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -815,16 +688,9 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/sunny9577/proxy-scraper/refs/heads/master/generated/http_proxies.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -851,16 +717,9 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Vadim287/free-proxy/refs/heads/main/proxies/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -887,16 +746,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Vadim287/free-proxy/refs/heads/main/proxies/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -923,16 +774,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/refs/heads/main/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -959,16 +802,9 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/refs/heads/main/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -995,16 +831,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/refs/heads/main/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1031,16 +859,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/RioMMO/ProxyFree/refs/heads/main/HTTP.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1067,16 +887,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/RioMMO/ProxyFree/refs/heads/main/SOCKS5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1103,16 +915,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/databay-labs/free-proxy-list/refs/heads/master/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1139,16 +943,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/databay-labs/free-proxy-list/refs/heads/master/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1175,16 +971,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Tsprnay/Proxy-lists/master/proxies/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1211,16 +999,13 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Tsprnay/Proxy-lists/master/proxies/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(
+            url=url,
+            headers=headers,
+            verify=False,
+            timeout=self.timeout,
+            proxies=_github_proxy
+        )
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1247,16 +1032,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Tsprnay/Proxy-lists/master/proxies/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1283,16 +1060,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/M-logique/Proxies/refs/heads/main/proxies/regular/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1319,16 +1088,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/M-logique/Proxies/refs/heads/main/proxies/regular/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1355,16 +1116,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/ALIILAPRO/Proxy/refs/heads/main/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1391,16 +1144,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/theriturajps/proxy-list/refs/heads/main/proxies.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1427,16 +1172,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1463,16 +1200,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1499,16 +1228,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1535,16 +1256,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/all/data.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1571,16 +1284,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/fyvri/fresh-proxy-list/archive/storage/classic/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1607,16 +1312,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/fyvri/fresh-proxy-list/archive/storage/classic/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1643,16 +1340,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/fyvri/fresh-proxy-list/archive/storage/classic/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1679,16 +1368,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/BreakingTechFr/Proxy_Free/refs/heads/main/proxies/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1715,16 +1396,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/BreakingTechFr/Proxy_Free/refs/heads/main/proxies/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1751,16 +1424,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1787,16 +1452,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1823,16 +1480,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1859,16 +1508,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/connect.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1895,16 +1536,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/trio666/proxy-checker/refs/heads/main/all.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1931,16 +1564,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/https2.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -1967,16 +1592,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/socks5_2.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2003,16 +1620,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/http2.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2039,16 +1648,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2075,16 +1676,9 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2111,16 +1705,9 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2147,16 +1734,9 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/nhan0o22/proxy/refs/heads/master/proxy.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2183,15 +1763,13 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://cdn.jsdelivr.net/gh/parserpp/ip_ports/proxyinfo.json'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(
+            url=url,
+            headers=headers,
+            verify=False,
+            timeout=self.timeout,
+            proxies=_github_proxy
+        )
         if req:
             proxies = []
             for i in req.text.split('}'):
@@ -2222,15 +1800,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://api.openproxylist.xyz/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
 
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2258,16 +1829,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2295,16 +1858,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2332,16 +1887,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2369,16 +1916,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/themiralay/Proxy-List-World/refs/heads/master/data.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2405,21 +1944,13 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
                 if _ := i.strip():
-                    append_dict = format_proxy(_, protocol='https')
+                    append_dict = format_proxy(_.split(' ')[0], protocol='https')
                     if not append_dict:
                         self.log.exception(f'代理格式错误！{_}')
                         continue
@@ -2441,21 +1972,13 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
                 if _ := i.strip():
-                    append_dict = format_proxy(_, protocol='http')
+                    append_dict = format_proxy(_.split(' ')[0], protocol='http')
                     if not append_dict:
                         self.log.exception(f'代理格式错误！{_}')
                         continue
@@ -2477,16 +2000,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/claude89757/free_https_proxies/refs/heads/main/free_https_proxies.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2513,16 +2028,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Simatwa/free-proxies/master/files/http.json'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
             for i in req.json().get('proxies'):
@@ -2549,15 +2056,13 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://cdn.rei.my.id/proxy/pHTTP'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(
+            url=url,
+            headers=headers,
+            verify=False,
+            timeout=self.timeout,
+            proxies=_github_proxy
+        )
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2584,15 +2089,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://cdn.rei.my.id/proxy/pSOCKS5'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2618,16 +2115,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/officialputuid/KangProxy/KangProxy/https/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2656,16 +2145,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/officialputuid/KangProxy/KangProxy/http/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2694,15 +2175,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception as e:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2733,16 +2207,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2774,16 +2240,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/casals-ar/proxy.casals.ar/main/http'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2815,16 +2273,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/socks5.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2855,16 +2305,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2895,16 +2337,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/https.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2935,16 +2369,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -2976,16 +2402,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/yemixzy/proxy-list/main/proxies/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3017,16 +2435,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/http_proxies.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
             proxies = []
 
@@ -3057,16 +2467,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/https_proxies.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3098,16 +2500,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3140,16 +2534,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/sarperavci/freeCheckedHttpProxies/main/freshHttpProxies.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3181,16 +2567,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/prxchk/proxy-list/main/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3222,16 +2600,8 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/andigwandi/free-proxy/main/proxy_list.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3261,16 +2631,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/elliottophellia/yakumo/master/results/http/global/http_checked.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3299,16 +2661,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/im-razvan/proxy_list/main/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3337,16 +2691,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/proxy4parsing/proxy-list/main/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3375,16 +2721,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             proxies = []
@@ -3422,15 +2760,8 @@ class GetProxyMethods:
                 'name': '全国代理ip',
                 'page': pn
             }
-            try:
-                req = await my_async_httpx.get(url=url, headers=headers, params=params, verify=False,
-                                               timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.get(url=url, headers=headers, params=params, verify=False,
+                                           timeout=self.timeout)
             if req:
                 req_dict = req.json()
                 http_p = req_dict.get('data', {}).get('data')
@@ -3466,15 +2797,8 @@ class GetProxyMethods:
         url = 'https://api.lumiproxy.com/web_v1/free-proxy/list?page_size=6000&page=1&language=zh-hans'
 
         while 1:
-            try:
-                req = await my_async_httpx.get(url=url, headers=headers, verify=False,
-                                               timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                           timeout=self.timeout)
             if req:
                 req_dict = req.json()
                 http_p = req_dict.get('data').get('list')
@@ -3510,7 +2834,7 @@ class GetProxyMethods:
         get_proxy_success = True
         req = ''
         proxy_queue = []
-        url = f'https://proxylist.geonode.com/api/proxy-list?limit=500&page=2&sort_by=lastChecked&sort_type=desc'
+        url = f'https://proxylist.geonode.com/api/proxy-list'
         page = 1
         total_count = 0
         limit = 500
@@ -3521,15 +2845,8 @@ class GetProxyMethods:
                 "sort_by": "lastChecked",
                 "sort_type": "desc"
             }
-            try:
-                req = await my_async_httpx.get(url=url, params=params, headers=headers, verify=False,
-                                               timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.get(url=url, params=params, headers=headers, verify=False,
+                                           timeout=self.timeout)
             if req:
                 req_dict = req.json()
                 http_p = req_dict.get('data')
@@ -3568,15 +2885,8 @@ class GetProxyMethods:
                 "offset": offset,
                 "protocols": ["https", "http", "socks5"]
             }
-            try:
-                req = await my_async_httpx.post(url=url, data=json.dumps(data), headers=headers, verify=False,
-                                                timeout=self.timeout)
-            except Exception:
-                # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-                await asyncio.sleep(10)
-                # self.GetProxy_Flag = False
-                get_proxy_success = False
-                return proxy_queue, get_proxy_success
+            req = await my_async_httpx.post(url=url, data=json.dumps(data), headers=headers, verify=False,
+                                            timeout=self.timeout)
             if req:
                 req_dict = req.json()
                 http_p = req_dict.get('proxies')
@@ -3606,15 +2916,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://proxy.953959.xyz/all/'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         if req:
 
             req_dict = req.json()
@@ -3642,15 +2944,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://www.proxyshare.com/detection/proxyList?limit=500&page=1&sort_by=lastChecked&sort_type=desc&protocols=http'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
         if req:
 
             req_dict = req.json()
@@ -3679,16 +2973,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/t0mer/free-proxies/main/proxies.json'
-        try:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
-                                           proxies=_github_proxy)
-        except Exception:
-            # self.log.info(f'获取代理 {url} 报错\t{self._timeshift(time.time())}')
-
-            await asyncio.sleep(10)
-            # self.GetProxy_Flag = False
-            get_proxy_success = False
-            return proxy_queue, get_proxy_success
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+                                       proxies=_github_proxy)
         if req:
 
             req_dict = json.loads(req.text.replace('None', 'null').replace('False', 'false').replace('True', 'true'))
@@ -3730,22 +3016,31 @@ class GetProxyMethods:
         tasks = set()
         for name, fn in funcs:
             if name.startswith('get_proxy_from'):
-                tasks.add(asyncio.create_task(fn()))
-
-        results: Union[tuple[list[str], bool] or Exception] = await asyncio.gather(*tasks, return_exceptions=True)
-
+                task = asyncio.create_task(fn())
+                tasks.add(task)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         for result in results:
             if isinstance(result, Exception) is True:
-                self.log.error(f'获取代理出错！{result}')
+                self.log.opt(exception=True).error(f'获取代理出错！{result}')
                 continue
             _, get_proxy_success = result
             proxy_queue.extend(_)
-        self.log.info(f'最终共有{len(proxy_queue)}个代理需要检查')
+        _s = set()
+        _t = []
+        for i in proxy_queue:
+            if list(i.values())[0] in _s:
+                continue
+            else:
+                _t.append(i)
+                _s.add(list(i.values())[0])
+        del proxy_queue
+        proxy_queue = _t
 
-        all_tasks = []
+        self.log.info(f'最终共有{len(proxy_queue)}个代理需要检查')
         for i in range(len(proxy_queue)):
-            all_tasks.append(self._check_ip_by_bili_zone(proxy_queue.pop()))
-        await asyncio.gather(*all_tasks)
+            task = asyncio.create_task(self._check_ip_by_bili_zone(proxy_queue.pop()))
+            tasks.add(task)
+        await asyncio.gather(*tasks, return_exceptions=True)
         self.log.info(f'代理已经检查完毕，并添加至数据库！')
         await SQLHelper.remove_list_dict_data_by_proxy()
         self.log.info(f'移除重复代理')
@@ -3756,17 +3051,15 @@ class GetProxyMethods:
         return
 
     async def get_proxy(self):
-        try:
-            await asyncio.create_task(self.__get_proxy())
-            self.set_GetProxy_Flag(False)
-        except Exception as e:
-            self.log.exception(e)
+        task = asyncio.create_task(self.__get_proxy())
+        task.add_done_callback(lambda _: self.set_GetProxy_Flag(False))
+        await task
 
     def set_GetProxy_Flag(self, boolean: bool = False):
         self.GetProxy_Flag = boolean
 
     # endregion
-    @sem_wrapper
+    @retry_wrapper
     async def _check_ip_by_bili_zone(self, proxy: dict, status=0, score=50) -> bool:
         '''
         使用zone检测代理ip，没问题就追加回队首，返回True为可用代理

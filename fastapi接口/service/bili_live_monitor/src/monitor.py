@@ -730,7 +730,7 @@ class AsyncMonitor(BaseMonitor):
                 self.recorded_server_data_id_list.append(_id)
                 self.recorded_server_data_id_list = self.recorded_server_data_id_list[-1000:]
             task = asyncio.create_task(self.async_solve_server_data(da))
-            task.add_done_callback(lambda t: self.task_set.remove(t))
+            task.add_done_callback(self.task_set.discard)
             self.task_set.add(task)
 
     @async_pushme_try_catch_decorator
@@ -745,7 +745,7 @@ class AsyncMonitor(BaseMonitor):
                 server_response: list[dict] = await AsyncTool.get_data_from_server()
                 # try:
                 task = asyncio.create_task(self.async_solve_data_from_server(server_response))
-                task.add_done_callback(lambda t: self.task_set.remove(t))
+                task.add_done_callback(self.task_set.discard)
                 self.task_set.add(task)
 
             except Exception as e:

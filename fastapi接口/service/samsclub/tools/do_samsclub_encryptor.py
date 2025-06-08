@@ -2,6 +2,8 @@ import asyncio
 import json
 from hashlib import md5
 import httpx
+
+from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.models.v1.samsclub.samsclub_model import SamsClubEncryptModel, SamsClubGetDoEncryptReqModel
 from CONFIG import CONFIG
 
@@ -30,6 +32,7 @@ async def get_do_encrypt_result_str(samsClubGetDoEncryptReqModel: SamsClubGetDoE
                                 })
     resp.raise_for_status()
     if len(resp.text) == 32:
+        sams_club_logger.debug(f"解密成功！{resp.text}")
         return resp.text
     else:
         raise ValueError(f"解密失败！{resp.text}")

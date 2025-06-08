@@ -4,7 +4,11 @@ import os
 import jieba
 import pickle
 
-
+current_file_dir = os.path.dirname(__file__)
+with open(os.path.join(current_file_dir, 'svm_model.pkl'), 'rb') as file:
+    loaded_model = pickle.load(file)
+with open(os.path.join(current_file_dir, 'svm_vectorizer.pkl'), 'rb') as file:
+    loaded_vector = pickle.load(file)
 # 或者使用pickle加载模型
 def preprocess_text(text):
     try:
@@ -17,18 +21,13 @@ def preprocess_text(text):
 def big_lot_predict(da_list: list[str])->list[int]:
     if len(da_list)==0:
         return []
-    current_file_dir = os.path.dirname(__file__)
-    with open(os.path.join(current_file_dir,'svm_model.pkl'), 'rb') as file:
-        loaded_model = pickle.load(file)
-    with open(os.path.join(current_file_dir,'svm_vectorizer.pkl'), 'rb') as file:
-        loaded_vector = pickle.load(file)
+
     x_list=[]
     for i in da_list:
         processed_text = preprocess_text(i)
         x_list.append(processed_text)
     x = loaded_vector.transform(x_list)
     predictions = loaded_model.predict(x)
-
     return predictions
 
 

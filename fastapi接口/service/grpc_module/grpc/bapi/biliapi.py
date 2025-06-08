@@ -33,8 +33,8 @@ def _request_wrapper(func):
                     raise ValueError(f'请求失败！检查响应：{resp_dict}')
                 return resp_dict
             except Exception as e:
-                bapi_log.error(f'请求失败！{e}')
-                await asyncio.sleep(10)
+                bapi_log.opt(exception=True).error(f'{func.__name__} 请求失败！{e}')
+                await asyncio.sleep(60)
 
     return wrapper
 
@@ -144,8 +144,8 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
 @_request_wrapper
 async def reserve_relation_info(
         ids: int | str,
-        use_custom_proxy=False,
-        is_use_available_proxy=False
+        use_custom_proxy: bool = False,
+        is_use_available_proxy: bool = False
 ) -> dict:
     url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
     # ua = random.choice(BAPI.User_Agent_List)
@@ -169,10 +169,12 @@ async def reserve_relation_info(
         # 'From': 'bingbot(at)microsoft.com',
     }
     if use_custom_proxy:
-        req_dict = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
-                                                                             headers=headers,
-                                                                             proxies=_custom_proxy
-                                                                             )
+        del headers['cookie']
+        resp = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
+                                                                         headers=headers,
+                                                                         proxies=_custom_proxy
+                                                                         )
+        req_dict = resp.json()
     else:
         req_dict = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
                                                                              headers=headers,
@@ -546,5 +548,5 @@ async def resource_abtest_abserver(
 
 if __name__ == "__main__":
     # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
-    _____x = asyncio.run(get_lot_notice(1, '1002115152638640195', True))
+    _____x = asyncio.run(reserve_relation_info(38640195, True, True))
     print(_____x)

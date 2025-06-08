@@ -31,6 +31,7 @@ class GroupingInfo(Base):
 
     pk = mapped_column(BigInteger, primary_key=True)
     level = mapped_column(TINYINT, nullable=False)
+    parentGroupingId = mapped_column(Integer)
     groupingId = mapped_column(VARCHAR(50))
     groupingIdInt = mapped_column(Integer, Computed('(cast(`groupingId` as signed))', persisted=True))
     image = mapped_column(VARCHAR(1000))

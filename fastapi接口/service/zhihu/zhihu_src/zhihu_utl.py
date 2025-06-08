@@ -4,14 +4,14 @@ import json
 import os
 import re
 from copy import deepcopy
-
 import bs4
 import httpx
+from loguru import logger
+
 from CONFIG import CONFIG
 from utl.代理.SealedRequests import my_async_httpx
-
 from utl.代理.request_with_proxy import request_with_proxy
-from fastapi接口.service.zhihu.zhihu_src.enc.zhuhu_enc import ZhiHuEncrypt, x_zse_93
+from fastapi接口.service.zhihu.zhihu_src.enc.zhuhu_enc import x_zse_93, zhi_hu_encrypt
 from fastapi接口.log.base_log import zhihu_api_logger
 
 _lock = asyncio.Lock()
@@ -22,9 +22,13 @@ class zhihu_method:
     LOG = zhihu_api_logger
     request_with_proxy = request_with_proxy()
     request_with_proxy.channel = 'zhihu'
-    login_cookie = '_xsrf=xaNvxBCeVX6IHdrhxWMTy6EfkYRR1JOu; _zap=3dbe96be-ed47-4bdb-9e2d-2d4e9c3eaf6c; d_c0=AdDf-LrYsxiPTtfg9wL167EIuUaeWgI2j54=|1717166161; __snaker__id=VpoKLx6wd9m0qGyx; q_c1=1fe4e4db62c6439a836b8994e29f8e4f|1728493464000|1728493464000; z_c0=2|1:0|10:1745588823|4:z_c0|80:MS4xZFZEd0J3QUFBQUFtQUFBQVlBSlZUVmZnLUdqa2hTMmZvWVFZZHNsa2pIcHRtMmRoY1ZpdE1RPT0=|8ba2059eeb5db7deadb994b8a4c1a29bf45b1fff3459d9df6e18759647389cac; __zse_ck=004_tPe0yW4M=Tf61CaunuXG=OQDJJw0qkaqSkSadeJTKEBCwI1WcS7EvBbwg2ilgG3T4DyApXG5iA=5QFj9cw5stwSvPRsbOXoe3ibt5ym5YqfaZ0A3f0p7lp9UtPnocqYb-hsS2Zi5/fHqtl8ypjRMavWOp2/D+kU9YZ95Rs2UF9Sk94cxaZkPffu4XvX4OIvbj0bFiKrKOCgZ2TwSPP6ZOrMuaJXSQmF5feCQxL64g0yiLn4q7vB1tpKe3quXuITjcbN4T9hNCwr3Y0ftOCrdJg4CabU1OUm4sBia3JFqSl04=;'
+    login_cookie = 'd_c0=AdDf-LrYsxiPTtfg9wL167EIuUaeWgI2j54=|1717166161; z_c0=2|1:0|10:1748342233|4:z_c0|80:MS4xZFZEd0J3QUFBQUFtQUFBQVlBSlZUZG5qSW1rMnhFOEQ4cVVsNE84VksxNmVzTU1ZS1plQ1F3PT0=|b7d222144eac0d8c8b56ff715e0e953d1b2f52c9ce124e63b355a00839ecfd6c; __zse_ck=004_w1F0jzH=3s=Q1ho2SGX4fXczq5NyCYfHFUDhxJfTx7FRD5/sCrHLBgjnqwhZWTeAPgDjccTo7v0zaR9TMBfNr3C=ptHcstX74twxUEbfgdpn/nrTRwiFvapF4zF3xwY/-YkkoWcmsvXXYA1UOHmWdjELLFI7Ed5vCPShrXGQVT27KnbUvo915Iy3h6FAO8hTb7vIBp5UiW4WaLtk8x4Kals549d9gjO6X3X2+o8VTrdLbhPtLfc8cQHN2s6E6X6I0r/AWegcId6UwlQ4VzbdA1QpAQxxbIhL63zvWuHL4cbY=;'
     request_headers = {
-        'cookie': login_cookie
+        'cookie': login_cookie,
+        'x-zse-93': x_zse_93,
+        'user-agent': CONFIG.rand_ua,
+        'accept': '*/*',
+        'x-requested-with': 'fetch'
     }
 
     async def __request(self, *args, **kwargs) -> (dict, str):
@@ -36,10 +40,14 @@ class zhihu_method:
                     req_dict = await self.request_with_proxy.request_with_proxy(*args, **kwargs, mode='single')
                     resp_text = json.dumps(req_dict)
                 else:
-                    resp = await my_async_httpx.request(*args, **kwargs, proxies=CONFIG.custom_proxy)
+                    resp = await my_async_httpx.request(
+                        *args,
+                        **kwargs,
+                        proxies=CONFIG.custom_proxy
+                    )
                     req_dict = resp.json()
                     resp_text = resp.text
-                self.LOG.info(f'{resp_text}')
+                self.LOG.debug(f'{resp_text}')
                 return req_dict, resp_text, resp
             except Exception as e:
                 self.LOG.exception(e)
@@ -49,16 +57,18 @@ class zhihu_method:
         while 1:  # 这里不能动，因为这个url的resp无法转成json
             try:
                 url_param = "/udid"
-                a_v = ZhiHuEncrypt.encode(x_zse_93 + url_param)
-                headers.update({"x-zse-96": '2.0_' + a_v})
+                zse_96 = zhi_hu_encrypt.encode('', url_param)
+                headers.update({"x-zse-96": zse_96})
                 async with httpx.AsyncClient(
                         proxy=CONFIG.my_ipv6_addr,
                         verify=False,
+                        follow_redirects=True,
+                        timeout=10
                 ) as cilent:
                     resp = await cilent.post(url='https://www.zhihu.com/udid', headers=headers, )
                 cookie_t = resp.cookies
                 d_c0 = cookie_t.get('d_c0')
-                # logger.info(f"d_c0==> {d_c0}")
+                logger.info(f"d_c0==> {d_c0}")
                 return d_c0
             except Exception as e:
                 self.LOG.exception(e)
@@ -69,47 +79,26 @@ class zhihu_method:
         url_path = url.split("?")[0].replace(url_host, "") + "?"
         url_params = url.split("?")[1]
         headers = deepcopy(self.request_headers)
-        headers.update({
-            'x-zse-96': '2.0_',
-            'x-zse-93': x_zse_93,
-            'x-api-version': '3.0.91',
-            'user-agent': CONFIG.rand_ua,
-            'accept': '*/*',
-            'x-requested-with': 'fetch'
-        })
         if 'd_c0' not in headers.get('cookie', ''):
             async with _lock:
                 headers = deepcopy(self.request_headers)
-                headers.update({
-                    'x-zse-96': '2.0_',
-                    'x-zse-93': x_zse_93,
-                    'x-api-version': '3.0.91',
-                    'user-agent': CONFIG.rand_ua,
-                    'accept': '*/*',
-                    'x-requested-with': 'fetch'
-                })
                 if 'd_c0' not in headers.get('cookie', ''):
                     d_c0 = await self._get_dc_0(headers)
+                    self.request_headers.update({
+                        "cookie": ' '.join([self.login_cookie, f"d_c0={d_c0};"]).strip()
+                    })
                 else:
                     d_c0 = ''.join(re.findall('d_c0=(.*?);', headers.get('cookie')))
+
         else:
             d_c0 = ''.join(re.findall('d_c0=(.*?);', headers.get('cookie')))
-
-        a_v = x_zse_93 + "+" + url_path + url_params + "+" + d_c0
-        encrypted_str = ZhiHuEncrypt.encode(a_v)
+        encrypted_str = zhi_hu_encrypt.encode(d_c0, url_path + url_params)
         headers.update({
-            "x-zse-96": '2.0_' + encrypted_str,
+            "x-zse-96": encrypted_str,
             'accept-encoding': 'gzip, deflate',
             'accept-language': 'zh-CN,zh;q=0.9'
         }
         )
-        if 'd_c0' in headers.get('cookie', ''):
-            ...
-        else:
-            headers.update({
-                "cookie": ' '.join([self.login_cookie, f"d_c0={d_c0};"]).strip()
-            })
-
         return headers
 
     async def get_moments_pin_by_user_id(self, real_name: str, offset: int, limit: int = 20, cookies='',
@@ -195,3 +184,8 @@ class zhihu_method:
         soup = bs4.BeautifulSoup(response.text, "html.parser")
         initialState = json.loads(soup.select('#js-initialData')[0].text).get('initialState')
         return initialState
+
+if __name__ =="__main__":
+    c =zhihu_method()
+    res = asyncio.run(c.get_moments_pin_by_user_id('tao-guang-yang-hui-1-50',0))
+    print(res)

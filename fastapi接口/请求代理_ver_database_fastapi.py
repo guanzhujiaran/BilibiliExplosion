@@ -28,11 +28,11 @@ if not args.logger:
     print('关闭日志输出')
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
+
 if sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
 else:
     import uvloop
-
     print('使用uvloop')
     uvloop.install()
 from fastapi接口.log.base_log import myfastapi_logger
@@ -139,4 +139,5 @@ if __name__ == '__main__':
         # If host is an empty string or None, all interfaces are assumed and a list of multiple sockets will be returned (most likely one for IPv4 and another one for IPv6).
         host="0.0.0.0",
         port=23333,
+        loop="auto" if sys.platform.startswith('windows') else 'uvloop'
     )

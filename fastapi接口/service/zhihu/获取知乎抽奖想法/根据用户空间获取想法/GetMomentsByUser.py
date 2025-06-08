@@ -217,6 +217,7 @@ class LotScrapy:
                     break
             else:
                 self.log.error(moment_pins_resp_json)
+                await asyncio.sleep(10)
                 if moment_pins_resp_json.get(
                         'code') == 10003:  # {'error': {'message': '请求参数异常，请升级客户端后重试。', 'code': 10003}}
                     raise ValueError(f'用户{uname}的请求参数异常\t{moment_pins_resp_json}')
@@ -256,7 +257,12 @@ class LotScrapy:
 
     async def main(self):
         # self.log.info(f'获取过的所有{len(self.all_pins)}条pin:{self.all_pins}')
-        await asyncio.gather(*[asyncio.create_task(self.get_all_pins(u)) for u in self.uname_list])
+        results = await asyncio.gather(
+            *[asyncio.create_task(self.get_all_pins(u)) for u in self.uname_list],
+            return_exceptions=True)
+        for result in results:
+            if type(result) is ValueError:
+                self.log.opt(exception=True).error(result)
         self.end_write()
 
     async def save_now_get_pin_ts(self, ts: int):
@@ -266,8 +272,6 @@ class LotScrapy:
             f.writelines(f'{ts}')
 
     async def api_get_all_pins(self) -> list[str]:
-        self.log.critical(f'api加密有变化，正在修复中，暂时不使用')
-        return []
         while self.is_getting_dyn_flag:
             self.log.debug('正在获取用户空间，请稍等...')
             await asyncio.sleep(30)

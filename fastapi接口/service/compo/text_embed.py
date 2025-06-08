@@ -13,7 +13,6 @@ _client = AsyncOpenAI(base_url=f'{CONFIG.lm_studio_url}/v1', api_key="your-api-k
 _model_name = 'text-embedding-multilingual-e5-base'
 
 
-@cache(8 * 3600)
 async def _create_embeddings(text: list[str | None], model: str = _model_name) -> list[list[float] | None]:
     resp = await _client.embeddings.create(input=[x for x in text if x and type(x) is str], model=model)
     ret_list = []

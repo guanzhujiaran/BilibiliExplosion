@@ -135,4 +135,4 @@ def async_pushme_try_catch_decorator(func):
 
 
 if __name__ == '__main__':
-    _pushpush('测试3', 'test3')
+    pushme('测试3', 'test3')

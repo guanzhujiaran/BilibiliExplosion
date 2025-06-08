@@ -104,5 +104,5 @@ class F65205aRandomIntGenerator:
 
 if __name__ == "__main__":
     a = F65205aRandomIntGenerator()
-    for i in range(902):
+    for i in range(276):
         print(a.nextInt())

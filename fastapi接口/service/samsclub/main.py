@@ -11,7 +11,7 @@ import os
 
 class SamsClubCrawler:
     class FilePath:
-        fetch_grouping_id_ts = os.path.join(os.path.dirname(__file__), 'conf/fetch_grouping_id_ts.txt')
+        fetch_grouping_id_ts = os.path.join(os.path.dirname(__file__), 'fetch_grouping_id_ts.txt')
 
     def __init__(self):
         self.api = sams_club_api
@@ -39,7 +39,6 @@ class SamsClubCrawler:
         if self.stop_flag:
             raise StopError("触发停止条件")
 
-
     async def grouping_id_downloader(self):
         if not self.fetch_grouping_id_ts:
             if os.path.exists(self.FilePath.fetch_grouping_id_ts):
@@ -52,39 +51,40 @@ class SamsClubCrawler:
                             self.fetch_grouping_id_ts = 0
                     else:
                         self.fetch_grouping_id_ts = 0
-        if int(time.time()) - self.fetch_grouping_id_ts < 24 * 60 * 60:
+        if int(time.time()) - self.fetch_grouping_id_ts < 3 * 24 * 60 * 60:
             self.log.info(f'grouping_id_downloader 未到更新时间')
             return
         all_grouping_ids_level_1 = await self.api.grouping_query_navigation()
-        dataList = all_grouping_ids_level_1.json().get('data', {}).get('dataList', [])
+        dataList = all_grouping_ids_level_1.json().get('data', {}).get('dataList', [])  # level 1的分类不需要动
         await self.sql_helper.bulk_upsert_grouping_info(dataList)
         for grouping_id_level_1 in dataList:
             grouping_id = grouping_id_level_1.get('groupingId')
             navigationId = grouping_id_level_1.get('navigationId')
             grouping_id_level_2 = await self.api.grouping_query_children(grouping_id, navigationId)
             level_2_data_list = grouping_id_level_2.json().get('data', {})
+            [x.update({"parentGroupingId": grouping_id}) for x in level_2_data_list]
             await self.sql_helper.bulk_upsert_grouping_info(level_2_data_list)
             for item in level_2_data_list:
                 children = item.get('children')
+                [x.update({"parentGroupingId": item.get('groupingId')}) for x in children]
                 await self.sql_helper.bulk_upsert_grouping_info(children)
 
         self.log.info(f'grouping_id_downloader 完成')
         with open(self.FilePath.fetch_grouping_id_ts, 'w') as f:
             f.write(str(int(time.time())))
 
+
     async def grouping_list_downloader(self, firstCategoryId, secondCategoryId, pageSize: int = 20):
         """
-
-        :param secondCategoryId:
-        :param firstCategoryId:
+            直接按照二级分类底下的`全部`分类去爬取
+        :param secondCategoryId: 一级大分类
+        :param firstCategoryId: 二级中分类
         :param pageSize:
         :return:
         """
         task_progress = await self.sql_helper.get_or_create_task_progress(firstCategoryId, secondCategoryId)
         start_page_num = task_progress.last_page_num
-
-        children_grouping_ids = await self.sql_helper.get_grouping_info_by_category_id(firstCategoryId)
-        frontCategoryIds = [child.get('groupingId') for child in children_grouping_ids.children]
+        frontCategoryIds = await self.sql_helper.get_front_category_ids(firstCategoryId, secondCategoryId)
         hasNextPage = True
         while hasNextPage:
             resp = await self.api.grouping_list(firstCategoryId, secondCategoryId, frontCategoryIds,
@@ -111,29 +111,30 @@ class SamsClubCrawler:
         grouping_infos_level2 = await self.sql_helper.get_grouping_infos_by_level(
             2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
         for grouping_info in grouping_infos_level2:
-            for child in grouping_info.children:
-                yield grouping_info.groupingId, child.get('groupingId')
-                await asyncio.sleep(next(self.delay_gen))
+            yield grouping_info.parentGroupingId, grouping_info.groupingIdInt
+            await asyncio.sleep(next(self.delay_gen))
+
+    async def scraping_spu_info_by_grouping_id(self, unfinished_tasks: list[dict] = None):
+        if unfinished_tasks is None:
+            unfinished_tasks = []
+        async for first_category, second_category in self.grouping_list_downloader_params_gen():
+            if {'firstCategoryId': first_category, 'secondCategoryId': second_category} in unfinished_tasks:
+                self.log.debug('已经爬取完成的')
+                continue
+            await self.grouping_list_downloader(first_category, second_category)
 
     async def main(self):
         try:
             await self.grouping_id_downloader()
-            self.log.info(f'更新分区信息完成')
-
             unfinished_tasks = await sql_helper.get_unfinished_tasks()
-
             for task in unfinished_tasks:
                 await self.grouping_list_downloader(**task)  # 继续抓取逻辑
-
-            async for first_category, second_category in self.grouping_list_downloader_params_gen():
-                if {'firstCategoryId': first_category, 'secondCategoryId': second_category} in unfinished_tasks:
-                    self.log.debug('已经爬取完成的')
-                    continue
-                await self.grouping_list_downloader(first_category, second_category)
+            await self.scraping_spu_info_by_grouping_id(unfinished_tasks)
         except Exception as e:
             self.log.opt(exception=True).critical(f"发生异常：{e}")
 
 
 if __name__ == "__main__":
     sams_club_crawler = SamsClubCrawler()
-    asyncio.run(sams_club_crawler.main())
+    res = asyncio.run(sams_club_crawler.main())
+    print(res)
