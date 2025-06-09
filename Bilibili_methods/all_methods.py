@@ -15,8 +15,7 @@ from CONFIG import CONFIG
 from pylangtools.langconv import Converter
 
 import Bilibili_methods.log_reporter as log_reporter
-import js2py
-
+import py_mini_racer
 import b站cookie.b站cookie_
 import b站cookie.globalvar as gl
 import numpy
@@ -1756,14 +1755,14 @@ class methods:
             print('评论被吞')
             print('评论内容：{}'.format(msg))
             try:
-                with open(CONFIG.root_dir+'动态转抽_新版2.0/评论log/comment_log.csv', 'a+', encoding='utf-8') as c:
+                with open(CONFIG.root_dir + '动态转抽_新版2.0/评论log/comment_log.csv', 'a+', encoding='utf-8') as c:
                     c.writelines(
                         '{0}\t{1}\t{2}\thttps://t.bilibili.com/{2}\t{3}\t{4}\n'.format(self.timeshift(time.time()),
                                                                                        username,
                                                                                        dynamic_id, repr(msg),
                                                                                        comment_dict))
             except:
-                with open(CONFIG.root_dir+'动态转抽_新版2.0/评论log/comment_log.csv', 'w', encoding='utf-8') as c:
+                with open(CONFIG.root_dir + '动态转抽_新版2.0/评论log/comment_log.csv', 'w', encoding='utf-8') as c:
                     c.writelines(
                         '{0}\t{1}\t{2}\thttps://t.bilibili.com/{2}\t{3}\t{4}\n'.format(self.timeshift(time.time()),
                                                                                        username,
@@ -1952,13 +1951,13 @@ class methods:
             print(username)
             print('评论被吞')
             try:
-                with open(CONFIG.root_dir+'动态转抽_新版2.0/评论log/comment_log.csv', 'a+', encoding='utf-8') as c:
+                with open(CONFIG.root_dir + '动态转抽_新版2.0/评论log/comment_log.csv', 'a+', encoding='utf-8') as c:
                     c.writelines(
                         '{0}\t{1}\t{2}\thttps://t.bilibili.com/{2}\t{3}\t{4}\n'.format(self.timeshift(time.time()),
                                                                                        username,
                                                                                        dy, repr(msg), comment_dict))
             except:
-                with open(CONFIG.root_dir+'动态转抽_新版2.0/评论log/comment_log.csv', 'w', encoding='utf-8') as c:
+                with open(CONFIG.root_dir + '动态转抽_新版2.0/评论log/comment_log.csv', 'w', encoding='utf-8') as c:
                     c.writelines(
                         '{0}\t{1}\t{2}\thttps://t.bilibili.com/{2}\t{3}\t{4}\n'.format(self.timeshift(time.time()),
                                                                                        username,
@@ -3994,12 +3993,12 @@ class methods:
         def get_upload_id(__uid):
             return f'{__uid}_{int(time.time())}_{math.floor(1e3 * random.random())}'
 
-        content = js2py.EvalJs()
-        content.execute(js)
-        res = content.defaultForwardContentNodes(_dynamic_req)
+        content = py_mini_racer.MiniRacer()
+        content.eval(js)
+        res = content.eval('defaultForwardContentNode', _dynamic_req)
         nodes = {'nodes': res}
-        nodes = {'nodes': content.refresh_nodes(nodes)}
-        contents = content.gen_contents(nodes)  # submit的参数
+        nodes = {'nodes': content.call('refresh_nodes',nodes)}
+        contents = content.call('gen_contents',nodes)  # submit的参数
         submit(contents, dynamic_id, csrf, cookie, ua)
         forward_args = {
             "dyn_req": {
@@ -4129,7 +4128,7 @@ class methods:
         try:
             pinglunreq = async_to_sync(
                 self.requests_with_proxy.request_with_proxy
-            )(method="GET", url=pinglunurl, data=pinglundata,headers=pinglunheader)
+            )(method="GET", url=pinglunurl, data=pinglundata, headers=pinglunheader)
         except:
             traceback.print_exc()
             print('获取评论失败')
@@ -4270,9 +4269,10 @@ class methods:
         req = self.s.get(url, params=params, headers=headers)
         return req.json()
 
-if __name__=='__main__':
-    __test =methods()
-    __res=__test.daily_choujiangxinxipanduan("""恭喜你在开学前刷到这条动态[给心心]!
+
+if __name__ == '__main__':
+    __test = methods()
+    __res = __test.daily_choujiangxinxipanduan("""恭喜你在开学前刷到这条动态[给心心]!
 关注@次元数码说 粉丝破9100或者转发破1000
 就有机会随机获得一款头戴式耳机陪你开学![鼓掌]
 #唠嗑##闲聊##耳机##头戴式耳##QCY##iKF##漫步者##倍思##开学##开学好礼#""")

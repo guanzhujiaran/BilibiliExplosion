@@ -9,6 +9,7 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 import uvicorn
 from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
+from fastapi接口.controller.v1.background_service import BackgroundService
 from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 import fastapi_cdn_host
 from fastapi接口.models.common import CommonResponseModel
@@ -16,7 +17,7 @@ from pydantic import BaseModel as PydanticBaseModel
 from loguru import logger
 from fastapi import FastAPI
 from starlette.requests import Request
-from starlette.responses import  JSONResponse
+from starlette.responses import JSONResponse
 log = logger.bind(name='fastapi')
 
 
@@ -26,7 +27,13 @@ class BaseModel(PydanticBaseModel):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
+    back_ground_tasks = BackgroundService.start_background_service(show_log=True)
     yield
+    [
+        x.cancel() for x in back_ground_tasks
+    ]
+    await asyncio.gather(*back_ground_tasks, return_exceptions=True)
+
 
 app = FastAPI(
     lifespan=lifespan,
@@ -63,4 +70,4 @@ def validation_exception_handler(request: Request, e: RequestValidationError):
 
 
 if __name__ == '__main__':
-    uvicorn.run(app='dev_env_main:app', host='127.0.0.1', port=3090)
+    uvicorn.run(app='dev_env_main:app', host='127.0.0.1', port=3090,loop='uvloop')

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from faststream.rabbit import RabbitQueue, RabbitExchange
+from faststream.rabbit import RabbitQueue, RabbitExchange, Channel
 
 
 class QueueName(str, Enum):

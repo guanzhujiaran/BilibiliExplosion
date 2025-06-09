@@ -33,6 +33,7 @@ if sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
 else:
     import uvloop
+
     print('使用uvloop')
     uvloop.install()
 from fastapi接口.log.base_log import myfastapi_logger
@@ -45,6 +46,7 @@ from fastapi接口.controller.v1.lotttery_database.bili.lottery_statistic import
 from fastapi接口.controller.v1.ip_info import get_ip_info
 from fastapi接口.controller.v1.background_service import BackgroundService
 from fastapi接口.controller.common import CommonRouter
+from fastapi接口.controller.v1.background_service import MQController
 
 
 @asynccontextmanager
@@ -71,6 +73,7 @@ app.include_router(LotteryStatistic.router)
 app.include_router(get_ip_info.router)
 app.include_router(BackgroundService.router)
 app.include_router(CommonRouter.router)
+app.include_router(MQController.router)
 FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
 
 
@@ -85,7 +88,7 @@ async def global_middleware(request: Request, call_next):
     request_ip = request.client.host if request.client else "unknown"
     try:
         response = await call_next(request)
-        # 可选：仅在调试模式下记录响应体
+        # 可选：仅在调试模式下返回错误堆栈
         if app.debug:
             response_body = b""
             async for chunk in response.body_iterator:

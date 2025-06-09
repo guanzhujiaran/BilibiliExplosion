@@ -13,7 +13,6 @@ from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLot
 from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 import time
 import ast
-import sqlite_utils
 from CONFIG import CONFIG
 from fastapi接口.service.grpc_module.src.SQLObject.models import Bilidyndetail, Lotdata
 import json

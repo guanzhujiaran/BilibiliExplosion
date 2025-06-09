@@ -2,10 +2,10 @@ from typing import Union
 
 from fastapi接口.log.base_log import toutiao_api_logger
 from fastapi接口.service.toutiao.src.Tools.Common.ZlibToos import BlobToStr
-from fastapi接口.service.toutiao.src.ToutiaoSetting import CONFIG
+from fastapi接口.service.toutiao.src.ToutiaoSetting import CONFIG as toutiaoCONFIG
+from CONFIG import CONFIG
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine,  async_sessionmaker
 import asyncio
 
 from fastapi接口.service.toutiao.src.db.models import TFEEDDATA
@@ -31,7 +31,7 @@ def retry_on_error(delay=10):
 
 class SqlHelperSpaceFeedDataDb:
     def __init__(self):
-        SQLITE_URI = CONFIG.DBSetting.AIO_SpaceFeedDataDb
+        SQLITE_URI = toutiaoCONFIG.DBSetting.AIO_SpaceFeedDataDb
         engine = create_async_engine(
             SQLITE_URI,
             echo=False,  # 是否打印sql日志

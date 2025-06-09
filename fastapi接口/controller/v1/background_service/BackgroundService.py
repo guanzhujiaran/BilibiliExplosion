@@ -5,44 +5,34 @@ from fastapi接口.models.v1.background_service.background_service_model import 
     TopicScrapyStatusResp, ReserveScrapyStatusResp, AllLotScrapyStatusResp, OthersLotStatusResp, ProxyStatusResp
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from .base import new_router
-from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn, GetOthersLotDyn
+from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
 from fastapi接口.service.background_tasks import schedule_refresh_bili_lot_database
+from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
+from fastapi接口.service.opus新版官方抽奖.转发抽奖 import \
+    定时获取所有动态以及发布充电和官方抽奖专栏 as dyn_detail_scrapy_class
+from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc import schedule_get_reserve_lot as reserve_scrapy_class
+from fastapi接口.service.opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖 as topic_scrapy_class
+from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
+from fastapi接口.service.bili_live_monitor.src.monitor import bili_live_async_monitor
+from fastapi接口.service.grpc_module.Utils.MQClient.VoucherMQClient import VoucherMQClient
 
 router = new_router()
-dyn_detail_scrapy_class = None
-topic_scrapy_class = None
-reserve_scrapy_class = None
-other_lot_class: GetOthersLotDyn = get_others_lot_dyn
 
 
 def start_background_service(show_log: bool):
-    global dyn_detail_scrapy_class
-    global topic_scrapy_class
-    global reserve_scrapy_class
-    global other_lot_class
     back_ground_tasks = []
-    from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
-    from fastapi接口.service.opus新版官方抽奖.转发抽奖 import 定时获取所有动态以及发布充电和官方抽奖专栏
-    dyn_detail_scrapy_class = 定时获取所有动态以及发布充电和官方抽奖专栏
-    from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc import schedule_get_reserve_lot
-    reserve_scrapy_class = schedule_get_reserve_lot
-    from fastapi接口.service.opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖
-    topic_scrapy_class = 定时获取话题抽奖
 
-    from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
-    from fastapi接口.service.bili_live_monitor.src.monitor import bili_live_async_monitor
     back_ground_tasks.append(asyncio.create_task(bili_space_monitor.main(show_log=show_log)))
     back_ground_tasks.append(asyncio.create_task(
-        定时获取所有动态以及发布充电和官方抽奖专栏.async_schedule_get_official_lot_main(show_log=show_log)))
+        dyn_detail_scrapy_class.async_schedule_get_official_lot_main(show_log=show_log)))
     back_ground_tasks.append(
-        asyncio.create_task(schedule_get_reserve_lot.async_schedule_get_reserve_lot_main(show_log=show_log)))
+        asyncio.create_task(reserve_scrapy_class.async_schedule_get_reserve_lot_main(show_log=show_log)))
     back_ground_tasks.append(asyncio.create_task(
-        定时获取话题抽奖.async_schedule_get_topic_lot_main(show_log=show_log)))
+        topic_scrapy_class.async_schedule_get_topic_lot_main(show_log=show_log)))
     back_ground_tasks.append(asyncio.create_task(async_monitor_ipv6_address_changes()))
     back_ground_tasks.append(asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log)))
     back_ground_tasks.append(
         asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
-    from fastapi接口.service.grpc_module.Utils.MQClient.VoucherMQClient import VoucherMQClient
     back_ground_tasks.append(
         asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer))
     )
@@ -92,7 +82,7 @@ def get_scrapy_status(scrapy_type: Literal[
                     succ_count=reserve_scrapy_class.reserve_robot.stats_plugin.processed_items_count,
                     cur_stop_num=reserve_scrapy_class.reserve_robot.null_stop_plugin.sequential_null_count,
                     start_ts=int(reserve_scrapy_class.reserve_robot.stats_plugin.start_time),
-                    freq=reserve_scrapy_class.reserve_robot.stats_plugin.crawling_speed(),
+                    freq=reserve_scrapy_class.reserve_robot.stats_plugin.crawling_speed,
                     is_running=reserve_scrapy_class.reserve_robot.stats_plugin.is_running,
                     latest_succ_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.end_success_params,
                     first_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.init_params,
@@ -217,3 +207,9 @@ async def get_proxy_status():
     return CommonResponseModel(data=
                                await SQLHelper.get_proxy_database_redis()
                                )
+
+if __name__ == "__main__":
+    async def _test():
+        tasks = start_background_service(True)
+        await asyncio.gather(*tasks)
+    asyncio.run(_test())

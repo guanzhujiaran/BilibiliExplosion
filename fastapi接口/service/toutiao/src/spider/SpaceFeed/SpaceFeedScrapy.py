@@ -32,14 +32,20 @@ def Singleton(cls):
 
 
 @dataclass
-class FileMap:
-    spiderSetting =get_file_p('../spiderSetting.json')
-    AllIdList =get_file_p('AllIdList.txt')
-    AllLotIdList =get_file_p('AllLotIdList.txt')
-    rsult_latest =get_file_p('../../SpaceFeedLot/result/latest.csv')
-    log_all =get_file_p('../../SpaceFeedLot/log/all.csv')
-    last_spider_user_id_recorder =get_file_p('../../SpaceFeedLot/last_spider_user_id_recorder.json')
-    last_get_lot_id_timestamp =get_file_p('../../FastApiReturns/SpaceFeedLotService/last_get_lot_id_timestamp.txt')
+class FileMapClass:
+    spiderSetting: str = field(default_factory=lambda: get_file_p('../spiderSetting.json'))
+    AllIdList: str = field(default_factory=lambda: get_file_p('AllIdList.txt'))
+    AllLotIdList: str = field(default_factory=lambda: get_file_p('AllLotIdList.txt'))
+    rsult_latest: str = field(default_factory=lambda: get_file_p('../../SpaceFeedLot/result/latest.csv'))
+    log_all: str = field(default_factory=lambda: get_file_p('../../SpaceFeedLot/log/all.csv'))
+    last_spider_user_id_recorder: str = field(
+        default_factory=lambda: get_file_p('../../SpaceFeedLot/last_spider_user_id_recorder.json'))
+    last_get_lot_id_timestamp: str = field(
+        default_factory=lambda: get_file_p('../../FastApiReturns/SpaceFeedLotService/last_get_lot_id_timestamp.txt')
+    )
+
+
+FileMap = FileMapClass()
 
 
 @dataclass
@@ -308,5 +314,4 @@ class ToutiaoSpaceFeedSpider:
 
 
 if __name__ == '__main__':
-    a = ToutiaoSpaceFeedSpider()
-    asyncio.run(a.main())
+    print(FileMap.spiderSetting)

@@ -1,42 +1,30 @@
-from faststream.rabbit.fastapi import RabbitBroker
 from CONFIG import CONFIG
 from fastapi接口.models.MQ.BaseMQModel import MQPropBase
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from fastapi接口.service.MQ.base.BasicAsyncClient import _mq_retry_wrapper
 from fastapi接口.service.MQ.base.MQClient.base import official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
-    upsert_milvus_bili_lot_data_prop
+    upsert_milvus_bili_lot_data_prop, get_broker
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 
 
-class RabbitBrokerContextManager:
-    def __init__(self, broker_url: str):
-        self.broker_url = broker_url
-        self.broker = None
 
-    async def __aenter__(self):
-        self.broker = RabbitBroker(url=CONFIG.RabbitMQConfig.broker_url)
-        await self.broker.connect(url=self.broker_url)
-        return self.broker
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        self.broker and await self.broker.close()
 
 
 def publisher_producer(mq_props: MQPropBase):
     async def publisher(message, extra_routing_key: str = ""):
-        async with RabbitBrokerContextManager(CONFIG.RabbitMQConfig.broker_url) as broker:
-            if extra_routing_key and type(extra_routing_key) is str:
-                routing_key = mq_props.routing_key_name + "." + extra_routing_key
-            else:
-                routing_key = mq_props.routing_key_name
-            await broker.publish(
-                message=message,
-                queue=mq_props.rabbit_queue,
-                exchange=mq_props.exchange,
-                routing_key=routing_key
-            )
+        broker = get_broker()
+        if extra_routing_key and type(extra_routing_key) is str:
+            routing_key = mq_props.routing_key_name + "." + extra_routing_key
+        else:
+            routing_key = mq_props.routing_key_name
+        await broker.publish(
+            message=message,
+            queue=mq_props.rabbit_queue,
+            exchange=mq_props.exchange,
+            routing_key=routing_key
+        )
 
     return publisher
 
@@ -127,4 +115,3 @@ class BiliLotDataPublisher:
         return await publisher(
             message=sqlalchemy_model_2_dict(body), extra_routing_key=extra_routing_key
         )
-

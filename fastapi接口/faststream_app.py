@@ -18,6 +18,7 @@ else:
 
     uvloop.install()
 from fastapi接口.utils.argParse import parse
+
 args = parse()
 print(f'运行 args:{args}')
 if not args.logger:
@@ -28,6 +29,7 @@ from fastapi接口.controller.v1.background_service.MQController import router
 import fastapi
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -40,4 +42,5 @@ app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=23334)
+
+    uvicorn.run(app, host="0.0.0.0", port=23334, loop="uvloop")

@@ -2,9 +2,7 @@ import asyncio
 import os
 import time
 from loguru import logger
-import fastapi接口.service.toutiao.src.spider.SpaceFeed.SpaceFeedScrapy as SpaceFeedScrapy
-
-ToutiaoSpaceFeedSpider, FileMap = SpaceFeedScrapy.ToutiaoSpaceFeedSpider, SpaceFeedScrapy.FileMap
+from fastapi接口.service.toutiao.src.spider.SpaceFeed.SpaceFeedScrapy import ToutiaoSpaceFeedSpider, FileMap
 
 
 class ToutiaoSpaceFeedLotService:

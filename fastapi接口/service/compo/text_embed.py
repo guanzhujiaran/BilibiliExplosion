@@ -1,6 +1,5 @@
 import asyncio
 from typing import List
-from fastapi_cache.decorator import cache
 from openai import AsyncOpenAI
 import fastapi接口.models.lottery_database.milvusModel.biliMilvusModel as biliMilvusModel
 import fastapi接口.service.compo.lottery_data_vec_sql.sql_helper as sql_helper
@@ -78,5 +77,4 @@ async def search_lottery_text(query_text: str, limit: int = 10) -> List[models.L
 
 
 if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(_create_embeddings('显卡'))
+    print(asyncio.run(_create_embeddings(['显卡'])))

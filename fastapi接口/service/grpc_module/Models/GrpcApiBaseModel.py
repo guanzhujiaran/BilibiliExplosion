@@ -1,6 +1,6 @@
 import secrets
 import time
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 
 from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import APIExClimbWuzhi
 
@@ -18,9 +18,9 @@ class MetaDataWrapper:
     exclimb_wuzhi_cfg: APIExClimbWuzhi
     cookie: str = ""
     times_352: int = 0
-    hash_id: str = secrets.token_hex(16)
+    hash_id: str = field(default_factory=lambda: secrets.token_hex(16))
     used_times: int = 0  # 使用次数
-    lastest_used_ts: int = int(time.time())
+    lastest_used_ts: int = field(default_factory=lambda: int(time.time()))
 
     def able(self, num_add=True) -> bool:
         """

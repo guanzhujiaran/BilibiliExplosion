@@ -1,4 +1,7 @@
 from faststream.rabbit import RabbitExchange, ExchangeType
+from faststream.rabbit.fastapi import RabbitRouter
+from CONFIG import CONFIG
+
 from fastapi接口.models.MQ.BaseMQModel import ExchangeName, MQPropBase, QueueName, RoutingKey
 
 
@@ -9,8 +12,21 @@ class BaseFastStreamMQ:
     async def consume(self, *args, **kwargs):
         raise NotImplementedError("子类必须实现此方法")
 
-exch = RabbitExchange(ExchangeName.bili_data.value, auto_delete=False, type=ExchangeType.TOPIC, durable=True)
 
+router = RabbitRouter(
+    CONFIG.RabbitMQConfig.broker_url,
+    include_in_schema=True,
+    logger=None,
+    max_consumers=500,  # 对于rabbitmq来说就是 prefetch_count
+    channel_number=10
+)
+
+
+def get_broker():
+    return router.broker
+
+
+exch = RabbitExchange(ExchangeName.bili_data.value, auto_delete=False, type=ExchangeType.TOPIC, durable=True)
 official_reserve_charge_lot_mq_prop = MQPropBase(
     queue_name=QueueName.OfficialReserveChargeLotMQ,
     routing_key_name=RoutingKey.OfficialReserveChargeLotMQ,

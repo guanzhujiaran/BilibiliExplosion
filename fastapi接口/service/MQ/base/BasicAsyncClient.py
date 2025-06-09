@@ -27,7 +27,7 @@ def _mq_retry_wrapper(max_retries: int = 5, delay: int = 10):
                     return await func(*args, **kwargs)
                 except Exception as e:
                     retries += 1
-                    MQ_logger.error(
+                    MQ_logger.exception(
                         f"MQ {func.__name__} 执行异常,参数：{args, kwargs}, 重试次数: {retries}/{max_retries}: {e}")
                     if max_retries <= 0 or retries < max_retries:
                         pass

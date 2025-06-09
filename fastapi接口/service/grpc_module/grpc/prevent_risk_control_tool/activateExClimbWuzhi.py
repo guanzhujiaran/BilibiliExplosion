@@ -5,7 +5,7 @@ import io
 import json
 import string
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Literal
 from urllib.parse import quote
 from CONFIG import CONFIG
@@ -53,12 +53,12 @@ class UuidInfoc:
 
 @dataclass
 class resolution:
-    w: int = random.randint(680, 3840)
-    h: int = random.randint(480, 2160)
-    window_w: int = random.randint(680, 3840)
-    window_h: int = random.randint(680, 3840)
-    avail_w: int = random.randint(680, 3840)
-    avail_h: int = random.randint(680, 3840)
+    w: int = field(default_factory=lambda: random.randint(680, 3840))
+    h: int = field(default_factory=lambda: random.randint(480, 2160))
+    window_w: int = field(default_factory=lambda: random.randint(680, 3840))
+    window_h: int = field(default_factory=lambda: random.randint(680, 3840))
+    avail_w: int = field(default_factory=lambda: random.randint(680, 3840))
+    avail_h: int = field(default_factory=lambda: random.randint(680, 3840))
 
 
 @dataclass
@@ -66,7 +66,7 @@ class APIExClimbWuzhi:
     _spi: str = "https://api.bilibili.com/x/frontend/finger/spi"
     _giaGateWayExClimbWuzhi: str = "https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi"
     _GenWebTicket = "https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket"
-    browser_resolution: resolution = resolution()
+    browser_resolution: resolution = field(default_factory=lambda: resolution())
     request_url = "https://www.bilibili.com/"
     ua: str = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
     cookie: str = ""
@@ -75,7 +75,7 @@ class APIExClimbWuzhi:
     bili_ticket_expires: str | int = ""
     deviceMemory: int = 8
     CPUCoreNum: int = 4
-    _uuid: str = UuidInfoc.gen()
+    _uuid: str = field(default_factory=lambda :UuidInfoc.gen())
     language: str = "zh-CN"
     timezone: str = "Asia/Shanghai"
     timezoneOffset: int = -480

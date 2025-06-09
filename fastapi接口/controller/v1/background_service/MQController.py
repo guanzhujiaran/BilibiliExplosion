@@ -7,8 +7,11 @@ from fastapi接口.service.MQ.base.MQClient.BiliLotDataFastStream import officia
 from faststream.rabbit.fastapi import RabbitMessage
 
 
-@router.subscriber(queue=official_reserve_charge_lot.mq_props.rabbit_queue,
-                   exchange=official_reserve_charge_lot.mq_props.exchange, retry=True)
+@router.subscriber(
+    queue=official_reserve_charge_lot.mq_props.rabbit_queue,
+    exchange=official_reserve_charge_lot.mq_props.exchange,
+    retry=True,
+)
 async def handle_official_reserve_charge_lot(
         body: LotDataReq,
         msg: RabbitMessage,
@@ -21,7 +24,9 @@ async def handle_official_reserve_charge_lot(
 
 
 @router.subscriber(queue=upsert_official_reserve_charge_lot.mq_props.rabbit_queue,
-                   exchange=upsert_official_reserve_charge_lot.mq_props.exchange, retry=True)
+                   exchange=upsert_official_reserve_charge_lot.mq_props.exchange,
+                   retry=True,
+                   )
 async def handle_upsert_official_reserve_charge_lot(
         newly_lot_data: Dict,
         msg: RabbitMessage,
@@ -34,7 +39,9 @@ async def handle_upsert_official_reserve_charge_lot(
 
 
 @router.subscriber(queue=upsert_lot_data_by_dynamic_id.mq_props.rabbit_queue,
-                   exchange=upsert_lot_data_by_dynamic_id.mq_props.exchange, retry=True)
+                   exchange=upsert_lot_data_by_dynamic_id.mq_props.exchange,
+                   retry=True,
+                   )
 async def handle_upsert_lot_data_by_dynamic_id(
         lot_data_dynamic_req: LotDataDynamicReq,
         msg: RabbitMessage,
@@ -46,8 +53,10 @@ async def handle_upsert_lot_data_by_dynamic_id(
     )
 
 
-@router.subscriber(queue=upsert_topic_lot.mq_props.rabbit_queue, exchange=upsert_topic_lot.mq_props.exchange,
-                   retry=True)
+@router.subscriber(queue=upsert_topic_lot.mq_props.rabbit_queue,
+                   exchange=upsert_topic_lot.mq_props.exchange,
+                   retry=True,
+                   )
 async def handle_upsert_topic_lot(
         body: TopicLotData,
         msg: RabbitMessage,
@@ -60,7 +69,9 @@ async def handle_upsert_topic_lot(
 
 
 @router.subscriber(queue=upsert_milvus_bili_lot_data.mq_props.rabbit_queue,
-                   exchange=upsert_milvus_bili_lot_data.mq_props.exchange, retry=True)
+                   exchange=upsert_milvus_bili_lot_data.mq_props.exchange,
+                   retry=True,
+                   )
 async def handle_upsert_milvus_bili_lot_data(
         body: Dict,
         msg: RabbitMessage,
@@ -70,4 +81,3 @@ async def handle_upsert_milvus_bili_lot_data(
         body,
         msg,
     )
-

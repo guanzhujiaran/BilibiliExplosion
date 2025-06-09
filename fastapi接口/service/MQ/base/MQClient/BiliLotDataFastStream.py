@@ -1,7 +1,11 @@
-from typing import Callable, Dict
-from faststream.rabbit.fastapi import RabbitRouter
-from faststream.rabbit.annotations import RabbitMessage
+import random
+from typing import Callable, Dict, Annotated
 
+import asyncio
+
+from fast_depends import Depends
+from faststream.rabbit import RabbitQueue
+from faststream.rabbit.fastapi import RabbitRouter, RabbitMessage, RabbitBroker
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
@@ -11,23 +15,11 @@ from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_s
 from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
 from fastapi接口.service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
-    upsert_milvus_bili_lot_data_prop
+    upsert_milvus_bili_lot_data_prop, router, get_broker
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import topic_robot
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from utl.pushme.pushme import pushme
-from CONFIG import CONFIG
-
-router = RabbitRouter(
-    CONFIG.RabbitMQConfig.broker_url,
-    include_in_schema=True,
-    logger=None,
-    max_consumers=1000,  # 对于rabbitmq来说就是 prefetch_count
-)
-
-
-def get_broker():
-    return router.broker
 
 
 def func_wrapper(func: Callable):
@@ -37,6 +29,43 @@ def func_wrapper(func: Callable):
         return await func(*args, **kwargs)
 
     return wrapper
+
+
+__test_queue = RabbitQueue(
+    name="test",
+)
+
+
+@router.after_startup
+async def _test(app):
+    await router.broker.publish("Hello!", __test_queue)
+
+
+@router.subscriber(__test_queue, retry=True)
+async def hello(
+        body: str,
+        msg: RabbitMessage,
+):
+    await asyncio.sleep(random.choice(range(0, 1000)))
+    is_ack = random.choice([True, False])
+    if is_ack:
+        ret = f"ACK!{body} from Rabbit subscriber test!"
+        # MQ_logger.info(ret)
+        await msg.ack()
+    else:
+        ret = f"NACK!{body} from Rabbit subscriber test!"
+        # MQ_logger.warning(ret)
+        await msg.nack()
+    return ret
+
+
+@router.publisher(__test_queue)
+@router.get('/test')
+async def _test_msg_pub(msg: str, broker: Annotated[RabbitBroker, Depends(get_broker)]):
+    ret = f"{msg} from Rabbit publisher test!"
+    # MQ_logger.debug(ret)
+    await broker.publish(msg, __test_queue)
+    return ret
 
 
 class OfficialReserveChargeLot(BaseFastStreamMQ):
@@ -54,17 +83,18 @@ class OfficialReserveChargeLot(BaseFastStreamMQ):
             lot_data = await get_lot_notice(
                 business_id=_body.business_id,
                 business_type=_body.business_type,
-                origin_dynamic_id=_body.origin_dynamic_id
+                origin_dynamic_id=_body.origin_dynamic_id,
+                use_custom_proxy=True
             )
             newly_lot_data = lot_data.get('data')
             if newly_lot_data:
-                MQ_logger.debug(f"newly_lot_data: {newly_lot_data}")
+                MQ_logger.info(f"newly_lot_data: {newly_lot_data}")
                 await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
                     newly_lot_data,
                     extra_routing_key="OfficialReserveChargeLotMQ")
                 # result = await asyncio.to_thread(grpc_sql_helper.upsert_lot_detail, newly_lot_data)
                 return await msg.ack()
-            MQ_logger.error(f"未获取到抽奖提示数据！参数：{_body}\t响应：{lot_data}")
+            MQ_logger.debug(f"未获取到抽奖提示数据！参数：{_body}\t响应：{lot_data}")
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{self.mq_props.queue_name} consume error: {e}')
@@ -91,9 +121,9 @@ class UpsertOfficialReserveChargeLot(BaseFastStreamMQ):
                 await BiliLotDataPublisher.pub_upsert_milvus_bili_lot_data(lot_data)
                 result = await grpc_sql_helper.upsert_lot_detail(newly_lot_data)
 
-                MQ_logger.critical(f"【{self.mq_props.queue_name}】upsert_lot_detail {newly_lot_data} result: {result}")
+                MQ_logger.info(f"【{self.mq_props.queue_name}】upsert_lot_detail {newly_lot_data} result: {result}")
                 return await msg.ack()
-            MQ_logger.error(
+            MQ_logger.debug(
                 f"【{self.mq_props.queue_name}】未获取到抽奖提示数据！参数：{newly_lot_data}")
             return await msg.ack()
         except Exception as e:
@@ -117,7 +147,7 @@ class UpsertLotDataByDynamicId(BaseFastStreamMQ):
     ):
         module_name = self.mq_props.queue_name
         try:
-            MQ_logger.critical(
+            MQ_logger.debug(
                 f"【{module_name}】收到消息：{lot_data_dynamic_req}")
             if lot_data_dynamic_req.dynamic_id:
                 dyn_detail = await dyn_detail_scrapy.get_grpc_single_dynDetail_by_dynamic_id(
@@ -132,10 +162,10 @@ class UpsertLotDataByDynamicId(BaseFastStreamMQ):
                     MQ_logger.info(
                         f"【{module_name}】获取到抽奖提示数据！参数：{lot_data_dynamic_req}")
                 else:
-                    MQ_logger.error(
+                    MQ_logger.debug(
                         f"【{module_name}】未获取到抽奖提示数据！参数：{lot_data_dynamic_req}")
                 return await msg.ack()
-            MQ_logger.error(
+            MQ_logger.debug(
                 f"未获取到【{module_name}】参数！参数：{lot_data_dynamic_req}")
             return await msg.ack()
         except Exception as e:
@@ -159,7 +189,7 @@ class UpsertTopicLot(BaseFastStreamMQ):
     ):
         module_name = self.mq_props.queue_name
         try:
-            MQ_logger.critical(
+            MQ_logger.debug(
                 f"【{module_name}】收到消息：{_body}")
             lot_data = await topic_robot.pipeline(_body.topic_id, use_sem=False)
             return await msg.ack()
@@ -184,7 +214,7 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
     ):
         module_name = self.mq_props.queue_name
         try:
-            MQ_logger.critical(
+            MQ_logger.debug(
                 f"【{module_name}】收到消息：{_body}")
             lot_data = Lotdata(**_body)
             da = await lot_data_2_bili_lot_data_ls(lot_data)
@@ -196,9 +226,16 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
             await msg.nack()
 
 
-
 official_reserve_charge_lot = OfficialReserveChargeLot()
 upsert_official_reserve_charge_lot = UpsertOfficialReserveChargeLot()
 upsert_lot_data_by_dynamic_id = UpsertLotDataByDynamicId()
 upsert_topic_lot = UpsertTopicLot()
 upsert_milvus_bili_lot_data = UpsertMilvusBiliLotData()
+
+if __name__ == '__main__':
+    from fastapi import FastAPI
+    import uvicorn
+
+    app = FastAPI()
+    app.include_router(router)
+    uvicorn.run(app, host="0.0.0.0", port=23332, loop="uvloop")

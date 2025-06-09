@@ -196,9 +196,3 @@ class FeedListApi:
         return feedListApiResp
 
 
-if __name__ == '__main__':
-    with open('../../../test/resp.txt', 'r', encoding='utf-8') as a:
-        d = json.load(a)
-        c = json.dumps(d)
-    f = FeedListApi(c)
-    print(f.UsefulInfo)

@@ -105,7 +105,7 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
                                                                              headers=_gen_headers(),
                                                                              proxies=_custom_proxy
                                                                              )
-            resp = await resp.json()
+            resp = resp.json()
         else:
             resp = await get_request_func(use_custom_proxy=use_custom_proxy)(url=url, method='get', params=params,
                                                                              headers=_gen_headers(),
@@ -548,5 +548,5 @@ async def resource_abtest_abserver(
 
 if __name__ == "__main__":
     # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
-    _____x = asyncio.run(reserve_relation_info(38640195, True, True))
+    _____x = asyncio.run(get_lot_notice(2, 38640195, None, True))
     print(_____x)
