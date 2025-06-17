@@ -1,53 +1,54 @@
 # -*- coding: utf-8 -*-
 # 成功代理：\{'http': 'http://(?!.*(192)) 查找非192本地代理
-import string
-from ssl import SSLError
-
-import curl_cffi
-from google.protobuf.message import DecodeError, EncodeError
-from google.protobuf.json_format import MessageToDict  # 这是第三方包，不用管
-import gzip
 import asyncio
 import base64
 import datetime
+import gzip
+import json
 import os
 import random
 import time
 import uuid
+from ssl import SSLError
 from typing import Union
+from urllib.parse import urlparse
+
+import curl_cffi
 import grpc
 from exceptiongroup import ExceptionGroup
-import json
+from google.protobuf.json_format import MessageToDict  # 这是第三方包，不用管
+from google.protobuf.message import DecodeError, EncodeError
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
     Response, WriteError, NetworkError
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
-from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2 import Config, AdParam, \
-    DynDetailReq, DynDetailReply, DynDetailsReq, DynSpaceReq, DynSpaceRsp
-from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2_grpc import DynamicStub
+
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import BiliGrpcApi_logger
-from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import voucher_rabbit_mq
 from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request352Error
 from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataWrapper
-from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import voucher_rabbit_mq
-from utl.代理.数据库操作.ProxyEvent import handle_proxy_succ, handle_proxy_request_fail, handle_proxy_352, \
-    handle_proxy_unknown_err
-from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
+from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
 from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import GeetestV3Breaker
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_latest_version_builds, resource_abtest_abserver
 from fastapi接口.service.grpc_module.grpc.bapi.models import LatestVersionBuild
-from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2 import Config, DynDetailReq, \
+    DynDetailReply, DynDetailsReq, DynSpaceReq, DynSpaceRsp
+from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2_grpc import DynamicStub
 from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, \
     APIExClimbWuzhi
+from fastapi接口.utils.Common import asyncio_gather
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from utl.designMode.asyncPool import BaseAsyncPool
-from utl.代理.request_with_proxy import request_with_proxy
-from CONFIG import CONFIG
 from utl.代理.SealedRequests import my_async_httpx
-from urllib.parse import urlparse
-from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
-from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
-from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
+from utl.代理.request_with_proxy import request_with_proxy
 from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
+from utl.代理.数据库操作.ProxyEvent import handle_proxy_succ, handle_proxy_request_fail, handle_proxy_352, \
+    handle_proxy_unknown_err
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
+from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
+from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 
 current_file_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -440,20 +441,17 @@ class BiliGrpc:
                         '-352' in str(resp.headers.get('grpc-Message')) or \
                         '-412' in str(resp.headers.get('bili-status-code')) or \
                         '-412' in str(resp.headers.get('grpc-Message')):  # -352的话尝试把这个metadata丢弃
-
-                    # self._352MQServer.push_voucher_info(
-                    #     voucher=resp.headers.get('x-bili-gaia-vvoucher'),
-                    #     ua=headers.get('user-agent'),
-                    #     ck=headers.get('buvid'),
-                    #     origin=f"https://{parsed_url.netloc}",
-                    #     referer=url,
-                    #     ticket=headers.get('x-bili-ticket'),
-                    #     version=md.version_name
-                    # )
+                    self.grpc_api_any_log.critical(
+                        f'\n-352报错！\n'
+                        f'url:{url}\n'
+                        f'body:{grpc_req_message}'
+                        f'headers:{new_headers}\n'
+                        f'token:{validate_token}\n'
+                        f'{sqlalchemy_model_2_dict(proxy)}')
                     if not validate_token:
                         # self.grpc_api_any_log.debug(f'未携带validate_token报错-352')
                         parsed_url = urlparse(url)
-                        validate_token, _ = await asyncio.gather(
+                        validate_token, _ = await asyncio_gather(
                             *[self.GeetestV3BreakerPool.do(
                                 v_voucher=resp.headers.get('x-bili-gaia-vvoucher'),
                                 ua=headers.get('user-agent'),
@@ -469,14 +467,13 @@ class BiliGrpc:
                                     my_cfg=md.exclimb_wuzhi_cfg,
                                     _from="h5"
                                 )
-                            ]
+                            ],
+                            log=self.grpc_api_any_log
                         )
                         if validate_token:
                             self.grpc_api_any_log.debug(f'获取到-352验证token:{validate_token}')
                             continue
                         else:
-                            self.grpc_api_any_log.critical(
-                                f'\n未获取到-352验证token:{validate_token}\n{sqlalchemy_model_2_dict(proxy)}')
                             raise Request352Error(
                                 f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，遇到-352，未获取到-352验证token',
                                 -352
@@ -625,15 +622,15 @@ class BiliGrpc:
             rid = int(rid)
         if type(rid) is not int:
             raise TypeError(f'rid must be number! rid:{rid}')
-        url = "https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail"
+        url = "https://grpc.biliapi.net/bilibili.app.dynamic.v2.Dynamic/DynDetail"
         data_dict = {
             # 'uid': random.randint(1, 3537105317792299),
             'dyn_type': dynamic_type,
             'rid': rid,
-            "ad_param": AdParam(
-                ad_extra=''.join(random.choices(string.ascii_uppercase + string.digits,
-                                                k=random.choice([x for x in range(1300, 1350)])))
-            ),
+            # "ad_param": AdParam(
+            #     ad_extra=''.join(random.choices(string.ascii_uppercase + string.digits,
+            #                                     k=random.choice([x for x in range(1300, 1350)])))
+            # ),
             'player_args': PlayerArgs(qn=32, fnval=272, voice_balance=1, voice_any=1),
             'share_id': 'dt.dt-detail.0.0.pv',
             'share_mode': 3,
@@ -660,7 +657,7 @@ class BiliGrpc:
             dynamic_id = str(dynamic_id)
         if type(dynamic_id) is not str or not str.isdigit(dynamic_id):
             raise TypeError(f'dynamic_id must be string type number! dynamic_id:{dynamic_id}')
-        url = "https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynDetail"
+        url = "https://grpc.biliapi.net/bilibili.app.dynamic.v2.Dynamic/DynDetail"
         data_dict = {
             # 'uid': random.randint(1, 3537105317792299),
             'dynamic_id': dynamic_id,
@@ -695,7 +692,7 @@ class BiliGrpc:
         if type(uid) is not int or type(history_offset) is not str:
             raise TypeError(
                 f'uid must be a number and history_offset must be str! uid:{uid} history_offset:{history_offset}')
-        url = "https://app.bilibili.com/bilibili.app.dynamic.v2.Dynamic/DynSpace"
+        url = "https://grpc.biliapi.net/bilibili.app.dynamic.v2.Dynamic/DynSpace"
         data_dict = {
             'host_uid': int(uid),
             'history_offset': history_offset,

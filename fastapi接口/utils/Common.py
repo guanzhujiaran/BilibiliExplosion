@@ -1,11 +1,12 @@
 import asyncio
-import random
+import concurrent.futures
 from typing import Callable
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from loguru import _logger
 from sqlalchemy.exc import InternalError
+
 from fastapi接口.log.base_log import myfastapi_logger, sql_log
-import concurrent.futures
 
 GLOBAL_SCHEDULER = AsyncIOScheduler()
 GLOBAL_SEM_LIMIT_NUM = 500
@@ -13,7 +14,7 @@ GLOBAL_SEM = asyncio.Semaphore(GLOBAL_SEM_LIMIT_NUM)
 _comm_lock = asyncio.Lock()
 
 
-def sem_gen(sem_limit=500):
+def sem_gen(sem_limit=50):
     return asyncio.Semaphore(sem_limit)
 
 
@@ -43,6 +44,7 @@ def comm_wrapper(func):
 
 def comm_sem_wrapper(sem_limit=100):
     sem = sem_gen(sem_limit)
+
     def wrapper_outter(func):
         async def wrapper(*args, **kwargs):
             async with sem:
@@ -50,7 +52,9 @@ def comm_sem_wrapper(sem_limit=100):
                 return res
 
         return wrapper
+
     return wrapper_outter
+
 
 def sem_wrapper(func):
     async def wrapper(*args, **kwargs):
@@ -117,11 +121,19 @@ def sql_retry_wrapper(_func: Callable) -> Callable:
                 return res
             except InternalError as internal_error:
                 sql_log.error(internal_error)
-                await asyncio.sleep(random.choice([5, 6, 7]))
+                await asyncio.sleep(60)
                 continue
             except Exception as e:
                 sql_log.exception(e)
-                await asyncio.sleep(random.choice([5, 6, 7]))
+                await asyncio.sleep(60)
                 continue
 
     return wrapper
+
+
+async def asyncio_gather(*coros_or_futures, log: _logger = myfastapi_logger):
+    results = await asyncio.gather(*coros_or_futures, return_exceptions=True)
+    for result in results:
+        if isinstance(result, Exception):
+            log.opt(exception=True).exception(result)
+    return results

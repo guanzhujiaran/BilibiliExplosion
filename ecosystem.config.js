@@ -6,6 +6,8 @@ module.exports = {
         interpreter: 'venv/bin/python',
         env: {"LANG": "zh_CN.UTF-8"},
         args: "--logger 0", //是否开启fastapi的日志
+        error_file: '/dev/null',
+        out_file: '/dev/null',
     },
         // { //已经整合到fastapi中，不需要单独启动
         //     name: "faststream_app",

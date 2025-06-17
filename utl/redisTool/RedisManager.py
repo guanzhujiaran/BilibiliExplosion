@@ -2,17 +2,20 @@ import asyncio
 import random
 import time
 import traceback
-from typing import Union, Any, List, Dict, AsyncIterator, Optional
 from datetime import timedelta
-import redis.asyncio as redis
-from enum import Enum
-from redis.typing import KeyT
-from redis.exceptions import ConnectionError, BusyLoadingError
-from CONFIG import CONFIG
-import redis as sync_redis
-from fastapi接口.log.base_log import redis_logger
+from enum import StrEnum
+from typing import Union, Any, List, Dict, AsyncIterator, Optional
 
-_MAX_SEM_NUM = 1024
+import redis as sync_redis
+import redis.asyncio as redis
+from redis.exceptions import ConnectionError, BusyLoadingError
+from redis.typing import KeyT
+
+from CONFIG import CONFIG
+from fastapi接口.log.base_log import redis_logger
+from fastapi接口.utils.Common import asyncio_gather
+
+_MAX_SEM_NUM = 4096
 _sem = asyncio.Semaphore(_MAX_SEM_NUM)
 
 
@@ -99,7 +102,7 @@ class SyncRedisManagerBase:
     RedisMap: 枚举Redis的key
     """
 
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         pass
 
     def __init__(self,
@@ -177,7 +180,7 @@ class RedisManagerBase:
     异步版本redis基类
     """
 
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         pass
 
     def __init__(self, host: str = CONFIG.database.proxyRedis.host,
@@ -458,7 +461,7 @@ class RedisManagerBase:
             if count > 1:
                 random_nums = random.sample(range(total), count)
                 async with r.pipeline() as pipe:
-                    await asyncio.gather(*[pipe.zrange(key, i, i) for i in random_nums])
+                    await asyncio_gather(*[pipe.zrange(key, i, i) for i in random_nums], log=redis_logger)
                 values = await pipe.execute()
                 return values
             else:
@@ -489,10 +492,10 @@ class RedisManagerBase:
                 for i in range(0, len(hm_k_v_List), chunk_size):
                     # 获取当前批次的元素
                     chunk_kv = hm_k_v_List[i:i + chunk_size]
-                    # 遍历当前批次的元素
-                    for idx in range(len(chunk_kv)):
-                        # 将当前批次的元素添加到管道中
-                        await pipe.hset(hm_name, mapping=chunk_kv[idx])
+                    result = {}
+                    for d in chunk_kv:
+                        result.update(d)
+                    await pipe.hset(hm_name, mapping=result)
                     # 执行当前批次的命令
                     await pipe.execute()  # 执行当前批次的命令
 
@@ -509,12 +512,18 @@ class RedisManagerBase:
         async with redis_client_factory(pool=self.pool) as r:
             return await r.hgetall(name=name)
 
+    @retry
     async def _hmget(self, name, key):
         async with redis_client_factory(pool=self.pool) as r:
             return await r.hget(name=name, key=key)
 
     @retry
-    async def _hmdel(self, name):
+    async def _hdel(self, name: str, *keys: str):
+        async with redis_client_factory(pool=self.pool) as r:
+            return await r.hdel(name=name, *keys)
+
+    @retry
+    async def _delete(self, name):
         async with redis_client_factory(pool=self.pool) as r:
             return await r.delete(name)
 
@@ -586,10 +595,12 @@ class RedisManagerBase:
         async with redis_client_factory(pool=self.pool) as r:
             return await r.zrem(key, *elements_to_remove)
 
+
 if __name__ == "__main__":
     async def _test():
         __ = RedisManagerBase()
         ___ = await __.exists('ip_list')
         print(___)
+
 
     asyncio.run(_test())

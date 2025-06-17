@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
-# 自己本地的fastapi封装接口服务 这是一个sqlite3数据库的接口，使用proxy相关操作
+import asyncio
 import io
 import os
 import sys
-import objgraph
-import asyncio
-from loguru import logger
+import traceback
 from contextlib import asynccontextmanager
+
+import fastapi_cdn_host
+import objgraph
+from fastapi import FastAPI, HTTPException
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
-import fastapi_cdn_host
-from fastapi import FastAPI, HTTPException
+from loguru import logger
 from starlette.requests import Request
 from starlette.responses import Response
-import traceback
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../'))  # 将CONFIG导入
 current_dir = os.path.dirname(__file__)
@@ -38,7 +38,7 @@ else:
     uvloop.install()
 from fastapi接口.log.base_log import myfastapi_logger
 from utl.pushme.pushme import pushme
-from fastapi接口.utils.Common import GLOBAL_SCHEDULER
+from fastapi接口.utils.Common import GLOBAL_SCHEDULER, asyncio_gather
 from fastapi接口.controller.damo import DamoML
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
 from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
@@ -47,20 +47,21 @@ from fastapi接口.controller.v1.ip_info import get_ip_info
 from fastapi接口.controller.v1.background_service import BackgroundService
 from fastapi接口.controller.common import CommonRouter
 from fastapi接口.controller.v1.background_service import MQController
+from fastapi接口.controller.v1.samsClub import samsClubController
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
-    GLOBAL_SCHEDULER.start()
     show_log = False
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
+    GLOBAL_SCHEDULER.start()
     yield
     myfastapi_logger.critical("正在取消其他服务")
     [
         x.cancel() for x in back_ground_tasks
     ]
-    await asyncio.gather(*back_ground_tasks, return_exceptions=True)
+    await asyncio_gather(*back_ground_tasks, log=myfastapi_logger)
     myfastapi_logger.critical("其他服务已取消")
 
 
@@ -74,6 +75,7 @@ app.include_router(get_ip_info.router)
 app.include_router(BackgroundService.router)
 app.include_router(CommonRouter.router)
 app.include_router(MQController.router)
+app.include_router(samsClubController.router)
 FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
 
 

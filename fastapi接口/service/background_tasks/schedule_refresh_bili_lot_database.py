@@ -3,17 +3,20 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from typing import Union
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
 from fastapi接口.dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
+from fastapi接口.log.base_log import background_task_logger
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticRankDateTypeEnum
 from fastapi接口.scripts.database.同步向量数据库.sync_bili_lottery_data import sync_bili_lottery_data, \
     del_outdated_bili_lottery_data
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import \
     grpc_sql_helper as bili_official_sqlhelper
-from fastapi接口.log.base_log import background_task_logger
 from fastapi接口.service.opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import ReserveScrapyRobot
+from fastapi接口.utils.Common import asyncio_gather
 from utl.pushme.pushme import async_pushme_try_catch_decorator, pushme
 
 _scheduler_start_hour = 4  # 定时任务开始时间：凌晨4点
@@ -70,13 +73,13 @@ async def __sync_2_redis(_lot_type: BiliLotStatisticLotTypeEnum, sync_ts_flag: b
                 )
             )
     # 并发执行任务
-    await asyncio.gather(*_tasks)
+    await asyncio_gather(*_tasks, log=background_task_logger)
     # 如果需要同步时间戳，则将当前时间戳存入Redis
     if sync_ts_flag:
         await lottery_data_statistic_redis.set_sync_ts(lot_type=_lot_type, ts=int(time.time()))
 
 
-async def _refresh_bili_lot_database(is_api_update:bool=True):
+async def _refresh_bili_lot_database(is_api_update: bool = True):
     """
     同步官方抽奖、充电抽奖和预约抽奖
     :return:
@@ -95,15 +98,16 @@ async def _refresh_bili_lot_database(is_api_update:bool=True):
         # 初始化官方抽奖提取器
         extract_official_lottery = ExtractOfficialLottery()
         # 并发执行预约抽奖机器人和官方抽奖提取器的刷新任务
-        await asyncio.gather(
+        await asyncio_gather(
             reserve_robot.refresh_not_drawn_lottery(),
-            extract_official_lottery.get_all_lots(is_api_update=True)
+            extract_official_lottery.get_all_lots(is_api_update=True),
+            log=background_task_logger
         )
     # 创建任务列表，用于同步抽奖数据到Redis
     tasks.extend([__sync_2_redis(i) for i in BiliLotStatisticLotTypeEnum])
     tasks.append(__sync_bili_user_info_simple())
     # 并发执行任务
-    await asyncio.gather(*tasks)
+    await asyncio_gather(*tasks, log=background_task_logger)
 
 
 @async_pushme_try_catch_decorator
@@ -149,6 +153,7 @@ async def async_schedule_refresh_bili_lotdata_database(schedule_mark: bool = Tru
     else:
         await _async_run(None, schedule_mark)
 
+
 if __name__ == "__main__":
     async def _test():
         start_ts, end_ts = BiliLotStatisticRankDateTypeEnum.month.get_start_end_ts()
@@ -159,22 +164,32 @@ if __name__ == "__main__":
             rank_type=BiliLotStatisticRankTypeEnum.first
         )
         print(res)
+
+
     async def _test2():
         start_ts, end_ts = BiliLotStatisticRankDateTypeEnum.month.get_start_end_ts()
         res = await bili_official_sqlhelper.get_lottery_result(
             uid=99929465,
             start_ts=start_ts,
             end_ts=end_ts,
-            business_type= BiliLotStatisticLotTypeEnum.lot_type_2_business_type(BiliLotStatisticLotTypeEnum.official),
-            rank_type = BiliLotStatisticRankTypeEnum.total,
-            offset = 0,
-            limit = 10
+            business_type=BiliLotStatisticLotTypeEnum.lot_type_2_business_type(BiliLotStatisticLotTypeEnum.official),
+            rank_type=BiliLotStatisticRankTypeEnum.total,
+            offset=0,
+            limit=10
         )
         print(res)
+
+
     async def _test_get_next_run_date():
         print(await _get_next_run_date())
+
+
     async def _test_async_run():
         await _async_run(None, False)
+
+
     async def _test_refresh_bili_lot_database():
         await _refresh_bili_lot_database(is_api_update=False)
+
+
     asyncio.run(_test_refresh_bili_lot_database())

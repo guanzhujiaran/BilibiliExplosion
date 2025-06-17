@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import Optional, Dict
 from pydantic import Field
 from pydantic import computed_field
@@ -256,7 +256,7 @@ class BiliLotStatisticLotteryResultResp(CustomBaseModel):
     total: int
 
 
-class BiliLotStatisticLotTypeEnum(str, Enum):
+class BiliLotStatisticLotTypeEnum(StrEnum):
     official = "official"
     reserve = "reserve"
     charge = "charge"
@@ -272,14 +272,14 @@ class BiliLotStatisticLotTypeEnum(str, Enum):
         return mapping.get(lot_type, 0)
 
 
-class BiliLotStatisticRankTypeEnum(str, Enum):
+class BiliLotStatisticRankTypeEnum(StrEnum):
     first = "first"
     second = "second"
     third = "third"
     total = "total"
 
 
-class BiliLotStatisticRankDateTypeEnum(str, Enum):
+class BiliLotStatisticRankDateTypeEnum(StrEnum):
     month = "month"  # 当月
     pre_month = "pre_month"  # 上月
     year = 'year'

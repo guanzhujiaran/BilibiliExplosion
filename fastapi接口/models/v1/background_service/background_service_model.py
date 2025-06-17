@@ -5,7 +5,7 @@ from pydantic import computed_field, Field
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
 
-class OthersLotStatusResp(CustomBaseModel):
+class ProgressStatusResp(CustomBaseModel):
     succ_count: int = 0
     start_ts: int = 0
     total_num: int = 0

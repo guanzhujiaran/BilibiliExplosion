@@ -41,7 +41,7 @@ class UserMap(Enum):
 
 def create_logger(user: UserMap) -> Logger:
     user_uq_value = uuid.uuid4().hex + user.value
-    _user_logger = logger.bind(user=user_uq_value)
+    _user_logger = logger.opt(lazy=True).bind(user=user_uq_value)
     _user_logger.add(
         os.path.join(
             os.path.dirname(os.path.abspath(__file__)),

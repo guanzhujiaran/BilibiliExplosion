@@ -1,12 +1,12 @@
 import asyncio
 import time
-from enum import Enum
+from enum import StrEnum
 from CONFIG import CONFIG
 from utl.redisTool.RedisManager import RedisManagerBase
 
 
 class LotDataRedisObj(RedisManagerBase):
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         add_dynamic_lottery_queue = "add_dynamic_lottery_queue"
 
     def __init__(self):

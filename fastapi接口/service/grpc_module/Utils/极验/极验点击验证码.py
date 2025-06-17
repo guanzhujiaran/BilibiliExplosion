@@ -6,6 +6,8 @@ from typing import Union
 import requests
 import httpx
 import bili_ticket_gt_python
+
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import Voucher352_logger
 from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
 from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import GeetestRegInfo, \
@@ -69,10 +71,7 @@ class GeetestV3Breaker:
             url='https://api.bilibili.com/x/gaia-vgate/v1/register',
             data=data,
             headers=headers_raw,
-            # proxies={
-            #     'http://': CONFIG.CONFIG.my_ipv6_addr,
-            #     'https://': CONFIG.CONFIG.my_ipv6_addr
-            # }
+            proxy=CONFIG.my_ipv6_addr,
         )
         resp_json = response.json()
         if resp_json.get('code') == 0:
@@ -148,10 +147,7 @@ class GeetestV3Breaker:
             url=url,
             data=data,
             headers=headers_raw,
-            # proxies={
-            #     'http://': CONFIG.CONFIG.my_ipv6_addr,
-            #     'https://': CONFIG.CONFIG.my_ipv6_addr
-            # }
+            # proxy=CONFIG.my_ipv6_addr,
         )
         resp_json = req.json()
         if resp_json.get('code') != 0:
@@ -186,8 +182,8 @@ class GeetestV3Breaker:
             self.succ_stats.total_time += 1
             if 1 or use_bili_ticket_gt:
                 if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
-                                                               geetest_reg_info.geetest_challenge):
-                    self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
+                                                         geetest_reg_info.geetest_challenge):
+                    self.log.critical(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
                     validate_result = GeetestV3Breaker.validate_geetest(
                         geetest_reg_info.geetest_challenge,
                         geetest_reg_info.token,
@@ -203,8 +199,6 @@ class GeetestV3Breaker:
                         self.succ_stats.succ_time += 1
                     return validate_result
         except Exception as e:
-            if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
-                return ''
             self.log.error(f'极验验证失败！{e}')
             self.succ_stats.total_time -= 1
         finally:
@@ -218,7 +212,7 @@ class GeetestV3Breaker:
                                          ticket: str = "",
                                          version: str = "",
                                          session_id: str = "",
-                                         use_bili_ticket_gt=True,):
+                                         use_bili_ticket_gt=True, ):
         h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
@@ -230,9 +224,9 @@ class GeetestV3Breaker:
             # 验证码获取成功才加1
             self.succ_stats.total_time += 1
             if 1 or use_bili_ticket_gt:
-                if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
-                                                               geetest_reg_info.geetest_challenge):
-                    self.log.debug(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
+                gt, challenge = geetest_reg_info.geetest_gt, geetest_reg_info.geetest_challenge
+                if validation := await asyncio.to_thread(self.click.simple_match_retry, gt, challenge):
+                    self.log.critical(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
                     validate_result = await validate_geetest(
                         geetest_reg_info.geetest_challenge,
                         geetest_reg_info.token,
@@ -248,9 +242,7 @@ class GeetestV3Breaker:
                         self.succ_stats.succ_time += 1
                     return validate_result
         except Exception as e:
-            if str(e) == 'RuntimeError: bili_ticket极验模块错误 { 错误类型: MissingParam("data") }':
-                return ''
-            self.log.debug(e)
+            self.log.error(f'极验验证失败！{e}')
             self.succ_stats.total_time -= 1
         finally:
             ...

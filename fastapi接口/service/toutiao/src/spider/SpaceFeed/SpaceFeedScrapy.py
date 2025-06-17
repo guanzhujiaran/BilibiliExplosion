@@ -5,13 +5,14 @@ import os.path
 import time
 from dataclasses import field, dataclass
 from typing import Dict, Tuple
-from loguru import logger
+from fastapi接口.log.base_log import toutiao_api_logger
 from Bilibili_methods.all_methods import methods as Bilimethods
 from fastapi接口.service.toutiao.src.Tools.ApiTools.APIRespTool import FeedListApi, FeedData, CellType
 from fastapi接口.service.toutiao.src.Tools.Common.ZlibToos import strToBlob
 from fastapi接口.service.toutiao.src.Tools.ApiTools.API import ToutiaoAPI
 from fastapi接口.service.toutiao.src.db.SqlHelper import SqlHelperSpaceFeedDataDb
 from fastapi接口.service.toutiao.src.db.models import TFEEDDATA
+from fastapi接口.utils.Common import asyncio_gather
 
 current_dir = os.path.dirname(__file__)
 
@@ -104,7 +105,7 @@ class ToutiaoSpaceFeedSpider:
                 if setting.get('user_id_list'):
                     self.user_id_list = setting.get('user_id_list')
             except Exception:
-                logger.error(f'读取配置文件出错，请检查文件格式是否正确！')
+                toutiao_api_logger.error(f'读取配置文件出错，请检查文件格式是否正确！')
 
     def load_last_spider_result(self):
 
@@ -209,13 +210,13 @@ class ToutiaoSpaceFeedSpider:
 
             # 终止条件
             if check_result[0]:
-                logger.info(f'{user_id}：遇到上一轮有过的动态了！停止继续获取用户空间！')
+                toutiao_api_logger.info(f'{user_id}：遇到上一轮有过的动态了！停止继续获取用户空间！')
                 break
             if not has_more:
-                logger.info(f'{user_id}：当前空间没有更多动态了！停止继续获取用户空间！')
+                toutiao_api_logger.info(f'{user_id}：当前空间没有更多动态了！停止继续获取用户空间！')
                 break
             if int(time.time()) - publish_time >= self.max_sep_time:
-                logger.info(
+                toutiao_api_logger.info(
                     f'{user_id}(总获取数目：{update_num}条)：{datetime.datetime.fromtimestamp(publish_time)}超过最长间隔时间{self.max_sep_time}秒！停止继续获取用户空间！')
                 break
         self.newest_spider_user_id_recorder[user_id].update_num = update_num
@@ -267,7 +268,7 @@ class ToutiaoSpaceFeedSpider:
                     publish_Date = datetime.datetime.fromtimestamp(publish_time).strftime('%Y-%m-%d %H:%M:%S')
                     user_id = origin_thread.user.user_id
                     if self.BAPI.choujiangxinxipanduan(content):
-                        logger.info(f'''
+                        toutiao_api_logger.info(f'''
 ---------------------------------
 【不是抽奖】
 发布者：{name}  {origin_thread.user.jumpUrl()}
@@ -277,7 +278,7 @@ class ToutiaoSpaceFeedSpider:
 ++++++++++++++++++++++++++++++++++
 ''')
                         continue
-                    logger.debug(f'''
+                    toutiao_api_logger.debug(f'''
 ---------------------------------
 【抽奖】
 发布者：{name}  {origin_thread.user.jumpUrl()}
@@ -298,18 +299,18 @@ class ToutiaoSpaceFeedSpider:
                         publish_Date=publish_Date
                     )
                     lot_data_list.append(lot_data)
-        logger.info(
+        toutiao_api_logger.info(
             f'最终结果：\n抽奖动态：{len(lot_data_list)}条\n全部动态：{len(self.container.FeedDataList)}条\n抽奖动态率：{round((len(lot_data_list) / (len(self.container.FeedDataList)) * 100 + 1), 2)}%')
         return lot_data_list
 
     async def main(self):
         task_list = []
         self.load_config()
-        logger.info(f'开始获取{self.user_id_list}')
+        toutiao_api_logger.info(f'开始获取{self.user_id_list}')
         for i in self.user_id_list:
             task = asyncio.create_task(self.getSpaceFeed(i))
             task_list.append(task)
-        await asyncio.gather(*task_list, return_exceptions=False)
+        await asyncio_gather(*task_list, log=toutiao_api_logger)
         self.round_end()
 
 

@@ -7,10 +7,12 @@ import json
 import re
 import time
 from datetime import datetime
+
 import bs4
+
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import sql_log
-from fastapi接口.utils.Common import sem_wrapper, sem_gen, retry_wrapper
+from fastapi接口.utils.Common import sem_gen, retry_wrapper, asyncio_gather
 from utl.代理.SealedRequests import my_async_httpx
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
@@ -30,7 +32,7 @@ class GetProxyMethods:
     get_proxy_sep_time = 2 * 3600  # 获取代理的间隔
     check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
     GetProxy_Flag = False
-    _sem = sem_gen()
+    _sem = sem_gen(100)
 
     # region a从代理网站获取代理
 
@@ -2507,7 +2509,7 @@ class GetProxyMethods:
             proxies = []
 
             for i in req.text.split('\n'):
-                addr = ''.join(re.findall('\d+.\d+.\d+.\d+', i.strip()))
+                addr = ''.join(re.findall(r'\d+.\d+.\d+.\d+', i.strip()))
                 if addr:
                     append_dict = format_proxy(i)
                     if not append_dict:
@@ -2795,36 +2797,32 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = 'https://api.lumiproxy.com/web_v1/free-proxy/list?page_size=6000&page=1&language=zh-hans'
-
-        while 1:
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False,
-                                           timeout=self.timeout)
-            if req:
-                req_dict = req.json()
-                http_p = req_dict.get('data').get('list')
-                for da in http_p:
-                    ip = da.get('ip')
-                    port = da.get('port')
-                    protocol_type = da.get('protocol')
-                    if protocol_type == 1:
-                        protocol = 'http'
-                    elif protocol_type == 2:
-                        protocol = 'https'
-                    elif protocol_type == 4:
-                        protocol = 'socks4'
-                    elif protocol_type == 8:
-                        protocol = 'socks5'
-                    else:
-                        protocol = 'http'
-                    proxy_queue.append(format_proxy(f'{ip}:{port}', protocol=protocol))
-                if len(proxy_queue) < 10:
-                    self.log.info(f'{req.text}, {url}')
-                self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
-                break
-            else:
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                       timeout=self.timeout)
+        if req:
+            req_dict = req.json()
+            http_p = req_dict.get('data').get('list')
+            for da in http_p:
+                ip = da.get('ip')
+                port = da.get('port')
+                protocol_type = da.get('protocol')
+                if protocol_type == 1:
+                    protocol = 'http'
+                elif protocol_type == 2:
+                    protocol = 'https'
+                elif protocol_type == 4:
+                    protocol = 'socks4'
+                elif protocol_type == 8:
+                    protocol = 'socks5'
+                else:
+                    protocol = 'http'
+                proxy_queue.append(format_proxy(f'{ip}:{port}', protocol=protocol))
+            if len(proxy_queue) < 10:
                 self.log.info(f'{req.text}, {url}')
-                get_proxy_success = False
-                break
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+            get_proxy_success = False
         return proxy_queue, get_proxy_success
 
     async def get_proxy_from_proxylist_geonode_com(self) -> tuple[list, bool]:
@@ -2835,10 +2833,8 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://proxylist.geonode.com/api/proxy-list'
-        page = 1
-        total_count = 0
         limit = 500
-        while 1:
+        for page in range(1, self.get_proxy_page + 1):
             params = {
                 "limit": limit,
                 "page": page,
@@ -2865,7 +2861,6 @@ class GetProxyMethods:
                 self.log.info(f'{req.text}, {url}')
                 get_proxy_success = False
                 break
-            page += 1
             if page * limit >= total_count:
                 break
         return proxy_queue, get_proxy_success
@@ -3011,41 +3006,40 @@ class GetProxyMethods:
         start_ts = int(time.time())
         self.log.critical(
             f'开始获取代理\t上次获取代理时间：{datetime.fromtimestamp(self.get_proxy_timestamp)}\t{datetime.now()}')
-        proxy_queue = []
+        proxy_list = []
         funcs = inspect.getmembers(get_proxy_methods, predicate=inspect.iscoroutinefunction)
         tasks = set()
         for name, fn in funcs:
             if name.startswith('get_proxy_from'):
-                task = asyncio.create_task(fn())
+                task = fn()
                 tasks.add(task)
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio_gather(*tasks, log=self.log)
         for result in results:
             if isinstance(result, Exception) is True:
-                self.log.opt(exception=True).error(f'获取代理出错！{result}')
                 continue
             _, get_proxy_success = result
-            proxy_queue.extend(_)
+            proxy_list.extend(_)
         _s = set()
         _t = []
-        for i in proxy_queue:
+        for i in proxy_list:
             if list(i.values())[0] in _s:
                 continue
             else:
                 _t.append(i)
                 _s.add(list(i.values())[0])
-        del proxy_queue
-        proxy_queue = _t
+        del proxy_list
+        proxy_list = _t
 
-        self.log.info(f'最终共有{len(proxy_queue)}个代理需要检查')
-        for i in range(len(proxy_queue)):
-            task = asyncio.create_task(self._check_ip_by_bili_zone(proxy_queue.pop()))
+        self.log.info(f'最终共有{len(proxy_list)}个代理需要检查')
+        for i in range(len(proxy_list)):
+            task = self._check_ip_by_bili_zone(proxy_list.pop())
             tasks.add(task)
-        await asyncio.gather(*tasks, return_exceptions=True)
-        self.log.info(f'代理已经检查完毕，并添加至数据库！')
+        await asyncio_gather(*tasks, log=self.log)
+        self.log.info(f'{self.__class__.__name__}代理已经检查完毕，并添加至数据库！')
         await SQLHelper.remove_list_dict_data_by_proxy()
-        self.log.info(f'移除重复代理')
+        self.log.info(f'{self.__class__.__name__}移除重复代理')
         self.log.critical(
-            f'获取代理完成\t耗时：{int(time.time()) - start_ts}秒')
+            f'{self.__class__.__name__}获取代理完成\t耗时：{int(time.time()) - start_ts}秒')
         get_proxy_success = True
         await SQLHelper.check_redis_data()
         return

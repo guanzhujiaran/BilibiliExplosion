@@ -5,6 +5,7 @@ import threading
 import json
 import os
 from fastapi接口.log.base_log import space_monitor_logger as log
+from fastapi接口.utils.Common import asyncio_gather
 from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 
@@ -109,7 +110,7 @@ class monitor:
         for i in self.monitor_uid_list:
             task = asyncio.create_task(self.monitor_main(i.get('uid')))
             task_list.append(task)
-        await asyncio.gather(*task_list)
+        await asyncio_gather(*task_list, log=log)
 
 bili_space_monitor = monitor()
 if __name__ == '__main__':

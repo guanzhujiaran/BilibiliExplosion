@@ -88,7 +88,7 @@ async def main(pub_article_info: pubArticleInfo, schedule_mark: bool):
     global reserve_robot
     reserve_robot = ReserveScrapyRobot()
     try:
-        await reserve_robot.get_reserve_concurrency()
+        await reserve_robot.main()
         await reserve_robot.refresh_not_drawn_lottery()
     except Exception as e:
         reserve_lot_logger.exception(f'获取预约抽奖信息失败！{e}')

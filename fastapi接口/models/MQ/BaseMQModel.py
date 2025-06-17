@@ -1,9 +1,9 @@
 from dataclasses import dataclass
-from enum import Enum
-from faststream.rabbit import RabbitQueue, RabbitExchange, Channel
+from enum import StrEnum
+from faststream.rabbit import RabbitQueue, RabbitExchange
 
 
-class QueueName(str, Enum):
+class QueueName(StrEnum):
     OfficialReserveChargeLotMQ = "OfficialReserveChargeLotQueue"
     UpsertOfficialReserveChargeLotMQ = "UpsertOfficialReserveChargeLotQueue"
     UpsertLotDataByDynamicIdMQ = "UpsertLotDataByDynamicIdQueue"
@@ -11,12 +11,12 @@ class QueueName(str, Enum):
     UpsertMilvusBiliLotDataMQ = "UpsertMilvusBiliLotDataMQ"
 
 
-class ExchangeName(str, Enum):
+class ExchangeName(StrEnum):
     bili_data = "bili_data"
 
 
 # 定义一个名为RoutingKey的类，继承自str和Enum
-class RoutingKey(str, Enum):
+class RoutingKey(StrEnum):
     # 定义一个名为OfficialReserveChargeLotMQ的枚举值，值为"BiliData.OfficialReserveChargeLotMQ"
     OfficialReserveChargeLotMQ = "BiliData.OfficialReserveChargeLotMQ"
     # 定义一个名为UpsertOfficialReserveChargeLotMQ的枚举值，值为"BiliData.UpsertOfficialReserveChargeLotMQ"

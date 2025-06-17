@@ -1,5 +1,5 @@
 import json
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import List
 from utl.redisTool.RedisManager import RedisManagerBase
 from CONFIG import CONFIG
@@ -13,7 +13,7 @@ class BiliRedisDbEnum(Enum):
 
 
 class BiliLiveLotteryRedis(RedisManagerBase):
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         all_live_lot = 'all_live_lot'
 
     def __init__(self):

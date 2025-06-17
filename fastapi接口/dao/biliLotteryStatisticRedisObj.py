@@ -1,16 +1,18 @@
 import ast
+import asyncio
 import json
-from enum import Enum
+from enum import StrEnum
 from typing import List
+
 from CONFIG import CONFIG
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, BiliLotStatisticRankDateTypeEnum
+from fastapi接口.utils.Common import asyncio_gather
 from utl.redisTool.RedisManager import RedisManagerBase
-import asyncio
 
 
 class LotteryDataStatisticRedis(RedisManagerBase):
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         lot_type_rank = 'LotteryDataStatisticRedis:{date}:{lot_type}:{rank_type}_prize'  # 转发抽奖类
         lot_sync_ts = 'LotteryDataStatisticRedis:{lot_type}:sync_ts'
         bili_user_uid_face_name = 'LotteryDataStatisticRedis:user_info'
@@ -123,7 +125,7 @@ class LotteryDataStatisticRedis(RedisManagerBase):
 
         ret_dict = {}
         tasks = [__do_task(uid) for uid in uid_arr]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio_gather(*tasks)
         for uid, rank in zip(uid_arr, results):
             if rank is not None:  # 确保结果不是异常
                 ret_dict[uid] = rank

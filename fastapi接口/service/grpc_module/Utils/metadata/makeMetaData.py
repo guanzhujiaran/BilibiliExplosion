@@ -1,25 +1,25 @@
 # -*- coding: utf-8 -*-
-import gzip
-import json
-import string
-import hmac
+import asyncio
 import base64
+import gzip
 import hashlib
+import hmac
+import json
 import random
 import re
+import string
 import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import asyncio
-from CONFIG import CONFIG
-from utl.代理.SealedRequests import my_async_httpx as myreq
 
+from CONFIG import CONFIG
+from fastapi接口.log.base_log import BiliGrpcApi_logger
 from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataBasicInfo
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign
 from fastapi接口.service.grpc_module.Utils.CONST import MemSizes, CPUFreqs, ProductDevices, Languages, Countries, \
     NetworkTypes, UsbStates, \
     CPUAbiLists, CPUHardwares, ANDROID_VERSIONS, BatteryStates, ANDROID_KERNELS, ScreenDPIs
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.api.ticket.v1.ticket_pb2 import GetTicketResponse, \
     GetTicketRequest
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.device.device_pb2 import Device
@@ -30,7 +30,7 @@ from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.network
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.restriction.restriction_pb2 import Restriction
 from fastapi接口.service.grpc_module.grpc.grpc_proto.datacenter.hakase.protobuf.android_device_info_pb2 import \
     AndroidDeviceInfo
-from fastapi接口.log.base_log import BiliGrpcApi_logger
+from utl.代理.SealedRequests import my_async_httpx as myreq
 
 
 class Fp:
@@ -157,7 +157,19 @@ class MetaDataNeedInfo:
         else:
             BiliGrpcApi_logger.error('解析Dalvik失败！')
             BiliGrpcApi_logger.error(f'{Dalvik}\n{build, device_model, osver, version_name, brand, channel}')
-        self.ua = f'{Dalvik} {self.version_name} os/android model/{self.device_model} mobi_app/android build/{self.build} channel/{self.channel} innerVer/{self.build} osVer/{self.osver} network/2'
+        self.ua = (f'grpc-c++/1.47.0 {Dalvik} '
+                   f'{self.version_name} '
+                   f'os/android '
+                   f'model/{self.device_model} '
+                   f'mobi_app/android '
+                   f'build/{self.build} '
+                   f'channel/{self.channel} '
+                   f'innerVer/{self.build} '
+                   f'osVer/{self.osver} '
+                   f'network/2 '
+                   f'grpc-java-ignet/1.36.1 '
+                   f'grpc-c/25.0.0 '
+                   f'(android; ignet_http)')
 
     def init_from_ua(self, ua: str, brand: str):
         self.ua = ua
@@ -241,14 +253,16 @@ async def make_metadata(
     metadata: tuple = (
         ("accept", "*/*"),
         ("accept-encoding", "gzip, deflate, br"),
-        ("app-key", "android64"),
         ("bili-http-engine", "ignet"),
         ("buvid", BUVID),
         ("content-type", "application/grpc"),
-        ("env", "prod"),
-        ("grpc-accept-encoding", "identity, gzip"),
+        ("grpc-accept-encoding", "identity, deflate, gzip"),
         ("grpc-encoding", "gzip"),
+        ("grpc-timeout", "18S"),
+        ("ignet_grpc_annotation_id", f"{random.choice(range(100, 200))}"),
+        ("te", "trailers"),
         ("user-agent", metaDataNeedInfo.ua),
+        ('x-bili-aurora-eid', ''),
         ("x-bili-device-bin", device_info_bytes),
         ("x-bili-fawkes-req-bin", FawkesReq(
             appkey="android64", env="prod", session_id=random_id()
@@ -265,6 +279,7 @@ async def make_metadata(
         ).SerializeToString()),
         ("x-bili-metadata-bin", Metadata(**metadata_params).SerializeToString()),
         ("x-bili-metadata-ip-region", "CN"),
+        ("x-bili-metadata-legal-region","CN"),
         ("x-bili-network-bin", Network(type=NetworkType.WIFI, oid=random.choice(['46000',
                                                                                  '46002',
                                                                                  '46007',

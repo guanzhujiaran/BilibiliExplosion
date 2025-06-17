@@ -1,22 +1,18 @@
-import time
 import asyncio
+import time
 from typing import Union, List, AsyncGenerator
+
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import topic_lot_logger
-from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler, ParamsType
-from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
+from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
+from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
+from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, \
     TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic, TCapsule
-from fastapi接口.utils.Common import sem_gen
 from utl.pushme.pushme import pushme
 from utl.代理.request_with_proxy import request_with_proxy
-
-
-class StopCounter(BaseStopCounter):
-    def __init__(self):
-        super().__init__(300)
 
 
 class SuccCounter(BaseSuccCounter):
@@ -33,10 +29,14 @@ class TopicRobot(UnlimitedCrawler):
         return self.stop_flag
 
     async def key_params_gen(self, params: int) -> AsyncGenerator[int, None]:
-        while 1:
-            yield params
-            params += 1
-
+        if self.has_get_failed_topic_ids:
+            while 1:
+                yield params
+                params += 1
+        else:
+            for i in self.get_failed_topic_ids:
+                yield i
+            return
 
     async def handle_fetch(self, params: int):
         await self.pipeline(params)
@@ -47,8 +47,6 @@ class TopicRobot(UnlimitedCrawler):
         self.min_sep_ts = 2 * 3600  # 最小的间隔时间
         self.baseurl = 'https://app.bilibili.com/x/topic/web/details/top'
         self.req = request_with_proxy()
-        self.stop_counter = StopCounter()
-        self.succ_counter = SuccCounter()
         self.__max_stop_times = 5  # 遇到超过时间的话题次数
         self._cur_stop_times: int = 0
         self.sql = topic_sqlhelper
@@ -58,10 +56,15 @@ class TopicRobot(UnlimitedCrawler):
         self._latest_topic_id = 0
         self._traffic_card_lock = asyncio.Lock()  # 活动数据锁
 
+        self.stats_plugin = StatsPlugin(self)
         super().__init__(
             max_sem=self.sem_limit,
-            _logger=topic_lot_logger
+            _logger=topic_lot_logger,
+            plugins=[self.stats_plugin],
         )
+
+        self.has_get_failed_topic_ids = False
+        self.get_failed_topic_ids = []
 
     @property
     def cur_stop_times(self):
@@ -107,10 +110,8 @@ class TopicRobot(UnlimitedCrawler):
         tTrafficCard: Union[TTrafficCard, None] = None
         tCapsules: Union[List[TCapsule], None] = None
         if resp.get('code') == 0:
-            self.succ_counter.latest_succ_topic_id = topic_id
             if topic_id > self._latest_topic_id:
                 self._latest_topic_id = topic_id
-                self.succ_counter.latest_topic_id = topic_id
                 self._stop_counter = 0
             da = resp.get('data')
             da_common_keys = ['click_area_card', 'functional_card', 'top_details']
@@ -143,7 +144,6 @@ class TopicRobot(UnlimitedCrawler):
                     if type(topic_item.get('ctime')) is int:
                         if int(time.time()) - topic_item.get('ctime') <= self.min_sep_ts:
                             self._cur_stop_times += 1
-                            self.stop_counter.cur_stop_continuous_num += 1
                             topic_lot_logger.info('到达最近时间，stop_times+=1！')
                 tTopDetails = TTopDetails(
                     close_pub_layer_entry=top_details.get('close_pub_layer_entry'),
@@ -199,11 +199,9 @@ class TopicRobot(UnlimitedCrawler):
     async def pipeline(self, topic_id, is_get_recent_failed_topic=False, use_sem=True):
         try:
             resp_dict = await self.scrapy_topic_dict(topic_id)
-            self.succ_counter.succ_count += 1
             topic_lot_logger.debug(f'topic_id 【{topic_id}】 {resp_dict}')
             if self._stop_counter >= self._max_stop_count and not is_get_recent_failed_topic:
                 self._cur_stop_times += 1
-                self.stop_counter.cur_stop_continuous_num += 1
                 topic_lot_logger.info('到达最大无效值，stop_times+1！')
             async with self._traffic_card_lock:
                 await self.save_resp(topic_id, resp_dict, is_get_recent_failed_topic)
@@ -214,29 +212,22 @@ class TopicRobot(UnlimitedCrawler):
             self.sem.release()
 
     async def main(self, start_topic_id=0):
-        # region 重新获取获取失败的数据
         try:
-            self.succ_counter.is_running = True
-            get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(
+            self.get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(
                 self._max_stop_count + self.sem_limit + 5000)
-            _task_list = set()
-            for i in get_failed_topic_ids:
-                await self.sem.acquire()
-                task = asyncio.create_task(self.pipeline(i, is_get_recent_failed_topic=True))
-                _task_list.add(task)
-            await asyncio.gather(*_task_list)
+            await self.run(self.get_failed_topic_ids[0])
+
+            self.has_get_failed_topic_ids = True  # 获取失败的话题完成
+
             if start_topic_id:
                 self.start_topic_id = start_topic_id
             else:
                 self.start_topic_id = await self.sql.get_max_topic_id()
-            # endregion
-            self.succ_counter.first_topic_id = self.start_topic_id + 1
-            await self.run(self.start_topic_id + 1)
+            await self.run(self.start_topic_id)
         except Exception as e:
             topic_lot_logger.error(f'发生异常！{e}')
             pushme(title=f'爬取话题异常', content=str(e))
-        finally:
-            self.succ_counter.is_running = False
+
 
 if __name__ == "__main__":
     a = TopicRobot()

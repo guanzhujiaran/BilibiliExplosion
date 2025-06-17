@@ -10,13 +10,11 @@ import threading
 import time
 from collections.abc import Callable
 from copy import deepcopy
-from enum import Enum
+from enum import StrEnum
 from functools import wraps
 from typing import Type, Union
-from loguru import logger
-from sqlalchemy import create_engine, select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.sql import text
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import live_monitor_logger
@@ -26,13 +24,12 @@ from fastapi接口.service.bili_live_monitor.utils.tool import AsyncTool
 from fastapi接口.utils.Common import retry_wrapper, sql_retry_wrapper
 from utl.pushme.pushme import pushme, async_pushme_try_catch_decorator
 from utl.redisTool.RedisManager import SyncRedisManagerBase, RedisManagerBase
-
 sqlhelper_lock = threading.Lock()
 async_sqlhelper_lock = asyncio.Lock()
 
 
 class BiliLiveLotRedisManager(SyncRedisManagerBase):
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         goldbox = 'goldbox'
         all_live_lot = 'all_live_lot'
 
@@ -53,7 +50,7 @@ class BiliLiveLotRedisManager(SyncRedisManagerBase):
 
 
 class AsyncBiliLiveLotRedisManager(RedisManagerBase):
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         goldbox = 'goldbox'
         all_live_lot = 'all_live_lot'
 
@@ -284,9 +281,9 @@ class AsyncMonitor(BaseMonitor):
         self.task_set = set()
 
     def init_background_task(self):
-        _t1 = asyncio.create_task(self.show_lot())
-        _t2 = asyncio.create_task(self.push_lot_data())
-        _t3 = asyncio.create_task(self.GOLDBOX.async_check_goldbox())
+        _t1 = self.show_lot()
+        _t2 = self.push_lot_data()
+        _t3 = self.GOLDBOX.async_check_goldbox()
         self.tasks.extend([_t1, _t2, _t3])
 
     def fresh_config(self):
@@ -770,4 +767,4 @@ if __name__ == '__main__':
         print(result)
 
 
-    asyncio.run(_test_sql())
+    asyncio.run(_test())

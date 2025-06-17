@@ -80,8 +80,8 @@ class UserAgentParser:
             'sec-fetch-mode': self.fetch_mode,
             'sec-fetch-site': self.fetch_site,
         }
-        origin_headers.update(*args)
         filtered_headers_dict = {key: value for key, value in origin_headers.items() if value}
+        origin_headers.update(*args)
         return filtered_headers_dict
 
     @staticmethod

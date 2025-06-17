@@ -1,41 +1,41 @@
 # -*- coding: utf-8 -*-
 # 由redis和mysql实现数据的统一
-import asyncio
 import json
 import random
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from functools import reduce
 from json import JSONDecodeError
+from ssl import SSLError
 from typing import Union
 
 import curl_cffi
 from exceptiongroup import ExceptionGroup
+from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
+    WriteError, NetworkError, TooManyRedirects
 from loguru import logger
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
+
 from CONFIG import CONFIG
-from utl.redisTool.RedisManager import RedisManagerBase
-from utl.代理.SealedRequests import my_async_httpx
-from utl.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods
-from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
-from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
-from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
-    WriteError, NetworkError, TooManyRedirects
-from ssl import SSLError
 from fastapi接口.log.base_log import request_with_proxy_logger
 from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import voucher_rabbit_mq
-from fastapi接口.utils.Common import GLOBAL_SCHEDULER, sem_wrapper
-from utl.代理.数据库操作.ProxyEvent import handle_proxy_412, handle_proxy_352, handle_proxy_request_fail, \
-    handle_proxy_succ
-from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request412Error, Request352Error, \
     RequestProxyResponseError
 from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, \
     APIExClimbWuzhi
+from fastapi接口.utils.Common import GLOBAL_SCHEDULER, asyncio_gather
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from utl.redisTool.RedisManager import RedisManagerBase
+from utl.代理.SealedRequests import my_async_httpx
+from utl.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods
 from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
+from utl.代理.数据库操作.ProxyEvent import handle_proxy_412, handle_proxy_352, handle_proxy_request_fail, \
+    handle_proxy_succ
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
+from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 
 
 @dataclass
@@ -65,7 +65,7 @@ class CheckProxyTime:
 
 
 class ProxyRedisManager(RedisManagerBase):
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         check_proxy_time = 'check_proxy_time'
 
     def __init__(self):
@@ -108,12 +108,14 @@ class RequestWithProxy:
 
     async def background_service(self):
         start_ts = int(time.time())
-        request_with_proxy_logger.critical('开始后台定时任务')
-        task1 = asyncio.create_task(get_proxy_methods.get_proxy())
-        await asyncio.gather(
-            task1
+        request_with_proxy_logger.critical(f'开始【{self.__class__.__name__}】的后台定时任务')
+        task1 = get_proxy_methods.get_proxy()
+        await asyncio_gather(
+            task1,
+            log=self.log
         )
-        request_with_proxy_logger.critical(f'定时任务执行完毕，耗时：{int(time.time()) - start_ts}秒')
+        request_with_proxy_logger.critical(
+            f'【{self.__class__.__name__}】定时任务执行完毕，耗时：{int(time.time()) - start_ts}秒')
 
     async def Get_Bili_Cookie(self, ua: str) -> CookieWrapper:
         """

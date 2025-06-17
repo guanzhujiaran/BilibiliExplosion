@@ -11,6 +11,8 @@ import fastapi接口.service.zhihu.zhihu_src.zhihu_utl as zhihu_utl
 from Bilibili_methods.all_methods import methods
 import pandas
 
+from fastapi接口.utils.Common import asyncio_gather
+
 current_dir = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -257,12 +259,9 @@ class LotScrapy:
 
     async def main(self):
         # self.log.info(f'获取过的所有{len(self.all_pins)}条pin:{self.all_pins}')
-        results = await asyncio.gather(
+        await asyncio_gather(
             *[asyncio.create_task(self.get_all_pins(u)) for u in self.uname_list],
-            return_exceptions=True)
-        for result in results:
-            if type(result) is ValueError:
-                self.log.opt(exception=True).error(result)
+            log=self.log)
         self.end_write()
 
     async def save_now_get_pin_ts(self, ts: int):

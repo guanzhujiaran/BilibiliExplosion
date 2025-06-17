@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import os
+import time
+from dataclasses import dataclass
+from functools import reduce
 from typing import AsyncGenerator
 
 import aiofiles
 import pandas
-from dataclasses import dataclass
-from functools import reduce
+
+import Bilibili_methods.all_methods
 from fastapi接口.log.base_log import reserve_lot_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler, ParamsType
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
@@ -13,12 +17,9 @@ from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin, S
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import reserve_relation_info
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, ProgressCounter
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
-from fastapi接口.utils.Common import sem_gen
-from utl.代理.request_with_proxy import request_with_proxy
-import time
-import os
-import Bilibili_methods.all_methods
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
+from fastapi接口.utils.Common import asyncio_gather
+from utl.代理.request_with_proxy import request_with_proxy
 
 BAPI = Bilibili_methods.all_methods.methods()
 
@@ -35,7 +36,13 @@ class dynamic_timestamp_info:
     ids: int = 0
 
     def get_time_str_until_now(self):
-        return time.strftime("%H小时%M分钟%S秒", time.gmtime(int(time.time()) - self.dynamic_timestamp))
+        return self.seconds_to_hms(int(time.time()) - self.dynamic_timestamp)
+
+    def seconds_to_hms(self, seconds):
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+        secs = seconds % 60
+        return f"{hours:02d}小时{minutes:02d}分{secs:02d}秒"
 
 
 class ReserveScrapyRobot(UnlimitedCrawler[int]):
@@ -69,9 +76,9 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         return await self.resolve_reserve(params)
 
     def __init__(self):
-        self.sem_limit = 100
+        self.sem_limit = 10
         self.stats_plugin = StatsPlugin(self)
-        self.null_time_quit = 150  # 遇到连续100条data为None的sid 则退出
+        self.null_time_quit = 500  # 遇到连续500条data为None的sid 则退出
         self.null_stop_plugin = SequentialNullStopPlugin(self, self.null_time_quit)
         super().__init__(
             plugins=[self.stats_plugin, self.null_stop_plugin],
@@ -186,17 +193,16 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
                                 f"{req1_dict}")
                             is_force_api = True  # 强制使用api获取数据，不信任数据库内数据了
                             continue
-                        self.n += 1
                         dynamic_timestamp = dynamic_data_dict.get('data').get('list').get(str(sid)).get('stime')
                         async with self.dynamic_ts_lock:
-                            if sid > self.dynamic_timestamp.ids:
+                            if sid > self.dynamic_timestamp.ids and dynamic_timestamp:
                                 self.dynamic_timestamp.dynamic_timestamp = dynamic_timestamp
                                 self.dynamic_timestamp.ids = sid
                         reserve_lot_logger.info(
                             f"\n\t\t\t\t第{str(self.stats_plugin.processed_items_count)}次获取直播预约\t{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}\t\t\t\trid:{sid}\n直播预约[{sid}]获取成功，直播预约创建时间：{BAPI.timeshift(self.dynamic_timestamp.dynamic_timestamp)}")
                     except Exception as e:
-                        reserve_lot_logger.info(
-                            f'\n\t\t\t\t第{self.stats_plugin.processed_items_count}次获取直播预约\t' + time.strftime(
+                        reserve_lot_logger.exception(
+                            f'{e}\n\t\t\t\t第{self.stats_plugin.processed_items_count}次获取直播预约\t' + time.strftime(
                                 '%Y-%m-%d %H:%M:%S',
                                 time.localtime()) +
                             '\t\t\t\trid:{}'.format(sid) + '\n' +
@@ -237,7 +243,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         run_function = lambda x, y: x if y in x else x + [y]
         return reduce(run_function, [[], ] + list_dict_data)
 
-    async def get_reserve_concurrency(self):
+    async def main(self):
         await self._init()
         now_round: TReserveRoundInfo = await self.sqlHelper.get_latest_reserve_round()
         round_start_ts = int(time.time()) if now_round.is_finished else now_round.round_start_ts
@@ -252,8 +258,15 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             async with self.dynamic_ts_lock:
                 self.dynamic_timestamp = dynamic_timestamp_info()
             await self.run(self.ids_list[ids_index])
+            self.ids = self.stats_plugin.end_params  # 加上这个才是最终的ids，否则ids并不会改变
             totoal_count1 = self.stats_plugin.succ_count
             self.ids_list[ids_index] = self.ids
+            reserve_lot_logger.critical(
+                f'{self.ids}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'
+                f'{self.dynamic_timestamp.get_time_str_until_now()}\n'
+                f'最终成功的ids：https://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_success_params}\n'
+                f'最终ids: https://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_params}\n'
+            )
         none_num2 = self.null_stop_plugin.sequential_null_count
         totoal_count2 = self.stats_plugin.succ_count
         finnal_rid_list = [
@@ -262,7 +275,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         ]
         reserve_lot_logger.critical(
             f'{self.ids_list}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'
-            f'{self.dynamic_timestamp.get_time_str_until_now()}秒，退出！'
+            f'{self.dynamic_timestamp.get_time_str_until_now()}秒，'
+            f'ids：{self.dynamic_timestamp.ids}，退出！'
             f'当前rid记录分别回滚{self.rollback_num + none_num1}和{self.rollback_num + none_num2}条'
             f'最终写入文件rid记录：{finnal_rid_list}')
 
@@ -329,7 +343,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             task = asyncio.create_task(self.resolve_reserve(reserve_lottery.sid, is_refresh=True))
             task_list.append(task)
             running_num += 1
-        await asyncio.gather(*task_list)
+        await asyncio_gather(*task_list, log=self.log)
         self.refresh_progress_counter.is_running = False
 
     async def _init(self):
@@ -361,4 +375,4 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     rid_run = ReserveScrapyRobot()
-    loop.run_until_complete(rid_run.get_reserve_concurrency())
+    loop.run_until_complete(rid_run.main())

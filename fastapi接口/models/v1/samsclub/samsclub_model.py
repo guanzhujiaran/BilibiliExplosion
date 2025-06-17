@@ -49,3 +49,4 @@ class SamsClubGetDoEncryptReqModel(CustomBaseModel):
     bodyStr: str
     uuidStr: str
     tokenStr: str
+

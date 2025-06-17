@@ -18,6 +18,9 @@ from loguru import logger
 from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+from fastapi接口.utils.Common import asyncio_gather
+
 log = logger.bind(name='fastapi')
 
 
@@ -32,7 +35,7 @@ async def lifespan(_app: FastAPI):
     [
         x.cancel() for x in back_ground_tasks
     ]
-    await asyncio.gather(*back_ground_tasks, return_exceptions=True)
+    await asyncio_gather(*back_ground_tasks)
 
 
 app = FastAPI(

@@ -4,13 +4,15 @@ import datetime
 import json
 import os
 import random
-import time
-from typing import List, Sequence
-from bs4 import BeautifulSoup
 import subprocess
+import time
 from functools import partial
+from typing import List, Sequence
+
+from bs4 import BeautifulSoup
 
 from fastapi接口.log.base_log import topic_lot_logger
+from fastapi接口.utils.Common import asyncio_gather
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
@@ -345,7 +347,7 @@ class ExtractTopicLottery:
                     ) for x in data.get('EvaContainerTrucksH5', [])
                     ]
                     break
-            await asyncio.gather(*[self.sql.add_era_task(
+            await asyncio_gather(*[self.sql.add_era_task(
                 traffic_card_id,
                 awardName=x.awardName,
                 taskDes=x.taskDes,
@@ -355,8 +357,8 @@ class ExtractTopicLottery:
                 topicID=x.topicID,
                 topicName=x.topicName
             ) for x in era_tasks
-            ])
-            await asyncio.gather(*[
+            ], log=topic_lot_logger)
+            await asyncio_gather(*[
                 self.sql.add_era_lottery(
                     traffic_card_id,
                     x.activity_id,
@@ -366,23 +368,23 @@ class ExtractTopicLottery:
                     x.lottery_type,
                     x.per_time,
                     x.point_name) for x in era_lottery_configs
-            ])
-            await asyncio.gather(*[self.sql.add_era_video(
+            ], log=topic_lot_logger)
+            await asyncio_gather(*[self.sql.add_era_video(
                 traffic_card_id,
                 [y.model_dump_json() for y in x.poolList],
                 x.topic_id,
                 x.topic_name,
                 x.videoSource_id
             ) for x in era_video_configs
-            ])
-            await asyncio.gather(*[self.sql.add_era_jika(
+            ], log=topic_lot_logger)
+            await asyncio_gather(*[self.sql.add_era_jika(
                 traffic_card_id,
                 x.activityUrl,
                 x.jikaId,
                 x.topId,
                 x.topName
             ) for x in era_jika
-            ])
+            ], log=topic_lot_logger)
             topic_lot_logger.info(f'{url}\t抽奖任务：{era_tasks}')
             topic_lot_logger.info(f'{url}\t抽奖内容：{era_lottery_configs}')
             topic_lot_logger.info(f'{url}\t视频活动：{era_video_configs}')
@@ -419,14 +421,14 @@ class ExtractTopicLottery:
                         lottery_id=x.get('lottery_id'),
                     ) for x in data.get('match-lottery-pc', [])]
                     break
-            await asyncio.gather(*[self.sql.add_activity_lottery(
+            await asyncio_gather(*[self.sql.add_activity_lottery(
                 traffic_card_id,
                 x.lotteryId,
                 x.continueTimes,
                 [y.model_dump_json() for y in x.list]
             ) for x in h5_lottery
-            ])
-            await asyncio.gather(*[self.sql.add_activity_match_task(
+            ],log=topic_lot_logger)
+            await asyncio_gather(*[self.sql.add_activity_match_task(
                 traffic_card_id,
                 x.task_desc,
                 x.interact_type,
@@ -434,13 +436,13 @@ class ExtractTopicLottery:
                 x.task_name,
                 x.url
             ) for x in match_task
-            ])
-            await asyncio.gather(*[self.sql.add_activity_match_lottery(
+            ],log=topic_lot_logger)
+            await asyncio_gather(*[self.sql.add_activity_match_lottery(
                 traffic_card_id,
                 x.lottery_id,
                 x.activity_id
             ) for x in match_lottery
-            ])
+            ],log=topic_lot_logger)
 
             topic_lot_logger.info(f'{url}\th5抽奖任务：{h5_lottery}')
             topic_lot_logger.info(f'{url}\t活动抽奖任务：{match_task}')
@@ -479,7 +481,7 @@ class ExtractTopicLottery:
             topic_lot_logger.error(f'{url}\t未知话题类型！\n{data}')
             return 3
 
-    async def spider_all_unread_traffic_card(self, status_list:list=None) -> (bool, int, Sequence[TTrafficCard]):
+    async def spider_all_unread_traffic_card(self, status_list: list = None) -> (bool, int, Sequence[TTrafficCard]):
         """
         获取所有未读的traffic_card，解析活动类型
         :return: 是否有新增的

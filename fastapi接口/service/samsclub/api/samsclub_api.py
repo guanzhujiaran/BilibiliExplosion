@@ -1,17 +1,16 @@
 import asyncio
 import json
+import os
 
-import curl_cffi
+import aiofiles
 from curl_cffi.requests.exceptions import RequestException
-from CONFIG import CONFIG
+
+from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.service.samsclub.exceptions.error import UnknownError
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import update_do_encrypt_key
 from fastapi接口.service.samsclub.tools.headers_gen import SamsClubHeadersGen, sort_headers_with_missing_last
 from utl.pushme.pushme import pushme
 from utl.代理.SealedRequests import my_async_httpx
-from fastapi接口.log.base_log import sams_club_logger
-import os
-import aiofiles
 
 
 class SamsClubApi:
@@ -30,7 +29,7 @@ class SamsClubApi:
                 if f_content := f.read():
                     auth_token = f_content.strip()
         self.headers_gen = SamsClubHeadersGen(
-            auth_token=auth_token
+            auth_token=auth_token,
         )
 
     log = sams_club_logger
@@ -70,7 +69,11 @@ class SamsClubApi:
     cur_siv = ""
     cur_ssk = ""
 
-    async def update_encrypt_key(self, resp_headers):
+    async def update_encrypt_key(self, resp_headers) -> bool:
+        """
+        True：真更新了
+        False：没有更细
+        """
         siv = resp_headers.get('siv')
         ssk = resp_headers.get('ssk')
         srd = resp_headers.get('srd')
@@ -78,6 +81,8 @@ class SamsClubApi:
             if siv != self.cur_siv or ssk != self.cur_ssk:
                 self.log.debug("更新加密密钥")
                 await update_do_encrypt_key(siv, ssk, srd)
+                return True
+        return False
 
     @property
     def base_url(self):
@@ -88,6 +93,7 @@ class SamsClubApi:
 
     async def send(self, url: str, body: dict, *, is_add_amap_headers: bool = True):
         while 1:
+            cur_auth_token = self.headers_gen.auth_token
             body_str = self.body_to_json(body)
             headers_model = await self.headers_gen.gen_headers(body_str)
             headers = headers_model.model_dump()
@@ -99,22 +105,22 @@ class SamsClubApi:
                     url,
                     headers=sort_headers_with_missing_last(headers),
                     data=body_str,
-                    proxies=CONFIG.custom_proxy
+                    # proxies=CONFIG.custom_proxy
                 )
             except RequestException as e:
-                self.log.debug(f'curl_cffi网络请求异常：{e}')
+                self.log.exception(f'curl_cffi网络请求异常：{e}')
                 await asyncio.sleep(10)
                 continue
             except Exception as e:
                 raise e
-            await self.update_encrypt_key(resp.headers)
-            is_succ = await self.handle_resp_code(resp)
+            is_updated = await self.update_encrypt_key(resp.headers)
+            is_succ = await self.handle_resp_code(resp, auth_token=cur_auth_token, is_updated_encrypt_key=is_updated)
             if not is_succ:
                 await asyncio.sleep(10)
                 continue
             return resp
 
-    async def handle_resp_code(self, response) -> bool:
+    async def handle_resp_code(self, response, auth_token: str, is_updated_encrypt_key: bool) -> bool:
         resp_dict = response.json()
         is_succ = resp_dict.get('success')
         resp_code = resp_dict.get('code')
@@ -123,12 +129,13 @@ class SamsClubApi:
                 case "SPU_NOT_EXIST":
                     self.log.debug(f'{resp_code}')
                 case "AUTH_FAIL" | "INTERNAL_ERROR":
+                    if is_updated_encrypt_key:
+                        return False
                     self.log.opt(exception=True).critical(f"被强制登出！{resp_dict}")
-                    err_token = self.headers_gen.auth_token
                     await asyncio.to_thread(pushme, f'山姆会员商店token失效', f'{resp_dict}')
                     self.log.debug(f'等待token更新')
                     while 1:
-                        if err_token != self.headers_gen.auth_token:
+                        if auth_token != self.headers_gen.auth_token:
                             break
                         await asyncio.sleep(3)
                 # raise AUTH_FAIL(f"鉴权失败！响应code：{resp_code}")
@@ -136,6 +143,21 @@ class SamsClubApi:
                     self.log.opt(exception=True).critical(f"请求未知错误！{resp_dict}")
                     raise UnknownError(f"未知响应code：{resp_code}")
         return bool(is_succ)
+
+    async def init_headers_info(self):
+        version_resp = await self.configuration_appVersionUpdate_getAppVersionUpdateInfo()
+        version_json = version_resp.json()
+        if version_str := version_json.get('data', {}).get('youngVersion'):
+            self.headers_gen.version_str = version_str
+
+    async def configuration_appVersionUpdate_getAppVersionUpdateInfo(self):
+        url = self._base_url + '/api/v1/sams/configuration/appVersionUpdate/getAppVersionUpdateInfo'
+        body = {
+            "androidChannel": "oppo",
+            "nowVersion": self.headers_gen.version_str,
+            "requestSource": "2"
+        }
+        return await self.send(url, body)
 
     async def spu_query_detail(self, spuId: int):
         url = self._base_url + '/api/v1/sams/goods-portal/spu/queryDetail'
@@ -213,18 +235,7 @@ class SamsClubApi:
 sams_club_api = SamsClubApi()
 if __name__ == '__main__':
     async def _test():
-        resp = await sams_club_api.grouping_list(
-            35145,
-            181024,
-            [
-                181024,
-                180035,
-                183066,
-                181066
-            ],
-            1, 20
-
-        )
+        resp = await sams_club_api.configuration_appVersionUpdate_getAppVersionUpdateInfo()
         print(resp.text)
         # {"data":{"spuId":"1340323","hostItem":"980056231","storeId":"6558","title":"番薯叶 600g","masterBizType":1,"viceBizType":1,"categoryIdList":["10003023","10003240","10004603"],"images":["https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/1963810/ebb8519f-75a9-42d5-a115-f1246b909078_179820200722003646242.jpg?imageMogr2/thumbnail/!80p","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/1963845/97ce61cd-e28b-401d-a5d5-bc42ee6c4ae0_315720200722003709129.jpg?imageMogr2/thumbnail/!80p"],"imageSizeThreeFour":[],"videos":[],"descVideo":[],"isAvailable":false,"isStoreAvailable":false,"isPutOnSale":false,"sevenDaysReturn":false,"intro":"番薯叶 600g","brandId":"10095137","weight":0.6,"desc":"<p><img alt=\"Members&nbsp;Mark&nbsp;油麦菜VEGETABLES\" src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/2201234/94119c09-95c2-4eb9-ab18-c7aa6dd11e36_452220200723050659327.jpg?imageMogr2/thumbnail/!80p\" style=\"caret-color: rgb(0, 0, 0); text-size-adjust: auto;\">\n<img alt=\"Members&nbsp;Mark&nbsp;油麦菜VEGETABLES\" src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/2201236/7611b8a2-1014-425f-af4a-6eec7e74ec49_699020200723050659401.jpg?imageMogr2/thumbnail/!80p\" style=\"caret-color: rgb(0, 0, 0); text-size-adjust: auto;\">\n<img alt=\"Members&nbsp;Mark&nbsp;油麦菜VEGETABLES\" src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/2201237/1f187a62-2016-4854-911e-b6fd86a75452_323920200723050659476.jpg?imageMogr2/thumbnail/!80p\" style=\"caret-color: rgb(0, 0, 0); text-size-adjust: auto;\">\n<img alt=\"Members&nbsp;Mark&nbsp;油麦菜VEGETABLES\" src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/2201239/98ae614f-8e4a-445e-b12b-e104818f8d64_446020200723050659537.jpg?imageMogr2/thumbnail/!80p\" style=\"caret-color: rgb(0, 0, 0); text-size-adjust: auto;\"></p>","priceInfo":[],"stockInfo":{"stockQuantity":0,"safeStockQuantity":0,"soldQuantity":0},"limitInfo":[],"tagInfo":[],"newTagInfo":[],"deliveryAttr":3,"favorite":false,"giveaway":false,"spuExtDTO":{"subETitle":"","hostUpc":["2170022000000","2170022000000","2170022000000","2170022000000"],"departmentId":"57","detailVideos":[],"weight":0.6,"deliveryAttr":3,"sevenDaysReturn":false,"giveaway":false,"isAccessory":false,"isRoutine":true,"status":1},"beltInfo":[],"detailVideos":[],"isSerial":false,"spuSpecInfo":[],"specList":{},"specInfo":[],"attrGroupInfo":[{"attrInfo":[{"attrId":"79758","title":"产地","attrValueList":[{}],"isImportant":false}],"attrGroupId":"1","title":"产地"},{"attrInfo":[{"attrId":"79733","title":"净重(g)","attrValueList":[{},{"value":"600"}],"isImportant":false}],"attrGroupId":"7","title":"规格"},{"attrInfo":[{"attrId":"79625","title":"包装","attrValueList":[{"attrValueId":"644722","value":"袋装"}],"isImportant":false}],"attrGroupId":"10","title":"包装"}],"attrInfo":[{"attrId":"79651","title":"进口/国产","attrValueList":[{"attrValueId":"644871","value":"国产"}],"isImportant":false}],"extendedWarrantyList":[],"couponContentList":[],"couponList":[],"promotionList":[],"promotionDetailList":[],"deliveryCapacityCountList":[{"strDate":"2025/05/27 周二","list":[{"startTime":"09:00","endTime":"21:00","closeDate":"2025-05-26","closeTime":"20:00","timeISFull":false,"disabled":false}]}],"isCollectOrder":0,"complianceInfo":{"id":"261038638727561494","value":"山姆品质、馈赠精选，如您有大宗采买需求，我们将为您提供全程专业的采买咨询服务。\n联系我们：山姆app - 我的 - 我的服务 - 福利采购，在线提交采买需求，资深采买顾问为您提供一对一专属服务，让福利采购更省心。"},"preSellList":[],"onlyStoreSale":false,"serviceInfo":[],"arrivalEndTimeDesc":"有货，可当日或次日发货，依照您在结算页面选择的配送时间窗而定。","isStoreExtent":false,"isGlobalDirectPurchase":false,"isGlobalOwnPickUp":false,"isAllowDelivery":true,"zoneTypeList":[],"isCrabCard":false,"isShowXPlusTag":false,"isCompare":false,"isGovSpu":false,"standardForIntactGoodsUrl":"https://m-sams.walmartmobile.cn/common/help-center/217","customTabList":[],"isTicket":false},"code":"Success","msg":"","errorMsg":"","traceId":"85aea94bbd506bb4","requestId":"as|4af9157120eb49ccb545f4c1382b458a.101.17481744417475739","rt":0,"success":true}
         # {"data":{"spuId":"1340324","hostItem":"95066","storeId":"6558","title":"飘柔 飘柔家庭绿茶洗发露WS+RJC SHM 12X400ml","masterBizType":1,"viceBizType":1,"categoryIdList":["10003039","10003340","10005326"],"images":["https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/2197227/06e20218-1dbd-4da2-9f05-5fb5867df19c_605920200723041907797.jpg?imageMogr2/thumbnail/!80p"],"imageSizeThreeFour":[],"videos":[],"descVideo":[],"isAvailable":false,"isStoreAvailable":false,"isPutOnSale":false,"sevenDaysReturn":true,"intro":"飘柔 飘柔家庭绿茶洗发露WS+RJC SHM 12X400ml","subTitle":"特殊订购商品 需独立购买及到店自提 下单后2周后到货","brandId":"10037226","weight":5.5,"desc":"<p><img border=\"0\" src=\"\">\n<img border=\"0\" src=\"\"></p>","priceInfo":[],"stockInfo":{"stockQuantity":0,"safeStockQuantity":0,"soldQuantity":0},"limitInfo":[],"tagInfo":[],"newTagInfo":[],"favorite":false,"spuExtDTO":{"subTitle":"特殊订购商品 需独立购买及到店自提 下单后2周后到货","subETitle":"","hostUpc":["16903148030470","16903148030470"],"departmentId":"2","detailVideos":[],"weight":5.5,"sevenDaysReturn":true,"status":3},"beltInfo":[],"detailVideos":[],"isSerial":false,"spuSpecInfo":[],"specList":{},"specInfo":[],"attrGroupInfo":[{"attrInfo":[{"attrId":"117093","title":"产地","attrValueList":[{"attrValueId":"1101060","value":"中国大陆"}],"isImportant":false}],"attrGroupId":"1","title":"产地"},{"attrInfo":[{"attrId":"117128","title":"适用对象","attrValueList":[{"attrValueId":"1101280","value":"所有人群"}],"isImportant":false}],"attrGroupId":"2","title":"基本信息"},{"attrInfo":[{"attrId":"117169","title":"净含量（ml/g）","attrValueList":[{},{"value":"4800"}],"isImportant":false}],"attrGroupId":"109","title":"包装规格"}],"attrInfo":[{"attrId":"117122","title":"适合发质","attrValueList":[{"attrValueId":"1101256","value":"油性"}],"isImportant":false},{"attrId":"117066","title":"功效","attrValueList":[{"attrValueId":"1100668","value":"其它"}],"isImportant":false},{"attrId":"117149","title":"单件规格","attrValueList":[{"attrValueId":"1101407","value":"201ml至400ml"}],"isImportant":false}],"extendedWarrantyList":[],"couponContentList":[],"couponList":[],"promotionList":[],"promotionDetailList":[],"deliveryCapacityCountList":[{"strDate":"2025/05/27 周二","list":[{"startTime":"09:00","endTime":"21:00","closeDate":"2025-05-26","closeTime":"20:00","timeISFull":false,"disabled":false}]}],"isCollectOrder":0,"complianceInfo":{"id":"261038638727561494","value":"山姆品质、馈赠精选，如您有大宗采买需求，我们将为您提供全程专业的采买咨询服务。\n联系我们：山姆app - 我的 - 我的服务 - 福利采购，在线提交采买需求，资深采买顾问为您提供一对一专属服务，让福利采购更省心。"},"preSellList":[],"onlyStoreSale":false,"serviceInfo":[],"arrivalEndTimeDesc":"有货，实际配送日期根据所在城市情况而定，配送前会与您提前联系确认。","isStoreExtent":false,"isGlobalDirectPurchase":false,"isGlobalOwnPickUp":false,"isAllowDelivery":false,"zoneTypeList":[],"isCrabCard":false,"isShowXPlusTag":false,"isCompare":false,"isGovSpu":false,"standardForIntactGoodsUrl":"https://m-sams.walmartmobile.cn/common/help-center/217","customTabList":[],"isTicket":false},"code":"Success","msg":"","errorMsg":"","traceId":"990087480927d3aa","requestId":"as|456c73a1098e416c92589745bdd853f9.101.17481744569835739","rt":0,"success":true}

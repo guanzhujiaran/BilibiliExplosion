@@ -34,7 +34,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self._start_time = time.time()
         self._last_update_time = time.time()  # Initial update time
         self._processed_items_count = 0
-        # No need to reset derived properties here, as they will calculate from _start_time and _processed_items_count
+        self._succ_count: int = 0
         await super().on_run_start(init_params)
 
     async def on_worker_end(self, worker_model: WorkerModel):

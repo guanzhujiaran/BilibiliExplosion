@@ -1,28 +1,27 @@
 import asyncio
 import datetime
-import itertools
 import json
 import os
 import re
+import subprocess
 import time
 import traceback
 from copy import deepcopy
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Union, List, Set, Sequence
-import subprocess
+from enum import StrEnum
 from functools import partial
-import aiofiles
+from typing import Union, List, Set, Sequence
+
 from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotuserspaceresp, TLotdyninfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
-from fastapi接口.utils.Common import sem_gen
-from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
+from fastapi接口.utils.Common import sem_gen, asyncio_gather
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
@@ -39,7 +38,7 @@ from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper impo
 
 BAPI = Bilibili_methods.all_methods.methods()
 ctx = MiniRacer()
-manual_reply_judge = ctx.eval("""
+manual_reply_judge = ctx.eval(r"""
         manual_reply_judge= function (dynamic_content) {
 					//判断是否需要人工回复 返回true需要人工判断  返回null不需要人工判断
 					//64和67用作判断是否能使用关键词回复
@@ -370,12 +369,12 @@ manual_reply_judge = ctx.eval("""
 _is_use_available_proxy = True
 
 
-class FileMap(str, Enum):
+class FileMap(StrEnum):
     current_file_path = os.path.dirname(os.path.abspath(__file__))
     github_bili_upload = os.path.join(current_file_path, '../../../github/bili_upload')
 
 
-class OfficialLotType(str, Enum):
+class OfficialLotType(StrEnum):
     reserve_lot = '预约抽奖'
     charge_lot = '充电抽奖'
     official_lot = '官方抽奖'
@@ -398,7 +397,6 @@ class BiliDynamicItem:
     dynamic_raw_detail: dict = field(default_factory=dict)  # 放解析下来的请求的字典，不高兴搞成class了
     bili_judge_lottery_result: BiliDynamicItemJudgeLotteryResult = field(
         default_factory=BiliDynamicItemJudgeLotteryResult)
-
     is_lot_orig: bool = field(default=False)  # 是否是抽奖动态的原动态
 
     def __post_init__(self):
@@ -1547,9 +1545,13 @@ class GetOthersLotDynRobot:
     # region 获取uidlist中的空间动态
 
     async def __do_space_task(self, __bili_space_user: BiliSpaceUserItem, isPubLotUser: bool):
-        await __bili_space_user.get_user_space_dynamic_id(isPubLotUser=isPubLotUser, SpareTime=self.SpareTime,
-                                                          succ_counter=self.space_succ_counter)
-        self.space_succ_counter.succ_count += 1
+        try:
+            await __bili_space_user.get_user_space_dynamic_id(isPubLotUser=isPubLotUser, SpareTime=self.SpareTime,
+                                                              succ_counter=self.space_succ_counter)
+            self.space_succ_counter.succ_count += 1
+        except Exception as _e:
+            get_others_lot_log.exception(_e)
+            raise _e
 
     async def get_all_space_dyn_id(self, bili_space_user_items: Set[BiliSpaceUserItem], isPubLotUser=False):
         self.space_succ_counter.total_num = len(bili_space_user_items)
@@ -1557,7 +1559,7 @@ class GetOthersLotDynRobot:
         for i in bili_space_user_items:
             task = asyncio.create_task(self.__do_space_task(i, isPubLotUser))
             tasks.add(task)
-        await asyncio.gather(*tasks)
+        await asyncio_gather(*tasks, log=get_others_lot_log)
         get_others_lot_log.info(f'{len(bili_space_user_items)}个空间获取完成')
         self.space_succ_counter.is_running = False
 
@@ -1664,13 +1666,16 @@ class GetOthersLotDynRobot:
         :param lotRound_id:
         :return:
         """
-        async with self._sem:
-            await item.judge_lottery(highlight_word_list=highlight_word_list, lotRound_id=lotRound_id)
-            self.dyn_succ_counter.succ_count += 1
+        try:
+            async with self._sem:
+                await item.judge_lottery(highlight_word_list=highlight_word_list, lotRound_id=lotRound_id)
+                self.dyn_succ_counter.succ_count += 1
+        except Exception as _e:
+            get_others_lot_log.exception(_e)
+            raise _e
 
     async def main(self):
         await self.__init()
-
         await self.get_all_space_dyn_id(self.bili_space_user_items_set, isPubLotUser=False)  # 获取抽奖号的空间
         pub_lot_uid_set: Set[BiliSpaceUserItem] = set()
         for x in self.bili_space_user_items_set:
@@ -1690,12 +1695,9 @@ class GetOthersLotDynRobot:
         self.dyn_succ_counter.total_num = len(self.goto_check_dynamic_item_set)
         tasks = set()
         for x in self.goto_check_dynamic_item_set:
-            task = asyncio.create_task(
-                self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id)
-            )
+            task = asyncio.create_task(self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id))
             tasks.add(task)
-        await asyncio.gather(*tasks)
-
+        await asyncio_gather(*tasks, log=get_others_lot_log)
         await self._after_scrapy()
         self.nowRound.isRoundFinished = 1
         await SqlHelper.addLotMainInfo(self.nowRound)
@@ -1944,5 +1946,4 @@ class GetOthersLotDyn:
 get_others_lot_dyn = GetOthersLotDyn()
 
 if __name__ == '__main__':
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    asyncio.run(get_others_lot_dyn.solve_return_lot(0))
+    asyncio.run(get_others_lot_dyn.get_new_dyn())

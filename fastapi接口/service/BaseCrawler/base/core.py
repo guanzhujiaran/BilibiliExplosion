@@ -16,6 +16,7 @@ class BaseCrawler(ABC, Generic[ParamsType]):
         self.max_sem = max_sem
         self.task_queue: asyncio.Queue[WorkerModel] = asyncio.Queue(1)  # 只要有一个就可以了
         self.sem = sem_gen(max_sem)
+        self._is_pause = False
 
     @abstractmethod
     async def worker(self):
@@ -28,3 +29,12 @@ class BaseCrawler(ABC, Generic[ParamsType]):
     @abstractmethod
     async def run(self, *args, **kwargs):
         ...
+
+
+    async def start(self):
+        self.log.info("UnlimitedCrawler start method called.")
+        self._is_pause = False
+
+    async def pause(self):
+        self.log.info("UnlimitedCrawler pause method called.")
+        self._is_pause = True

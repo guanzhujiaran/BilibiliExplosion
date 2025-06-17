@@ -6,15 +6,17 @@ import random
 import time
 from datetime import datetime
 from typing import Union, Sequence
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+
 from Bilibili_methods.all_methods import methods
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import get_rm_following_list_logger
 from fastapi接口.service.grpc_module.Utils.GrpcDynamicRespUtils import DynTool, ObjDynInfo
-from fastapi接口.service.grpc_module.src.获取取关对象.db.models import UserInfo, SpaceDyn
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
-from fastapi接口.utils.Common import sem_retry_wrapper, sem_gen
+from fastapi接口.service.grpc_module.src.获取取关对象.db.models import UserInfo, SpaceDyn
+from fastapi接口.utils.Common import sem_retry_wrapper, sem_gen, asyncio_gather
 
 current_dir = os.path.dirname(__file__)
 
@@ -265,7 +267,7 @@ class GetRmFollowingListV1:
                             break
             except Exception as e:
                 self.logger.exception(f'Exception while check is lot up!{uid}\n{e}')
-    
+
     @sem_retry_wrapper
     async def check_db_exist_up(self, uid: Union[int, str]) -> bool:
         """
@@ -315,7 +317,7 @@ class GetRmFollowingListV1:
                 self.logger.critical(
                     f'当前正在检查关注列表：{len(following_list) - running_task_num}/{len(following_list)}个！')
                 await asyncio.sleep(10)
-        results = await asyncio.gather(*tasks)
+        results = await asyncio_gather(*tasks, log=self.logger)
         ret_list = [following_list[idx] for idx, result in enumerate(results) if not result]
         return ret_list
 

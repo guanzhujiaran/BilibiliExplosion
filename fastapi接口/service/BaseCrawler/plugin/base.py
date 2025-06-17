@@ -20,13 +20,6 @@ class CrawlerPlugin(ABC, Generic[ParamsType]):
         在爬虫的 run 方法开始执行时触发。
         """
 
-    async def on_before_fetch(self, worker_model: WorkerModel):
-        """
-        在 worker 调用 handle_fetch 之前触发。
-        可以用于修改或验证 params。
-        返回修改后的 params。
-        """
-
     async def on_worker_end(self, worker_model: WorkerModel) -> Any:
         """
         在 worker 完成 handle_fetch 之后，on_worker_end 之前触发。

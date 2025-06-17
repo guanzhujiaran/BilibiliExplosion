@@ -5,19 +5,20 @@ import random
 import time
 import urllib.parse
 import uuid
+
 from curl_cffi import requests
 from curl_cffi.requests import BrowserType
-from CONFIG import CONFIG
-from utl.代理.SealedRequests import my_async_httpx as _my_sealed_req
-from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
-from utl.pushme.pushme import pushme
 
-from utl.代理.request_with_proxy import request_with_proxy
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import bapi_log
 from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
 from fastapi接口.service.grpc_module.Utils.response.check_resp import check_reserve_relation_info
 from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import GeetestRegInfo
 from fastapi接口.service.grpc_module.grpc.bapi.models import LatestVersionBuild
+from utl.pushme.pushme import pushme
+from utl.代理.SealedRequests import my_async_httpx as _my_sealed_req
+from utl.代理.request_with_proxy import request_with_proxy
+from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
 
 proxy_req = request_with_proxy()
 _custom_proxy = CONFIG.custom_proxy
@@ -53,7 +54,7 @@ def get_request_func(use_custom_proxy=False) -> callable:
         return proxy_req.request_with_proxy  # 代理池里面的ip发起请求
 
 
-def _gen_headers(*extra_headers) -> dict:
+def _gen_headers(*extra_headers:dict) -> dict:
     ua = CONFIG.rand_ua
     ua_parser = UserAgentParser(ua, is_mobile=False, fetch_dest='empty', fetch_mode='cors',
                                 fetch_site='same-site')
@@ -231,6 +232,7 @@ async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_
                                                                             mode='rand',
                                                                             proxies=_custom_proxy
                                                                             )
+            req = req.json()
         else:
             req = await get_request_func(use_custom_proxy=use_custom_proxy)(
                 is_use_available_proxy=is_use_available_proxy,
@@ -288,6 +290,7 @@ async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, ri
             headers=headers,
             proxies=_custom_proxy
         )
+        dynamic_req = dynamic_req.json()
     else:
         dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(
             is_use_available_proxy=is_use_available_proxy,
@@ -497,56 +500,35 @@ async def resource_abtest_abserver(
     return response
 
 
-# async def get_guest_id():
-#     """
-#     获取metadata生成时的guest_id，一直会使用下去
-#     :return:
-#     """
-#     url = 'https://passport.bilibili.com/x/passport-user/guest/reg'
-#     ua = f'Mozilla/5.0 BiliDroid/{app_version_name} (bbcallen@gmail.com) os/android model/{model} mobi_app/android build/{app_build} channel/{channel} innerVer/{app_build} osVer/{osver} network/2'
-#     headers_raw = [
-#         ('fp_local', fp_local),
-#         ("fp_remote", fp_remote),
-#         ('session_id', session_id),
-#         ('buvid', buvid),
-#         ("env", 'prod'),
-#         ('app-key', 'android'),
-#         ('env', 'prod'),
-#         ('app-key', 'android'),
-#         ('user-agent', ua),
-#         ("x-bili-trace-id", gen_trace_id()),
-#         ('x-bili-aurora-eid', ''),
-#         ("x-bili-mid", ''),
-#         ('x-bili-aurora-zone', ''),
-#         ("x-bili-gaia-vtoken", ""),
-#         ("x-bili-ticket", ticket),
-#         ('content-type', 'application/x-www-form-urlencoded; charset=utf-8'),
-#         ('accept-encoding', 'gzip')
-#     ]
-#     params = {
-#         'build': brand,
-#         'buvid': app_build,
-#         'buvid': buvid,
-#         'c_locale': 'zh_CN',
-#         "channel": channel,
-#         'device_info': 'phone',
-#         'disable_rcmd': 0,
-#         'dt': '',
-#         'local_id': buvid,
-#         'mobi_app': 'android',
-#         'platform': 'android',
-#         's_locale': 'zh_CN',
-#         'statistics': json.dumps({"appId": 1, "platform": 3, "version": app_version_name, "abtest": ""},
-#                                  separators=(',', ':')),
-#         'ts': int(time.time()),
-#     }
-#     signed_params = appsign(params)
-#     response = await get_request_func(use_custom_proxy=True)(url=url, method='get', params=signed_params, )
-#     bapi_log.debug(f'\n{url}\t发请求验证成功：{response.json()}')
-#     return response
+async def xlive_web_interface_v1_index_getWebAreaList(
+        use_custom_proxy=False,
+        is_use_available_proxy=False
+):
+    url = 'https://api.live.bilibili.com/xlive/web-interface/v1/index/getWebAreaList?source_id=2'
+    headers = _gen_headers({
+        'origin': 'https://live.bilibili.com',
+        'referer': 'https://live.bilibili.com/'
+    })
+    resp = await get_request_func(use_custom_proxy=use_custom_proxy)(
+        method='GET',
+        url=url,
+        headers=headers,
+        proxies=_custom_proxy,
+        is_use_available_proxy=is_use_available_proxy,
+        mode='single',
+    )
+
+    if use_custom_proxy:
+        return resp.json()
+    else:
+        return resp
+
+
 
 
 if __name__ == "__main__":
     # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
-    _____x = asyncio.run(get_lot_notice(2, 38640195, None, True))
-    print(_____x)
+    print(_gen_headers({
+        'origin': 'https://live.bilibili.com',
+        'referer': 'https://live.bilibili.com/'
+    }))

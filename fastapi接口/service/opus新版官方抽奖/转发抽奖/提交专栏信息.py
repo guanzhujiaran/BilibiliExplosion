@@ -1,25 +1,27 @@
+import asyncio
+import json
+import os
+import threading
+import time
 from copy import deepcopy
 from typing import List
 
+import pandas as pd
+
+import b站cookie.globalvar as gl
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
-from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
-from utl.pushme.pushme import pushme
-import time
 from fastapi接口.service.opus新版官方抽奖.Model.OfficialLotModel import LotDetail
 from fastapi接口.service.opus新版官方抽奖.转发抽奖.生成专栏信息 import GenerateOfficialLotCv
-import pandas as pd
-import threading
-import os
-import b站cookie.globalvar as gl
-import json
-import asyncio
+from fastapi接口.utils.Common import asyncio_gather
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from utl.pushme.pushme import pushme
 from utl.代理.request_with_proxy import request_with_proxy
 
 
@@ -138,7 +140,7 @@ class ExtractOfficialLottery:
         for da in original_lot_notice:
             task = asyncio.create_task(_solve_lot_data(da, running_status))
             task_list.append(task)
-        await asyncio.gather(*task_list)
+        await asyncio_gather(*task_list, log=official_lot_logger)
         return new_updated_lot_data
 
     async def get_lot_dict(self, all_lots: List[Lotdata], latest_lots_judge_ts=20 * 3600) -> \
@@ -238,7 +240,7 @@ class ExtractOfficialLottery:
             )
             ret_list.append(result)
 
-        await asyncio.gather(*[_construct_lot_detail_bulk(x) for x in lot_data_list])
+        await asyncio_gather(*[_construct_lot_detail_bulk(x) for x in lot_data_list], log=official_lot_logger)
 
         return ret_list
 
@@ -252,11 +254,13 @@ class ExtractOfficialLottery:
         all_lots_with_no_business_id = await self.sql.get_all_lot_with_no_business_id()
 
         self.log.critical(f'未同步到Lotdata表中的官方抽奖数量:{len(all_lots_with_no_business_id)}')
-        await asyncio.gather(*[
-            dyn_detail_scrapy.resolve_dynamic_details_card(json.loads(x.bilidyndetail.dynData, strict=False),
-                                                           is_running_scrapy=False) for x in
-            all_lots_with_no_business_id
-        ])
+        await asyncio_gather(
+            *[
+                dyn_detail_scrapy.resolve_dynamic_details_card(json.loads(x.bilidyndetail.dynData, strict=False),
+                                                               is_running_scrapy=False) for x in
+                all_lots_with_no_business_id
+            ],
+            log=official_lot_logger)
 
         all_official_lots_undrawn = await self.sql.get_all_lot_not_drawn()
         self.log.critical(f'未开奖的官方抽奖数量:{len(all_official_lots_undrawn)}')
@@ -280,10 +284,12 @@ class ExtractOfficialLottery:
 
             self.refresh_official_lot_progress = ProgressCounter()
             self.refresh_official_lot_progress.total_num = len(all_official_lots_undrawn)
-            await asyncio.gather(*[
-                __(x) for x in all_official_lots_undrawn
-            ]
-                                 )
+            await asyncio_gather(
+                *[
+                    __(x) for x in all_official_lots_undrawn
+                ],
+                log=official_lot_logger
+            )
             self.refresh_official_lot_progress.is_running = False
 
         all_lot_official_data, latest_updated_official_lot_data, all_lot_charge_data, latest_updated_charge_lot_data = \

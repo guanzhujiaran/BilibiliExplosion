@@ -1,6 +1,6 @@
 import asyncio
 import time
-from enum import Enum
+from enum import StrEnum
 from typing import List
 from fastapi接口.log.base_log import milvus_db_logger
 from fastapi接口.models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
@@ -8,7 +8,7 @@ from fastapi接口.utils.Common import lock_retry_wrapper
 
 
 class Sqlhelper:
-    class Collections(str, Enum):
+    class Collections(StrEnum):
         bili_lot_data = 'bili_lot_data'
 
     def __init__(self):

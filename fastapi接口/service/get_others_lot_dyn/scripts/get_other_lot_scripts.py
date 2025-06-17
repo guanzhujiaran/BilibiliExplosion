@@ -4,7 +4,7 @@ from typing import Sequence
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotuserspaceresp
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper,get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import BiliDynamicItem
-from fastapi接口.utils.Common import sem_gen
+from fastapi接口.utils.Common import sem_gen, asyncio_gather
 
 _sem = sem_gen()
 
@@ -86,7 +86,7 @@ async def get_other_lot_by_lot_round_id(lot_round_id):
         task = asyncio.create_task(x.judge_lottery(highlight_word_list,lot_round_id))
         task.add_done_callback(lambda __: _sem.release())
         task_set.add(task)
-    await asyncio.gather(
+    await asyncio_gather(
         *task_set
     )
     print(all_dynamic_items)

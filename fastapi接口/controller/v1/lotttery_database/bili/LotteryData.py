@@ -1,21 +1,22 @@
 """
 单轮回复
 """
-import asyncio
 from typing import List
 
 from fastapi import Query, Body
+from fastapi_cache.decorator import cache
+
 from fastapi接口.models.common import CommonResponseModel, ResponsePaginationItems
-from fastapi接口.service.compo.text_embed import search_lottery_text
-from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
-from .base import new_router
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, OfficialLotteryResp, \
     AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp, AddDynamicLotteryReq, \
     AddTopicLotteryReq, BulkAddDynamicLotteryReq, BulkAddDynamicLotteryRespItem, LotdataResp
-from fastapi_cache.decorator import cache
+from fastapi接口.service.compo.text_embed import search_lottery_text
+from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.lottery_database.bili_lotterty import get_common_lottery, get_reserve_lottery, \
     get_official_lottery, get_all_lottery, get_charge_lottery, get_topic_lottery, get_live_lottery, \
     add_dynamic_lottery_by_dynamic_id, add_topic_lottery
+from fastapi接口.utils.Common import asyncio_gather
+from .base import new_router
 
 router = new_router()
 
@@ -216,7 +217,8 @@ async def api_BulkAddLottery(
         _msg, _is_succ = await add_dynamic_lottery_by_dynamic_id(dynamic_id_or_url)
         return BulkAddDynamicLotteryRespItem(dynamic_id=dynamic_id_or_url, msg=_msg, is_succ=_is_succ)
 
-    resp_data = await asyncio.gather(*(_solve_lottery(dynamic_id_or_url) for dynamic_id_or_url in data.dynamic_id_or_urls), return_exceptions=True)
+    resp_data = await asyncio_gather(
+        *(_solve_lottery(dynamic_id_or_url) for dynamic_id_or_url in data.dynamic_id_or_urls))
 
     return CommonResponseModel(code=0, data=resp_data)
 

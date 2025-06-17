@@ -8,7 +8,7 @@ class SleepTimeGenerator:
             self,
             short_wait_range: Tuple[float, float] = (1, 5.0),  # 短等待时间范围 (秒)
             medium_wait_range: Tuple[float, float] = (7.0, 10.0),  # 中等等待时间范围 (秒)
-            long_wait_range: Tuple[float, float] = (300, 600),  # 长等待时间范围 (秒)
+            long_wait_range: Tuple[float, float] = (100, 200),  # 长等待时间范围 (秒)
             medium_wait_frequency: int = 5,  # 每 N 次访问触发一次中等等待 (例如：每 5 次)
             long_wait_frequency: int = 150,  # 每 M 次访问触发一次长等待 (例如：每 20 次)
             random_long_wait_probability: float = 0.0,  # 每次访问时随机触发长等待的概率 (0.0 - 1.0)

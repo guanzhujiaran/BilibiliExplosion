@@ -1,14 +1,9 @@
 from copy import deepcopy
-
 import base64
-
 import json
-
-from enum import Enum
-
+from enum import StrEnum
 import random
 from typing import Literal, Dict
-
 import requests
 import time
 import urllib.parse
@@ -120,7 +115,7 @@ class My_dm_img_Redis(RedisManagerBase):
             "WbiKeys": WbiKeys()
         }
 
-    class RedisMap(str, Enum):
+    class RedisMap(StrEnum):
         WbiKeys = "WbiKeys"
 
     async def get_wbiKeys(self) -> WbiKeys:
