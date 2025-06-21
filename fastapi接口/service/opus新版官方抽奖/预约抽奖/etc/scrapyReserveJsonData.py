@@ -60,8 +60,11 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
     async def is_stop(self) -> bool:
         async with self.dynamic_ts_lock:
             if int(time.time()) - self.dynamic_timestamp.dynamic_timestamp <= self.EndTimeSeconds:  # 如果超过了最大data
-                if self.null_stop_plugin.sequential_null_count > 30:
+                self.encounter_end_time_seconds_times += 1
+                if self.encounter_end_time_seconds_times > 10 and self.null_stop_plugin.sequential_null_count > 30:
                     return True
+                else:
+                    return False
             else:
                 reserve_lot_logger.debug(
                     f"最近的预约时间间隔过长{self.dynamic_timestamp.get_time_str_until_now()}")
@@ -76,15 +79,16 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         return await self.resolve_reserve(params)
 
     def __init__(self):
-        self.sem_limit = 10
+        self.sem_limit = 1  # 因为用的是自己的代理，所以速度可以慢点
         self.stats_plugin = StatsPlugin(self)
-        self.null_time_quit = 500  # 遇到连续500条data为None的sid 则退出
+        self.null_time_quit = 1000  # 遇到连续500条data为None的sid 则退出
         self.null_stop_plugin = SequentialNullStopPlugin(self, self.null_time_quit)
         super().__init__(
             plugins=[self.stats_plugin, self.null_stop_plugin],
             max_sem=self.sem_limit,
             _logger=reserve_lot_logger
         )
+
         self._use_custom_proxy = True
         self._is_use_available_proxy = False  # 是否套用急需完成的api的那套设置
         self.sqlHelper = bili_reserve_sqlhelper
@@ -96,6 +100,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         self.proxy_request.mode = 'rand'
         # {"proxy":{"http":1.1.1.1},"status":"可用|-412|失效","update_ts":time.time(), }
         self.EndTimeSeconds = 3 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
+        self.encounter_end_time_seconds_times = 0
         self.rollback_num = 100  # 获取完之后的回滚数量
         self.dynamic_ts_lock = asyncio.Lock()
         self.highlight_word_list = ['jd卡', '京东卡', '红包', '主机', '显卡', '电脑', '天猫卡', '猫超卡', '现金',
@@ -252,7 +257,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         totoal_count1 = 0
         totoal_count2 = 0
         for ids_index in range(len(self.ids_list)):
-            none_num1 = self.null_stop_plugin.sequential_null_count
+            none_num1 = self.null_stop_plugin.sequential_null_count if int(
+                time.time()) - self.dynamic_timestamp.dynamic_timestamp < self.EndTimeSeconds else - self.null_time_quit
             async with self.ids_change_lock:
                 self.ids = self.ids_list[ids_index]
             async with self.dynamic_ts_lock:
@@ -267,7 +273,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
                 f'最终成功的ids：https://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_success_params}\n'
                 f'最终ids: https://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_params}\n'
             )
-        none_num2 = self.null_stop_plugin.sequential_null_count
+        none_num2 = self.null_stop_plugin.sequential_null_count if int(
+            time.time()) - self.dynamic_timestamp.dynamic_timestamp < self.EndTimeSeconds else - self.null_time_quit
         totoal_count2 = self.stats_plugin.succ_count
         finnal_rid_list = [
             str(self.ids_list[0] - self.rollback_num - none_num1),
@@ -280,8 +287,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             f'当前rid记录分别回滚{self.rollback_num + none_num1}和{self.rollback_num + none_num2}条'
             f'最终写入文件rid记录：{finnal_rid_list}')
 
-        with open(os.path.join(self.current_dir, 'idsstart'), 'w', encoding='utf-8') as ridstartfile:
-            ridstartfile.write("\n".join(
+        async with aiofiles.open(os.path.join(self.current_dir, 'idsstart'), 'w', encoding='utf-8') as ridstartfile:
+            await ridstartfile.write("\n".join(
                 finnal_rid_list))
         self.write_in_file()
         latest_reserve_lots = await self.generate_update_reserve_lotterys_by_round_id(self.now_round_id)
@@ -293,6 +300,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             round_lot_num=len(latest_reserve_lots),
         )
         await self.sqlHelper.add_reserve_round_info(new_round_info)
+        await self.refresh_not_drawn_lottery()
 
     async def generate_update_reserve_lotterys_by_round_id(self, round_id) -> list[TUpReserveRelationInfo]:
         """
@@ -371,6 +379,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             reserve_lot_logger.exception('获取rid开始文件失败')
             raise e
 
+
+reserve_robot = ReserveScrapyRobot()
 
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()

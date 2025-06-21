@@ -4,10 +4,8 @@ import os
 import time
 from pathlib import Path
 from typing import Any
-
 import aiofiles
 import pandas as pd
-
 from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.models.v1.background_service.background_service_model import ProgressStatusResp
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
@@ -15,7 +13,6 @@ from fastapi接口.service.BaseCrawler.model.base import WorkerStatus, ParamsTyp
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.samsclub.Sql.SqlHelper import sql_helper
 from fastapi接口.service.samsclub.api.samsclub_api import sams_club_api
-from fastapi接口.service.samsclub.exceptions.error import StopError
 from fastapi接口.utils.SleepTimeGen import SleepTimeGenerator
 
 
@@ -36,13 +33,13 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
         await self.grouping_list_downloader(first_category, second_category)
         return WorkerStatus.complete
 
+
     def __init__(self):
         self.api = sams_club_api
         # 设置配置
         self.concurrent_num = 1
         self.sleep_time_gen = SleepTimeGenerator()
         self.delay_gen = self.sleep_time_gen.continuous_generator()
-        self._stop_flag = False
         self.sql_helper = sql_helper
         self.fetch_grouping_id_ts = 0
         self.api.headers_gen.version_str = "5.0.123"
@@ -63,18 +60,6 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
                                                                                                          f'{datetime.datetime.now().year}/'
                                                                                                          f'{datetime.datetime.now().month}/'
                                                                                                          f'{datetime.datetime.now().day}/{first_cate}_{second_cate}_{pn}.csv')
-
-    @property
-    def stop_flag(self):
-        return self._stop_flag
-
-    @stop_flag.setter
-    def stop_flag(self, value):
-        self._stop_flag = value
-
-    def check_stop(self):
-        if self.stop_flag:
-            raise StopError("触发停止条件")
 
     async def grouping_id_downloader(self):
         if not self.fetch_grouping_id_ts:
@@ -107,8 +92,8 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
                 await self.sql_helper.bulk_upsert_grouping_info(children)
 
         self.log.info(f'grouping_id_downloader 完成')
-        with open(self.FilePath.fetch_grouping_id_ts, 'w') as f:
-            f.write(str(int(time.time())))
+        async with aiofiles.open(self.FilePath.fetch_grouping_id_ts, 'w') as f:
+            await f.write(str(int(time.time())))
 
     async def grouping_list_downloader(self, firstCategoryId, secondCategoryId, pageSize: int = 20):
         """
@@ -185,7 +170,7 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
                         2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
                     await self.run((0, 0))
                 except Exception as e:
-                    self.log.opt(exception=True).critical(f"发生异常：{e}")
+                    self.log.exception(f"发生异常：{e}")
 
     async def get_status(self) -> ProgressStatusResp:
         return ProgressStatusResp(
@@ -202,4 +187,4 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
 sams_club_crawler = SamsClubCrawler()  # 直接单例模式运行
 
 if __name__ == "__main__":
-    print(sams_club_crawler.__class__.__name__)
+    asyncio.run(sams_club_crawler.main())

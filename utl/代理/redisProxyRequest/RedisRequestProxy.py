@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # 由redis和mysql实现数据的统一
+import asyncio
 import json
 import random
 import time
@@ -109,7 +110,7 @@ class RequestWithProxy:
     async def background_service(self):
         start_ts = int(time.time())
         request_with_proxy_logger.critical(f'开始【{self.__class__.__name__}】的后台定时任务')
-        task1 = get_proxy_methods.get_proxy()
+        task1 = asyncio.create_task(get_proxy_methods.get_proxy())
         await asyncio_gather(
             task1,
             log=self.log

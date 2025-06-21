@@ -14,7 +14,7 @@ GLOBAL_SEM = asyncio.Semaphore(GLOBAL_SEM_LIMIT_NUM)
 _comm_lock = asyncio.Lock()
 
 
-def sem_gen(sem_limit=50):
+def sem_gen(sem_limit=10):
     return asyncio.Semaphore(sem_limit)
 
 

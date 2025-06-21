@@ -16,7 +16,7 @@ from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
 from fastapi接口.service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
     upsert_milvus_bili_lot_data_prop, router, get_broker
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.定时获取话题抽奖 import topic_robot
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from utl.pushme.pushme import pushme
@@ -191,7 +191,7 @@ class UpsertTopicLot(BaseFastStreamMQ):
         try:
             MQ_logger.debug(
                 f"【{module_name}】收到消息：{_body}")
-            lot_data = await topic_robot.pipeline(_body.topic_id, use_sem=False)
+            lot_data = await topic_robot.pipeline(_body.topic_id)
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{module_name} consume error: {e}')

@@ -5,6 +5,7 @@ import os
 import aiofiles
 from curl_cffi.requests.exceptions import RequestException
 
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.service.samsclub.exceptions.error import UnknownError
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import update_do_encrypt_key

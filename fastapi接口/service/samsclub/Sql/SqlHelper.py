@@ -1,8 +1,9 @@
 from typing import Dict, Any, Optional, List
+
 from sqlalchemy import update, select, func
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, joinedload
 
 from CONFIG import CONFIG
 from fastapi接口.service.samsclub.Sql.models import (
@@ -115,7 +116,7 @@ class SQLHelper:
                     case "stockInfo":
                         obj_list.append(gen_update_obj(model_class, items))
                     case "priceInfo":
-                        cur_price, prev_price = await self.get_price_info_by_spu_id(spu_id,db)
+                        cur_price, prev_price = await self.get_price_info_by_spu_id(spu_id, db)
                         for item in items:
                             price = item.get('price')
                             if item.get('priceTypeName') == '销售价':
@@ -379,17 +380,25 @@ class SQLHelper:
         return frontCategoryIds
 
     @sql_retry_wrapper
-    async def get_grouping_info_by_category_id(self, category_id) -> GroupingInfo | None:
+    async def get_full_spu_info_by_spu_id(self, spu_id):
         """
         查询所有未完成的任务（is_finished != 1）
         返回 [ {first_category_id: int, second_category_id: int}, ... ]
         """
         async with self.async_session() as db:
+            stmt = select(SpuInfo).options(
+                joinedload(SpuInfo.spu_category),  # 加载 spu_category 子表
+                joinedload(SpuInfo.spu_new_tag_info),  # 加载 spu_new_tag_info 子表
+                joinedload(SpuInfo.spu_price_info),  # 加载 spu_price_info 子表
+                joinedload(SpuInfo.spu_tag_info),  # 加载 spu_tag_info 子表
+                joinedload(SpuInfo.spu_video_info)  # 加载 spu_video_info 子表
+            ).where(SpuInfo.spuId == spu_id).limit(1)
             result = await db.execute(
-                select(GroupingInfo)
-                .where(GroupingInfo.groupingId == category_id)
-                .limit(1)
+                stmt
             )
+            return result.scalars().first()
+
+
 sql_helper = SQLHelper()
 
 if __name__ == '__main__':
@@ -397,7 +406,7 @@ if __name__ == '__main__':
 
 
     async def _test():
-        res = await sql_helper.get_grouping_infos_by_level(2)
+        res = await sql_helper.get_full_spu_info_by_spu_id(2)
         print(res)
 
 

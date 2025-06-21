@@ -32,7 +32,7 @@ class GetProxyMethods:
     get_proxy_sep_time = 2 * 3600  # 获取代理的间隔
     check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
     GetProxy_Flag = False
-    _sem = sem_gen(100)
+    _sem = sem_gen()
 
     # region a从代理网站获取代理
 

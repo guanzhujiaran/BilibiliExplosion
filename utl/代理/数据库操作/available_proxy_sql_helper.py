@@ -1,14 +1,16 @@
 import asyncio
 from datetime import datetime, timedelta
 from typing import Optional
-from sqlalchemy import func, select, delete, update, and_, or_
+
+from sqlalchemy import func, select, delete, and_, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import selectinload
+
 from CONFIG import CONFIG
-from fastapi接口.utils.Common import GLOBAL_SCHEDULER, lock_retry_wrapper, sql_retry_wrapper
-from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import AvailableProxy, ProxyTab
 from fastapi接口.log.base_log import sql_log
+from fastapi接口.utils.Common import sql_retry_wrapper
+from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import AvailableProxy, ProxyTab
 
 
 class AvailableProxySqlHelper:
@@ -78,67 +80,60 @@ class AvailableProxySqlHelper:
         Updates the usage counter and timestamps upon successful selection.
         Adjusts the internal flag 'use_good_proxy_flag' based on availability.
         """
-        try:
-            available_num = await self.get_num(is_available=True)
-            while 1:
-                if available_num > self.MIN_USABLE_PROXY_NUM and self.use_good_proxy_flag:
-                    now = datetime.now()
-                    two_hours_ago = now - timedelta(hours=2)
-                    async with self.session() as session:
-                        async with session.begin():
-                            stmt = (
-                                select(AvailableProxy)
-                                .options(selectinload(AvailableProxy.proxy_tab))  # <--- Eager load ProxyTab
-                                .where(
-                                    AvailableProxy.available == True,
-                                    or_(
-                                        AvailableProxy.counter <= 20,
-                                        AvailableProxy.max_counter_ts == None,
-                                        AvailableProxy.max_counter_ts < two_hours_ago,
-                                        and_(AvailableProxy.resp_code == -352,
-                                             AvailableProxy.latest_352_ts < two_hours_ago),
-                                        and_(AvailableProxy.resp_code == -412,
-                                             AvailableProxy.latest_used_ts < two_hours_ago)
-                                    )
+        available_num = await self.get_num(is_available=True)
+        while 1:
+            if available_num > self.MIN_USABLE_PROXY_NUM and self.use_good_proxy_flag:
+                now = datetime.now()
+                two_hours_ago = now - timedelta(hours=2)
+                async with self.session() as session:
+                    async with session.begin():
+                        stmt = (
+                            select(AvailableProxy)
+                            .options(selectinload(AvailableProxy.proxy_tab))  # <--- Eager load ProxyTab
+                            .where(
+                                AvailableProxy.available == True,
+                                or_(
+                                    AvailableProxy.counter <= 20,
+                                    AvailableProxy.max_counter_ts == None,
+                                    AvailableProxy.max_counter_ts < two_hours_ago,
+                                    and_(AvailableProxy.resp_code == -352,
+                                         AvailableProxy.latest_352_ts < two_hours_ago),
+                                    and_(AvailableProxy.resp_code == -412,
+                                         AvailableProxy.latest_used_ts < two_hours_ago)
                                 )
-                                .order_by(func.rand())
-                                .limit(1)
-                                .with_for_update(skip_locked=True)
                             )
-                            result = await session.execute(stmt)
-                            proxy_available = result.scalars().first()  # Renamed variable for clarity
+                            .order_by(func.rand())
+                            .limit(1)
+                            .with_for_update(skip_locked=True)
+                        )
+                        result = await session.execute(stmt)
+                        proxy_available = result.scalars().first()  # Renamed variable for clarity
 
-                            if proxy_available:
-                                # --- Update AvailableProxy stats ---
-                                proxy_available.counter += 1
-                                proxy_available.latest_used_ts = now
+                        if proxy_available:
+                            # --- Update AvailableProxy stats ---
+                            proxy_available.counter += 1
+                            proxy_available.latest_used_ts = now
 
-                                if proxy_available.counter > 20 and not proxy_available.max_counter_ts:
-                                    proxy_available.max_counter_ts = now
-                                if proxy_available.counter > 20 and proxy_available.max_counter_ts < two_hours_ago:
-                                    proxy_available.counter = 1
+                            if proxy_available.counter > 20 and not proxy_available.max_counter_ts:
+                                proxy_available.max_counter_ts = now
+                            if proxy_available.counter > 20 and proxy_available.max_counter_ts < two_hours_ago:
+                                proxy_available.counter = 1
 
-                                if proxy_available.resp_code == -352 and proxy_available.latest_352_ts < two_hours_ago:
-                                    proxy_available.resp_code = 0
-                                # --- Check if ProxyTab was loaded ---
-                                if not proxy_available.proxy_tab:
-                                    return None, available_num  # Treat as failure
-                                return proxy_available, available_num  # Return the AvailableProxy object (caller will access .proxy_tab)
-                            else:
-                                return None, available_num
-                else:
-                    if available_num > self.MAX_USABLE_PROXY_NUM:
-                        self.use_good_proxy_flag = True
-                        continue
-                    if available_num < self.MIN_USABLE_PROXY_NUM:
-                        self.use_good_proxy_flag = False
-                    return None, available_num
-        except SQLAlchemyError as e:
-            self.log.error(f"Database error in get_rand_available_proxy_sql: {e}", exc_info=True)
-            return None, 0
-        except Exception as e:
-            self.log.error(f"Unexpected error in get_rand_available_proxy_sql: {e}", exc_info=True)
-            return None, 0
+                            if proxy_available.resp_code == -352 and proxy_available.latest_352_ts < two_hours_ago:
+                                proxy_available.resp_code = 0
+                            # --- Check if ProxyTab was loaded ---
+                            if not proxy_available.proxy_tab:
+                                return None, available_num  # Treat as failure
+                            return proxy_available, available_num  # Return the AvailableProxy object (caller will access .proxy_tab)
+                        else:
+                            return None, available_num
+            else:
+                if available_num > self.MAX_USABLE_PROXY_NUM:
+                    self.use_good_proxy_flag = True
+                    continue
+                if available_num < self.MIN_USABLE_PROXY_NUM:
+                    self.use_good_proxy_flag = False
+                return None, available_num
 
     # --- Keep existing methods ---
     @sql_retry_wrapper
@@ -236,36 +231,30 @@ class AvailableProxySqlHelper:
         """
         proxy_id = proxy_tab.proxy_id
         computed_proxy_str = proxy_tab.computed_proxy_str
-        try:
-            async with self.session() as session:
-                stmt = select(AvailableProxy).where(AvailableProxy.proxy_tab_id == proxy_id).limit(1)
-                result = await session.execute(stmt)
-                proxy = result.scalars().first()  # This is the AvailableProxy object
-                now = datetime.now()
-                if proxy:
-                    proxy.available = available
-                    proxy.resp_code = resp_code
-                    proxy.latest_used_ts = now
-                    if resp_code == -352:
-                        proxy.latest_352_ts = now
-                elif available:
-                    new_proxy = AvailableProxy(
-                        proxy_tab_id=proxy_id,
-                        ip=computed_proxy_str,  # Assuming proxy_tab.ip is accessible or passed
-                        available=True,  # Explicitly True as this is the insert condition
-                        resp_code=resp_code,  # Set initial resp_code
-                        counter=1,  # Start counter at 0 for a new available proxy
-                        latest_used_ts=now,
-                        max_counter_ts=None,  # No max counter reached yet
-                        latest_352_ts=now if resp_code == -352 else None
-                    )
-                    session.add(new_proxy)
-                await session.commit()
-        except SQLAlchemyError as e:
-            self.log.exception(f"Error upserting AvailableProxy details for proxy_tab_id={proxy_tab.proxy_id}: {e}",
-                               exc_info=True)
-            # Rollback handled by context manager
-            raise  # Re-raise or handle error appropriately
+        async with self.session() as session:
+            stmt = select(AvailableProxy).where(AvailableProxy.proxy_tab_id == proxy_id).limit(1)
+            result = await session.execute(stmt)
+            proxy = result.scalars().first()  # This is the AvailableProxy object
+            now = datetime.now()
+            if proxy:
+                proxy.available = available
+                proxy.resp_code = resp_code
+                proxy.latest_used_ts = now
+                if resp_code == -352:
+                    proxy.latest_352_ts = now
+            elif available:
+                new_proxy = AvailableProxy(
+                    proxy_tab_id=proxy_id,
+                    ip=computed_proxy_str,  # Assuming proxy_tab.ip is accessible or passed
+                    available=True,  # Explicitly True as this is the insert condition
+                    resp_code=resp_code,  # Set initial resp_code
+                    counter=1,  # Start counter at 0 for a new available proxy
+                    latest_used_ts=now,
+                    max_counter_ts=datetime.fromtimestamp(17000000),  # No max counter reached yet
+                    latest_352_ts=now if resp_code == -352 else None
+                )
+                session.add(new_proxy)
+            await session.commit()
 
 
 sql_helper = AvailableProxySqlHelper()

@@ -320,7 +320,7 @@ class SQLHelperClass:
                             #     f"Processing chunk {cur_chunk // chunk_size + 1}/{total_proxies_to_update // chunk_size}: {len(chunk)} success!")
                         break
                     except Exception as e:
-                        sql_log.error(f"An unexpected error occurred: {e}", exc_info=True)
+                        sql_log.error(f"An unexpected error occurred: {e}")
                         await asyncio.sleep(10)
 
             try:
@@ -331,10 +331,10 @@ class SQLHelperClass:
                 sql_log.critical(f"Successfully updated {total_proxies_to_update} proxies in the database.")
             except Exception as err:
                 # Catch other potential errors during processing
-                sql_log.error(f"An unexpected error occurred: {err}", exc_info=True)
+                sql_log.error(f"An unexpected error occurred: {err}")
         except Exception as err:
             # Catch errors during Redis fetch or initial data processing
-            sql_log.error(f"Error during sync_2_database setup: {err}", exc_info=True)
+            sql_log.error(f"Error during sync_2_database setup: {err}")
             # Handle error appropriately
 
     async def check_redis_data(self, force=False):

@@ -2,8 +2,11 @@
 import os
 from datetime import datetime
 from typing import Optional, AsyncGenerator, Any
+
+import aiofiles
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger as default_logger  # 统一别名为 default_logger
+
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import ParamsType, WorkerStatus
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER
@@ -43,13 +46,13 @@ class CrawlerExecutionInfo:
             self.logger.exception(f"[{self.crawler_name}] 加载上次执行时间失败，使用默认值。")
             self.last_exec_time = datetime.fromtimestamp(86400)  # 默认时间点：1970-01-02 00:00:00
 
-    def save_last_exec_time(self):
+    async def save_last_exec_time(self):
         now = datetime.now()
         self.last_exec_time = now
         file_path = self._get_last_exec_file_path()
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(str(int(now.timestamp())))
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(str(int(now.timestamp())))
         except Exception as e:
             self.logger.exception(f"[{self.crawler_name}] 写入上次执行时间失败：{e}")
 
@@ -73,13 +76,11 @@ class GenericCrawlerScheduler:
             crawler: UnlimitedCrawler,
             cron_expr: str,
             default_interval_seconds: int = 2 * 3600,
-            run_on_start: bool = True
     ):
         self.crawler = crawler
         self.crawler_name = crawler.__class__.__name__
         self.cron_expr = cron_expr
         self.default_interval_seconds = default_interval_seconds
-        self.run_on_start = run_on_start
         self.job_id = f"crawler_job_{self.crawler_name}"
         self.logger = self.crawler.log
 
@@ -116,27 +117,27 @@ class GenericCrawlerScheduler:
                 next_run_time=datetime.now(),  # 立即执行第一次
                 coalesce=True,  # 错过的任务合并为一次
                 max_instances=1,  # 同时只运行一个实例
-                misfire_grace_time=360  # 允许延迟最多 360 秒
+                misfire_grace_time=3600  # 允许延迟最多 3600 秒
             )
             self.logger.info(f"[{self.crawler_name}] 已添加新任务，首次运行时间已设为现在，将立即尝试执行")
 
     @async_pushme_try_catch_decorator
     async def run(self):
-        self.logger.info(f"[{self.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
+        self.logger.critical(f"[{self.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
 
         if self.exec_info.is_need_to_execute():
             try:
                 self.logger.info(f"[{self.crawler_name}] 开始执行爬虫任务...")
                 await self.crawler.main()  # 调用异步 main 函数
-                self.exec_info.save_last_exec_time()
+                await self.exec_info.save_last_exec_time()
             except Exception as e:
                 self.logger.exception(f"[{self.crawler_name}] 爬虫执行出错：{e}")
         else:
-            self.logger.info(f"[{self.crawler_name}] 当前不满足执行条件，跳过本次任务。")
+            self.logger.critical(f"[{self.crawler_name}] 当前不满足执行条件，跳过本次任务。")
 
     def start(self):
         if not GLOBAL_SCHEDULER.running:
-            self.logger.warning("调度器未运行，请确保已启动 GLOBAL_SCHEDULER。")
+            self.logger.critical("调度器未运行，请确保已启动 GLOBAL_SCHEDULER。")
         GLOBAL_SCHEDULER.resume_job(self.job_id)
 
     def pause(self):
@@ -148,6 +149,8 @@ class GenericCrawlerScheduler:
 
 if __name__ == '__main__':
     import asyncio
+
+
     class MockCrawler(UnlimitedCrawler):
         """模拟的爬虫类，仅用于测试"""
 
@@ -161,8 +164,9 @@ if __name__ == '__main__':
             pass
 
         async def main(self):
-            default_logger.info("[MockCrawler] 开始执行 main 方法...")
-            default_logger.info("[MockCrawler] main 方法执行完成")
+            self.log.info("[MockCrawler] 开始执行 main 方法...")
+            self.log.info("[MockCrawler] main 方法执行完成")
+
 
     async def _test_scheduler():
         # 启动全局调度器（如果尚未启动）
@@ -173,8 +177,7 @@ if __name__ == '__main__':
         scheduler = GenericCrawlerScheduler(
             crawler=crawler,
             cron_expr="*/1 * * * *",  # 每分钟执行一次
-            default_interval_seconds=60,  # 至少间隔 60 秒才能再次执行
-            run_on_start=True  # 这个参数现在只是保留，不再使用 create_task
+            default_interval_seconds=120,  # 至少间隔 120 秒才能再次执行
         )
 
         default_logger.info("调度器已启动，等待任务触发...")

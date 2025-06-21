@@ -18,12 +18,8 @@ from loguru import logger
 from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-
 from fastapi接口.utils.Common import asyncio_gather
-
 log = logger.bind(name='fastapi')
-
-
 class BaseModel(PydanticBaseModel):
     class Config:
         arbitrary_types_allowed = True

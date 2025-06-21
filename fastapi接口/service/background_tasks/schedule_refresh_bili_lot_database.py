@@ -3,9 +3,7 @@ import time
 import traceback
 from datetime import datetime, timedelta
 from typing import Union
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from fastapi接口.dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
 from fastapi接口.log.base_log import background_task_logger
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
@@ -34,7 +32,6 @@ async def _get_next_run_date():
     if latest_sync_datetime - datetime.now() < timedelta(hours=24):
         now = datetime.now()
         today_four_am = now.replace(hour=4, minute=0, second=0, microsecond=0)
-
         if now > today_four_am:
             # 如果现在时间已经超过今天的4点了，则计算明天4点的时间
             target_time = today_four_am + timedelta(days=1)

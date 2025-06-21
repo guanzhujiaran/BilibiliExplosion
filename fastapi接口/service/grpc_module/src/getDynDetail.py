@@ -13,11 +13,13 @@ from typing import Any
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
+from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign, get_lot_notice, reserve_relation_info
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.DynObjectClass import dynAllDetail
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.service.grpc_module.src.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from fastapi接口.utils.Common import sem_gen, asyncio_gather
@@ -61,7 +63,7 @@ class DynDetailScrapy(UnlimitedCrawler):
         return self.stop_counter.stop_flag
 
     def __init__(self):
-        max_sem = 500
+        max_sem = 100
         self.offset = 10  # 每次获取rid的数量，数值最好不要超过10，太大的话传输会出问题
         self.proxy_req = request_with_proxy()
         self.BiliGrpc = bili_grpc
@@ -81,13 +83,15 @@ class DynDetailScrapy(UnlimitedCrawler):
         self.Sqlhelper = grpc_sql_helper
         self.stop_counter: StopCounter = StopCounter()  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = sem_gen()  # 同时运行的协程数量
+        self.scrapy_sem = sem_gen(100)  # 同时运行的协程数量
         self.stop_limit_time = 2 * 3600  # 提前多少时间停止
         self.succ_counter = SuccCounter()
         self._BiliLotDataPublisher = None
+        self.status_plugin = StatsPlugin(self)
         super().__init__(
             max_sem=max_sem,
-            _logger=official_lot_logger
+            _logger=official_lot_logger,
+            plugins=[self.status_plugin]
         )
 
     @property
@@ -536,6 +540,8 @@ class DynDetailScrapy(UnlimitedCrawler):
             pushme(title='爬取动态任务出错', content=f'爬取动态任务出错：{e}')
         finally:
             self.succ_counter.is_running = False
+        lot_dyn_sort_by_date = LotDynSortByDate()
+        await lot_dyn_sort_by_date.main()
 
     # region 测试用
     async def _testget_dynamics_by_spec_rids(self, all_rids: list[int]):
@@ -574,12 +580,6 @@ class DynDetailScrapy(UnlimitedCrawler):
 
 
 dyn_detail_scrapy = DynDetailScrapy()
-# def test_get_all_details():
-#     dyn_detail_scrapy = DynDetailScrapy()
-#     resp = dyn_detail_scrapy.get_lot_notice(2, '260978218')
-#     lot_data = resp.get('data')
-#     dyn_detail_scrapy.Sqlhelper.upsert_lot_detail(lot_data)
-
 
 if __name__ == "__main__":
     asyncio.run(dyn_detail_scrapy._test_run())

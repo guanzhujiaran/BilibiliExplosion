@@ -54,7 +54,7 @@ def get_request_func(use_custom_proxy=False) -> callable:
         return proxy_req.request_with_proxy  # 代理池里面的ip发起请求
 
 
-def _gen_headers(*extra_headers:dict) -> dict:
+def _gen_headers(*extra_headers: dict) -> dict:
     ua = CONFIG.rand_ua
     ua_parser = UserAgentParser(ua, is_mobile=False, fetch_dest='empty', fetch_mode='cors',
                                 fetch_site='same-site')
@@ -85,7 +85,35 @@ def get_latest_version_builds() -> list[LatestVersionBuild]:
 
 
 @_request_wrapper
-async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id: str | int | None = None,
+async def get_web_topic(
+        topic_id: int,
+        use_custom_proxy: bool = False,
+        is_use_available_proxy: bool = False
+):
+    url = 'https://app.bilibili.com/x/topic/web/details/top'
+    params = {
+        'topic_id': topic_id,
+        'source': 'Web'
+    }
+    headers = _gen_headers()
+
+    resp = await get_request_func(use_custom_proxy=use_custom_proxy)(
+        method='GET',
+        url=url,
+        params=params,
+        headers=headers,
+        proxies=_custom_proxy,
+        is_use_available_proxy=is_use_available_proxy,
+        mode='single',
+    )
+    if use_custom_proxy:
+        return resp.json()
+    else:
+        return resp
+
+
+@_request_wrapper
+async def get_lot_notice(business_type: str | int, business_id: str | int, origin_dynamic_id: str | int | None = None,
                          use_custom_proxy=False):
     """
     获取抽奖notice
@@ -112,32 +140,34 @@ async def get_lot_notice(business_type: int, business_id: str, origin_dynamic_id
                                                                              headers=_gen_headers(),
                                                                              )
         if resp.get('code') != 0:
-            pushme('get_lot_notice',
-                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type={business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            bapi_log.error(f'get_lot_notice响应代码错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             if resp.get('code') == -9999:
                 return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
-            await asyncio.sleep(10)
             bapi_log.critical(f'get_lot_notice响应代码错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            pushme('get_lot_notice响应代码错误！',
-                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
-                   f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            await asyncio.to_thread(
+                pushme, 'get_lot_notice响应代码错误！',
+                f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+                f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            await asyncio.sleep(100)
             continue
         resp_business_id = resp.get('data', {}).get('business_id')
         resp_business_type = resp.get('data', {}).get('business_type')
         if str(business_type) != '2' and str(business_id) != str(resp_business_id):  # 非图片动态响应才使用business_id判断
             bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            pushme(f'get_lot_notice响应内容错误，business_type{business_type}！',
-                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
-                   f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            await asyncio.to_thread(
+                pushme,
+                f'get_lot_notice响应内容错误，business_type{business_type}！',
+                f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+                f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             await asyncio.sleep(10)
             continue
         if str(business_type) == '2' and origin_dynamic_id and str(origin_dynamic_id) != str(resp_business_id):
             bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            pushme(f'get_lot_notice响应内容错误，business_type{business_type}！',
-                   f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
-                   f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            await asyncio.sleep(10)
+            await asyncio.to_thread(
+                pushme,
+                f'get_lot_notice响应内容错误，business_type{business_type}！',
+                f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+                f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+            await asyncio.sleep(100)
             continue
         return resp
 
@@ -353,7 +383,7 @@ async def get_geetest_reg_info(v_voucher: str,
     resp_json = response.json()
     if resp_json.get('code') == 0:  # gt=ac597a4506fee079629df5d8b66dd4fe 这个是web端的，目标是获取到app端的gt
         if resp_json.get('data').get('geetest') is None:
-            bapi_log.error(
+            bapi_log.warning(
                 f"\n该风控无法通过 captcha 解除！！！获取极验信息失败: {data}\n{resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
             return False
         bapi_log.debug(f"\n成功获取极验challenge：{resp_json}")
@@ -524,11 +554,6 @@ async def xlive_web_interface_v1_index_getWebAreaList(
         return resp
 
 
-
-
 if __name__ == "__main__":
     # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
-    print(_gen_headers({
-        'origin': 'https://live.bilibili.com',
-        'referer': 'https://live.bilibili.com/'
-    }))
+    print(asyncio.run(get_web_topic(114514, True)))

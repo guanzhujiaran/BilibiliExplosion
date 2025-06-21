@@ -49,7 +49,7 @@ async def get_available_proxy(
                     proxy_tab = available_proxy.proxy_tab
                     used_available_proxy = True
             except Exception as e:
-                sql_log.exception(f"Attempt {attempt}: Error getting from AvailableProxy: {e}", exc_info=True)
+                sql_log.exception(f"Attempt {attempt}: Error getting from AvailableProxy: {e}")
 
         # --- Attempt 2: Fallback to general ProxyTab table ---
         if not proxy_tab:  # Only if Attempt 1 failed or wasn't requested
@@ -68,7 +68,7 @@ async def get_available_proxy(
                 await get_proxy_methods.get_proxy()  # Fetch new proxies (likely puts into Redis)
                 await SQLHelper.check_redis_data()
             except Exception as e:
-                sql_log.exception(f"Attempt {attempt}: Error during proxy acquisition process: {e}", exc_info=True)
+                sql_log.exception(f"Attempt {attempt}: Error during proxy acquisition process: {e}")
             await asyncio.sleep(initial_retry_delay_seconds)
 
     # The while True loop ensures this point is never reached if a proxy is eventually found.

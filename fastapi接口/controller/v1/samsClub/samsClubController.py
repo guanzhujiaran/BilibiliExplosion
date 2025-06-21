@@ -20,7 +20,7 @@ async def set_new_auth_token(auth_token: str):
 
 @router.post(
     '/crawler_op',
-    description='更新samsclub爬虫的auth_token',
+    description='操作爬虫',
     response_model=CommonResponseModel[bool],
 )
 async def set_new_auth_token(cmd: Literal['run','start', 'pause']):
@@ -39,3 +39,4 @@ async def set_new_auth_token(cmd: Literal['run','start', 'pause']):
             )
 async def crawler_status():
     return CommonResponseModel(data=await sams_club_crawler.get_status())
+

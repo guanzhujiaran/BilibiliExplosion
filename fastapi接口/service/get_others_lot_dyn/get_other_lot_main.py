@@ -3,15 +3,11 @@ import datetime
 import json
 import os
 import re
-import subprocess
 import time
-import traceback
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
-from functools import partial
 from typing import Union, List, Set, Sequence
-
 from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotuserspaceresp, TLotdyninfo
@@ -22,8 +18,6 @@ from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer 
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.utils.Common import sem_gen, asyncio_gather
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-
-subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import proxy_req, get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail
@@ -365,7 +359,7 @@ manual_reply_judge = ctx.eval(r"""
 						manual_re77
 					);
 				}
-            """, )
+            """)
 _is_use_available_proxy = True
 
 
@@ -462,9 +456,8 @@ class BiliDynamicItem:
             pinglunreq = await proxy_req.request_with_proxy(
                 is_use_available_proxy=_is_use_available_proxy, method="GET", url=pinglunurl, data=pinglundata,
                 headers=pinglunheader, mode='single', hybrid='1')
-        except:
-            traceback.print_exc()
-            get_others_lot_log.info(f'{pinglunurl}\t获取评论失败')
+        except Exception as e:
+            get_others_lot_log.exception(f'{e}\n{pinglunurl}\t获取评论失败')
             pinglunreq = await self.get_pinglunreq_with_proxy(dynamic_id, rid, pn, _type)
             return pinglunreq
         return pinglunreq
@@ -1491,7 +1484,6 @@ class GetOthersLotDynRobot:
         self.username = ''
         self.nonLotteryWords = ['分享视频', '分享动态']
         self.SpareTime = 86400 * 5  # 多少时间以前的就不获取别人的动态了
-
         self.highlight_word_list = [
             'jd卡',
             '京东卡',

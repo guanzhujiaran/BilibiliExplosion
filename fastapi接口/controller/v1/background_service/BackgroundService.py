@@ -6,15 +6,15 @@ from fastapi接口.models.v1.background_service.background_service_model import 
     TopicScrapyStatusResp, ReserveScrapyStatusResp, AllLotScrapyStatusResp, ProgressStatusResp, ProxyStatusResp
 from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
 from fastapi接口.service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
-from fastapi接口.service.background_tasks import schedule_refresh_bili_lot_database
 from fastapi接口.service.bili_live_monitor.src.monitor import bili_live_async_monitor
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
 from fastapi接口.service.grpc_module.Utils.MQClient.VoucherMQClient import VoucherMQClient
+from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
-from fastapi接口.service.opus新版官方抽奖.活动抽奖 import 定时获取话题抽奖 as topic_scrapy_class
-from fastapi接口.service.opus新版官方抽奖.转发抽奖 import \
-    定时获取所有动态以及发布充电和官方抽奖专栏 as dyn_detail_scrapy_class
-from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc import schedule_get_reserve_lot as reserve_scrapy_class
+from fastapi接口.service.opus新版官方抽奖.bili_lottery_api.refresh_bili_lot_database import \
+    refresh_bili_lot_database_crawler
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
+from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import reserve_robot
 from fastapi接口.service.samsclub.main import sams_club_crawler
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from .base import new_router
@@ -26,22 +26,34 @@ def start_background_service(show_log: bool):
     samsclub_scheduler = GenericCrawlerScheduler(
         crawler=sams_club_crawler,
         cron_expr="0 0 * * *",
-        default_interval_seconds=60,  # 至少间隔 60 秒才能再次执行
-        run_on_start=True  # 这个参数现在只是保留，不再使用 create_task
+        default_interval_seconds=8 * 3600,  # 至少间隔 8小时才能再次执行
+    )
+    get_reserve_lot = GenericCrawlerScheduler(
+        crawler=reserve_robot,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=8 * 3600,
+    )
+    get_dyn = GenericCrawlerScheduler(
+        crawler=dyn_detail_scrapy,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=8 * 3600,
+    )
+    get_topic = GenericCrawlerScheduler(
+        crawler=topic_robot,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=8 * 3600,
+    )
+    refresh_bili_lotdata_database = GenericCrawlerScheduler(
+        crawler=refresh_bili_lot_database_crawler,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=8 * 3600,
     )
     back_ground_tasks = []
-
     back_ground_tasks.append(asyncio.create_task(bili_space_monitor.main(show_log=show_log)))
-    back_ground_tasks.append(asyncio.create_task(
-        dyn_detail_scrapy_class.async_schedule_get_official_lot_main(show_log=show_log)))
-    back_ground_tasks.append(
-        asyncio.create_task(reserve_scrapy_class.async_schedule_get_reserve_lot_main(show_log=show_log)))
-    back_ground_tasks.append(asyncio.create_task(
-        topic_scrapy_class.async_schedule_get_topic_lot_main(show_log=show_log)))
     back_ground_tasks.append(asyncio.create_task(async_monitor_ipv6_address_changes()))
     back_ground_tasks.append(asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log)))
-    back_ground_tasks.append(
-        asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
+    # back_ground_tasks.append(
+    # asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
     back_ground_tasks.append(
         asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer))
     )
@@ -56,47 +68,47 @@ def get_scrapy_status(scrapy_type: Literal[
 ]) -> DynScrapyStatusResp | TopicScrapyStatusResp | ReserveScrapyStatusResp | ProgressStatusResp | None:
     match scrapy_type:
         case 'dyn':
-            if dyn_detail_scrapy_class and dyn_detail_scrapy_class.dyn_detail_scrapy is not None:
+            if dyn_detail_scrapy is not None:
                 return DynScrapyStatusResp(
-                    first_dyn_id=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.first_dyn_id,
-                    succ_count=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.succ_count,
-                    cur_stop_num=dyn_detail_scrapy_class.dyn_detail_scrapy.stop_counter.cur_stop_continuous_num,
-                    latest_rid=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.latest_rid,
-                    latest_succ_dyn_id=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.latest_succ_dyn_id,
-                    start_ts=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.start_ts,
-                    freq=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.show_pace(),
-                    is_running=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.is_running,
-                    update_ts=dyn_detail_scrapy_class.dyn_detail_scrapy.succ_counter.update_ts
+                    first_dyn_id=dyn_detail_scrapy.succ_counter.first_dyn_id or 0,
+                    succ_count=dyn_detail_scrapy.status_plugin.succ_count or 0,
+                    cur_stop_num=dyn_detail_scrapy.stop_counter.cur_stop_continuous_num or 0,
+                    latest_rid=dyn_detail_scrapy.status_plugin.end_params or 0,
+                    latest_succ_dyn_id=dyn_detail_scrapy.succ_counter.latest_succ_dyn_id or 0,
+                    start_ts=int(dyn_detail_scrapy.status_plugin.start_time),
+                    freq=dyn_detail_scrapy.status_plugin.crawling_speed,
+                    is_running=dyn_detail_scrapy.status_plugin.is_running,
+                    update_ts=int(dyn_detail_scrapy.status_plugin.last_update_time)
                 )
             else:
                 return DynScrapyStatusResp()
         case 'topic':
-            if topic_scrapy_class and topic_scrapy_class.topic_robot is not None:
+            if topic_robot is not None:
                 return TopicScrapyStatusResp(
-                    succ_count=topic_scrapy_class.topic_robot.stats_plugin.succ_count,
-                    cur_stop_num=topic_scrapy_class.topic_robot.cur_stop_times,
-                    start_ts=int(topic_scrapy_class.topic_robot.stats_plugin.start_time),
-                    freq=topic_scrapy_class.topic_robot.stats_plugin.crawling_speed,
-                    is_running=topic_scrapy_class.topic_robot.stats_plugin.is_running,
-                    latest_succ_topic_id=topic_scrapy_class.topic_robot.stats_plugin.end_success_params or 0,
-                    first_topic_id=topic_scrapy_class.topic_robot.stats_plugin.init_params or 0,
-                    latest_topic_id=topic_scrapy_class.topic_robot.stats_plugin.end_params or 0,
-                    update_ts=int(topic_scrapy_class.topic_robot.stats_plugin.last_update_time)
+                    succ_count=topic_robot.stats_plugin.succ_count,
+                    cur_stop_num=topic_robot.cur_stop_times or 0,
+                    start_ts=int(topic_robot.stats_plugin.start_time),
+                    freq=topic_robot.stats_plugin.crawling_speed,
+                    is_running=topic_robot.stats_plugin.is_running,
+                    latest_succ_topic_id=topic_robot.stats_plugin.end_success_params or 0,
+                    first_topic_id=topic_robot.stats_plugin.init_params or 0,
+                    latest_topic_id=topic_robot.stats_plugin.end_params or 0,
+                    update_ts=int(topic_robot.stats_plugin.last_update_time)
                 )
             else:
                 return TopicScrapyStatusResp()
         case 'reserve':
-            if reserve_scrapy_class and reserve_scrapy_class.reserve_robot is not None:
+            if reserve_robot is not None:
                 return ReserveScrapyStatusResp(
-                    succ_count=reserve_scrapy_class.reserve_robot.stats_plugin.processed_items_count,
-                    cur_stop_num=reserve_scrapy_class.reserve_robot.null_stop_plugin.sequential_null_count,
-                    start_ts=int(reserve_scrapy_class.reserve_robot.stats_plugin.start_time),
-                    freq=reserve_scrapy_class.reserve_robot.stats_plugin.crawling_speed,
-                    is_running=reserve_scrapy_class.reserve_robot.stats_plugin.is_running,
-                    latest_succ_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.end_success_params,
-                    first_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.init_params,
-                    latest_reserve_id=reserve_scrapy_class.reserve_robot.stats_plugin.end_params,
-                    update_ts=int(reserve_scrapy_class.reserve_robot.stats_plugin.last_update_time)
+                    succ_count=reserve_robot.stats_plugin.processed_items_count,
+                    cur_stop_num=reserve_robot.null_stop_plugin.sequential_null_count or 0,
+                    start_ts=int(reserve_robot.stats_plugin.start_time),
+                    freq=reserve_robot.stats_plugin.crawling_speed,
+                    is_running=reserve_robot.stats_plugin.is_running,
+                    latest_succ_reserve_id=reserve_robot.stats_plugin.end_success_params or 0,
+                    first_reserve_id=reserve_robot.stats_plugin.init_params or 0,
+                    latest_reserve_id=reserve_robot.stats_plugin.end_params or 0,
+                    update_ts=int(reserve_robot.stats_plugin.last_update_time)
                 )
             else:
                 return ReserveScrapyStatusResp()
@@ -125,9 +137,9 @@ def get_scrapy_status(scrapy_type: Literal[
             else:
                 return ProgressStatusResp()
         case 'refresh_bili_official':
-            if schedule_refresh_bili_lot_database.extract_official_lottery \
-                    and schedule_refresh_bili_lot_database.extract_official_lottery.refresh_official_lot_progress:
-                _progress = schedule_refresh_bili_lot_database.extract_official_lottery.refresh_official_lot_progress
+            if refresh_bili_lot_database_crawler.extract_official_lottery \
+                    and refresh_bili_lot_database_crawler.extract_official_lottery.refresh_official_lot_progress:
+                _progress = refresh_bili_lot_database_crawler.extract_official_lottery.refresh_official_lot_progress
                 return ProgressStatusResp(
                     succ_count=_progress.succ_count,
                     start_ts=_progress.start_ts,
@@ -139,9 +151,9 @@ def get_scrapy_status(scrapy_type: Literal[
             else:
                 return ProgressStatusResp()
         case 'refresh_bili_reserve':
-            if schedule_refresh_bili_lot_database.reserve_robot \
-                    and schedule_refresh_bili_lot_database.reserve_robot.refresh_progress_counter:
-                _progress = schedule_refresh_bili_lot_database.reserve_robot.refresh_progress_counter
+            if refresh_bili_lot_database_crawler.reserve_robot \
+                    and refresh_bili_lot_database_crawler.reserve_robot.refresh_progress_counter:
+                _progress = refresh_bili_lot_database_crawler.reserve_robot.refresh_progress_counter
                 return ProgressStatusResp(
                     succ_count=_progress.succ_count,
                     start_ts=_progress.start_ts,
@@ -216,4 +228,3 @@ async def get_proxy_status():
     return CommonResponseModel(data=
                                await SQLHelper.get_proxy_database_redis()
                                )
-

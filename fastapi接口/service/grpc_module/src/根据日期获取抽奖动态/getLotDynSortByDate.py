@@ -2,10 +2,10 @@
 import datetime
 # -*- coding: utf-8 -*-
 import json
-import time
-from typing import Sequence
 import subprocess
+import time
 from functools import partial
+from typing import Sequence
 
 from fastapi接口.service.grpc_module.src.SQLObject.models import Bilidyndetail
 
@@ -291,7 +291,9 @@ class LotDynSortByDate:
 
         return lot_data
 
-    async def main(self, between_ts=[int(time.time()) - 7 * 24 * 3600, int(time.time())], GenWordCloud=False):
+    async def main(self, between_ts=None, GenWordCloud=False):
+        if between_ts is None:
+            between_ts = [int(time.time()) - 7 * 24 * 3600, int(time.time())]
         print('开始获取所有动态的抽奖信息')
         if between_ts[1] > int(time.time()):  # 确保最大时间到当前时间截止
             between_ts[1] = int(time.time())

@@ -1,5 +1,5 @@
 import time
-from typing import Any, Optional, Dict, List
+from typing import Any, Optional
 
 import numpy as np
 
@@ -22,6 +22,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self._start_time: float = time.time()  # Stores the monotonic start time
         self._last_update_time: float = 0.0  # Stores the wall clock time of last worker finish
         self._processed_items_count: int = 0  # Fundamental counter
+        self._null_count: int = 0
         self._succ_count: int = 0
 
     async def on_run_start(self, init_params: ParamsType):
@@ -34,7 +35,8 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self._start_time = time.time()
         self._last_update_time = time.time()  # Initial update time
         self._processed_items_count = 0
-        self._succ_count: int = 0
+        self._null_count = 0
+        self._succ_count = 0
         await super().on_run_start(init_params)
 
     async def on_worker_end(self, worker_model: WorkerModel):
@@ -48,9 +50,11 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
             self._succ_count += 1
             if worker_model.fetchStatus == WorkerStatus.complete:
                 self._end_success_params = worker_model.params
+            if worker_model.fetchStatus == WorkerStatus.nullData:
+                self._null_count += 1
         # Log current speed by calling the property, which calculates it on demand
         self.log.debug(
-            f"StatsPlugin: Worker finished. Total processed: {self._processed_items_count}, "
+            f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
             f"Current Speed: {self.crawling_speed:.2f} items/s")
         await super().on_worker_end(worker_model)
 
@@ -134,6 +138,11 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         if current_duration > 0:
             return self._processed_items_count / current_duration
         return 0.0
+
+    @property
+    def null_count(self) -> int:
+        """返回 null 数据的数量"""
+        return self._null_count
 
     @property
     def succ_count(self) -> int:
@@ -229,7 +238,6 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
 
         return False
 
-
     async def on_run_end(self, end_param: ParamsType) -> None:
         """
         在爬虫运行完全结束时调用。
@@ -239,7 +247,6 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
             f"插件结束。最终已处理的连续 null 计数: {self._sequential_null_count}。"
         )
         await super().on_run_end(end_param)
-
 
     # --- 公开属性以访问统计信息 ---
     @property

@@ -76,7 +76,7 @@ class GeetestV3Breaker:
         resp_json = response.json()
         if resp_json.get('code') == 0:
             if resp_json.get('data').get('geetest') is None:
-                Voucher352_logger.error(
+                Voucher352_logger.warning(
                     f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
                 return False
             Voucher352_logger.debug(f"\n成功获取极验challenge：{resp_json}")

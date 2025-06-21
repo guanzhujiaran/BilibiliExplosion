@@ -43,7 +43,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
     @abstractmethod
     async def main(self, *args, **kwargs):
         """
-        运行的主函数
+        运行的主函数的逻辑，可以加一些乱七八糟的函数进去
         """
 
     async def on_worker_end(self, worker_model: WorkerModel):

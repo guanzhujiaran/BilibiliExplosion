@@ -4,21 +4,13 @@ import datetime
 import json
 import os
 import random
-import subprocess
 import time
-from functools import partial
 from typing import List, Sequence
-
 from bs4 import BeautifulSoup
-
 from fastapi接口.log.base_log import topic_lot_logger
 from fastapi接口.utils.Common import asyncio_gather
-
-subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
-import execjs
 import b站cookie.globalvar as gl
 from CONFIG import CONFIG
-
 from fastapi接口.service.opus新版官方抽奖.Base.generate_cv import GenerateCvBase
 from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvItem, LotType, CvContent, Color, CvContentOps, \
     CvContentAttr, CutOff
@@ -30,7 +22,7 @@ from fastapi接口.service.opus新版官方抽奖.活动抽奖.model.EraBlackBoa
 from utl.pushme.pushme import pushme
 import asyncio
 from utl.代理.SealedRequests import my_async_httpx
-
+from py_mini_racer import MiniRacer
 
 class GenerateTopicLotCv(GenerateCvBase):
 
@@ -328,9 +320,10 @@ class ExtractTopicLottery:
             for tag in script_tags:
                 if '__initialState' in tag.text:
                     # 尝试从字符串中提取 JSON 数据
-                    js_env = execjs.compile('let window = {};' + tag.string)
+                    js_env = MiniRacer()
+                    js_env.eval('let window = {};' + tag.string)
                     # 将字符串转换为字典
-                    data = js_env.eval('window.__initialState')
+                    data = js_env.execute('window.__initialState')
                     for x in data.get('EraTasklist', data.get('EraTasklistPc', [])):
                         for y in x.get('tasklist', []):
                             era_tasks.append(EraTask.model_validate(y))
@@ -403,9 +396,10 @@ class ExtractTopicLottery:
             for tag in script_tags:
                 if '__initialState' in tag.text:
                     # 尝试从字符串中提取 JSON 数据
-                    js_env = execjs.compile('let window = {};' + tag.string)
+                    js_env = MiniRacer()
+                    js_env.eval('let window = {};' + tag.string)
                     # 将字符串转换为字典
-                    data = js_env.eval('window.__initialState')
+                    data = js_env.execute('window.__initialState')
                     if lottery_v3 := data.get('h5-lottery-v3', data.get('pc-lottery-v3', [])):
                         h5_lottery = [H5ActivityLottery(
                             lotteryId=x.get('lotteryId'),
@@ -468,9 +462,10 @@ class ExtractTopicLottery:
             for tag in script_tags:
                 if '__initialState' in tag.text:
                     # 尝试从字符串中提取 JSON 数据
-                    js_env = execjs.compile('let window = {};' + tag.string)
+                    js_env = MiniRacer()
+                    js_env.eval('let window = {};' + tag.string)
                     # 将字符串转换为字典
-                    data = js_env.eval('window.__initialState')
+                    data = js_env.execute('window.__initialState')
                     jump_urls = list(
                         set([x.get('button_jump_url') for x in data.get('h5-button', data.get('button', [])) if
                              'blackboard' in x.get('button_jump_url', '')]))

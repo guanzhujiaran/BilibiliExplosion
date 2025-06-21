@@ -153,7 +153,6 @@ class _CONFIG:
         ),
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
-    # my_ipv6_addr = 'http://127.0.0.1:8080'
     unidbg_addr = "http://192.168.1.200:23335"
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()
