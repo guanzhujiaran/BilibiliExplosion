@@ -83,7 +83,7 @@ class DynDetailScrapy(UnlimitedCrawler):
         self.Sqlhelper = grpc_sql_helper
         self.stop_counter: StopCounter = StopCounter()  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = sem_gen(100)  # 同时运行的协程数量
+        self.scrapy_sem = sem_gen(10)  # 同时运行的协程数量
         self.stop_limit_time = 2 * 3600  # 提前多少时间停止
         self.succ_counter = SuccCounter()
         self._BiliLotDataPublisher = None

@@ -33,7 +33,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         ...
 
     @abstractmethod
-    async def key_params_gen(self, params: ParamsType) -> AsyncGenerator[ParamsType, None]:
+    async def key_params_gen(self, params: Any) -> AsyncGenerator[ParamsType, None]:
         yield params
 
     @abstractmethod

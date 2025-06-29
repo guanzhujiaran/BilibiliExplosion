@@ -27,7 +27,7 @@ class TReserveRoundInfo(Base):
 class TUpReserveRelationInfo(Base):
     __tablename__ = 't_up_reserve_relation_info'
     __table_args__ = (
-        ForeignKeyConstraint(['reserve_round_id'], ['t_reserve_round_info.round_id'], name='t_up_reserve_relation_info_ibfk_1'),
+            ForeignKeyConstraint(['reserve_round_id'], ['t_reserve_round_info.round_id'], name='t_up_reserve_relation_info_ibfk_1'),
         Index('reserve_round_id', 'reserve_round_id')
     )
 

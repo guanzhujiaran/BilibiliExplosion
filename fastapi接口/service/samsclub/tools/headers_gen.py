@@ -1,4 +1,5 @@
 import asyncio
+import random
 import time
 import uuid
 
@@ -6,7 +7,6 @@ from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.models.v1.samsclub.samsclub_model import SamsClubHeadersModel, SamsClubEncryptModel, \
     SamsClubGetDoEncryptReqModel
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import get_st, get_do_encrypt_result_str
-import random
 from fastapi接口.service.samsclub.tools.java_rand_gen import F65205aRandomIntGenerator
 from fastapi接口.utils.Common import retry_wrapper
 
@@ -57,6 +57,8 @@ class SamsClubHeadersGen:
     device_name = "OnePlus_ONEPLUS+A6000"
     device_str = "d3e9907ab1881aac891aff90100016e1950c"
     version_str = "5.0.122"
+    longitude = 121.463874
+    latitude = 31.258597
     auth_token = ""
     _counter = 100
     _lock = asyncio.Lock()
@@ -123,7 +125,11 @@ class SamsClubHeadersGen:
             "t": ts_str,
             "n": fake_n,
             "st": st,
-            "app-version": self.version_str
+            "app-version": self.version_str,
+            'Local-Longitude': str(self.longitude),
+            'Local-Latitude': str(self.latitude),
+            'longitude': str(self.longitude),
+            'latitude': str(self.latitude),
         }
         return SamsClubHeadersModel(
             **headers_dict

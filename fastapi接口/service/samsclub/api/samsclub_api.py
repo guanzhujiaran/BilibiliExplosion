@@ -5,7 +5,6 @@ import os
 import aiofiles
 from curl_cffi.requests.exceptions import RequestException
 
-from CONFIG import CONFIG
 from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.service.samsclub.exceptions.error import UnknownError
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import update_do_encrypt_key
@@ -32,11 +31,11 @@ class SamsClubApi:
         self.headers_gen = SamsClubHeadersGen(
             auth_token=auth_token,
         )
+        self._lock = asyncio.Lock()
 
     log = sams_club_logger
 
     _base_url = "https://api-sams.walmartmobile.cn"
-    token_inlined = "042b2013d15fed9dc0932b7f7fea12a8c854"
     uid = "1818144697779"
     addressVO = {
         "cityName": "上海市",
@@ -80,9 +79,13 @@ class SamsClubApi:
         srd = resp_headers.get('srd')
         if siv and ssk:
             if siv != self.cur_siv or ssk != self.cur_ssk:
-                self.log.debug("更新加密密钥")
-                await update_do_encrypt_key(siv, ssk, srd)
-                return True
+                async with self._lock:
+                    if siv != self.cur_siv or ssk != self.cur_ssk:
+                        self.log.debug("更新加密密钥")
+                        await update_do_encrypt_key(siv, ssk, srd)
+                        self.cur_siv = siv
+                        self.cur_ssk = ssk
+                        return True
         return False
 
     @property
@@ -109,22 +112,32 @@ class SamsClubApi:
                     # proxies=CONFIG.custom_proxy
                 )
             except RequestException as e:
-                self.log.exception(f'curl_cffi网络请求异常：{e}')
                 await asyncio.sleep(10)
                 continue
             except Exception as e:
+                self.log.exception(f'curl_cffi网络请求未知异常：{e}')
                 raise e
             is_updated = await self.update_encrypt_key(resp.headers)
             is_succ = await self.handle_resp_code(resp, auth_token=cur_auth_token, is_updated_encrypt_key=is_updated)
             if not is_succ:
                 await asyncio.sleep(10)
                 continue
+            self.log.debug(f'请求成功：{resp}')
             return resp
+
+    async def get_recommend_store_list_by_location(self):
+        url = self._base_url + '/api/v1/sams/merchant/storeApi/getRecommendStoreListByLocation'
+        body = {
+            "latitude": self.headers_gen.latitude,
+            "longitude": self.headers_gen.longitude
+        }
+        return await self.send(url, body=body, is_add_amap_headers=False)
 
     async def handle_resp_code(self, response, auth_token: str, is_updated_encrypt_key: bool) -> bool:
         resp_dict = response.json()
         is_succ = resp_dict.get('success')
         resp_code = resp_dict.get('code')
+        resp_msg = resp_dict.get('msg')
         if is_succ is not True:
             match resp_code:
                 case "SPU_NOT_EXIST":
@@ -132,7 +145,7 @@ class SamsClubApi:
                 case "AUTH_FAIL" | "INTERNAL_ERROR":
                     if is_updated_encrypt_key:
                         return False
-                    self.log.opt(exception=True).critical(f"被强制登出！{resp_dict}")
+                    self.log.critical(f"被强制登出！{resp_dict}")
                     await asyncio.to_thread(pushme, f'山姆会员商店token失效', f'{resp_dict}')
                     self.log.debug(f'等待token更新')
                     while 1:
@@ -140,6 +153,9 @@ class SamsClubApi:
                             break
                         await asyncio.sleep(3)
                 # raise AUTH_FAIL(f"鉴权失败！响应code：{resp_code}")
+                case "BUSYNESS":
+                    self.log.critical(f'{resp_msg}')
+                    await asyncio.sleep(60)
                 case _:
                     self.log.opt(exception=True).critical(f"请求未知错误！{resp_dict}")
                     raise UnknownError(f"未知响应code：{resp_code}")
@@ -150,6 +166,26 @@ class SamsClubApi:
         version_json = version_resp.json()
         if version_str := version_json.get('data', {}).get('youngVersion'):
             self.headers_gen.version_str = version_str
+
+        store_info_resp = await self.get_recommend_store_list_by_location()
+        store_info_resp_dict = store_info_resp.json()
+        if store_info_resp_data := store_info_resp_dict.get('data', {}).get('storeList'):
+            self.storeList = []  # 字符串的store_id
+            self.storeInfoVOList = []  # like
+            # {"storeType": 16, "storeId": 6558, "storeDeliveryAttr": [3, 4, 6, 14],
+            # "storeDeliveryTemplateId": 1355122139681978902}
+            for x in store_info_resp_data:
+                self.storeList.append(x.get('storeId'))
+                da = {
+                    "storeType": int(x.get('storeType')),
+                    "storeId": int(x.get('storeId')),
+                    "storeDeliveryAttr": x.get('allDeliveryAttrList'),
+                    "storeDeliveryTemplateId": int(
+                        x.get('storeRecmdDeliveryTemplateData').get('storeDeliveryTemplateId'))
+                }
+                self.storeInfoVOList.append(da)
+        self.log.debug(f'初始化headers信息成功\n{version_str}\n{self.storeList}\n{self.storeInfoVOList}')
+        ...
 
     async def configuration_appVersionUpdate_getAppVersionUpdateInfo(self):
         url = self._base_url + '/api/v1/sams/configuration/appVersionUpdate/getAppVersionUpdateInfo'

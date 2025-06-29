@@ -13,7 +13,6 @@ import urllib
 from urllib import parse
 from CONFIG import CONFIG
 from pylangtools.langconv import Converter
-
 import Bilibili_methods.log_reporter as log_reporter
 import py_mini_racer
 import b站cookie.b站cookie_

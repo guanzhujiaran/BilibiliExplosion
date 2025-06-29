@@ -1,14 +1,18 @@
 import ast
 import asyncio
 import json
+import time
 from datetime import datetime
 from enum import StrEnum
 from typing import Union, List, Sequence
+
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+
+from CONFIG import CONFIG
+from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotdyninfo, \
     TLotuserspaceresp, TRiddynid
-from CONFIG import CONFIG
 from fastapi接口.utils.Common import sql_retry_wrapper
 from utl.redisTool.RedisManager import RedisManagerBase
 
@@ -123,6 +127,20 @@ class __SqlHelper:
             sql = select(TLotdyninfo).filter(TLotdyninfo.dynLotRound_id == LotRound_id).order_by(
                 TLotdyninfo.dynId.desc())
             res = await session.execute(sql)
+            ret = res.scalars().all()
+            return ret
+
+    @sql_retry_wrapper
+    async def getAllLotDynByTimeLimit(self, time_limit: int = 20 * 3600 * 24):
+        target_dyn_id = ts_2_fake_dynamic_id(int(time.time()) - time_limit)
+        stmt = select(TLotdyninfo).filter(
+            and_(
+                TLotdyninfo.isLot == True,
+                TLotdyninfo.dynId >= target_dyn_id
+            )
+        )
+        async with self._session() as session:
+            res = await session.execute(stmt)
             ret = res.scalars().all()
             return ret
 
@@ -326,18 +344,24 @@ class __SqlHelper:
             ret = res.scalars().first()
             return ret
 
+    @sql_retry_wrapper
+    async def getLatestLotDynInfoByUid(self, uid: int | str) -> TLotdyninfo | None:
+        async with self._session() as session:
+            sql = select(TLotdyninfo).filter(and_(TLotdyninfo.up_uid == uid, TLotdyninfo.isLot == True)).order_by(
+                TLotdyninfo.dynId.desc()).limit(1)
+            res = await session.execute(sql)
+            ret = res.scalars().first()
+            return ret
+
 
 get_other_lot_redis_manager = GetOtherLotRedisManager()
 
 SqlHelper = __SqlHelper()
 
-
-async def __test__():
-    result = await SqlHelper.addDynInfo(TLotdyninfo(
-        dynId=114514
-    ))
-    print(result)
-
-
 if __name__ == '__main__':
+    async def __test__():
+        result = await SqlHelper.getLatestLotDynInfoByUid(3546740766541963)
+        print(result)
+
+
     asyncio.run(__test__())

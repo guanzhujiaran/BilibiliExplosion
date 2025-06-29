@@ -181,4 +181,5 @@ class _CONFIG:
 CONFIG = _CONFIG()
 
 if __name__ == "__main__":
-    print(CONFIG.rand_ua)
+    for x in range(10):
+        print(CONFIG.rand_ua)

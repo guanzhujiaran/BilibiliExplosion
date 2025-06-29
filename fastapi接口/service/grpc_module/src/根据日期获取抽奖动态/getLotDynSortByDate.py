@@ -2,16 +2,10 @@
 import datetime
 # -*- coding: utf-8 -*-
 import json
-import subprocess
 import time
-from functools import partial
 from typing import Sequence
-
 from fastapi接口.service.grpc_module.src.SQLObject.models import Bilidyndetail
-
-subprocess.Popen = partial(subprocess.Popen, encoding='utf-8')
-
-import execjs
+from py_mini_racer import MiniRacer
 import pandas as pd
 import Bilibili_methods.all_methods
 from fastapi接口.service.grpc_module.src.DynObjectClass import lotDynData
@@ -75,7 +69,8 @@ class LotDynSortByDate:
             'switch',
             'Switch'
         ]  # 需要重点查看的关键词列表
-        self.manual_reply_judge = execjs.compile("""
+        self.manual_reply_judge = MiniRacer()
+        self.manual_reply_judge.eval("""
                 manual_reply_judge= function (dynamic_content) {
                             //判断是否需要人工回复 返回true需要人工判断  返回null不需要人工判断
                             //64和67用作判断是否能使用关键词回复

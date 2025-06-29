@@ -855,8 +855,7 @@ grpc_sql_helper = SQLHelper()
 if __name__ == "__main__":
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.query_official_lottery_by_timelimit(
-            time_limit=30 * 24 * 3600,
+        result = await grpc_sql_helper.get_all_lot_not_drawn(
         )
         sql_log.debug(len(result))
 

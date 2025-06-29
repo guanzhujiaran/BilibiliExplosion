@@ -8,7 +8,7 @@ from sqlalchemy.exc import InternalError
 
 from fastapi接口.log.base_log import myfastapi_logger, sql_log
 
-GLOBAL_SCHEDULER = AsyncIOScheduler()
+GLOBAL_SCHEDULER: AsyncIOScheduler = AsyncIOScheduler()
 GLOBAL_SEM_LIMIT_NUM = 500
 GLOBAL_SEM = asyncio.Semaphore(GLOBAL_SEM_LIMIT_NUM)
 _comm_lock = asyncio.Lock()
@@ -137,3 +137,14 @@ async def asyncio_gather(*coros_or_futures, log: _logger = myfastapi_logger):
         if isinstance(result, Exception):
             log.opt(exception=True).exception(result)
     return results
+
+
+if __name__ == '__main__':
+    async def _test():
+        while 1:
+            print(GLOBAL_SCHEDULER.get_jobs())
+            await asyncio.sleep(10)
+
+
+    GLOBAL_SCHEDULER.add_job(_test, 'interval', seconds=10)
+    asyncio.run(_test())

@@ -9,8 +9,6 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 import uvicorn
 from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
-from fastapi接口.controller.v1.background_service import BackgroundService
-from fastapi接口.controller.v1.lotttery_database.bili import LotteryData
 import fastapi_cdn_host
 from fastapi接口.models.common import CommonResponseModel
 from pydantic import BaseModel as PydanticBaseModel
@@ -18,7 +16,9 @@ from loguru import logger
 from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-from fastapi接口.utils.Common import asyncio_gather
+
+from fastapi接口.service.samsclub.Sql.SdlHelper import graphql_app
+
 log = logger.bind(name='fastapi')
 class BaseModel(PydanticBaseModel):
     class Config:
@@ -26,21 +26,20 @@ class BaseModel(PydanticBaseModel):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
-    back_ground_tasks = BackgroundService.start_background_service(show_log=True)
+    # back_ground_tasks = BackgroundService.start_background_service(show_log=True)
+    # yield
+    # [
+    #     x.cancel() for x in back_ground_tasks
+    # ]
+    # await asyncio_gather(*back_ground_tasks)
     yield
-    [
-        x.cancel() for x in back_ground_tasks
-    ]
-    await asyncio_gather(*back_ground_tasks)
-
 
 app = FastAPI(
     lifespan=lifespan,
 
               )
 fastapi_cdn_host.patch_docs(app)
-
-app.include_router(LotteryData.router)
+app.include_router(graphql_app,prefix='/graphql')
 @app.get('/memory_objgraph',)
 async def memory_objgraph(limit:int=50):
     common_types = await asyncio.to_thread(objgraph.most_common_types, limit=limit)

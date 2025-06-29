@@ -1,19 +1,23 @@
 import asyncio
 import gc
+import json
+from copy import deepcopy
+
 from fastapi接口.controller.common.base import new_router
+from fastapi接口.dao.redisConn import r
+from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserveInfo
+from fastapi接口.service.bili_live_monitor.src.monitor import BiliLiveLotRedisManager
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingList import get_rm_following_list
+from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingListV2 import GetRmFollowingListV2
+from fastapi接口.service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import \
+    toutiaoSpaceFeedLotService
 from fastapi接口.service.zhihu.获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import zhihu_lotScrapy
-from fastapi接口.service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import toutiaoSpaceFeedLotService
-from fastapi接口.service.bili_live_monitor.src.monitor import BiliLiveLotRedisManager
-from fastapi接口.dao.redisConn import r
-import json
-from fastapi接口.log.base_log import myfastapi_logger
 from utl.pushme.pushme import pushme
 
 router = new_router()
+
 
 @router.get('/v1/get/live_lots', description='获取redis中的所有直播相关抽奖信息', )
 async def v1_get_live_lots(
@@ -42,24 +46,27 @@ async def v1_get_live_lots(
 async def app_avaliable_api():
     await asyncio.sleep(1)
     return 'Service is running!'
+
+
 @router.get('/gc')
 async def app_avaliable_api():
     await asyncio.to_thread(gc.collect)
     return 'gc完成！'
 
 
-
 # endregion
 
 # region 基于Grpc api的功能实现
 @router.post('/v1/post/RmFollowingList')
-async def v1_post_rm_following_list(data: list[int| str]):
+async def v1_post_rm_following_list(data: list[int | str]):
     """
     取关接口 调用的是b站appp端的grpc协议接口，没那么容易被风控
     :param data: list[int] 关注列表 直接传列表即可
     :return:
     """
-    result = await get_rm_following_list.main(data)
+    gmflv2 = GetRmFollowingListV2()
+    result = deepcopy(await gmflv2.main(data))
+    del gmflv2
     return result
 
 
@@ -126,6 +133,5 @@ async def toutiao_get_others_lot_ids():
     await asyncio.to_thread(pushme, f'获取到头条抽奖{len(result)}条', '\n'.join(result)
                             )
     return result
-
 
 # endregion

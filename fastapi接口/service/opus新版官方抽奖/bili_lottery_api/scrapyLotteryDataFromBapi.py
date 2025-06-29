@@ -53,11 +53,11 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
     async def handle_fetch(self, params: BusinessParams) -> WorkerStatus:
         return await self.pipeline(params.business_type, params.business_id)
 
-    def __init__(self, business_type: BusinessType):
+    def __init__(self, business_type: BusinessType, sem_num=1):
         self.__business_type: BusinessType = business_type
-        self.default_dyn_rid = 345671305
+        self.default_dyn_rid = 346492727
         self.default_reserve_sid = 4234284
-        self.sem_limit = 1
+        self.sem_limit = sem_num
         self.min_reserve_sep_ts = 8 * 3600  # 最小的间隔时间
         self.min_dyn_sep_ts = 12 * 3600
         self.__max_stop_times = 5  # 遇到超过时间的次数
@@ -73,14 +73,14 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
             plugins=[self.stats_plugin],
         )
 
-    async def solve_dyn_data(self, data: dict):
+    async def solve_dyn_data(self, data: dict, rid: int):
         business_id = data.get('business_id')
         if business_id:
             dynamic_ts = dynamic_id_2_ts(business_id)
             if int(time.time()) - dynamic_ts < self.min_dyn_sep_ts:
                 self._cur_stop_times += 1
                 self.latest_ts = dynamic_ts
-                await self.redis_helper.set_id(self.redis_helper.RedisMap.dyn_rid, business_id)
+            await self.redis_helper.set_id(self.redis_helper.RedisMap.dyn_rid, rid)
         else:
             self.log.critical(f'business_id：{data} 获取动态时间失败！')
 
@@ -93,9 +93,10 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
                 if int(time.time()) - stime < self.min_reserve_sep_ts:
                     self._cur_stop_times += 1
                     self.latest_ts = stime
-                    await self.redis_helper.set_id(self.redis_helper.RedisMap.reserve_sid, reserve_sid)
             else:
                 self.log.critical(f'business_id：{data} 获取预约时间失败：{reserve_resp}')
+
+            await self.redis_helper.set_id(self.redis_helper.RedisMap.reserve_sid, reserve_sid)
 
     async def pipeline(
             self,
@@ -116,7 +117,7 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
                 )
                 match business_type:
                     case 2:
-                        await self.solve_dyn_data(data)
+                        await self.solve_dyn_data(data, rid=business_id)
                     case 10:
                         await self.solve_reserve_data(data)
 
@@ -145,7 +146,13 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
             pushme(title=f'爬取B站lottery异常', content=str(e))
 
 
-lottery_api_robot_dyn = LotteryApiRobot(business_type=2)
-lottery_api_robot_reserve = LotteryApiRobot(business_type=10)
+lottery_api_robot_dyn = LotteryApiRobot(business_type=2, sem_num=10)
+lottery_api_robot_reserve = LotteryApiRobot(business_type=10, sem_num=1)
 if __name__ == '__main__':
-    asyncio.run(asyncio.gather(lottery_api_robot_dyn.main(), lottery_api_robot_reserve.main()))
+    async def _test():
+        await asyncio.gather(lottery_api_robot_dyn.main(), lottery_api_robot_reserve.main())
+
+
+    asyncio.run(_test(
+
+    ))

@@ -123,7 +123,7 @@ class GenericCrawlerScheduler:
 
     @async_pushme_try_catch_decorator
     async def run(self):
-        self.logger.critical(f"[{self.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
+        self.logger.info(f"[{self.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
 
         if self.exec_info.is_need_to_execute():
             try:
@@ -133,7 +133,7 @@ class GenericCrawlerScheduler:
             except Exception as e:
                 self.logger.exception(f"[{self.crawler_name}] 爬虫执行出错：{e}")
         else:
-            self.logger.critical(f"[{self.crawler_name}] 当前不满足执行条件，跳过本次任务。")
+            self.logger.info(f"[{self.crawler_name}] 当前不满足执行条件，跳过本次任务。")
 
     def start(self):
         if not GLOBAL_SCHEDULER.running:
@@ -177,7 +177,7 @@ if __name__ == '__main__':
         scheduler = GenericCrawlerScheduler(
             crawler=crawler,
             cron_expr="*/1 * * * *",  # 每分钟执行一次
-            default_interval_seconds=120,  # 至少间隔 120 秒才能再次执行
+            default_interval_seconds=60,  # 至少间隔 60 秒才能再次执行
         )
 
         default_logger.info("调度器已启动，等待任务触发...")

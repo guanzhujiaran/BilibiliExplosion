@@ -1,7 +1,6 @@
-from enum import Enum
+from pydantic import Field, ConfigDict
 
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
-from pydantic import Field, ConfigDict
 
 
 class SamsClubHeadersModel(CustomBaseModel):
@@ -16,9 +15,9 @@ class SamsClubHeadersModel(CustomBaseModel):
     device_name: str = Field("OnePlus_ONEPLUS+A6000", alias="device-name")
     treq_id: str = Field(..., alias="treq-id")
     auth_token: str = Field(...,
-        alias="auth-token")
-    longitude: str = Field("121.38286")
-    latitude: str = Field("31.315798")
+                            alias="auth-token")
+    longitude: str | float = Field(...)
+    latitude: str | float = Field(...)
     p: str = Field("1656120205")
     t: str = Field(...)
     n: str = Field(...)
@@ -27,8 +26,8 @@ class SamsClubHeadersModel(CustomBaseModel):
     sny: str = "c"
     rcs: str = "1"
     spv: str = "2.0"
-    Local_Longitude: str = Field("121.463992", alias="Local-Longitude")
-    Local_Latitude: str = Field("31.258575", alias="Local-Latitude")
+    Local_Longitude: str | float = Field(..., alias="Local-Longitude")
+    Local_Latitude: str | float = Field(..., alias="Local-Latitude")
     zoneType: str = "1"
     content_type: str = Field("application/json;charset=utf-8", alias="Content-Type")
     Host: str = "api-sams.walmartmobile.cn"
@@ -50,3 +49,11 @@ class SamsClubGetDoEncryptReqModel(CustomBaseModel):
     uuidStr: str
     tokenStr: str
 
+
+class SamsClubQuerySpuInfoParamsModel(CustomBaseModel):
+    spu_new_tag_tag_mark: str | None
+    spu_info_title: str | None
+    spu_info_update_asc: bool | None
+    spu_price_asc: bool | None
+    spu_price_min: bool | None
+    spu_price_max: bool | None

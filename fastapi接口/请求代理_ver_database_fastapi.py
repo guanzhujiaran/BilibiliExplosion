@@ -27,10 +27,10 @@ if not args.logger:
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 if sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
-else:
-    import uvloop
-    print('使用uvloop')
-    uvloop.install()
+# else:
+#     import uvloop
+#     print('使用uvloop')
+#     uvloop.install()
 from fastapi接口.log.base_log import myfastapi_logger
 from utl.pushme.pushme import pushme
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER, asyncio_gather

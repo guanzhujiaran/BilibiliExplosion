@@ -1,5 +1,5 @@
 import asyncio
-from typing import Literal, Union
+from typing import Literal, Union, Any
 
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.background_service.background_service_model import DynScrapyStatusResp, \
@@ -13,9 +13,12 @@ from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
 from fastapi接口.service.opus新版官方抽奖.bili_lottery_api.refresh_bili_lot_database import \
     refresh_bili_lot_database_crawler
+from fastapi接口.service.opus新版官方抽奖.bili_lottery_api.scrapyLotteryDataFromBapi import lottery_api_robot_dyn, \
+    lottery_api_robot_reserve
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import reserve_robot
 from fastapi接口.service.samsclub.main import sams_club_crawler
+from fastapi接口.utils.Common import GLOBAL_SCHEDULER
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from .base import new_router
 
@@ -26,37 +29,44 @@ def start_background_service(show_log: bool):
     samsclub_scheduler = GenericCrawlerScheduler(
         crawler=sams_club_crawler,
         cron_expr="0 0 * * *",
-        default_interval_seconds=8 * 3600,  # 至少间隔 8小时才能再次执行
+        default_interval_seconds=15 * 3600,
     )
     get_reserve_lot = GenericCrawlerScheduler(
         crawler=reserve_robot,
         cron_expr="0 0 * * *",
-        default_interval_seconds=8 * 3600,
+        default_interval_seconds=15 * 3600,
     )
     get_dyn = GenericCrawlerScheduler(
         crawler=dyn_detail_scrapy,
         cron_expr="0 0 * * *",
-        default_interval_seconds=8 * 3600,
+        default_interval_seconds=15 * 3600,
     )
     get_topic = GenericCrawlerScheduler(
         crawler=topic_robot,
         cron_expr="0 0 * * *",
-        default_interval_seconds=8 * 3600,
+        default_interval_seconds=15 * 3600,
     )
     refresh_bili_lotdata_database = GenericCrawlerScheduler(
         crawler=refresh_bili_lot_database_crawler,
         cron_expr="0 0 * * *",
-        default_interval_seconds=8 * 3600,
+        default_interval_seconds=15 * 3600,
     )
-    back_ground_tasks = []
-    back_ground_tasks.append(asyncio.create_task(bili_space_monitor.main(show_log=show_log)))
-    back_ground_tasks.append(asyncio.create_task(async_monitor_ipv6_address_changes()))
-    back_ground_tasks.append(asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log)))
+    lottery_api_robot_dyn_scheduler = GenericCrawlerScheduler(
+        crawler=lottery_api_robot_dyn,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=15 * 3600,
+    )
+    lottery_api_robot_reserve_scheduler = GenericCrawlerScheduler(
+        crawler=lottery_api_robot_reserve,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=15 * 3600,
+    )
+    back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log)),
+                         asyncio.create_task(async_monitor_ipv6_address_changes()),
+                         asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log)),
+                         asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer))]
     # back_ground_tasks.append(
     # asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
-    back_ground_tasks.append(
-        asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer))
-    )
 
     return back_ground_tasks
 
@@ -228,3 +238,11 @@ async def get_proxy_status():
     return CommonResponseModel(data=
                                await SQLHelper.get_proxy_database_redis()
                                )
+
+
+@router.get('/GlobalSchedule/get_jobs', description='全局定时任务', response_model=CommonResponseModel[Any])
+async def global_schedule():
+    ret = []
+    for job in GLOBAL_SCHEDULER.get_jobs():
+        ret.append(str(job))
+    return CommonResponseModel(data=ret)

@@ -2,6 +2,7 @@ from typing import Literal
 
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.background_service.background_service_model import ProgressStatusResp
+from fastapi接口.service.samsclub.Sql.SdlHelper import graphql_app
 from fastapi接口.service.samsclub.main import sams_club_crawler
 from .base import new_router
 
@@ -23,7 +24,7 @@ async def set_new_auth_token(auth_token: str):
     description='操作爬虫',
     response_model=CommonResponseModel[bool],
 )
-async def set_new_auth_token(cmd: Literal['run','start', 'pause']):
+async def set_new_auth_token(cmd: Literal['run', 'start', 'pause']):
     match cmd:
         case 'start':
             await sams_club_crawler.start()
@@ -40,3 +41,5 @@ async def set_new_auth_token(cmd: Literal['run','start', 'pause']):
 async def crawler_status():
     return CommonResponseModel(data=await sams_club_crawler.get_status())
 
+
+router.include_router(graphql_app, prefix='/graphql')

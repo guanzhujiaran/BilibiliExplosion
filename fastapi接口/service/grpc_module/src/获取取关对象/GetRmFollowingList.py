@@ -6,10 +6,9 @@ import random
 import time
 from datetime import datetime
 from typing import Union, Sequence
-
+import aiofiles
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-
 from Bilibili_methods.all_methods import methods
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import get_rm_following_list_logger
@@ -17,10 +16,7 @@ from fastapi接口.service.grpc_module.Utils.GrpcDynamicRespUtils import DynTool
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.获取取关对象.db.models import UserInfo, SpaceDyn
 from fastapi接口.utils.Common import sem_retry_wrapper, sem_gen, asyncio_gather
-
 current_dir = os.path.dirname(__file__)
-
-
 def get_file_path(relative_path: str):
     return os.path.join(current_dir, relative_path)
 
@@ -321,20 +317,20 @@ class GetRmFollowingListV1:
         ret_list = [following_list[idx] for idx, result in enumerate(results) if not result]
         return ret_list
 
-    def get_lucky_up_list(self) -> []:
+    async def get_lucky_up_list(self) -> []:
 
         if os.path.exists(get_file_path('中奖up.json')):
-            with open(get_file_path('中奖up.json'), 'r', encoding='utf-8') as f:
-                return json.loads(f.read()).get('up_ids')
+            async with aiofiles.open(get_file_path('中奖up.json'), 'r', encoding='utf-8') as f:
+                return json.loads(await f.read()).get('up_ids')
         else:
-            with open(get_file_path('中奖up.json'), 'w', encoding='utf-8') as f:
-                f.write(json.dumps({'up_ids': []}, indent=4))
+            async with aiofiles.open(get_file_path('中奖up.json'), 'w', encoding='utf-8') as f:
+                await f.write(json.dumps({'up_ids': []}, indent=4))
             return []
 
     async def main(self, following_list: list) -> list:
         if type(following_list) is not list:
             return []
-        self.lucky_up_list = self.get_lucky_up_list()
+        self.lucky_up_list = await self.get_lucky_up_list()
         resp_list = await self.check_lot_up(following_list)
         return resp_list
 

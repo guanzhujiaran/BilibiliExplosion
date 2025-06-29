@@ -267,7 +267,6 @@ class ExtractOfficialLottery:
         if is_api_update:
             async def __(lotdata: Lotdata):
                 if not lotdata.bilidyndetail:
-                    ...
                     lot_data_resp = await get_lot_notice(
                         business_type=lotdata.business_type,
                         business_id=lotdata.business_id
@@ -280,7 +279,7 @@ class ExtractOfficialLottery:
                 else:
                     await dyn_detail_scrapy.resolve_dynamic_details_card(
                         json.loads(lotdata.bilidyndetail.dynData, strict=False), is_running_scrapy=False)
-                    self.refresh_official_lot_progress.succ_count += 1
+                self.refresh_official_lot_progress.succ_count += 1
 
             self.refresh_official_lot_progress = ProgressCounter()
             self.refresh_official_lot_progress.total_num = len(all_official_lots_undrawn)

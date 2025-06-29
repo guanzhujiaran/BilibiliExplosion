@@ -56,7 +56,7 @@ def pushme(title: str, content: str, __type: Optional[Literal[
         return resp
     finally:
         try:
-            pushme_logger.error(f'请求响应：{resp.text}\n{title}\n{content}')
+            pushme_logger.debug(f'请求响应：{resp.text}\n{title}\n{content}')
         except Exception as e:
             pushme_logger.exception(f'推送失败！{e}')
 

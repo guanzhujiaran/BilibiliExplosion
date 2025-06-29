@@ -48,6 +48,8 @@ class SpuInfo(Base):
 
     spuId = mapped_column(VARCHAR(50), primary_key=True, comment='SPU ID')
     title = mapped_column(String(255), nullable=False)
+    create_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
+    update_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
     brandId = mapped_column(VARCHAR(50))
     subTitle = mapped_column(TEXT)
     image = mapped_column(String(512))
@@ -79,13 +81,14 @@ class SpuInfo(Base):
     spuSpecInfo = mapped_column(JSON)
     zoneTypeList = mapped_column(JSON)
     categoryOuterService = mapped_column(JSON)
+    smallPackagePriceDisplay = mapped_column(String(255))
     commonOuterService = mapped_column(JSON)
-    created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
-    update_time = mapped_column(DateTime, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='最后更新时间')
+    unknow_field = mapped_column(JSON)
 
     spu_category: Mapped[List['SpuCategory']] = relationship('SpuCategory', uselist=True, back_populates='spu')
     spu_new_tag_info: Mapped[List['SpuNewTagInfo']] = relationship('SpuNewTagInfo', uselist=True, back_populates='spu')
     spu_price_info: Mapped[List['SpuPriceInfo']] = relationship('SpuPriceInfo', uselist=True, back_populates='spu')
+    spu_stock_info: Mapped[List['SpuStockInfo']] = relationship('SpuStockInfo', uselist=True, back_populates='spu')
     spu_tag_info: Mapped[List['SpuTagInfo']] = relationship('SpuTagInfo', uselist=True, back_populates='spu')
     spu_video_info: Mapped[List['SpuVideoInfo']] = relationship('SpuVideoInfo', uselist=True, back_populates='spu')
 
@@ -110,6 +113,7 @@ class SpuNewTagInfo(Base):
     __tablename__ = 'spu_new_tag_info'
     __table_args__ = (
         ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], ondelete='CASCADE', name='spu_new_tag_info_ibfk_1'),
+        Index('title', 'title'),
         Index('uq_spuId_tagManageId', 'spu_id', 'tagManageId', unique=True)
     )
 
@@ -118,6 +122,11 @@ class SpuNewTagInfo(Base):
     update_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='更新时间')
     spu_id = mapped_column(String(50))
     beginTime = mapped_column(BigInteger)
+    endTime = mapped_column(BigInteger)
+    originalPrice = mapped_column(String(50))
+    promotionPrice = mapped_column(String(50))
+    savedMoney = mapped_column(Integer)
+    titleCn = mapped_column(String(50))
     logoImageCn = mapped_column(VARCHAR(512))
     logoImageEn = mapped_column(VARCHAR(512))
     logoImageZhCn = mapped_column(VARCHAR(512))
@@ -133,8 +142,9 @@ class SpuNewTagInfo(Base):
     tagPlace = mapped_column(Integer)
     tagSortType = mapped_column(Integer)
     tagStyleId = mapped_column(VARCHAR(50))
-    title = mapped_column(String(1024))
+    title = mapped_column(VARCHAR(255))
     id = mapped_column(String(50))
+    unknow_field = mapped_column(JSON)
 
     spu: Mapped[Optional['SpuInfo']] = relationship('SpuInfo', back_populates='spu_new_tag_info')
 
@@ -153,44 +163,50 @@ class SpuPriceInfo(Base):
     price = mapped_column(Integer)
     priceType = mapped_column(Integer)
     priceTypeName = mapped_column(VARCHAR(255))
+    unknow_field = mapped_column(JSON)
 
     spu: Mapped[Optional['SpuInfo']] = relationship('SpuInfo', back_populates='spu_price_info')
 
 
-class SpuStockInfo(SpuInfo):
+class SpuStockInfo(Base):
     __tablename__ = 'spu_stock_info'
     __table_args__ = (
         ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], ondelete='CASCADE', name='spu_stock_info_ibfk_1'),
+        Index('spu_id', 'spu_id', unique=True)
     )
 
-    spu_id = mapped_column(String(50), primary_key=True)
+    pk = mapped_column(BigInteger, primary_key=True)
+    spu_id = mapped_column(String(50), nullable=False)
     create_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP'), comment='创建时间')
     update_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='更新时间')
     safeStockQuantity = mapped_column(Integer)
     soldQuantity = mapped_column(Integer)
     stockQuantity = mapped_column(Integer)
+    unknow_field = mapped_column(JSON)
+
+    spu: Mapped['SpuInfo'] = relationship('SpuInfo', back_populates='spu_stock_info')
 
 
 class SpuTagInfo(Base):
     __tablename__ = 'spu_tag_info'
     __table_args__ = (
         ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], ondelete='CASCADE', name='spu_tag_info_ibfk_1'),
-        Index('spu_id', 'spu_id')
+        Index('spu_id_tag_id', 'spu_id', 'tagMark', unique=True)
     )
 
     pk = mapped_column(BigInteger, primary_key=True)
-    create_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP'), comment='创建时间')
+    update_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
+    create_time = mapped_column(TIMESTAMP, nullable=False, server_default=text('CURRENT_TIMESTAMP'))
     spu_id = mapped_column(String(50))
-    tagId = mapped_column(VARCHAR(50))
-    title = mapped_column(String(1024))
+    id = mapped_column(VARCHAR(50))
+    title = mapped_column(VARCHAR(1024))
     tagMark = mapped_column(VARCHAR(255))
     tagPlace = mapped_column(Integer)
     tagSortType = mapped_column(Integer)
     priorityValue = mapped_column(Integer)
     promotionTag = mapped_column(VARCHAR(255))
     beginTime = mapped_column(BigInteger)
-    update_time = mapped_column(DateTime)
-    id = mapped_column(String(50))
+    unknow_field = mapped_column(JSON)
 
     spu: Mapped[Optional['SpuInfo']] = relationship('SpuInfo', back_populates='spu_tag_info')
 
@@ -209,5 +225,6 @@ class SpuVideoInfo(Base):
     videoUrl = mapped_column(VARCHAR(512))
     videoCover = mapped_column(VARCHAR(512))
     duration = mapped_column(Integer)
+    unknow_field = mapped_column(JSON)
 
     spu: Mapped[Optional['SpuInfo']] = relationship('SpuInfo', back_populates='spu_video_info')

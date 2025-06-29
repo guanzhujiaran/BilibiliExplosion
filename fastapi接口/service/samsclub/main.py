@@ -1,11 +1,13 @@
 import asyncio
 import datetime
+import json
 import os
 import time
 from pathlib import Path
 from typing import Any
+
 import aiofiles
-import pandas as pd
+
 from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.models.v1.background_service.background_service_model import ProgressStatusResp
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
@@ -33,7 +35,6 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
         await self.grouping_list_downloader(first_category, second_category)
         return WorkerStatus.complete
 
-
     def __init__(self):
         self.api = sams_club_api
         # 设置配置
@@ -59,7 +60,7 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
         grouping_data_list = lambda first_cate, second_cate, pn: os.path.join(os.path.dirname(__file__), f'csv/'
                                                                                                          f'{datetime.datetime.now().year}/'
                                                                                                          f'{datetime.datetime.now().month}/'
-                                                                                                         f'{datetime.datetime.now().day}/{first_cate}_{second_cate}_{pn}.csv')
+                                                                                                         f'{datetime.datetime.now().day}/{first_cate}_{second_cate}_{pn}.txt')
 
     async def grouping_id_downloader(self):
         if not self.fetch_grouping_id_ts:
@@ -104,33 +105,35 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
         :return:
         """
         task_progress = await self.sql_helper.get_or_create_task_progress(firstCategoryId, secondCategoryId)
-        start_page_num = task_progress.last_page_num
+        if task_progress.is_finished:
+            start_page_num = 1
+        else:
+            start_page_num = task_progress.last_page_num
         frontCategoryIds = await self.sql_helper.get_front_category_ids(firstCategoryId, secondCategoryId)
         hasNextPage = True
         while hasNextPage:
             resp = await self.api.grouping_list(firstCategoryId, secondCategoryId, frontCategoryIds,
                                                 start_page_num, pageSize)
             dataList = resp.json().get('data', {}).get('dataList', [])
+            self.log.debug(f'插入数据：{dataList}')
+            if not dataList:
+                self.log.critical(f'数据内容为空：{(firstCategoryId, secondCategoryId, frontCategoryIds,
+                                                   start_page_num, pageSize)}')
             await self.sql_helper.bulk_upsert_spu_info(dataList)
             file_p = self.FilePath.grouping_data_list(firstCategoryId, secondCategoryId, start_page_num)
             await asyncio.to_thread(
                 Path(file_p).parent.mkdir,
                 parents=True, exist_ok=True
             )
-            df = pd.DataFrame(dataList)
-            await asyncio.to_thread(
-                df.to_csv,
-                file_p,
-                index=False,
-                header=True
-            )
+            async with aiofiles.open(file_p, 'w') as f:
+                await f.write(json.dumps(dataList, ensure_ascii=False))
             hasNextPage = resp.json().get('data', {}).get('hasNextPage', False)
             start_page_num += 1
             await self.sql_helper.update_task_progress(
                 first_category_id=firstCategoryId,
                 second_category_id=secondCategoryId,
                 new_page_num=start_page_num,
-                is_finished=False
+                is_finished=not hasNextPage
             )
             await asyncio.sleep(next(self.delay_gen))
         await self.sql_helper.update_task_progress(

@@ -35,7 +35,7 @@ async def get_available_proxy(
             if __available_proxy_num == 0 or __latest_sync_ts < int(time.time()) - 1 * 3600:
                 __available_proxy_num = await sql_helper.get_num(is_available=True)
                 __latest_sync_ts = int(time.time())
-    while True:  # Loop indefinitely until a proxy is found
+    while attempt <= 3:  # Loop indefinitely until a proxy is found
         attempt += 1
         proxy_tab: Optional[ProxyTab] = None
         # --- Attempt 1: Use AvailableProxy table (if requested) ---
@@ -70,6 +70,7 @@ async def get_available_proxy(
             except Exception as e:
                 sql_log.exception(f"Attempt {attempt}: Error during proxy acquisition process: {e}")
             await asyncio.sleep(initial_retry_delay_seconds)
-
+    proxy_tab = await SQLHelper.select_proxy("rand")
+    return proxy_tab, used_available_proxy
     # The while True loop ensures this point is never reached if a proxy is eventually found.
     # If acquisition *never* yields a proxy, this function will wait forever.

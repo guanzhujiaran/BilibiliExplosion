@@ -1,5 +1,7 @@
 import datetime
+
 import requests
+
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import live_monitor_logger
 from utl.代理.SealedRequests import my_async_httpx
@@ -127,6 +129,7 @@ class AsyncTool:
                 return req
             except Exception as e:
                 p = CONFIG.custom_proxy
+                return []
         return None
 
     @staticmethod

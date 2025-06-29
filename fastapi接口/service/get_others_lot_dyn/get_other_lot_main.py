@@ -8,27 +8,29 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Union, List, Set, Sequence
+
+from py_mini_racer import MiniRacer
+
+import Bilibili_methods.all_methods
+from CONFIG import CONFIG
+from fastapi接口.log.base_log import get_others_lot_logger as get_others_lot_log
 from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo
+from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotuserspaceresp, TLotdyninfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
-from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
-from fastapi接口.utils.Common import sem_gen, asyncio_gather
-from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import proxy_req, get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
-from py_mini_racer import MiniRacer
-from fastapi接口.log.base_log import get_others_lot_logger as get_others_lot_log
-from CONFIG import CONFIG
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
-from utl.pushme.pushme import pushme
-import Bilibili_methods.all_methods
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper as mysq
+from fastapi接口.utils.Common import sem_gen, asyncio_gather
+from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from utl.pushme.pushme import pushme
 
 BAPI = Bilibili_methods.all_methods.methods()
 ctx = MiniRacer()
@@ -361,6 +363,50 @@ manual_reply_judge = ctx.eval(r"""
 				}
             """)
 _is_use_available_proxy = True
+GET_LOT_DYN_TIME_LIMIT = 20 * 3600 * 24
+HighlightWordList = [
+    'jd卡',
+    '京东卡',
+    '京东E卡',
+    '红包',
+    '主机',
+    '显卡',
+    '电脑',
+    '天猫卡',
+    '猫超卡',
+    '现金',
+    '见盘',
+    '耳机',
+    '鼠标',
+    '手办',
+    '景品',
+    'ps5',
+    '内存',
+    '风扇',
+    '散热',
+    '水冷',
+    '硬盘',
+    '显示器',
+    '主板',
+    '电源',
+    '机箱',
+    'fgo',
+    '折现',
+    '樱瞳',
+    '盈通',
+    '🧧',
+    '键盘',
+    '游戏本',
+    '御神子',
+    '琉璃子',
+    '固态',
+    '手机',
+    'GB',
+    'TB',
+    'tb',  # 可能是显存大小，硬盘容量，内存条容量等参数
+    'switch',
+    '冰箱'
+]
 
 
 class FileMap(StrEnum):
@@ -392,6 +438,7 @@ class BiliDynamicItem:
     bili_judge_lottery_result: BiliDynamicItemJudgeLotteryResult = field(
         default_factory=BiliDynamicItemJudgeLotteryResult)
     is_lot_orig: bool = field(default=False)  # 是否是抽奖动态的原动态
+    is_use_available_proxy: bool = field(default=_is_use_available_proxy)
 
     def __post_init__(self):
         if not self.dynamic_id and not (self.dynamic_rid and self.dynamic_type):
@@ -403,12 +450,12 @@ class BiliDynamicItem:
             return hash(int(self.dynamic_id))
         return hash(- int(self.dynamic_type) - int(self.dynamic_rid))
 
-    async def init(self):
+    async def _init(self):
         if not self.dynamic_id and self.dynamic_rid and self.dynamic_type:
             self.dynamic_id = await SqlHelper.getDynIdByRidType(self.dynamic_rid, self.dynamic_type)
 
     # region 获取评论
-    async def get_pinglunreq_with_proxy(self, dynamic_id, rid, pn, _type, *mode):
+    async def _get_pinglunreq_with_proxy(self, dynamic_id, rid, pn, _type, *mode):
         """
         3是热评，2是最新的，大概
         :param dynamic_id:
@@ -454,17 +501,17 @@ class BiliDynamicItem:
         }
         try:
             pinglunreq = await proxy_req.request_with_proxy(
-                is_use_available_proxy=_is_use_available_proxy, method="GET", url=pinglunurl, data=pinglundata,
+                is_use_available_proxy=self.is_use_available_proxy, method="GET", url=pinglunurl, data=pinglundata,
                 headers=pinglunheader, mode='single', hybrid='1')
         except Exception as e:
             get_others_lot_log.exception(f'{e}\n{pinglunurl}\t获取评论失败')
-            pinglunreq = await self.get_pinglunreq_with_proxy(dynamic_id, rid, pn, _type)
+            pinglunreq = await self._get_pinglunreq_with_proxy(dynamic_id, rid, pn, _type)
             return pinglunreq
         return pinglunreq
 
-    async def get_topcomment_with_proxy(self, dynamicid, rid, pn, _type, mid):
+    async def _get_topcomment_with_proxy(self, dynamicid, rid, pn, _type, mid):
         iner_replies = ''
-        pinglunreq = await self.get_pinglunreq_with_proxy(dynamicid, rid, pn, _type, 3)
+        pinglunreq = await self._get_pinglunreq_with_proxy(dynamicid, rid, pn, _type, 3)
         try:
             pinglun_dict = pinglunreq
             pingluncode = pinglun_dict.get('code')
@@ -509,7 +556,7 @@ class BiliDynamicItem:
             get_others_lot_log.info(e)
             get_others_lot_log.info('获取置顶评论失败')
             if pinglunreq is None or pinglunreq.get('code') is None:
-                return await self.get_topcomment_with_proxy(dynamicid, rid, pn, _type, mid)
+                return await self._get_topcomment_with_proxy(dynamicid, rid, pn, _type, mid)
             pinglun_dict = pinglunreq
             data = pinglun_dict.get('data')
             get_others_lot_log.info(pinglun_dict)
@@ -804,7 +851,7 @@ class BiliDynamicItem:
         }
         return structure
 
-    async def solve_dynamic_item_detail(self):
+    async def _solve_dynamic_item_detail(self):
         if not self.dynamic_raw_resp:
             await self._get_dyn_detail_resp()
         dynamic_raw_detail = await self.__solve_dynamic_item_detail(self.dynamic_raw_resp)
@@ -821,7 +868,7 @@ class BiliDynamicItem:
                     }这样的dict
         :return:
         """
-        await self.init()
+        await self._init()
         get_others_lot_log.debug(f'正在获取动态响应：{self.dynamic_id}')
         dynamic_req = None
         dynamic_detail_resp = None
@@ -872,10 +919,10 @@ class BiliDynamicItem:
                 if str(self.dynamic_type) != '2' and not self.dynamic_id:
                     dynamic_req = await get_polymer_web_dynamic_detail(rid=self.dynamic_rid,
                                                                        dynamic_type=self.dynamic_type,
-                                                                       is_use_available_proxy=_is_use_available_proxy)
+                                                                       is_use_available_proxy=self.is_use_available_proxy)
                 else:
                     dynamic_req = await get_polymer_web_dynamic_detail(dynamic_id=self.dynamic_id,
-                                                                       is_use_available_proxy=_is_use_available_proxy)
+                                                                       is_use_available_proxy=self.is_use_available_proxy)
         except Exception as e:
             get_others_lot_log.exception(e)
             await asyncio.sleep(30)
@@ -883,10 +930,10 @@ class BiliDynamicItem:
         self.dynamic_raw_resp = dynamic_req
         return dynamic_req
 
-    async def solve_official_lot_data(self,
-                                      dyn_id: Union[str, int],
-                                      lot_type: OfficialLotType,
-                                      official_lot_id: str):
+    async def _solve_official_lot_data(self,
+                                       dyn_id: Union[str, int],
+                                       lot_type: OfficialLotType,
+                                       official_lot_id: str):
         """
         将官方抽奖数据爬取并上传到数据库
         :param official_lot_id:
@@ -927,7 +974,7 @@ class BiliDynamicItem:
         :param highlight_word_list:
         :return:
         """
-        await self.init()
+        await self._init()
         get_others_lot_log.debug(f'正在判断抽奖动态：{self.dynamic_id}')
         cur_dynamic = None
         orig_dynamic = None
@@ -938,13 +985,11 @@ class BiliDynamicItem:
             t_lot_dyn_info = await SqlHelper.getDynInfoByDynamicId(self.dynamic_id)
             if t_lot_dyn_info:  # 如果是本轮没有跑完的，那就添加进去
                 if t_lot_dyn_info.dynLotRound_id == lotRound_id:
-                    bili_lot_dyn_info = BiliDynamicItemJudgeLotteryResult(cur_dynamic=t_lot_dyn_info)
-                    self.bili_judge_lottery_result = bili_lot_dyn_info
-                    # return bili_lot_dyn_info # 这里不返回，作为本轮没跑完的动态继续跑完整个流程
-                else:
-                    self.bili_judge_lottery_result = BiliDynamicItemJudgeLotteryResult()  # 这个是以前的动态，不加进去了
-                    return self.bili_judge_lottery_result
-        await self.solve_dynamic_item_detail()
+                    self.bili_judge_lottery_result = BiliDynamicItemJudgeLotteryResult(cur_dynamic=t_lot_dyn_info)
+                # else:
+                #     self.bili_judge_lottery_result = BiliDynamicItemJudgeLotteryResult()  # 这个是以前的动态，不加进去了
+                #     return self.bili_judge_lottery_result
+        await self._solve_dynamic_item_detail()
         dynamic_detail = self.dynamic_raw_detail
         try:
             if dynamic_detail and dynamic_detail.get('dynamic_id'):
@@ -1022,8 +1067,7 @@ class BiliDynamicItem:
                 else:
                     is_lot = True
                 official_lot_type = OfficialLotType.official_lot if is_official_lot else OfficialLotType.charge_lot if is_charge_lot else OfficialLotType.reserve_lot if is_reserve_lot else ''
-
-                cur_dynamic = TLotdyninfo(dynId=str(dynamic_detail_dynamic_id),
+                cur_dynamic = TLotdyninfo(dynId=dynamic_detail_dynamic_id,
                                           dynamicUrl=ret_url,
                                           authorName=author_name,
                                           up_uid=author_uid,
@@ -1047,7 +1091,7 @@ class BiliDynamicItem:
 
                 try:
                     if is_official_lot or is_reserve_lot or is_charge_lot:
-                        await self.solve_official_lot_data(str(dynamic_detail_dynamic_id), official_lot_type, lot_rid)
+                        await self._solve_official_lot_data(str(dynamic_detail_dynamic_id), official_lot_type, lot_rid)
                 except Exception as e:
                     get_others_lot_log.exception(f'上传官方抽奖失败！{e}')
                 if dynamic_detail['orig_dynamic_id']:
@@ -1076,7 +1120,7 @@ class BiliDynamicItem:
                     elif BAPI.zhuanfapanduan(orig_dynamic_content):
                         orig_ret_url += '?tab=2'
                     orig_dynamic = TLotdyninfo(
-                        dynId=str(orig_dynamic_id),
+                        dynId=orig_dynamic_id,
                         dynamicUrl=orig_ret_url,
                         authorName=orig_name,
                         up_uid=author_uid,
@@ -1109,7 +1153,8 @@ class BiliDynamicItem:
                                     aid_dynamic_item = BiliDynamicItem(
                                         dynamic_rid=aid_str,
                                         dynamic_type=8,
-                                        is_lot_orig=True
+                                        is_lot_orig=True,
+                                        is_use_available_proxy=self.is_use_available_proxy
                                     )
                                     await aid_dynamic_item.judge_lottery(high_lights_list, lotRound_id)
                                     attached_card = aid_dynamic_item.bili_judge_lottery_result.cur_dynamic if aid_dynamic_item.bili_judge_lottery_result else None
@@ -1147,7 +1192,7 @@ class BiliDynamicItem:
         judge_result = BiliDynamicItemJudgeLotteryResult(
             cur_dynamic=cur_dynamic,
             orig_dynamic=orig_dynamic,
-            attached_card=attached_card
+            attached_card=attached_card,
         )
         self.bili_judge_lottery_result = judge_result
         return judge_result
@@ -1162,13 +1207,11 @@ class BiliSpaceUserItem:
     uid: int | str
     offset: int | str | None = 0
     lot_user_info: TLotuserinfo | None = field(default=None)  # 用户信息
-
     dynamic_infos: Set[BiliDynamicItem] = field(default_factory=set)  # 存放用户的空间动态详情
-
     pub_lot_users: Set['BiliSpaceUserItem'] = field(
         default_factory=set)  # 存放用户发布抽奖的用户详情，调用solve_space_dynamic的时候需要将isPubLotUser设置为True
-
     updateNum: int = field(default=0)
+    is_use_available_proxy: bool = field(default=_is_use_available_proxy)
 
     def __hash__(self):
         return hash(int(self.uid))
@@ -1212,27 +1255,26 @@ class BiliSpaceUserItem:
                     get_others_lot_log.info(
                         f'\n{self.uid}\nhttps://t.bilibili.com/{newest_space_offset} 距离上次获取抽奖时间（{datetime.datetime.fromtimestamp(dynamic_calculated_ts)}）不足2小时，跳过')
                     return
+        if lot_user_info:
+            # 只有当第二轮也获取完的时候，才会将latestFinishedOffset设置为最新的一条动态id值
+            if not lot_user_info.isUserSpaceFinished and not isPreviousRoundFinished:  # 如果上一轮也没有完成，同时这个用户的空间没获取完，从上次的offset继续获取下去
+                origin_offset = lot_user_info.offset
+            elif lot_user_info.isUserSpaceFinished and not isPreviousRoundFinished:  # 如果上一轮抽奖没有完成，重新开始了，但是这个用户的空间获取完了，查询数据库，获取当前round_id的最小值 最多多获取到上一轮的全部数据
+                origin_offset = await SqlHelper.getOldestSpaceOffsetByUidRoundId(self.uid,
+                                                                                 self.lot_round_id)
+            else:  # lot_user_info.isUserSpaceFinished and isPreviousRoundFinished
+                # 如果上一轮抽奖已经完成，并且这个用户的空间获取完了，那么就从0开始重新获取
+                origin_offset = 0
+            # 不会存在上一轮获取完了，但是用户没获取完的情况！！！不用讨论
         else:
-            if lot_user_info:
-                # 只有当第二轮也获取完的时候，才会将latestFinishedOffset设置为最新的一条动态id值
-                if not lot_user_info.isUserSpaceFinished and not isPreviousRoundFinished:  # 如果上一轮也没有完成，同时这个用户的空间没获取完，从上次的offset继续获取下去
-                    origin_offset = lot_user_info.offset
-                elif lot_user_info.isUserSpaceFinished and not isPreviousRoundFinished:  # 如果上一轮抽奖没有完成，重新开始了，但是这个用户的空间获取完了，查询数据库，获取当前round_id的最小值 最多多获取到上一轮的全部数据
-                    origin_offset = await SqlHelper.getOldestSpaceOffsetByUidRoundId(self.uid,
-                                                                                     self.lot_round_id)
-                else:  # lot_user_info.isUserSpaceFinished and isPreviousRoundFinished
-                    # 如果上一轮抽奖已经完成，并且这个用户的空间获取完了，那么就从0开始重新获取
-                    origin_offset = 0
-                # 不会存在上一轮获取完了，但是用户没获取完的情况！！！不用讨论
-            else:
-                lot_user_info = TLotuserinfo(
-                    uid=self.uid,
-                    isPubLotUser=isPubLotUser,
-                    isUserSpaceFinished=0,
-                    offset=0,
-                    latestFinishedOffset=0
-                )
-            await SqlHelper.addLotUserInfo(lot_user_info)
+            lot_user_info = TLotuserinfo(
+                uid=self.uid,
+                isPubLotUser=isPubLotUser,
+                isUserSpaceFinished=0,
+                offset=0,
+                latestFinishedOffset=0
+            )
+        await SqlHelper.addLotUserInfo(lot_user_info)
         # endregion
         self.lot_user_info = lot_user_info
         cur_offset = deepcopy(origin_offset)
@@ -1265,8 +1307,9 @@ class BiliSpaceUserItem:
                 start_ts = time.time()
                 get_others_lot_log.debug(f'正在前往获取用户【{self.uid}】空间动态请求！')
                 dyreq_dict = await get_space_dynamic_req_with_proxy(self.uid, cur_offset if cur_offset else "",
-                                                                    is_use_available_proxy=_is_use_available_proxy)
+                                                                    is_use_available_proxy=self.is_use_available_proxy)
                 code = dyreq_dict.get('code')
+                msg = dyreq_dict.get('message')
                 if code != 0:
                     get_others_lot_log.critical(
                         f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}')
@@ -1276,6 +1319,11 @@ class BiliSpaceUserItem:
                         f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}',
                         'text'
                     )
+                    if code == 4101129:
+                        get_others_lot_log.critical(
+                            f'用户【{self.uid}】空间动态请求失败！\n{msg}')
+                        await asyncio.sleep(3)
+                        continue
                 get_others_lot_log.info(
                     f'获取用户【{self.uid}】空间动态请求成功！耗时：{time.time() - start_ts}秒\n响应：\n{dyreq_dict}')
                 resp_dyn_ids = await self.__add_space_card_to_db(dyreq_dict)
@@ -1289,7 +1337,7 @@ class BiliSpaceUserItem:
                 get_others_lot_log.error(f'获取空间动态用户名失败！{dyreq_dict}')
                 get_others_lot_log.exception(e)
             try:
-                repost_dynamic_id_list = await self.solve_space_dynamic(
+                repost_dynamic_id_list = await self._solve_space_dynamic(
                     dyreq_dict,
                     isPubLotUser
                 )  # 脚本们转发生成的动态id 同时将需要获取的抽奖发布者的uid记录下来
@@ -1321,8 +1369,8 @@ class BiliSpaceUserItem:
                     uid=self.uid,
                     uname=uname,
                     updateNum=self.updateNum,
-                    updatetime=datetime.datetime.now(),
-                    isUserSpaceFinished=0 if not secondRound else 1,
+                    updatetime=lot_user_info.updatetime,  # 只有最后完成了才会更新`updatetime`
+                    isUserSpaceFinished=0,
                     offset=cur_offset,
                     latestFinishedOffset=lot_user_info.latestFinishedOffset,
                     isPubLotUser=isPubLotUser
@@ -1405,7 +1453,7 @@ class BiliSpaceUserItem:
             lot_round_id=self.lot_round_id
         ))
 
-    async def solve_space_dynamic(self, space_req_dict: dict, isPubLotUser: bool) -> List[BiliDynamicItem] | None:
+    async def _solve_space_dynamic(self, space_req_dict: dict, isPubLotUser: bool) -> List[BiliDynamicItem] | None:
         """
         脚本们转发生成的动态id 同时将需要获取的抽奖发布者的uid记录下来
         :param isPubLotUser:发布抽奖动态的up
@@ -1426,7 +1474,11 @@ class BiliSpaceUserItem:
                                 "item": dynamic_item
                             }
                     }
-                    bili_dynamic_item = BiliDynamicItem(dynamic_id=dynamic_id_str, dynamic_raw_resp=single_dynamic_resp)
+                    bili_dynamic_item = BiliDynamicItem(
+                        dynamic_id=dynamic_id_str,
+                        dynamic_raw_resp=single_dynamic_resp,
+                        is_use_available_proxy=self.is_use_available_proxy
+                    )
                     if isPubLotUser:  # 只添加发布抽奖动态的人的原始动态，如果是转发抽奖的抽奖号，那么他的转发抽奖的转发动态是不需要加入检查动态set的
                         self.dynamic_infos.add(bili_dynamic_item)
                 else:
@@ -1441,8 +1493,11 @@ class BiliSpaceUserItem:
                                 }
                         }
                         if orig_dynamic_id_str and orig_dynamic_item.get('type') != 'DYNAMIC_TYPE_NONE':
-                            orig_bili_dynamic_item = BiliDynamicItem(dynamic_id=orig_dynamic_id_str,
-                                                                     dynamic_raw_resp=orig_single_dynamic_resp)
+                            orig_bili_dynamic_item = BiliDynamicItem(
+                                dynamic_id=orig_dynamic_id_str,
+                                dynamic_raw_resp=orig_single_dynamic_resp,
+                                is_use_available_proxy=self.is_use_available_proxy
+                            )
                             self.dynamic_infos.add(orig_bili_dynamic_item)
                         else:
                             if orig_dynamic_item and orig_dynamic_item.get('type') != 'DYNAMIC_TYPE_NONE':
@@ -1478,55 +1533,13 @@ class GetOthersLotDynRobot:
     """
 
     def __init__(self):
-        self._sem = sem_gen()
+        self._sem = sem_gen(100)
         self.isPreviousRoundFinished = False  # 上一轮抽奖是否结束
         self.nowRound: TLotmaininfo = TLotmaininfo()
         self.username = ''
         self.nonLotteryWords = ['分享视频', '分享动态']
         self.SpareTime = 86400 * 5  # 多少时间以前的就不获取别人的动态了
-        self.highlight_word_list = [
-            'jd卡',
-            '京东卡',
-            '京东E卡',
-            '红包',
-            '主机',
-            '显卡',
-            '电脑',
-            '天猫卡',
-            '猫超卡',
-            '现金',
-            '见盘',
-            '耳机',
-            '鼠标',
-            '手办',
-            '景品',
-            'ps5',
-            '内存',
-            '风扇',
-            '散热',
-            '水冷',
-            '硬盘',
-            '显示器',
-            '主板',
-            '电源',
-            '机箱',
-            'fgo',
-            '折现',
-            '樱瞳',
-            '盈通',
-            '🧧',
-            '键盘',
-            '游戏本',
-            '御神子',
-            '琉璃子',
-            '固态',
-            '手机',
-            'GB',
-            'TB',
-            'tb',  # 可能是显存大小，硬盘容量，内存条容量等参数
-            'switch',
-            '冰箱'
-        ]
+        self.highlight_word_list = HighlightWordList
         self.bili_space_user_items_set: Set[BiliSpaceUserItem] = set()
         self.bili_dynamic_items_set: Set[BiliDynamicItem] = set()
         self.scrapy_info = RobotScrapyInfo()
@@ -1753,7 +1766,7 @@ class GetOthersLotDyn:
             await self.robot.main()
             await get_other_lot_redis_manager.set_get_dyn_ts(int(time.time()))
         self.is_getting_dyn_flag = False
-        return await self.solve_return_lot(0)
+        return await self.solve_return_lot()
 
     async def get_official_lot_dyn(self) -> list[str]:
         """
@@ -1783,22 +1796,14 @@ class GetOthersLotDyn:
             )
         return ret_list
 
-    async def get_unignore_Big_lot_dyn(self) -> list[str]:
+    async def get_unignore_Big_lot_dyn(self, time_limit: int = GET_LOT_DYN_TIME_LIMIT) -> list[str]:
         """
         获取必抽的大奖
         :return:
         """
-        all_lot: List[TLotdyninfo] = []
-        latest_finished_round: TLotmaininfo | None = await SqlHelper.getLatestFinishedRound()
-        if latest_finished_round:
-            all_lot = await SqlHelper.getAllLotDynByLotRoundNum(
-                LotRoundNum=latest_finished_round.lotRound_id
-            )
-            dyn_content_list = [x.dynContent for x in all_lot]
-        else:
-            get_others_lot_log.critical(f'没有抽奖信息内容！！')
-            return []
+        all_lot = await SqlHelper.getAllLotDynByTimeLimit()
         all_lot = [x for x in all_lot if self.__is_need_lot(x)]
+        dyn_content_list = [x.dynContent for x in all_lot]
         is_lot_list = await asyncio.to_thread(big_lot_predict, dyn_content_list)
         ret_list = []
         for i in range(len(all_lot)):
@@ -1873,7 +1878,7 @@ class GetOthersLotDyn:
     # region 获取抽奖csv里的数据
     def __is_need_lot(self, lot_det: TLotdyninfo):
         """
-        过滤抽奖函数，只保留一般抽奖
+        过滤抽奖函数，只保留一般抽奖 最长大概是判断20天
         :param lot_det:
         :return:
         """
@@ -1904,18 +1909,12 @@ class GetOthersLotDyn:
                 return False
         return True
 
-    async def solve_return_lot(self, lot_round: int | None = None) -> list[str]:
+    async def solve_return_lot(self, time_limit: int = GET_LOT_DYN_TIME_LIMIT) -> list[str]:
         """
         解析并过滤抽奖的csv，直接返回动态链接的列表
         :return:
         """
-
-        if lot_round:
-            all_lot_det = await SqlHelper.getAllLotDynByLotRoundNum(LotRoundNum=lot_round)
-        else:
-            latest_finished_round = await SqlHelper.getLatestFinishedRound()
-            all_lot_det = await SqlHelper.getAllLotDynByLotRoundNum(LotRoundNum=latest_finished_round.lotRound_id)
-
+        all_lot_det = await SqlHelper.getAllLotDynByTimeLimit(time_limit)
         filtered_list: list[TLotdyninfo] = list(filter(self.__is_need_lot, all_lot_det))
         filtered_list.sort(key=lambda x: x.dynId, reverse=True)
         self.push_lot_csv(
