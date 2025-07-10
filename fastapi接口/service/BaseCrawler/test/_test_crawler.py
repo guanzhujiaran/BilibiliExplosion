@@ -9,11 +9,11 @@ from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin, S
 
 class TestCrawler(UnlimitedCrawler):
     def __init__(self):
-        stats_plugin = StatsPlugin(self)
-        null_stop_plugin = SequentialNullStopPlugin(self)
+        self.stats_plugin = StatsPlugin(self)
+        self.null_stop_plugin = SequentialNullStopPlugin(self)
 
         super().__init__(
-            plugins=[null_stop_plugin, stats_plugin]
+            plugins=[self.null_stop_plugin, self.stats_plugin]
         )
         self._count = 0
         print('初始化')
@@ -23,7 +23,7 @@ class TestCrawler(UnlimitedCrawler):
     async def handle_fetch(self, params: int) -> WorkerStatus:
         print(params)
         self._count += 1
-        await asyncio.sleep(random.random() * 100)
+        # await asyncio.sleep(random.random() * 100)
 
         return WorkerStatus.nullData
 
@@ -54,6 +54,7 @@ class TestCrawler(UnlimitedCrawler):
 async def _test():
     a = TestCrawler()
     await a.main()
+    print(a.stats_plugin.get_all_status())
 
 
 if __name__ == "__main__":

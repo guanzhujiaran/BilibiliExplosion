@@ -87,7 +87,6 @@ class SQLHelper:
                 obj['unknow_field'] = unknow_field
         return obj
 
-    @sql_retry_wrapper
     async def _handle_relationships_upsert(self, spu_id: str, spu_data: Dict[str, Any], db: AsyncSession):
 
         spu_title = spu_data.get('title')
@@ -501,5 +500,12 @@ if __name__ == '__main__':
         res = await sql_helper.query_spu_info(1)
         print(res)
 
+    async def _test_query_price():
+        async with sql_helper.async_session()as db:
+            res = await sql_helper.get_price_info_by_spu_id(
+                325257813,db
+            )
+            print(res)
 
-    asyncio.run(_test_query_spu_info())
+
+    asyncio.run(_test_query_price())

@@ -16,6 +16,19 @@ running_uids = set()
 
 
 class GetRmFollowingListV2(UnlimitedCrawler[int]):
+    def __init__(self):
+        super().__init__(
+            max_sem=10,
+            _logger=get_rm_following_list_logger
+        )
+        self.following_list = []
+        self.running_uids = running_uids
+        self._lock = asyncio.Lock()
+        self.check_up_sep_days = 7  # 每个uid的检查间隔
+        self.round_id = 1
+        self.max_gap_time = 86400 * 60  # 取关多少天未发抽奖动态的up主
+        self.is_use_available_proxy = False
+
     async def is_stop(self) -> bool:
         pass
 
@@ -87,19 +100,6 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
         result = [x for x in following_list if not await self.check_lot_up_from_database(x)]
         self.log.debug(result)
         return result
-
-    def __init__(self):
-        super().__init__(
-            max_sem=10,
-            _logger=get_rm_following_list_logger
-        )
-        self.following_list = []
-        self.running_uids = running_uids
-        self._lock = asyncio.Lock()
-        self.check_up_sep_days = 7  # 每个uid的检查间隔
-        self.round_id = 1
-        self.max_gap_time = 86400 * 60  # 取关多少天未发抽奖动态的up主
-        self.is_use_available_proxy = False
 
 
 if __name__ == '__main__':

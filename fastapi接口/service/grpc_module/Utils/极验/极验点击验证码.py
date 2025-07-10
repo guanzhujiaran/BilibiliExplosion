@@ -247,7 +247,7 @@ class GeetestV3Breaker:
         finally:
             ...
 
-
+geetest_v3_breaker = GeetestV3Breaker()
 if __name__ == '__main__':
     _g = GeetestV3Breaker()
     asyncio.run(_g.a_validate_form_voucher_ua(

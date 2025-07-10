@@ -26,7 +26,7 @@ class RBDParamsType(CustomBaseModel):
 
 class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[None]):
     def __init__(self):
-        max_sem = 10
+        max_sem = 100
         self.status_plugin = StatsPlugin(self)
         super().__init__(
             max_sem=max_sem,

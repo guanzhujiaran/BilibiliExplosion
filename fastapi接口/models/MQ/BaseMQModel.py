@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+
 from faststream.rabbit import RabbitQueue, RabbitExchange
 
 
@@ -9,6 +10,7 @@ class QueueName(StrEnum):
     UpsertLotDataByDynamicIdMQ = "UpsertLotDataByDynamicIdQueue"
     UpsertTopicLotMQ = "UpsertTopicLotMQ"
     UpsertMilvusBiliLotDataMQ = "UpsertMilvusBiliLotDataMQ"
+    BiliVoucherMQ = "bili_352_voucher"
 
 
 class ExchangeName(StrEnum):
@@ -26,6 +28,7 @@ class RoutingKey(StrEnum):
     # 定义一个名为UpsertTopicLotMQ的枚举值，值为"BiliData.UpsertTopicLotMQ"
     UpsertTopicLotMQ = "BiliData.UpsertTopicLotMQ"
     UpsertMilvusBiliLotDataMQ = "Milvus.BiliLotDataMQ"
+    BiliVoucherMQ = "BiliData.bili_352_voucher"
 
 
 @dataclass

@@ -24,7 +24,6 @@ class t:
             _t = ""
             for i in range(e):
                 tep = 16 * random.random()
-                print(tep)
                 _t += o(tep)
             return s(_t, e)
 
@@ -46,7 +45,6 @@ class t:
                     k = i.strip().split('=')[0].strip()
                     v = i.strip().split('=')[1].strip()
                 except:
-                    print(c_s)
                     traceback.print_exc()
                     exit('common_cookie_parse_failed')
                 if k == "b_timer":
@@ -230,7 +228,6 @@ class t:
 
 cookie_file_name_list = os.listdir(os.path.join(CONFIG.root_dir,'b站cookie/cookie_path'))
 cookie_file_name_list=sorted(cookie_file_name_list,key=lambda x:int(x[6:-4]))
-print(cookie_file_name_list)
 t = t()
 ua_list = [
     "Mozilla/5.0 BiliDroid/6.90.0 (bbcallen@gmail.com) os/android model/oneplus 6 mobi_app/android build/6900400 channel/html5_search_baidu innerVer/6900410 osVer/6.0.1 network/2",
@@ -278,7 +275,8 @@ for i in range(1, len(cookie_file_name_list) + 1):
 # t.write_cookie(cookie2,'cookie2')
 # ua2 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36"
 # watch_cookie2 = t.watch_cookie_parse(fullcookie2, ua2)
-# fingerprint2 = t.get_fingerprint(fullcookie2)
+# fingerprint2 = t.get_finger78iuuuuuuuuuuuuuuuuuuuu
+# fullcookie2)
 # csrf2 = t.get_csrf(fullcookie2)
 # uid2 = "9295261"  # 保加利亚
 # uname2 = '保加利亚人妖王'

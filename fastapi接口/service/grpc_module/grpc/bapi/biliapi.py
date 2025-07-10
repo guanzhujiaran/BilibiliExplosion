@@ -11,16 +11,15 @@ from curl_cffi.requests import BrowserType
 
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import bapi_log
+from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import RequestKnownError
 from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
 from fastapi接口.service.grpc_module.Utils.response.check_resp import check_reserve_relation_info
 from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import GeetestRegInfo
 from fastapi接口.service.grpc_module.grpc.bapi.models import LatestVersionBuild
 from utl.pushme.pushme import pushme
-from utl.代理.SealedRequests import my_async_httpx as _my_sealed_req
-from utl.代理.request_with_proxy import request_with_proxy
+from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 from utl.加密.wbi加密 import gen_dm_args, get_wbi_params
 
-proxy_req = request_with_proxy()
 _custom_proxy = CONFIG.custom_proxy
 black_code_list = [-412, -352]  # 异常代码，需要重试的
 
@@ -30,12 +29,12 @@ def _request_wrapper(func):
         while 1:
             try:
                 resp_dict = await func(*args, **kwargs)
-                if resp_dict.get('code') is None or resp_dict.get('code') in black_code_list:
-                    raise ValueError(f'请求失败！检查响应：{resp_dict}')
                 return resp_dict
+            except RequestKnownError:
+                continue
             except Exception as e:
-                bapi_log.opt(exception=True).error(f'{func.__name__} 请求失败！{e}')
-                await asyncio.sleep(60)
+                bapi_log.exception(f'{func.__name__} 请求失败！{e}')
+                await asyncio.sleep(10)
 
     return wrapper
 
@@ -45,13 +44,6 @@ def gen_trace_id() -> str:
     trace_id_hex = hex(int(round(time.time()) / 256)).lower().replace("0x", "")
     trace_id = trace_id_uid + trace_id_hex + ":" + trace_id_uid[-10:] + trace_id_hex + ":0:0"
     return trace_id
-
-
-def get_request_func(use_custom_proxy=False) -> callable:
-    if use_custom_proxy:
-        return _my_sealed_req.request  # 自己的ipv6发起请求
-    else:
-        return proxy_req.request_with_proxy  # 代理池里面的ip发起请求
 
 
 def _gen_headers(*extra_headers: dict) -> dict:
@@ -85,9 +77,68 @@ def get_latest_version_builds() -> list[LatestVersionBuild]:
 
 
 @_request_wrapper
+async def get_reply_main(
+        dynamic_id,
+        rid,
+        pn,
+        _type,
+        mode,
+        use_custom_proxy: bool = True,
+        is_use_available_proxy: bool = False
+):
+    """
+           mode 3是热评，2是最新，大概
+           :param dynamic_id:
+           :param rid:
+           :param pn:
+           :param _type:
+           :param mode:
+           :return:
+           """
+    if mode:
+        mode = mode[0]
+    else:
+        mode = 2
+    ctype = 17
+    if str(_type) == '8':
+        ctype = 1
+    elif str(_type) == '4' or str(_type) == '1':
+        ctype = 17
+    elif str(_type) == '2':
+        ctype = 11
+    elif str(_type) == '64':
+        ctype = 12
+    if len(str(rid)) == len(str(dynamic_id)):
+        oid = dynamic_id
+    else:
+        oid = rid
+    headers = _gen_headers()
+    pinglunurl = 'https://api.bilibili.com/x/v2/reply/main?next=' + str(pn) + '&type=' + str(ctype) + '&oid=' + str(
+        oid) + '&mode=' + str(mode) + '&plat=1&_=' + str(int(time.time()))
+    pinglundata = {
+        'jsonp': 'jsonp',
+        'next': pn,
+        'type': ctype,
+        'oid': oid,
+        'mode': mode,
+        'plat': 1,
+        '_': time.time()
+    }
+    resp = await request_with_proxy_internal.request_with_proxy(
+        method='GET',
+        url=pinglunurl,
+        params=pinglundata,
+        headers=headers,
+        is_use_available_proxy=is_use_available_proxy,
+        is_use_custom_proxy=use_custom_proxy,
+    )
+    return resp
+
+
+@_request_wrapper
 async def get_web_topic(
         topic_id: int,
-        use_custom_proxy: bool = False,
+        use_custom_proxy: bool = True,
         is_use_available_proxy: bool = False
 ):
     url = 'https://app.bilibili.com/x/topic/web/details/top'
@@ -97,24 +148,21 @@ async def get_web_topic(
     }
     headers = _gen_headers()
 
-    resp = await get_request_func(use_custom_proxy=use_custom_proxy)(
+    resp = await request_with_proxy_internal.request_with_proxy(
         method='GET',
         url=url,
         params=params,
         headers=headers,
-        proxies=_custom_proxy,
         is_use_available_proxy=is_use_available_proxy,
-        mode='single',
+        is_use_custom_proxy=use_custom_proxy,
     )
-    if use_custom_proxy:
-        return resp.json()
-    else:
-        return resp
+    return resp
 
 
 @_request_wrapper
 async def get_lot_notice(business_type: str | int, business_id: str | int, origin_dynamic_id: str | int | None = None,
-                         use_custom_proxy=False):
+                         use_custom_proxy: bool = True,
+                         is_use_available_proxy: bool = False):
     """
     获取抽奖notice
     :param origin_dynamic_id:
@@ -129,16 +177,15 @@ async def get_lot_notice(business_type: str | int, business_id: str | int, origi
             'business_type': business_type,
             'business_id': business_id,
         }
-        if use_custom_proxy:
-            resp = await get_request_func(use_custom_proxy=use_custom_proxy)(url=url, method='get', params=params,
-                                                                             headers=_gen_headers(),
-                                                                             proxies=_custom_proxy
-                                                                             )
-            resp = resp.json()
-        else:
-            resp = await get_request_func(use_custom_proxy=use_custom_proxy)(url=url, method='get', params=params,
-                                                                             headers=_gen_headers(),
-                                                                             )
+        headers = _gen_headers()
+        resp = await request_with_proxy_internal.request_with_proxy(
+            method='GET',
+            url=url,
+            params=params,
+            headers=headers,
+            is_use_available_proxy=is_use_available_proxy,
+            is_use_custom_proxy=use_custom_proxy,
+        )
         if resp.get('code') != 0:
             if resp.get('code') == -9999:
                 return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
@@ -175,49 +222,28 @@ async def get_lot_notice(business_type: str | int, business_id: str | int, origi
 @_request_wrapper
 async def reserve_relation_info(
         ids: int | str,
-        use_custom_proxy: bool = False,
+        use_custom_proxy: bool = True,
         is_use_available_proxy: bool = False
 ) -> dict:
     url = 'http://api.bilibili.com/x/activity/up/reserve/relation/info?ids=' + str(ids)
-    # ua = random.choice(BAPI.User_Agent_List)
-    headers = {
-        'accept': 'text/html,application/json',
-        'accept-encoding': 'gzip, deflate',
-        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-        'cache-control': 'no-cache',
-        'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
-        'sec-ch-ua-mobile': '?0',
-        'sec-ch-ua-platform': "\"Windows\"",
-        'sec-fetch-dest': 'empty',
-        'sec-fetch-mode': 'cors',
-        'sec-fetch-site': 'same-site',
-        'user-agent': CONFIG.rand_ua,
-        'cookie': '1'
-        # 'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
-        #                                         random.choice(range(0, 255)), random.choice(range(0, 255))),
-        # 'X-Real-IP': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
-        #                                   random.choice(range(0, 255)), random.choice(range(0, 255))),
-        # 'From': 'bingbot(at)microsoft.com',
-    }
-    if use_custom_proxy:
-        del headers['cookie']
-        resp = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
-                                                                         headers=headers,
-                                                                         proxies=_custom_proxy
-                                                                         )
-        req_dict = resp.json()
-    else:
-        req_dict = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET', url=url,
-                                                                             headers=headers,
-                                                                             is_use_available_proxy=is_use_available_proxy,
-                                                                             )
+    headers = _gen_headers()
+    req_dict = await request_with_proxy_internal.request_with_proxy(
+        method='GET',
+        url=url,
+        headers=headers,
+        is_use_available_proxy=is_use_available_proxy,
+        is_use_custom_proxy=use_custom_proxy,
+    )
     check_reserve_relation_info(req_dict, ids=ids)
     return req_dict
 
 
 @_request_wrapper
-async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_custom_proxy=False,
-                                           is_use_available_proxy=False):
+async def get_space_dynamic_req_with_proxy(
+        hostuid: int | str, offset: str,
+        use_custom_proxy: bool = False,
+        is_use_available_proxy: bool = False
+):
     """
     offset不能为0，需要为0的时候传入空字符串即可
     :param is_use_available_proxy:
@@ -227,56 +253,51 @@ async def get_space_dynamic_req_with_proxy(hostuid: int | str, offset: str, use_
     :return:
     """
     offset = offset if offset else ''
-    while 1:
-        url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
-        headers = _gen_headers({
-            "origin": "https://space.bilibili.com",
-            'referer': f"https://space.bilibili.com/{hostuid}/dynamic",
-            'cookie': '1'
-        })
-        dongtaidata = {
-            'offset': offset,
-            'host_mid': hostuid,
-            'timezone_offset': -480,
-            'platform': 'web',
-            'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,forwardListHidden,decorationCard,commentsNewVersion,onlyfansAssetsV2,ugcDelete,onlyfansQaCard',
-            'web_location': "333.1387",
-        }
-        dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
-        dongtaidata.update({
-            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
-            "x-bili-web-req-json": json.dumps({"spm_id": "333.1387"}, separators=(',', ':'))
-        })
-        wbi_sign = await get_wbi_params(dongtaidata)
-        dongtaidata.update({
-            'w_rid': wbi_sign['w_rid']
-        })
-        dongtaidata.update({
-            "wts": wbi_sign['wts']
-        })
-        url_params = url + '?' + urllib.parse.urlencode(dongtaidata, safe='[],:')
-        if use_custom_proxy:
-            req = await get_request_func(use_custom_proxy=use_custom_proxy)(method='GET',
-                                                                            url=url_params,
-                                                                            headers=headers,
-                                                                            mode='rand',
-                                                                            proxies=_custom_proxy
-                                                                            )
-            req = req.json()
-        else:
-            req = await get_request_func(use_custom_proxy=use_custom_proxy)(
-                is_use_available_proxy=is_use_available_proxy,
-                method='GET',
-                url=url_params,
-                headers=headers,
-            )
-        return req
+    url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/space'
+    headers = _gen_headers({
+        "origin": "https://space.bilibili.com",
+        'referer': f"https://space.bilibili.com/{hostuid}/dynamic",
+    })
+    dongtaidata = {
+        'offset': offset,
+        'host_mid': hostuid,
+        'timezone_offset': -480,
+        'platform': 'web',
+        'features': 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,forwardListHidden,decorationCard,commentsNewVersion,onlyfansAssetsV2,ugcDelete,onlyfansQaCard',
+        'web_location': "333.1387",
+    }
+    dongtaidata = gen_dm_args(dongtaidata)  # 先加dm参数
+    dongtaidata.update({
+        "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
+        "x-bili-web-req-json": json.dumps({"spm_id": "333.1387"}, separators=(',', ':'))
+    })
+    wbi_sign = await get_wbi_params(dongtaidata)
+    dongtaidata.update({
+        'w_rid': wbi_sign['w_rid']
+    })
+    dongtaidata.update({
+        "wts": wbi_sign['wts']
+    })
+    url_params = url + '?' + urllib.parse.urlencode(dongtaidata, safe='[],:')
+    resp = await request_with_proxy_internal.request_with_proxy(
+        method='GET',
+        url=url_params,
+        headers=headers,
+        is_use_available_proxy=is_use_available_proxy,
+        is_use_custom_proxy=use_custom_proxy,
+        is_use_cookie=True
+    )
+    return resp
 
 
 @_request_wrapper
-async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, rid: str | int | None = None,
-                                         dynamic_type: str | int | None = None, use_custom_proxy=False,
-                                         is_use_available_proxy=False):
+async def get_polymer_web_dynamic_detail(
+        dynamic_id: str | int | None = None,
+        rid: str | int | None = None,
+        dynamic_type: str | int | None = None,
+        use_custom_proxy=False,
+        is_use_available_proxy=False
+):
     url = 'https://api.bilibili.com/x/polymer/web-dynamic/v1/detail'
     headers = _gen_headers({
         "origin": "https://t.bilibili.com",
@@ -313,33 +334,29 @@ async def get_polymer_web_dynamic_detail(dynamic_id: str | int | None = None, ri
         "wts": wbi_sign['wts']
     })
     url_with_params = url + '?' + urllib.parse.urlencode(data, safe='[],:')
-    if use_custom_proxy:
-        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(
-            method='GET',
-            url=url_with_params,
-            headers=headers,
-            proxies=_custom_proxy
-        )
-        dynamic_req = dynamic_req.json()
-    else:
-        dynamic_req = await get_request_func(use_custom_proxy=use_custom_proxy)(
-            is_use_available_proxy=is_use_available_proxy,
-            method='GET',
-            url=url_with_params,
-            headers=headers,
-            mode='single',
-        )
-    return dynamic_req
+    resp = await request_with_proxy_internal.request_with_proxy(
+        method='GET',
+        url=url_with_params,
+        headers=headers,
+        is_use_available_proxy=is_use_available_proxy,
+        is_use_custom_proxy=use_custom_proxy,
+        is_use_cookie=True
+    )
+    return resp
 
 
-async def get_geetest_reg_info(v_voucher: str,
-                               h5_ua: str = "Mozilla/5.0 (Linux; Android 9; PCRT00 Build/PQ3A.190605.05081124; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 os/android model/PCRT00 build/8130300 osVer/9 sdkInt/28 network/2 BiliApp/8130300 mobi_app/android channel/master Buvid/XYC415CC0C4C410574E19A3772711795B96A8 sessionID/34420383 innerVer/8130300 c_locale/zh_CN s_locale/zh_CN disable_rcmd/0 themeId/1 sh/24 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 channel/master innerVer/8130300 osVer/9 network/2",
-                               buvid: str = "",
-                               ori: str = "",
-                               ref: str = "",
-                               ticket: str = "",
-                               version: str = "8.9.0"
-                               ) -> GeetestRegInfo | bool:
+@_request_wrapper
+async def get_geetest_reg_info(
+        v_voucher: str,
+        h5_ua: str = "Mozilla/5.0 (Linux; Android 9; PCRT00 Build/PQ3A.190605.05081124; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile Safari/537.36 os/android model/PCRT00 build/8130300 osVer/9 sdkInt/28 network/2 BiliApp/8130300 mobi_app/android channel/master Buvid/XYC415CC0C4C410574E19A3772711795B96A8 sessionID/34420383 innerVer/8130300 c_locale/zh_CN s_locale/zh_CN disable_rcmd/0 themeId/1 sh/24 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 channel/master innerVer/8130300 osVer/9 network/2",
+        buvid: str = "",
+        ori: str = "",
+        ref: str = "",
+        ticket: str = "",
+        version: str = "8.9.0",
+        use_custom_proxy=True,
+        is_use_available_proxy=False
+) -> GeetestRegInfo | bool:
     url = 'https://api.bilibili.com/x/gaia-vgate/v1/register'
     data = {
         "disable_rcmd": 0,
@@ -373,18 +390,18 @@ async def get_geetest_reg_info(v_voucher: str,
         ('accept-encoding', 'gzip')
     ]
     # data = urllib.parse.urlencode(data)
-    response = await get_request_func(use_custom_proxy=True)(
+    resp_json = await request_with_proxy_internal.request_with_proxy(
         method='POST',
         url=url,
-        data=data,
-        headers=headers_raw,
-        proxies=_custom_proxy
+        headers=dict(headers_raw),
+        is_use_available_proxy=is_use_available_proxy,
+        is_use_custom_proxy=use_custom_proxy,
+        is_use_cookie=False
     )
-    resp_json = response.json()
     if resp_json.get('code') == 0:  # gt=ac597a4506fee079629df5d8b66dd4fe 这个是web端的，目标是获取到app端的gt
         if resp_json.get('data').get('geetest') is None:
             bapi_log.warning(
-                f"\n该风控无法通过 captcha 解除！！！获取极验信息失败: {data}\n{resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
+                f"\n该风控无法通过 captcha 解除！！！获取极验信息失败: {data}\n{resp_json}\n请求头：{headers_raw}")
             return False
         bapi_log.debug(f"\n成功获取极验challenge：{resp_json}")
         return GeetestRegInfo(
@@ -398,6 +415,7 @@ async def get_geetest_reg_info(v_voucher: str,
         return False
 
 
+@_request_wrapper
 async def validate_geetest(challenge, token, validate,
                            h5_ua: str = "Mozilla/5.0 (Linux; Android 9; PCRT00 Build/PQ3A.190605.05081124; wv)"
                                         " AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/91.0.4472.114 Mobile "
@@ -411,7 +429,9 @@ async def validate_geetest(challenge, token, validate,
                            ori: str = "",
                            ref: str = "",
                            ticket: str = "",
-                           version: str = "8.9.0"
+                           version: str = "8.9.0",
+                           use_custom_proxy=True,
+                           is_use_available_proxy=False
                            ) -> str:
     """
     :param challenge:
@@ -456,14 +476,14 @@ async def validate_geetest(challenge, token, validate,
         ('accept-encoding', 'gzip')
     ]
     # data = urllib.parse.urlencode(data)
-    response = await get_request_func(use_custom_proxy=True)(
+    resp_json = await request_with_proxy_internal.request_with_proxy(
         method='POST',
         url=url,
-        data=data,
-        headers=headers_raw,
-        proxies=_custom_proxy
+        headers=dict(headers_raw),
+        is_use_available_proxy=is_use_available_proxy,
+        is_use_custom_proxy=use_custom_proxy,
+        is_use_cookie=False
     )
-    resp_json = response.json()
     if resp_json.get('code') != 0:
         bapi_log.error(
             f"\n发请求 {url} 验证validate极验失败:{challenge, token, validate}\n {resp_json}\n{data}\n{headers_raw}")
@@ -472,6 +492,7 @@ async def validate_geetest(challenge, token, validate,
     return token
 
 
+@_request_wrapper
 async def resource_abtest_abserver(
         buvid,
         fp_local,
@@ -484,7 +505,9 @@ async def resource_abtest_abserver(
         channel,
         osver,
         ticket,
-        brand
+        brand,
+        use_custom_proxy=True,
+        is_use_available_proxy=False
 ):
     url = 'https://app.bilibili.com/x/resource/abtest/abserver'
     ua = f'Mozilla/5.0 BiliDroid/{app_version_name} (bbcallen@gmail.com) os/android model/{model} mobi_app/android build/{app_build} channel/{channel} innerVer/{app_build} osVer/{osver} network/2'
@@ -521,15 +544,20 @@ async def resource_abtest_abserver(
         'ts': int(time.time()),
     }
     signed_params = appsign(params)
-    response = await get_request_func(use_custom_proxy=True)(
+    resp_json = await request_with_proxy_internal.request_with_proxy(
+        method='GET',
         url=url,
-        method='get',
         params=signed_params,
-        headers=headers_raw)
-    bapi_log.debug(f'\n{url}\t发请求验证成功：{response.json()}')
-    return response
+        headers=dict(headers_raw),
+        is_use_available_proxy=is_use_available_proxy,
+        is_use_custom_proxy=use_custom_proxy,
+        is_use_cookie=False
+    )
+    bapi_log.debug(f'\n{url}\t发请求验证成功：{resp_json}')
+    return resp_json
 
 
+@_request_wrapper
 async def xlive_web_interface_v1_index_getWebAreaList(
         use_custom_proxy=False,
         is_use_available_proxy=False
@@ -539,21 +567,17 @@ async def xlive_web_interface_v1_index_getWebAreaList(
         'origin': 'https://live.bilibili.com',
         'referer': 'https://live.bilibili.com/'
     })
-    resp = await get_request_func(use_custom_proxy=use_custom_proxy)(
+    resp_json = await request_with_proxy_internal.request_with_proxy(
         method='GET',
         url=url,
         headers=headers,
-        proxies=_custom_proxy,
         is_use_available_proxy=is_use_available_proxy,
-        mode='single',
+        is_use_custom_proxy=use_custom_proxy,
+        is_use_cookie=False
     )
-
-    if use_custom_proxy:
-        return resp.json()
-    else:
-        return resp
+    return resp_json
 
 
 if __name__ == "__main__":
     # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
-    print(asyncio.run(get_web_topic(114514, True)))
+    print(asyncio.run(get_lot_notice(1, 1083058471376519249, use_custom_proxy=True)))

@@ -22,6 +22,11 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         for plugin in plugins:
             self.__register_plugin(plugin)
 
+    @property
+    def plugins(self) -> List[CrawlerPlugin[ParamsType]]:
+        return self._plugins
+
+
     def __register_plugin(self, plugin: CrawlerPlugin[ParamsType]):
         if plugin not in self._plugins:
             self._plugins.append(plugin)

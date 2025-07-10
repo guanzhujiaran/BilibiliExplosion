@@ -5,18 +5,16 @@ import traceback
 from datetime import timedelta
 from enum import StrEnum
 from typing import Union, Any, List, Dict, AsyncIterator, Optional
-
 import redis as sync_redis
 import redis.asyncio as redis
 from redis.exceptions import ConnectionError, BusyLoadingError
 from redis.typing import KeyT
-
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import redis_logger
-from fastapi接口.utils.Common import asyncio_gather
+from fastapi接口.utils.Common import asyncio_gather, sem_gen
 
 _MAX_SEM_NUM = 4096
-_sem = asyncio.Semaphore(_MAX_SEM_NUM)
+_sem = sem_gen(_MAX_SEM_NUM)
 
 
 def retry_async_generator(func):
@@ -27,34 +25,33 @@ def retry_async_generator(func):
 
     async def wrapper_generator(*args, **kwargs):
         while True:  # 外层循环用于重试整个生成过程
-            async with _sem:  # 在尝试获取并迭代生成器前获取信号量
-                try:
-                    # 1. 调用原始函数获取异步生成器对象
-                    gen = func(*args, **kwargs)
-                    # 2. 迭代原始生成器，并将值 yield 给调用方
-                    # 这个 async for 循环会在 gen 完成 (StopAsyncIteration) 或抛出异常时结束
-                    async for item in gen:
-                        # 如果成功从原始生成器获取到值，就 yield 给外部调用方
-                        yield item
-                    # 3. 如果 async for 循环正常结束，说明生成器运行完毕，跳出重试循环
-                    break  # 成功完成，退出重试循环
-                except ConnectionError as e:
-                    redis_logger.exception(
-                        f'Redis连接错误 during generator iteration for {func.__name__}, retrying in 30s... {e}')
-                    # 信号量在 'async with' 块结束时自动释放
-                    await asyncio.sleep(30)
-                    # while True 循环继续，尝试获取信号量并重新开始
+            try:
+                # 1. 调用原始函数获取异步生成器对象
+                gen = func(*args, **kwargs)
+                # 2. 迭代原始生成器，并将值 yield 给调用方
+                # 这个 async for 循环会在 gen 完成 (StopAsyncIteration) 或抛出异常时结束
+                async for item in gen:
+                    # 如果成功从原始生成器获取到值，就 yield 给外部调用方
+                    yield item
+                # 3. 如果 async for 循环正常结束，说明生成器运行完毕，跳出重试循环
+                break  # 成功完成，退出重试循环
+            except ConnectionError as e:
+                redis_logger.exception(
+                    f'Redis连接错误 during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                # 信号量在 'async with' 块结束时自动释放
+                await asyncio.sleep(30)
+                # while True 循环继续，尝试获取信号量并重新开始
 
-                except Exception as e:
-                    # 捕获其他异常
-                    redis_logger.exception(
-                        f'An unexpected error occurred during generator iteration for {func.__name__}, retrying in 30s... {e}')
-                    # 信号量在 'async with' 块结束时自动释放
-                    await asyncio.sleep(30)
-                    # while True 循环继续，尝试获取信号量并重新开始
+            except Exception as e:
+                # 捕获其他异常
+                redis_logger.exception(
+                    f'An unexpected error occurred during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                # 信号量在 'async with' 块结束时自动释放
+                await asyncio.sleep(30)
+                # while True 循环继续，尝试获取信号量并重新开始
 
-                # Note: StopAsyncIteration 是正常结束标志，会被 async for 内部处理，
-                # 不会到达这里的 except 块
+            # Note: StopAsyncIteration 是正常结束标志，会被 async for 内部处理，
+            # 不会到达这里的 except 块
 
     # 返回这个 wrapper 生成器函数
     return wrapper_generator
@@ -63,17 +60,16 @@ def retry_async_generator(func):
 def retry(func):
     async def wrapper(*args, **kwargs):
         while 1:
-            async with _sem:
-                try:
-                    return await func(*args, **kwargs)
-                except BusyLoadingError as e:
-                    await asyncio.sleep(30)
-                except ConnectionError as e:
-                    redis_logger.exception(f'Redis连接错误，重试中...{e}')
-                    await asyncio.sleep(30)
-                except Exception as e:
-                    redis_logger.exception(e)
-                    await asyncio.sleep(30)
+            try:
+                return await func(*args, **kwargs)
+            except BusyLoadingError as e:
+                await asyncio.sleep(30)
+            except ConnectionError as e:
+                redis_logger.exception(f'Redis连接错误，重试中...{e}')
+                await asyncio.sleep(30)
+            except Exception as e:
+                redis_logger.exception(e)
+                await asyncio.sleep(30)
 
     return wrapper
 

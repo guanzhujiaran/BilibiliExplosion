@@ -22,7 +22,6 @@ from fastapi接口.service.opus新版官方抽奖.转发抽奖.生成专栏信�
 from fastapi接口.utils.Common import asyncio_gather
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from utl.pushme.pushme import pushme
-from utl.代理.request_with_proxy import request_with_proxy
 
 
 class ExtractOfficialLottery:
@@ -46,7 +45,6 @@ class ExtractOfficialLottery:
         self.stop_flag_lock = threading.Lock()
 
         self.sql = grpc_sql_helper
-        self.proxy_request = request_with_proxy()
         self.log = official_lot_logger
         self.__no_lot_timer = 0
         self.__no_lot_timer_lock = threading.Lock()

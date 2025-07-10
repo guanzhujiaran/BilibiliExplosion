@@ -65,7 +65,7 @@ async def get_available_proxy(
             return proxy_tab, used_available_proxy
         else:
             try:
-                await get_proxy_methods.get_proxy()  # Fetch new proxies (likely puts into Redis)
+                await get_proxy_methods.main()  # Fetch new proxies (likely puts into Redis)
                 await SQLHelper.check_redis_data()
             except Exception as e:
                 sql_log.exception(f"Attempt {attempt}: Error during proxy acquisition process: {e}")

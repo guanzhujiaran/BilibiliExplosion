@@ -7,12 +7,17 @@ import json
 import re
 import time
 from datetime import datetime
+from typing import Any, AsyncGenerator
 
 import bs4
+import curl_cffi.requests.exceptions
 
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import sql_log
-from fastapi接口.utils.Common import sem_gen, retry_wrapper, asyncio_gather
+from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
+from fastapi接口.service.BaseCrawler.model.base import ParamsType, WorkerStatus
+from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
+from fastapi接口.utils.Common import retry_wrapper, asyncio_gather
 from utl.代理.SealedRequests import my_async_httpx
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
@@ -24,22 +29,43 @@ _github_proxy = {
 }
 
 
-class GetProxyMethods:
-    get_proxy_page = 10
-    log = sql_log
-    get_proxy_timestamp = 0
-    timeout = 10
-    get_proxy_sep_time = 2 * 3600  # 获取代理的间隔
-    check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
-    GetProxy_Flag = False
-    _sem = sem_gen()
+class GetProxyMethods(UnlimitedCrawler):
+    async def key_params_gen(self, params: Any) -> AsyncGenerator[ParamsType, None]:
+        for x in self.proxy_list:
+            yield x
+
+    async def is_stop(self) -> bool:
+        pass
+
+    async def handle_fetch(self, params: ParamsType) -> WorkerStatus | Any:
+        await self._check_ip_by_bili_zone(params)
+        return
+
+    async def main(self, *args, **kwargs):
+        await self.get_proxy()
+        await self.run(None)
+        await SQLHelper.remove_list_dict_data_by_proxy()
+        self.log.info(f'{self.__class__.__name__}移除重复代理')
+        await SQLHelper.check_redis_data()
+    def __init__(self):
+        self.proxy_list = []
+        self._lock = asyncio.Lock()
+        self.get_proxy_page = 10
+        self.get_proxy_timestamp: int = 0
+        self.get_proxy_sep_time = 2 * 3600  # 获取代理的间隔
+        self.check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
+        self.GetProxy_Flag = False
+        self.status_plugin = StatsPlugin(self)
+        super().__init__(
+            _logger=sql_log,
+            plugins=[self.status_plugin]
+        )
 
     # region a从代理网站获取代理
 
     # region a从免费代理网站获取代理，每个网站的表格不一样，需要测试！网站按照表格的样式填充代理信息
 
-    def __init__(self):
-        self._lock = asyncio.Lock()
+
 
     async def get_proxy_from_cn_proxy_tools(self) -> tuple[list, bool]:
         headers = {
@@ -51,7 +77,7 @@ class GetProxyMethods:
 
             url = f'https://cn.proxy-tools.com/proxy?page={page}'
             headers.update({'Referer': url})
-            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, )
             if req:
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
                 td = html.select('tr>td')
@@ -89,13 +115,15 @@ class GetProxyMethods:
 
             url = f'https://www.kuaidaili.com/free/dps/{page}'
             headers.update({'Referer': url})
-            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, )
             if req:
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
                 script = html.select('script[type="text/javascript"]')
                 json_str = ''
-                for x in filter(lambda y: y.text and 'valid_minute' in x.text, script):
+                for x in filter(lambda y: y.text and 'valid_minute' in y.text, script):
                     json_str = ''.join(re.findall('const fpsList =(.*);', x.text))
+                if not json_str:
+                    return [], False
                 proxies = json.loads(json_str)
 
                 for i in proxies:
@@ -127,13 +155,15 @@ class GetProxyMethods:
         for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.kuaidaili.com/free/fps/{page}'
             headers.update({'Referer': url})
-            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, )
             if req:
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
                 script = html.select('script[type="text/javascript"]')
                 json_str = ''
-                for x in filter(lambda y: y.text and 'last_check_time' in x.text, script):
+                for x in filter(lambda y: y.text and 'last_check_time' in y.text, script):
                     json_str = ''.join(re.findall('const fpsList =(.*);', x.text))
+                if not json_str:
+                    return [], False
                 proxies = json.loads(json_str)
                 for i in proxies:
                     if i:
@@ -198,7 +228,7 @@ class GetProxyMethods:
         for page in range(1, self.get_proxy_page + 1):
 
             url = f'http://www.66ip.cn/{page}.html'
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                            proxies=(await SQLHelper.select_score_top_proxy()).proxy
                                            )
 
@@ -282,7 +312,7 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.89ip.cn/index_{page}.html'
-            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, )
 
             if req:
 
@@ -319,7 +349,7 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.ip3366.net/free/?stype=1&page={page}'
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
 
             if req:
 
@@ -356,7 +386,7 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'http://www.ip3366.net/free/?stype=2&page={page}'
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
             if req:
 
                 html = bs4.BeautifulSoup(req.text, 'html.parser')
@@ -393,7 +423,7 @@ class GetProxyMethods:
         proxy_queue = []
         for page in range(1, self.get_proxy_page + 1):
             url = f'https://www.qiyunip.com/freeProxy/{page}.html'
-            req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
 
             if req:
 
@@ -436,7 +466,7 @@ class GetProxyMethods:
         get_proxy_success = True
         proxy_queue = []
         url = f'https://ip.ihuan.me/'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
         if req:
             html = bs4.BeautifulSoup(req.text, 'html.parser')
             td = html.select('tr>td')
@@ -474,7 +504,7 @@ class GetProxyMethods:
         gmt = datetime.now().strftime(gmt_format)
 
         url = f'https://www.docip.net/data/free.json?t={gmt}'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
 
         if req:
 
@@ -503,7 +533,7 @@ class GetProxyMethods:
         get_proxy_success = True
         proxy_queue = []
         url = f'https://openproxylist.xyz/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
 
         if req:
 
@@ -537,7 +567,7 @@ class GetProxyMethods:
 
             url = f'https://proxyhub.me/'
             headers.update({"cookie": f"page={page};"})
-            req = await my_async_httpx.get(url=url, verify=False, headers=headers, timeout=self.timeout)
+            req = await my_async_httpx.get(url=url, verify=False, headers=headers, )
 
             if req:
 
@@ -577,7 +607,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://proxy.scdn.io/text.php'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -605,7 +635,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://www.proxy-list.download/api/v1/get?type=http'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -633,7 +663,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://www.proxy-list.download/api/v1/get?type=socks5'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -661,7 +691,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/sunny9577/proxy-scraper/refs/heads/master/generated/socks5_proxies.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
 
         if req:
@@ -690,7 +720,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/sunny9577/proxy-scraper/refs/heads/master/generated/http_proxies.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
 
         if req:
@@ -719,7 +749,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Vadim287/free-proxy/refs/heads/main/proxies/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
 
         if req:
@@ -748,7 +778,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Vadim287/free-proxy/refs/heads/main/proxies/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -776,7 +806,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/refs/heads/main/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -804,7 +834,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/refs/heads/main/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
 
         if req:
@@ -833,7 +863,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/vmheaven/VMHeaven-Free-Proxy-Updated/refs/heads/main/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -861,7 +891,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/RioMMO/ProxyFree/refs/heads/main/HTTP.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -889,7 +919,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/RioMMO/ProxyFree/refs/heads/main/SOCKS5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -917,7 +947,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/databay-labs/free-proxy-list/refs/heads/master/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -945,7 +975,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/databay-labs/free-proxy-list/refs/heads/master/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -973,7 +1003,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Tsprnay/Proxy-lists/master/proxies/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1005,7 +1035,7 @@ class GetProxyMethods:
             url=url,
             headers=headers,
             verify=False,
-            timeout=self.timeout,
+            
             proxies=_github_proxy
         )
         if req:
@@ -1034,7 +1064,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Tsprnay/Proxy-lists/master/proxies/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1062,7 +1092,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/M-logique/Proxies/refs/heads/main/proxies/regular/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1090,7 +1120,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/M-logique/Proxies/refs/heads/main/proxies/regular/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1118,7 +1148,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/ALIILAPRO/Proxy/refs/heads/main/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1146,7 +1176,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/theriturajps/proxy-list/refs/heads/main/proxies.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1174,7 +1204,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1202,7 +1232,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1230,7 +1260,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/SevenworksDev/proxy-list/refs/heads/main/proxies/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1258,7 +1288,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/all/data.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1286,7 +1316,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/fyvri/fresh-proxy-list/archive/storage/classic/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1314,7 +1344,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/fyvri/fresh-proxy-list/archive/storage/classic/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1342,7 +1372,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/fyvri/fresh-proxy-list/archive/storage/classic/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1370,7 +1400,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/BreakingTechFr/Proxy_Free/refs/heads/main/proxies/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1398,7 +1428,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/BreakingTechFr/Proxy_Free/refs/heads/main/proxies/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1426,7 +1456,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1454,7 +1484,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1482,7 +1512,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1510,7 +1540,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/zloi-user/hideip.me/refs/heads/master/connect.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1538,7 +1568,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/trio666/proxy-checker/refs/heads/main/all.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1566,7 +1596,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/https2.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1594,7 +1624,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/socks5_2.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1622,7 +1652,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/http2.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1650,7 +1680,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1678,7 +1708,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
 
         if req:
@@ -1707,7 +1737,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MohammadHosseinkargar/proxylist/refs/heads/main/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
 
         if req:
@@ -1736,7 +1766,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/nhan0o22/proxy/refs/heads/master/proxy.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
 
         if req:
@@ -1769,7 +1799,7 @@ class GetProxyMethods:
             url=url,
             headers=headers,
             verify=False,
-            timeout=self.timeout,
+            
             proxies=_github_proxy
         )
         if req:
@@ -1802,7 +1832,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://api.openproxylist.xyz/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False)
 
         if req:
             proxies = []
@@ -1831,7 +1861,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1860,7 +1890,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1889,7 +1919,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/r00tee/Proxy-List/main/Https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1918,7 +1948,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/themiralay/Proxy-List-World/refs/heads/master/data.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1946,7 +1976,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1974,7 +2004,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/lalifeier/proxy-scraper/main/proxies/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -1986,7 +2016,7 @@ class GetProxyMethods:
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
-                self.log.info(f'{req.text}, {url}')
+                self.log.info(f'从请求响应获取到的代理太少：{req.text}, {url}')
             self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
         else:
             self.log.info(f'{req.text}, {url}')
@@ -2002,7 +2032,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/claude89757/free_https_proxies/refs/heads/main/free_https_proxies.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -2030,7 +2060,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/Simatwa/free-proxies/master/files/http.json'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -2062,7 +2092,7 @@ class GetProxyMethods:
             url=url,
             headers=headers,
             verify=False,
-            timeout=self.timeout,
+            
             proxies=_github_proxy
         )
         if req:
@@ -2091,7 +2121,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://cdn.rei.my.id/proxy/pSOCKS5'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
         if req:
             proxies = []
             for i in req.text.split('\n'):
@@ -2117,7 +2147,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/officialputuid/KangProxy/KangProxy/https/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2125,9 +2155,9 @@ class GetProxyMethods:
 
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = format_proxy(i)
+                    append_dict = format_proxy(i, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.opt(exception=True).error(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2147,15 +2177,13 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/officialputuid/KangProxy/KangProxy/http/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
-
             proxies = []
-
             for i in req.text.split('\n'):
                 if i.strip():
-                    append_dict = format_proxy(i)
+                    append_dict = format_proxy(i, protocol='http')
                     if not append_dict:
                         self.log.exception(f'代理格式错误！{i}')
                         continue
@@ -2177,7 +2205,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2209,7 +2237,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2242,7 +2270,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/casals-ar/proxy.casals.ar/main/http'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2275,7 +2303,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/socks5.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2307,7 +2335,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2339,7 +2367,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Zaeem20/FREE_PROXIES_LIST/master/https.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2371,7 +2399,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2404,7 +2432,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/yemixzy/proxy-list/main/proxies/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2437,7 +2465,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/http_proxies.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
             proxies = []
@@ -2469,7 +2497,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/Anonym0usWork1221/Free-Proxies/main/proxy_files/https_proxies.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2502,7 +2530,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2536,7 +2564,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/sarperavci/freeCheckedHttpProxies/main/freshHttpProxies.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2569,7 +2597,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/prxchk/proxy-list/main/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2602,7 +2630,7 @@ class GetProxyMethods:
         proxy_queue = []
 
         url = f'https://raw.githubusercontent.com/andigwandi/free-proxy/main/proxy_list.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2633,7 +2661,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/elliottophellia/yakumo/master/results/http/global/http_checked.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2663,7 +2691,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/im-razvan/proxy_list/main/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2693,7 +2721,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/proxy4parsing/proxy-list/main/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2723,7 +2751,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/mmpx12/proxy-list/master/http.txt'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2763,7 +2791,7 @@ class GetProxyMethods:
                 'page': pn
             }
             req = await my_async_httpx.get(url=url, headers=headers, params=params, verify=False,
-                                           timeout=self.timeout)
+                                           )
             if req:
                 req_dict = req.json()
                 http_p = req_dict.get('data', {}).get('data')
@@ -2798,7 +2826,7 @@ class GetProxyMethods:
         proxy_queue = []
         url = 'https://api.lumiproxy.com/web_v1/free-proxy/list?page_size=6000&page=1&language=zh-hans'
         req = await my_async_httpx.get(url=url, headers=headers, verify=False,
-                                       timeout=self.timeout)
+                                       )
         if req:
             req_dict = req.json()
             http_p = req_dict.get('data').get('list')
@@ -2842,7 +2870,7 @@ class GetProxyMethods:
                 "sort_type": "desc"
             }
             req = await my_async_httpx.get(url=url, params=params, headers=headers, verify=False,
-                                           timeout=self.timeout)
+                                           )
             if req:
                 req_dict = req.json()
                 http_p = req_dict.get('data')
@@ -2872,26 +2900,20 @@ class GetProxyMethods:
         get_proxy_success = True
         req = ''
         proxy_queue = []
-        url = f'https://proxydb.net/list'
         for pn in range(0, self.get_proxy_page):
             offset = 30 * pn
-            data = {
-                "anonlvls": [],
-                "offset": offset,
-                "protocols": ["https", "http", "socks5"]
-            }
-            req = await my_async_httpx.post(url=url, data=json.dumps(data), headers=headers, verify=False,
-                                            timeout=self.timeout)
+            url = f'https://proxydb.net/?country=&offset={offset}&protocol=http&protocol=https'
+            req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                           )
             if req:
-                req_dict = req.json()
-                http_p = req_dict.get('proxies')
-                total_count = req_dict.get('total_count')
-                for da in http_p:
-                    ip = da.get('ip')
-                    port = da.get('port')
-                    protocol = da.get('type')
-                    if ip and port and protocol:
-                        proxy_queue.append(format_proxy(f'{protocol}://{ip}:{port}'))
+                html = bs4.BeautifulSoup(req.text, 'html.parser')
+                td = html.select('tr>td')
+                for i in range(len(td) // 9):
+                    proxy_str = td[i * 9].text.strip() + ':' + td[i * 9 + 1].text.strip().split('\n')[0]
+                    if 'HTTP' in td[i * 9 + 2].text:
+                        proxy_queue.append(format_proxy(proxy_str, protocol='http'))
+                    elif 'HTTPS' in td[i * 9 + 2].text:
+                        proxy_queue.append(format_proxy(proxy_str, protocol='https'))
                 if len(proxy_queue) < 10:
                     self.log.info(f'{req.text}, {url}')
                 self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
@@ -2899,36 +2921,6 @@ class GetProxyMethods:
                 self.log.info(f'{req.text}, {url}')
                 get_proxy_success = False
                 break
-            if offset >= total_count:
-                break
-        return proxy_queue, get_proxy_success
-
-    async def get_proxy_from_proxy_953959_xyz(self) -> tuple[list, bool]:
-        headers = {
-            'User-Agent': CONFIG.rand_ua,
-        }
-        get_proxy_success = True
-        req = ''
-        proxy_queue = []
-        url = f'https://proxy.953959.xyz/all/'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
-        if req:
-
-            req_dict = req.json()
-            http_p = req_dict
-            for da in http_p:
-                if proxy := da.get('proxy'):
-                    proxy_queue.append({
-                        'http': f'http://{proxy}',
-                        'https': f'http://{proxy}'
-                    })
-            if len(proxy_queue) < 10:
-                self.log.info(f'{req.text}, {url}')
-            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
-        else:
-            self.log.info(f'{req.text}, {url}')
-
-            get_proxy_success = False
         return proxy_queue, get_proxy_success
 
     async def get_proxy_from_proxyshare(self) -> tuple[list, bool]:
@@ -2939,7 +2931,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://www.proxyshare.com/detection/proxyList?limit=500&page=1&sort_by=lastChecked&sort_type=desc&protocols=http'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout)
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
         if req:
 
             req_dict = req.json()
@@ -2968,7 +2960,7 @@ class GetProxyMethods:
         req = ''
         proxy_queue = []
         url = f'https://raw.githubusercontent.com/t0mer/free-proxies/main/proxies.json'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, timeout=self.timeout,
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
                                        proxies=_github_proxy)
         if req:
 
@@ -2993,6 +2985,18 @@ class GetProxyMethods:
     # endregion
     # region 获取代理主函数
     async def __get_proxy(self):
+        def retry_wrapper(func):
+            async def wrapper(*args, **kwargs):
+                try:
+                    return await asyncio.wait_for(func(*args, **kwargs),120)
+                except curl_cffi.requests.exceptions.RequestException as e:
+                    raise e
+                except Exception as e:
+                    self.log.exception(e)
+                    raise e
+
+            return wrapper
+
         if self.GetProxy_Flag or time.time() - self.get_proxy_timestamp < self.get_proxy_sep_time:
             return
         async with self._lock:
@@ -3003,7 +3007,6 @@ class GetProxyMethods:
             else:
                 self.get_proxy_timestamp = time.time()
                 self.GetProxy_Flag = True
-        start_ts = int(time.time())
         self.log.critical(
             f'开始获取代理\t上次获取代理时间：{datetime.fromtimestamp(self.get_proxy_timestamp)}\t{datetime.now()}')
         proxy_list = []
@@ -3011,14 +3014,15 @@ class GetProxyMethods:
         tasks = set()
         for name, fn in funcs:
             if name.startswith('get_proxy_from'):
-                task = fn()
+                task = asyncio.create_task(retry_wrapper(fn)())
                 tasks.add(task)
         results = await asyncio_gather(*tasks, log=self.log)
         for result in results:
             if isinstance(result, Exception) is True:
                 continue
-            _, get_proxy_success = result
-            proxy_list.extend(_)
+            if result:
+                _, get_proxy_success = result
+                proxy_list.extend(_)
         _s = set()
         _t = []
         for i in proxy_list:
@@ -3028,21 +3032,9 @@ class GetProxyMethods:
                 _t.append(i)
                 _s.add(list(i.values())[0])
         del proxy_list
-        proxy_list = _t
+        self.proxy_list = _t
+        self.log.info(f'最终共有{len(self.proxy_list)}个代理需要检查')
 
-        self.log.info(f'最终共有{len(proxy_list)}个代理需要检查')
-        for i in range(len(proxy_list)):
-            task = self._check_ip_by_bili_zone(proxy_list.pop())
-            tasks.add(task)
-        await asyncio_gather(*tasks, log=self.log)
-        self.log.info(f'{self.__class__.__name__}代理已经检查完毕，并添加至数据库！')
-        await SQLHelper.remove_list_dict_data_by_proxy()
-        self.log.info(f'{self.__class__.__name__}移除重复代理')
-        self.log.critical(
-            f'{self.__class__.__name__}获取代理完成\t耗时：{int(time.time()) - start_ts}秒')
-        get_proxy_success = True
-        await SQLHelper.check_redis_data()
-        return
 
     async def get_proxy(self):
         task = asyncio.create_task(self.__get_proxy())
@@ -3061,24 +3053,23 @@ class GetProxyMethods:
         :param proxy:
         :return:
         '''
-        async with self._sem:
-            if self.check_proxy_flag:
-                try:
-                    _url = 'http://api.bilibili.com/x/web-interface/zone'
-                    _req = await my_async_httpx.get(url=_url, proxies=proxy, timeout=self.timeout)
-                    if _req.json().get('code') == 0:
-                        # self.log.info(f'代理检测成功，添加回代理列表：{_req.json()}')
-                        await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
-                        return True
-                    else:
-                        # self.log.info(f'代理失效：{_req.text}')
-                        return False
-                except Exception as e:
-                    # self.log.info(f'代理检测失败：{proxy}')
+        if self.check_proxy_flag:
+            try:
+                _url = 'http://api.bilibili.com/x/web-interface/zone'
+                _req = await my_async_httpx.get(url=_url, proxies=proxy, )
+                if _req.json().get('code') == 0:
+                    # self.log.info(f'代理检测成功，添加回代理列表：{_req.json()}')
+                    await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
+                    return True
+                else:
+                    # self.log.info(f'代理失效：{_req.text}')
                     return False
-            else:
-                await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
-                return True
+            except Exception as e:
+                # self.log.info(f'代理检测失败：{proxy}')
+                return False
+        else:
+            await self._add_to_proxy_list(self._proxy_warrper(proxy, status, score))
+            return True
 
     def _proxy_warrper(self, proxy, status=0, score=50):
         return {"proxy": proxy, "status": status, "update_ts": int(time.time()), 'score': score}
@@ -3101,4 +3092,4 @@ class GetProxyMethods:
 get_proxy_methods = GetProxyMethods()
 
 if __name__ == "__main__":
-    asyncio.run(get_proxy_methods.get_proxy())
+    asyncio.run(get_proxy_methods.main())

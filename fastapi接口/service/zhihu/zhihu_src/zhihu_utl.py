@@ -7,10 +7,9 @@ from copy import deepcopy
 import bs4
 import httpx
 from loguru import logger
-
 from CONFIG import CONFIG
 from utl.代理.SealedRequests import my_async_httpx
-from utl.代理.request_with_proxy import request_with_proxy
+from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 from fastapi接口.service.zhihu.zhihu_src.enc.zhuhu_enc import x_zse_93, zhi_hu_encrypt
 from fastapi接口.log.base_log import zhihu_api_logger
 
@@ -20,8 +19,7 @@ _lock = asyncio.Lock()
 class zhihu_method:
     current_file = os.path.dirname(os.path.abspath(__file__))
     LOG = zhihu_api_logger
-    request_with_proxy = request_with_proxy()
-    request_with_proxy.channel = 'zhihu'
+    request_with_proxy = request_with_proxy_internal
     login_cookie = 'd_c0=AdDf-LrYsxiPTtfg9wL167EIuUaeWgI2j54=|1717166161; z_c0=2|1:0|10:1748342233|4:z_c0|80:MS4xZFZEd0J3QUFBQUFtQUFBQVlBSlZUZG5qSW1rMnhFOEQ4cVVsNE84VksxNmVzTU1ZS1plQ1F3PT0=|b7d222144eac0d8c8b56ff715e0e953d1b2f52c9ce124e63b355a00839ecfd6c; __zse_ck=004_w1F0jzH=3s=Q1ho2SGX4fXczq5NyCYfHFUDhxJfTx7FRD5/sCrHLBgjnqwhZWTeAPgDjccTo7v0zaR9TMBfNr3C=ptHcstX74twxUEbfgdpn/nrTRwiFvapF4zF3xwY/-YkkoWcmsvXXYA1UOHmWdjELLFI7Ed5vCPShrXGQVT27KnbUvo915Iy3h6FAO8hTb7vIBp5UiW4WaLtk8x4Kals549d9gjO6X3X2+o8VTrdLbhPtLfc8cQHN2s6E6X6I0r/AWegcId6UwlQ4VzbdA1QpAQxxbIhL63zvWuHL4cbY=;'
     request_headers = {
         'cookie': login_cookie,

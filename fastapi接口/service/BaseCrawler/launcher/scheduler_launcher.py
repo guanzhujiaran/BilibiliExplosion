@@ -59,14 +59,15 @@ class CrawlerExecutionInfo:
     def is_need_to_execute(self) -> bool:
         """判断是否需要执行爬虫"""
         if self.last_exec_time is None:
+            self.logger.critical(f"[{self.crawler_name}] 上次执行时间为空，将执行一次。")
             return True
         now = datetime.now()
         delta = (now - self.last_exec_time).total_seconds()
         if delta >= self.default_interval_seconds:
-            self.logger.info(f"[{self.crawler_name}] 满足执行条件，delta={delta}s")
+            self.logger.critical(f"[{self.crawler_name}] 满足执行条件，delta={delta}s")
             return True
         else:
-            self.logger.info(f"[{self.crawler_name}] 不满足执行条件，delta={delta}s")
+            self.logger.critical(f"[{self.crawler_name}] 不满足执行条件，delta={delta}s")
             return False
 
 
@@ -76,9 +77,10 @@ class GenericCrawlerScheduler:
             crawler: UnlimitedCrawler,
             cron_expr: str,
             default_interval_seconds: int = 2 * 3600,
+            crawler_name: Optional[str] = None
     ):
         self.crawler = crawler
-        self.crawler_name = crawler.__class__.__name__
+        self.crawler_name = crawler_name if crawler_name else crawler.__class__.__name__
         self.cron_expr = cron_expr
         self.default_interval_seconds = default_interval_seconds
         self.job_id = f"crawler_job_{self.crawler_name}"

@@ -52,3 +52,8 @@ upsert_milvus_bili_lot_data_prop = MQPropBase(
     routing_key_name=RoutingKey.UpsertMilvusBiliLotDataMQ,
     exchange=exch
 )
+bili_voucher_prop = MQPropBase(
+    queue_name=QueueName.BiliVoucherMQ,
+    routing_key_name=RoutingKey.BiliVoucherMQ,
+    exchange=exch
+)

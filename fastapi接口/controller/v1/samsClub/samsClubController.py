@@ -24,7 +24,7 @@ async def set_new_auth_token(auth_token: str):
     description='操作爬虫',
     response_model=CommonResponseModel[bool],
 )
-async def set_new_auth_token(cmd: Literal['run', 'start', 'pause']):
+async def samsclub_crawler_op(cmd: Literal['run', 'start', 'pause']):
     match cmd:
         case 'start':
             await sams_club_crawler.start()

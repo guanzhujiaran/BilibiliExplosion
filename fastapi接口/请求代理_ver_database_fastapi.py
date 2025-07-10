@@ -5,6 +5,7 @@ import os
 import sys
 import traceback
 from contextlib import asynccontextmanager
+
 import fastapi_cdn_host
 import objgraph
 from fastapi import FastAPI, HTTPException
@@ -13,6 +14,7 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 from loguru import logger
 from starlette.requests import Request
 from starlette.responses import Response
+
 sys.path.append(os.path.join(os.path.dirname(__file__), '../'))  # 将CONFIG导入
 current_dir = os.path.dirname(__file__)
 grpc_dir = os.path.join(current_dir, 'service/grpc_module/grpc/grpc_proto')
@@ -27,10 +29,6 @@ if not args.logger:
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 if sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
-# else:
-#     import uvloop
-#     print('使用uvloop')
-#     uvloop.install()
 from fastapi接口.log.base_log import myfastapi_logger
 from utl.pushme.pushme import pushme
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER, asyncio_gather
@@ -86,7 +84,7 @@ async def global_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         # 可选：仅在调试模式下返回错误堆栈
-        if app.debug:
+        if hasattr(app, 'debug'):
             response_body = b""
             async for chunk in response.body_iterator:
                 response_body += chunk

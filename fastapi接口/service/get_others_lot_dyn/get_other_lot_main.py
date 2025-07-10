@@ -12,7 +12,6 @@ from typing import Union, List, Set, Sequence
 from py_mini_racer import MiniRacer
 
 import Bilibili_methods.all_methods
-from CONFIG import CONFIG
 from fastapi接口.log.base_log import get_others_lot_logger as get_others_lot_log
 from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
@@ -21,14 +20,14 @@ from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TL
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import proxy_req, get_space_dynamic_req_with_proxy, \
-    get_polymer_web_dynamic_detail
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_space_dynamic_req_with_proxy, \
+    get_polymer_web_dynamic_detail, get_reply_main
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper as mysq
-from fastapi接口.utils.Common import sem_gen, asyncio_gather
+from fastapi接口.utils.Common import asyncio_gather
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from utl.pushme.pushme import pushme
 
@@ -455,82 +454,20 @@ class BiliDynamicItem:
             self.dynamic_id = await SqlHelper.getDynIdByRidType(self.dynamic_rid, self.dynamic_type)
 
     # region 获取评论
-    async def _get_pinglunreq_with_proxy(self, dynamic_id, rid, pn, _type, *mode):
-        """
-        3是热评，2是最新的，大概
-        :param dynamic_id:
-        :param rid:
-        :param pn:
-        :param _type:
-        :param mode:
-        :return:
-        """
-        if mode:
-            mode = mode[0]
-        else:
-            mode = 2
-        ctype = 17
-        if str(_type) == '8':
-            ctype = 1
-        elif str(_type) == '4' or str(_type) == '1':
-            ctype = 17
-        elif str(_type) == '2':
-            ctype = 11
-        elif str(_type) == '64':
-            ctype = 12
-        if len(str(rid)) == len(str(dynamic_id)):
-            oid = dynamic_id
-        else:
-            oid = rid
-        pinglunheader = {
-            'referer': f'https://t.bilibili.com/{rid}?type={_type}',
-            # 'connection': 'close',
-            'user-agent': CONFIG.rand_ua,
-            'cookie': '1'
-        }
-        pinglunurl = 'http://api.bilibili.com/x/v2/reply/main?next=' + str(pn) + '&type=' + str(ctype) + '&oid=' + str(
-            oid) + '&mode=' + str(mode) + '&plat=1&_=' + str(int(time.time()))
-        pinglundata = {
-            'jsonp': 'jsonp',
-            'next': pn,
-            'type': ctype,
-            'oid': oid,
-            'mode': mode,
-            'plat': 1,
-            '_': time.time()
-        }
-        try:
-            pinglunreq = await proxy_req.request_with_proxy(
-                is_use_available_proxy=self.is_use_available_proxy, method="GET", url=pinglunurl, data=pinglundata,
-                headers=pinglunheader, mode='single', hybrid='1')
-        except Exception as e:
-            get_others_lot_log.exception(f'{e}\n{pinglunurl}\t获取评论失败')
-            pinglunreq = await self._get_pinglunreq_with_proxy(dynamic_id, rid, pn, _type)
-            return pinglunreq
-        return pinglunreq
-
     async def _get_topcomment_with_proxy(self, dynamicid, rid, pn, _type, mid):
         iner_replies = ''
-        pinglunreq = await self._get_pinglunreq_with_proxy(dynamicid, rid, pn, _type, 3)
+        pinglunreq = await get_reply_main(dynamicid, rid, pn, _type, 3)
         try:
             pinglun_dict = pinglunreq
             pingluncode = pinglun_dict.get('code')
             if pingluncode != 0:
-                get_others_lot_log.info('获取置顶评论失败')
                 message = pinglun_dict.get('message')
-                get_others_lot_log.info(pinglun_dict)
-
                 if message != 'UP主已关闭评论区' and message != '啥都木有' and message != '评论区已关闭':
-                    while 1:
-                        try:
-                            await asyncio.sleep(1)
-                            break
-                        except:
-                            continue
-                    return 'null'
+                    get_others_lot_log.error(f'【未知原因】获取置顶评论失败：{pinglun_dict}')
+                    return ''
                 else:
-                    get_others_lot_log.info(message)
-                    return 'null'
+                    get_others_lot_log.debug(f'获取置顶评论失败：{pinglun_dict}')
+                    return ''
             reps = pinglun_dict.get('data').get('replies')
             if reps is not None:
                 for i in reps:
@@ -551,27 +488,18 @@ class BiliDynamicItem:
                 get_others_lot_log.info(f'https://t.bilibili.com/{dynamicid}\t置顶评论：{topmsg}')
             else:
                 get_others_lot_log.info(f'https://t.bilibili.com/{dynamicid}\t无置顶评论')
-                topmsg = 'null' + iner_replies
+                topmsg = '' + iner_replies
         except Exception as e:
-            get_others_lot_log.info(e)
+            get_others_lot_log.exception(e)
             get_others_lot_log.info('获取置顶评论失败')
-            if pinglunreq is None or pinglunreq.get('code') is None:
-                return await self._get_topcomment_with_proxy(dynamicid, rid, pn, _type, mid)
             pinglun_dict = pinglunreq
             data = pinglun_dict.get('data')
             get_others_lot_log.info(pinglun_dict)
             get_others_lot_log.info(data)
-            topmsg = 'null'
+            topmsg = ''
             get_others_lot_log.info(BAPI.timeshift(int(time.time())))
             if data == '评论区已关闭':
                 topmsg = data
-            else:
-                while 1:
-                    try:
-                        await asyncio.sleep(1)
-                        break
-                    except:
-                        continue
         return topmsg
 
     # endregion
@@ -1245,7 +1173,6 @@ class BiliSpaceUserItem:
         lot_user_info: TLotuserinfo | None = await SqlHelper.getLotUserInfoByUid(self.uid)
         first_dynamic_id = 0
         self.offset = lot_user_info.offset if lot_user_info else 0
-
         # region 这部分是主要逻辑，包括断点续爬，需要注意逻辑是否正确
         if secondRound:
             newest_space_offset = await SqlHelper.getNewestSpaceDynInfoByUid(self.uid)
@@ -1260,8 +1187,10 @@ class BiliSpaceUserItem:
             if not lot_user_info.isUserSpaceFinished and not isPreviousRoundFinished:  # 如果上一轮也没有完成，同时这个用户的空间没获取完，从上次的offset继续获取下去
                 origin_offset = lot_user_info.offset
             elif lot_user_info.isUserSpaceFinished and not isPreviousRoundFinished:  # 如果上一轮抽奖没有完成，重新开始了，但是这个用户的空间获取完了，查询数据库，获取当前round_id的最小值 最多多获取到上一轮的全部数据
-                origin_offset = await SqlHelper.getOldestSpaceOffsetByUidRoundId(self.uid,
-                                                                                 self.lot_round_id)
+                origin_offset = await SqlHelper.getOldestSpaceOffsetByUidRoundId(
+                    self.uid,
+                    self.lot_round_id
+                )
             else:  # lot_user_info.isUserSpaceFinished and isPreviousRoundFinished
                 # 如果上一轮抽奖已经完成，并且这个用户的空间获取完了，那么就从0开始重新获取
                 origin_offset = 0
@@ -1306,8 +1235,11 @@ class BiliSpaceUserItem:
             else:
                 start_ts = time.time()
                 get_others_lot_log.debug(f'正在前往获取用户【{self.uid}】空间动态请求！')
-                dyreq_dict = await get_space_dynamic_req_with_proxy(self.uid, cur_offset if cur_offset else "",
-                                                                    is_use_available_proxy=self.is_use_available_proxy)
+                dyreq_dict = await get_space_dynamic_req_with_proxy(
+                    self.uid,
+                    cur_offset if cur_offset else "",
+                    is_use_available_proxy=self.is_use_available_proxy
+                )
                 code = dyreq_dict.get('code')
                 msg = dyreq_dict.get('message')
                 if code != 0:
@@ -1361,7 +1293,6 @@ class BiliSpaceUserItem:
                     'text'
                 )
                 break
-
             self.offset = cur_offset
             time_list = get_space_dynamic_time(dyreq_dict)
             if not secondRound:  # 第二轮获取动态，不更新数据库
@@ -1401,6 +1332,7 @@ class BiliSpaceUserItem:
             except Exception as e:
                 get_others_lot_log.critical(f'Error: has_more获取失败\n{dyreq_dict}\n{e}')
                 get_others_lot_log.exception(e)
+        get_others_lot_log.debug(f'更新lot_user_info')
         await SqlHelper.addLotUserInfo(TLotuserinfo(
             # 第二轮获取完了才接着更新数据库，这样下次获取的时候，不论是从中间开始还是重新起一轮，都不会收到第二轮的数据的影响
             uid=self.uid,
@@ -1413,6 +1345,7 @@ class BiliSpaceUserItem:
             isPubLotUser=isPubLotUser
         ))
         if not secondRound:
+            get_others_lot_log.debug(f'更新lot_user_info最终状态')
             await self.get_user_space_dynamic_id(
                 secondRound=True,
                 isPubLotUser=isPubLotUser,
@@ -1423,6 +1356,7 @@ class BiliSpaceUserItem:
         if n <= 50 and time.time() - time_list[-1] >= SpareTime and secondRound == False and not isPubLotUser:
             get_others_lot_log.critical(
                 f'{self.uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{self.uid}\n查看详情')
+        get_others_lot_log.debug(f'{self.uid}空间动态获取完毕！')
 
     async def __add_space_card_to_db(self, spaceResp: dict) -> List[int | str] | None:
         try:
@@ -1533,7 +1467,6 @@ class GetOthersLotDynRobot:
     """
 
     def __init__(self):
-        self._sem = sem_gen(100)
         self.isPreviousRoundFinished = False  # 上一轮抽奖是否结束
         self.nowRound: TLotmaininfo = TLotmaininfo()
         self.username = ''
@@ -1551,18 +1484,30 @@ class GetOthersLotDynRobot:
 
     async def __do_space_task(self, __bili_space_user: BiliSpaceUserItem, isPubLotUser: bool):
         try:
-            await __bili_space_user.get_user_space_dynamic_id(isPubLotUser=isPubLotUser, SpareTime=self.SpareTime,
-                                                              succ_counter=self.space_succ_counter)
+            self.space_succ_counter.running_params.add(__bili_space_user.uid)
+            await __bili_space_user.get_user_space_dynamic_id(
+                isPubLotUser=isPubLotUser,
+                SpareTime=self.SpareTime,
+                succ_counter=self.space_succ_counter
+            )
+            self.space_succ_counter.running_params.discard(__bili_space_user.uid)
             self.space_succ_counter.succ_count += 1
         except Exception as _e:
             get_others_lot_log.exception(_e)
             raise _e
 
-    async def get_all_space_dyn_id(self, bili_space_user_items: Set[BiliSpaceUserItem], isPubLotUser=False):
+    async def get_all_space_dyn_id(
+            self,
+            bili_space_user_items: Set[BiliSpaceUserItem],
+            isPubLotUser=False
+    ):
         self.space_succ_counter.total_num = len(bili_space_user_items)
         tasks = set()
         for i in bili_space_user_items:
-            task = asyncio.create_task(self.__do_space_task(i, isPubLotUser))
+            task = asyncio.create_task(
+                self.__do_space_task(i, isPubLotUser),
+                name=f'{i.uid}'
+            )
             tasks.add(task)
         await asyncio_gather(*tasks, log=get_others_lot_log)
         get_others_lot_log.info(f'{len(bili_space_user_items)}个空间获取完成')
@@ -1672,9 +1617,10 @@ class GetOthersLotDynRobot:
         :return:
         """
         try:
-            async with self._sem:
-                await item.judge_lottery(highlight_word_list=highlight_word_list, lotRound_id=lotRound_id)
-                self.dyn_succ_counter.succ_count += 1
+            self.dyn_succ_counter.running_params.add(self.__hash__())
+            await item.judge_lottery(highlight_word_list=highlight_word_list, lotRound_id=lotRound_id)
+            self.dyn_succ_counter.running_params.discard(self.__hash__())
+            self.dyn_succ_counter.succ_count += 1
         except Exception as _e:
             get_others_lot_log.exception(_e)
             raise _e
@@ -1700,9 +1646,13 @@ class GetOthersLotDynRobot:
         self.dyn_succ_counter.total_num = len(self.goto_check_dynamic_item_set)
         tasks = set()
         for x in self.goto_check_dynamic_item_set:
-            task = asyncio.create_task(self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id))
+            task = asyncio.create_task(
+                self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id),
+                name=f'{x.dynId}'
+            )
             tasks.add(task)
         await asyncio_gather(*tasks, log=get_others_lot_log)
+        self.dyn_succ_counter.is_running = False
         await self._after_scrapy()
         self.nowRound.isRoundFinished = 1
         await SqlHelper.addLotMainInfo(self.nowRound)

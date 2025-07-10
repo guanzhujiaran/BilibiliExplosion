@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from typing import Literal, Union, Any
 
 from fastapi接口.models.common import CommonResponseModel
@@ -6,9 +7,9 @@ from fastapi接口.models.v1.background_service.background_service_model import 
     TopicScrapyStatusResp, ReserveScrapyStatusResp, AllLotScrapyStatusResp, ProgressStatusResp, ProxyStatusResp
 from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
 from fastapi接口.service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
+from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.bili_live_monitor.src.monitor import bili_live_async_monitor
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
-from fastapi接口.service.grpc_module.Utils.MQClient.VoucherMQClient import VoucherMQClient
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
 from fastapi接口.service.opus新版官方抽奖.bili_lottery_api.refresh_bili_lot_database import \
@@ -19,13 +20,19 @@ from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.robo
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import reserve_robot
 from fastapi接口.service.samsclub.main import sams_club_crawler
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER
+from utl.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from .base import new_router
 
 router = new_router()
 
 
-def start_background_service(show_log: bool):
+class BackgroundService:
+    get_proxy_methods_scheduler = GenericCrawlerScheduler(
+        crawler=get_proxy_methods,
+        cron_expr="0 */2 * * *",
+        default_interval_seconds=2 * 3600,
+    )
     samsclub_scheduler = GenericCrawlerScheduler(
         crawler=sams_club_crawler,
         cron_expr="0 0 * * *",
@@ -55,16 +62,21 @@ def start_background_service(show_log: bool):
         crawler=lottery_api_robot_dyn,
         cron_expr="0 0 * * *",
         default_interval_seconds=15 * 3600,
+        crawler_name='lottery_api_robot_dyn'
     )
     lottery_api_robot_reserve_scheduler = GenericCrawlerScheduler(
         crawler=lottery_api_robot_reserve,
         cron_expr="0 0 * * *",
         default_interval_seconds=15 * 3600,
+        crawler_name='lottery_api_robot_reserve'
     )
+
+
+def start_background_service(show_log: bool):
     back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log)),
                          asyncio.create_task(async_monitor_ipv6_address_changes()),
-                         asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log)),
-                         asyncio.create_task(asyncio.to_thread(VoucherMQClient().start_voucher_break_consumer))]
+                         asyncio.create_task(bili_live_async_monitor.async_main(ShowLog=show_log))
+                         ]
     # back_ground_tasks.append(
     # asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
 
@@ -130,7 +142,8 @@ def get_scrapy_status(scrapy_type: Literal[
                     total_num=other_lot_class.robot.space_succ_counter.total_num,
                     progress=other_lot_class.robot.space_succ_counter.show_pace(),
                     is_running=other_lot_class.robot.space_succ_counter.is_running,
-                    update_ts=other_lot_class.robot.space_succ_counter.update_ts
+                    update_ts=other_lot_class.robot.space_succ_counter.update_ts,
+                    running_params=other_lot_class.robot.dyn_succ_counter.running_params
                 )
             else:
                 return ProgressStatusResp()
@@ -142,7 +155,8 @@ def get_scrapy_status(scrapy_type: Literal[
                     total_num=other_lot_class.robot.dyn_succ_counter.total_num,
                     progress=other_lot_class.robot.dyn_succ_counter.show_pace(),
                     is_running=other_lot_class.robot.dyn_succ_counter.is_running,
-                    update_ts=other_lot_class.robot.dyn_succ_counter.update_ts
+                    update_ts=other_lot_class.robot.dyn_succ_counter.update_ts,
+                    running_params=other_lot_class.robot.dyn_succ_counter.running_params
                 )
             else:
                 return ProgressStatusResp()
@@ -178,25 +192,25 @@ def get_scrapy_status(scrapy_type: Literal[
 
 @router.get('/GetDynamicScrapyStatus', description='获取动态爬虫状态',
             response_model=CommonResponseModel[Union[DynScrapyStatusResp, None]])
-async def get_dynamic_scrapy_status():
+def get_dynamic_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('dyn'))
 
 
 @router.get('/GetTopicScrapyStatus', description='获取话题爬虫状态',
             response_model=CommonResponseModel[Union[TopicScrapyStatusResp, None]])
-async def get_topic_scrapy_status():
+def get_topic_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('topic'))
 
 
 @router.get('/GetReserveScrapyStatus', description='获取预约爬虫状态',
             response_model=CommonResponseModel[Union[ReserveScrapyStatusResp, None]])
-async def get_reserve_scrapy_status():
+def get_reserve_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('reserve'))
 
 
 @router.get('/GetAllLotScrapyStatus', description='获取所有爬虫状态',
             response_model=CommonResponseModel[Union[AllLotScrapyStatusResp, None]])
-async def get_all_scrapy_status():
+def get_all_scrapy_status():
     return CommonResponseModel(
         data=AllLotScrapyStatusResp(
             dyn_scrapy_status=get_scrapy_status('dyn'),
@@ -208,25 +222,25 @@ async def get_all_scrapy_status():
 
 @router.get('/GetOthersLotSpaceStatus', description='获取其他人空间爬虫的状态',
             response_model=CommonResponseModel[Union[ProgressStatusResp, None]])
-async def get_others_lot_space_status():
+def get_others_lot_space_status():
     return CommonResponseModel(data=get_scrapy_status('other_space'))
 
 
 @router.get('/GetOthersLotDynStatus', description='获取其他人动态爬虫的状态',
             response_model=CommonResponseModel[Union[ProgressStatusResp, None]])
-async def get_others_lot_dyn_status():
+def get_others_lot_dyn_status():
     return CommonResponseModel(data=get_scrapy_status('other_dyn'))
 
 
 @router.get('/GetRefreshBiliOfficialStatus', description='获取刷新B站官方和充电抽奖结果状态',
             response_model=CommonResponseModel[Union[ProgressStatusResp, None]])
-async def get_refresh_bili_official_status():
+def get_refresh_bili_official_status():
     return CommonResponseModel(data=get_scrapy_status('refresh_bili_official'))
 
 
 @router.get('/GetRefreshBiliReserveStatus', description='获取刷新B站预约抽奖结果状态',
             response_model=CommonResponseModel[Union[ProgressStatusResp, None]])
-async def get_refresh_bili_reserve_status():
+def get_refresh_bili_reserve_status():
     return CommonResponseModel(data=get_scrapy_status('refresh_bili_reserve'))
 
 
@@ -241,8 +255,26 @@ async def get_proxy_status():
 
 
 @router.get('/GlobalSchedule/get_jobs', description='全局定时任务', response_model=CommonResponseModel[Any])
-async def global_schedule():
+def global_schedule():
     ret = []
     for job in GLOBAL_SCHEDULER.get_jobs():
         ret.append(str(job))
     return CommonResponseModel(data=ret)
+
+
+@router.get('/BackgroundService/AllStat', description='后台服务状态', response_model=CommonResponseModel[Any])
+def background_service_status():
+    ret_list = []
+    # 获取 BackgroundService 类中定义的所有属性
+    members = inspect.getmembers(BackgroundService)
+    # 过滤出那些是 GenericCrawlerScheduler 实例的属性
+    for name, value in members:
+        if isinstance(value, GenericCrawlerScheduler):
+            for plugin in value.crawler.plugins:
+                if isinstance(plugin, StatsPlugin):
+                    ret_list.append(
+                        {
+                            f'{name}.{StatsPlugin.__name__}': plugin.get_all_status()
+                        }
+                    )
+    return CommonResponseModel(data=ret_list)

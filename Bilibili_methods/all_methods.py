@@ -20,8 +20,7 @@ import b站cookie.globalvar as gl
 import numpy
 import requests
 from asgiref.sync import async_to_sync
-from utl.代理 import request_with_proxy
-
+from utl.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 up_nickname_dict = {
     '真果粒官方': '果粒总',
     '邻家小妹装机馆': '小欣阿姨',
@@ -408,14 +407,12 @@ up_nickname_dict = {
     'TCL': 'T哥',
 
 }
-
 # 噫！好！我中了！
 kongpinglun = '⁡'
 
-
 class methods:
     def __init__(self):
-        self.requests_with_proxy = request_with_proxy.request_with_proxy()
+        self.requests_with_proxy = request_with_proxy_internal
         self.copy_suffix = ['']  # 复制后缀
         self.changyongemo = ['doge', '脱单doge', '妙啊', '吃瓜', 'tv_doge', '藏狐', '原神_哇', '原神_哼', '原神_嗯',
                              '原神_欸嘿', '原神_喝茶']  # 常用的表情包
@@ -438,44 +435,10 @@ class methods:
         self.pinglunshibai = list()
         self.guanzhushibai = list()
         self.official_caihongpilist = [  # 官方回复内容
-            # '老板超级大气喵[永雏塔菲_嘻嘻喵][永雏塔菲_好热]非常感谢老板喵[永雏塔菲_星星眼][永雏塔菲_哈哈哈]@{1} 的评论喵',
-            # '老板超级大气喵[永雏塔菲_好热][永雏塔菲_嘻嘻喵]非常感谢老板喵[永雏塔菲_哈哈哈][永雏塔菲_星星眼]@{1} 的评论喵',
-            # '老板超级大气喵[永雏塔菲_令人兴奋][永雏塔菲_好热]非常感谢老板喵[永雏塔菲_亲嘴][永雏塔菲_嘻嘻喵]@{1} 的评论喵',
             '老板超级大气喵[永雏塔菲_嘻嘻喵][永雏塔菲_好热]非常感谢老板喵[永雏塔菲_星星眼][永雏塔菲_哈哈哈]',
             '老板超级大气喵[永雏塔菲_好热][永雏塔菲_嘻嘻喵]非常感谢老板喵[永雏塔菲_哈哈哈][永雏塔菲_星星眼]',
             '老板超级大气喵[永雏塔菲_令人兴奋][永雏塔菲_好热]非常感谢老板喵[永雏塔菲_亲嘴][永雏塔菲_嘻嘻喵]',
-            # '老板超级大气喵[未来有你_打call][永雏塔菲_好热]非常感谢老板喵[未来有你_走花路][永雏塔菲_哈哈哈]',
-            # '老板超级大气喵[未来有你_好耶][永雏塔菲_嘻嘻喵]非常感谢老板喵[未来有你_热情][永雏塔菲_星星眼]',
-            # '老板超级大气喵[永雏塔菲_令人兴奋][未来有你_打call]非常感谢老板喵[永雏塔菲_亲嘴][未来有你_好耶]',
-            # # '@{1} 祝{0}粉丝越来越多！',
-            # # '@{1} 祝{0}粉丝越来越多，人气越来越旺[热词系列_好耶]',
-            # '\n{0}的宠粉福利好耶[未来有你_登场]\n被戳中了……心巴！n(*≧▽≦*)n[未来有你_未来有你]\n',
-            # '\n爱了爱了[未来有你_登场]\n{0}，你！是！我的神！！！[未来有你_未来有你]\n',
-            # '\n{0}真宠粉[未来有你_登场]\n祝所有人都有超级美好的一天！！ヾ(≧∇≦*)ゝ[未来有你_未来有你]\n',
-            # '\n哇，是{0}的宠粉抽奖[未来有你_登场]\n你是~我！的！神！[未来有你_未来有你]\n',
-            # '\n{0}的宠粉抽奖[未来有你_登场]\n你是~我！的！神！[未来有你_未来有你]\n',
-            # # '\n{0}超宠粉的er[未来有你_登场]\n{1}祝{0}三阳开泰，四季安康[未来有你_走花路]\n最重要的是粉丝越来越多[未来有你_未来有你]\n',
-            # '\n感谢{0}的宠粉抽奖[未来有你_打call]\n听我说👂👂👂谢谢你🙏🙏🙏因为有你👉👉👉温暖了四季🌈🌈🌈\n',
-            # '\n{0}超宠粉的er[未来有你_打call]\n你是~我！的！神！[未来有你_未来有你]\n',
-            # '\n关注{0}，好运来！来！来！水逆霉运退！退！退！[未来有你_打call]\n',
-            # # '感谢{0}的宠粉福利[热词系列_可以][热词系列_可以]\n愿粉丝越来越多[热词系列_秀][热词系列_秀]\n祝@{1} 好运来[热词系列_保护][热词系列_保护]',
-            # # '好耶，希望能被宠粉的{0}抽到呀[脱单doge]\n',
-            # # '来了来了，来支持{0}了[打call]\n',
-            # # '来了来了，希望能被宠粉的{0}抽到[脱单doge]',
-            # # '来了来了，希望能被宠粉的{0}抽到呀[脱单doge]\n',
-            # '\n来了来了，{0}真宠粉，希望能被抽到呀[未来有你_酸了][未来有你_酸了]\n',
-            # '\n{0}超宠粉，惊喜不断，好运常伴[未来有你_未来有你][未来有你_未来有你]\n',
-            # '\n来了来了，{0}超宠粉的er，希望能被抽到呀[未来有你_酸了][未来有你_酸了]\n',
-            # '\n{0}宠粉福利多，点点关注不迷路[未来有你_打call][未来有你_打call]\n祝大家每天有个好心情o(≧v≦)o[未来有你_好耶]\n',
-            # '\n心动不如行动，关注{0}，福利一直有[未来有你_未来有你]\n',
-            # '\n关注{0}，欧气不断[未来有你_未来有你]\n',
-            #
-            # # '支持{0}，祝你们的粉丝越来越多[打call]产品越卖越火[保卫萝卜_笔芯]',
-            # # '我对您的爱滔滔不绝[热词系列_爱了爱了]\n我会多多支持您的[热词系列_仙人指路]\n好耶，感谢{0}[热词系列_妙啊]\n@{1} 在这里真诚的祝福您![热词系列_多谢款待]\n祝您万事无忧!万事顺心![热词系列_可以]\n希望您的粉丝越来越多![热词系列_再来亿遍]',
-            # # '@{1} 在此祝福[热词系列_仙人指路]\n愿{0}的粉丝越来越多[热词系列_好耶]\n在b站越来越好[热词系列_秀]',
-            # # '来了来了，谢谢{0}的宠粉福利[脱单doge]\n',
-            # # '{0}太宠粉了，遇见{0}，是我最大的幸运！[未来有你_未来有你][未来有你_未来有你][未来有你_未来有你]\n',
-        ]  # 为了你😨😨😨我变成狼人模样🐺🐺🐺\n为了你😱😱😱染上疯狂🤡🤡🤡\n为了你😰😰😰穿上厚厚的伪装👹👹👹\n为了你🤗🤗🤗换了心肠💀💀💀\n
+        ]
         self.non_official_chp = ['好耶',
                                  '许愿',
                                  '万一呢',
@@ -485,25 +448,7 @@ class methods:
                                  '拉低中奖率',
                                  ]
         self.shangjiayingguang = [  # '水点评论，点点赞，合作那边那好交代[doge]',
-            # '很满意的一次购物。',
-            # '买了三台了，质量非常好，与卖家描述一致，孩子们都特别喜欢吃，版型很好，面料舒适，尺码标准，不沾杯持妆久，很满意的一次购物。',
-            # '橘色系更加显白，洗完也很柔顺头发也不油了，屏幕清晰运行流畅，很满意的一次购物。',
-            # '敏感肌用起来毫无压力，握感舒适不伤牙龈，每次炒菜都会放几滴，很满意的一次购物。',
-            # 'UP多发这种广告，很实用谢谢',
             '还不错，买了[doge]',
-            # '已经买了几个了，用起来跟真人差不多，推荐大家也去买来用[doge][doge][doge]',
-            # '买过认为值 好评，买了三台了，质量非常好，与卖家描述一致',
-            # '孩子们都特别喜欢吃，版型很好，面料舒适，尺码标准。很满意的一次购物。',
-            # '不沾杯持妆久，很满意的一次购物。',
-            # '屏幕清晰运行流畅，每次炒菜都会放几滴，很满意的一次购物。',
-            # '货很好 物美价廉 快递也迅速。很满意的一次购物。',
-            # '已折叠对您购物参考帮助不大的评价',
-            # '买了三台了，质量非常好，括约肌也能用！',
-            # '橘色系更加显白，屏幕清晰运行流畅。很满意的一次购物。',
-            # '握感舒适不伤牙龈，每次炒菜都会放几滴，用起来和真人差不多，很舒服。很满意的一次购物。',
-            # '该用户未做出评价，系统已默认好评！',
-            # '已收到货。质量很好，与描述一致，完全超出期望，包装仔细严实，总的来说这次是很满意的一次购物',
-            # '孩子很喜欢，不伤牙龈，一口气上五楼，很满意的一次购物。',
             '好好好',
             '未下单期待收货[doge]',
             '很好吃[doge]',
@@ -581,93 +526,6 @@ class methods:
                        '小电视_哭泣',
                        '小电视_太太喜欢', '小电视_好怒啊', '小电视_困惑', '小电视_我好兴奋', '小电视_思索', '小电视_无语'
                        ]  # 拥有的表情包
-        self.User_Agent_List = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.111 Safari/537.36 Edg/86.0.622.61',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.183 Safari/537.36 Edg/86.0.622.63',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/86.0.4240.80 Safari/537.36 Edg/86.0.622.43',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36 Edg/87.0.664.66',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.146 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36 Edg/88.0.705.63',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.190 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36 Edg/88.0.705.50',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4346.0 Safari/537.36 Edg/89.0.731.0',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4369.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36 Edg/89.0.774.68',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36 Edg/89.0.774.75',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.69 Safari/537.36 Edg/89.0.774.39',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36 Edg/89.0.774.50',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36 Edg/89.0.774.54',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36 Edg/89.0.774.57',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Safari/537.36 Edg/89.0.774.63',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4414.0 Safari/537.36 Edg/90.0.803.0',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4421.0 Safari/537.36 Edg/90.0.808.0',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4421.0 Safari/537.36 Edg/90.0.810.0',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4422.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36 Edg/90.0.818.62',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.30 Safari/537.36 Edg/90.0.818.14',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.41 Safari/537.36 Edg/90.0.818.22',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.51 Safari/537.36 Edg/90.0.818.27',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36 Edg/90.0.818.46',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36 Edg/90.0.818.49',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.49',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36 Edg/90.0.818.51',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4433.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4435.0 Safari/537.36 Edg/91.0.825.0',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4460.0 Safari/537.36 Edg/91.0.849.0',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4471.0 Safari/537.36 Edg/91.0.864.1',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.19 Safari/537.36 Edg/91.0.864.11',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4476.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4482.0 Safari/537.36 Edg/92.0.874.0',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4495.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.71 Safari/537.36 Edg/94.0.992.38',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36 Edg/96.0.1054.29',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36 Edg/97.0.1072.55',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.99 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36 Edg/98.0.1108.62',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36 Edg/99.0.1150.30',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36 Edg/100.0.1185.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36 Edg/100.0.1185.50',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.54 Safari/537.36 Edg/101.0.1210.39',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36 Edg/101.0.1210.53',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.67 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.63 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.63 Safari/537.36 Edg/102.0.1245.30',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.63 Safari/537.36 Edg/102.0.1245.39',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.124 Safari/537.36 Edg/102.0.1245.44',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.53 Safari/537.36 Edg/103.0.1264.37',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.114 Safari/537.36 Edg/103.0.1264.62',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.27',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.50',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/105.0.0.0 Safari/537.36 Edg/105.0.1343.53'
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36 '
-            'Edg/106.0.1370.47',
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Edg/108.0.1462.54",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.41",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36 Edg/113.0.1774.35",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
-        ]
-        proxy_pool = [
-        ]
-        self.proxy_pool = list(map(eval, set(list(map(str, proxy_pool)))))
-        self.ban_proxy_pool = list()
         self.s = requests.session()
 
     def timeshift(self, timestamp):
@@ -702,7 +560,7 @@ class methods:
             oid = dynamic_id
         else:
             oid = rid
-        fakeuseragent = random.choice(self.User_Agent_List)
+        fakeuseragent = CONFIG.rand_ua
         pinglunheader = {
             'user-agent': fakeuseragent}
         pinglunurl = 'https://api.bilibili.com/x/v2/reply/main?next=' + str(pn) + '&type=' + str(ctype) + '&oid=' + str(
@@ -880,7 +738,7 @@ class methods:
         '''
         if _cookie == '':
             headers = {
-                "user-agent": random.choice(self.User_Agent_List),
+                "user-agent": CONFIG.rand_ua,
                 'origin': 'https://t.bilibili.com',
                 'referer': 'https://t.bilibili.com/{}?spm_id_from=444.41.0.0'.format(dynamic_id),
                 'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
@@ -917,7 +775,6 @@ class methods:
         except Exception as e:
             # time.sleep(eval(input('输入等待时间')))
             time.sleep(10)
-            print()
             traceback.print_exc()
             return self.get_dynamic_detail(dynamic_id, _cookie, _useragent)
         try:
@@ -1130,7 +987,7 @@ class methods:
         '''
         if _cookie == '':
             headers = {
-                "user-agent": random.choice(self.User_Agent_List),
+                "user-agent": CONFIG.rand_ua,
                 'origin': 'https://t.bilibili.com',
                 'referer': 'https://t.bilibili.com/{}?spm_id_from=444.41.0.0'.format(dynamic_id),
                 'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
@@ -1420,7 +1277,7 @@ class methods:
         '''
         if _cookie == '':
             headers = {
-                "user-agent": random.choice(self.User_Agent_List),
+                "user-agent": CONFIG.rand_ua,
                 'origin': 'https://t.bilibili.com',
                 'referer': 'https://www.bilibili.com/opus/{}?spm_id_from=444.41.0.0'.format(dynamic_id),
                 'sec-ch-ua': "\"Google Chrome\";v=\"105\", \"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"105\"",
@@ -2576,7 +2433,7 @@ class methods:
                 }
         # ua = 'Mozilla/5.0 (compatible; bingbot/2.0 +http://www.bing.com/bingbot.htm)'
         # ua = 'Mozilla/5.0 (Windows Phone 8.1; ARM; Trident/7.0; Touch; rv:11.0; IEMobile/11.0; NOKIA; Lumia 530) like Gecko BingPreview/1.0b'
-        ua = random.choice(self.User_Agent_List)
+        ua = CONFIG.rand_ua
         headers = {
             'host': 'api.vc.bilibili.com',
             'authority': 'api.vc.bilibili.com',
@@ -2634,7 +2491,7 @@ class methods:
         }
         # ua = 'Mozilla/5.0 (compatible; bingbot/2.0 +http://www.bing.com/bingbot.htm)'
         # ua = 'Mozilla/5.0 (Windows Phone 8.1; ARM; Trident/7.0; Touch; rv:11.0; IEMobile/11.0; NOKIA; Lumia 530) like Gecko BingPreview/1.0b'
-        ua = random.choice(self.User_Agent_List)
+        ua = CONFIG.rand_ua
         headers = {
             'host': 'api.vc.bilibili.com',
             'authority': 'api.vc.bilibili.com',
@@ -2706,7 +2563,7 @@ class methods:
             oid = dynamic_id
         else:
             oid = rid
-        fakeuseragent = random.choice(self.User_Agent_List)
+        fakeuseragent = CONFIG.rand_ua
         pinglunheader = {
             'user-agent': fakeuseragent,
             'X-Forwarded-For': '{}.{}.{}.{}'.format(random.choice(range(0, 255)), random.choice(range(0, 255)),
@@ -4028,21 +3885,8 @@ class methods:
             pinglun_dict = json.loads(pinglunreq)
             pingluncode = pinglun_dict.get('code')
             if pingluncode != 0:
-                print('获取置顶评论失败')
                 message = pinglun_dict.get('message')
-                print(pinglun_dict)
-
-                if message != 'UP主已关闭评论区' and message != '啥都木有' and message != '评论区已关闭':
-                    while 1:
-                        try:
-                            time.sleep(eval(input('输入等待时间')))
-                            break
-                        except:
-                            continue
-                    return 'null'
-                else:
-                    print(message)
-                    return 'null'
+                return ''
             reps = pinglun_dict.get('data').get('replies')
             if reps != None:
                 for i in reps:
@@ -4052,7 +3896,7 @@ class methods:
             data = pinglun_dict.get('data')
             topreplies = data.get('top_replies')
             topmsg = ''
-            if topreplies != None:
+            if topreplies is not None:
                 for tprps in topreplies:
                     topmsg += tprps.get('content').get('message')
                     if tprps.get('replies'):
@@ -4060,33 +3904,17 @@ class methods:
                             if tprpsrps.get('mid') == mid:
                                 iner_replies += tprpsrps.get('content').get('message')
                 topmsg += iner_replies
-                print('置顶评论：' + topmsg)
             else:
-                print('无置顶评论')
-                topmsg = 'null' + iner_replies
+                topmsg = '' + iner_replies
         except Exception as e:
-            print(e)
-            print('获取置顶评论失败')
             pinglun_dict = json.loads(pinglunreq)
             data = pinglun_dict.get('data')
-            print(pinglun_dict)
-            print(data)
-            topmsg = 'null'
-            print(self.timeshift(int(time.time())))
-            if data == '评论区已关闭':
-                topmsg = data
-            else:
-                while 1:
-                    try:
-                        time.sleep(eval(input('输入等待时间')))
-                        break
-                    except:
-                        continue
+            topmsg = ''
         return topmsg
 
     def get_pinglunreq_proxy(self, dynamic_id, rid, pn, _type, *mode) -> dict:
         """
-        3是热评，2是最新，大概
+        mode 3是热评，2是最新，大概
         :param dynamic_id:
         :param rid:
         :param pn:
@@ -4128,7 +3956,7 @@ class methods:
             pinglunreq = async_to_sync(
                 self.requests_with_proxy.request_with_proxy
             )(method="GET", url=pinglunurl, data=pinglundata, headers=pinglunheader)
-        except:
+        except Exception as e:
             traceback.print_exc()
             print('获取评论失败')
             print(self.timeshift(int(time.time())))

@@ -1,24 +1,27 @@
-import random
-from typing import Callable, Dict, Annotated
-
 import asyncio
+import random
+import time
+from typing import Callable, Dict, Annotated
 
 from fast_depends import Depends
 from faststream.rabbit import RabbitQueue
-from faststream.rabbit.fastapi import RabbitRouter, RabbitMessage, RabbitBroker
-from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
+from faststream.rabbit.fastapi import RabbitMessage, RabbitBroker
+
 from fastapi接口.log.base_log import MQ_logger
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
-from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
-from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
+from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
-    upsert_milvus_bili_lot_data_prop, router, get_broker
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
+    upsert_milvus_bili_lot_data_prop, router, get_broker, bili_voucher_prop
+from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
+from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
+from fastapi接口.service.grpc_module.Models.RabbitmqModel import VoucherInfo
+from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import geetest_v3_breaker
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice
+from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
 from utl.pushme.pushme import pushme
 
 
@@ -226,12 +229,48 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
             await msg.nack()
 
 
+class BiliVoucher(BaseFastStreamMQ):
+    def __init__(self):
+        super().__init__(
+            mq_props=bili_voucher_prop
+        )
+
+    @func_wrapper
+    async def consume(
+            self,
+            voucher_info: VoucherInfo,
+            msg: RabbitMessage,
+    ):
+        module_name = self.mq_props.queue_name
+        try:
+            MQ_logger.debug(
+                f"【{module_name}】收到消息：{voucher_info}")
+            if int(time.time()) - voucher_info.generate_ts > 10:
+                return await msg.ack()
+            geetest_v3_breaker.validate_form_voucher_ua(
+                voucher_info.voucher,
+                voucher_info.ua,
+                voucher_info.ck,
+                voucher_info.origin,
+                voucher_info.referer,
+                voucher_info.ticket,
+                voucher_info.version,
+                voucher_info.session_id,
+                True,
+            )
+            return await msg.ack()
+        except Exception as e:
+            MQ_logger.exception(f'{module_name} consume error: {e}')
+            pushme(f'{module_name} consume error: {e}', e.__str__())
+            await msg.nack()
+
+
 official_reserve_charge_lot = OfficialReserveChargeLot()
 upsert_official_reserve_charge_lot = UpsertOfficialReserveChargeLot()
 upsert_lot_data_by_dynamic_id = UpsertLotDataByDynamicId()
 upsert_topic_lot = UpsertTopicLot()
 upsert_milvus_bili_lot_data = UpsertMilvusBiliLotData()
-
+bili_voucher = BiliVoucher()
 if __name__ == '__main__':
     from fastapi import FastAPI
     import uvicorn

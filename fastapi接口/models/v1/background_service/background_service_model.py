@@ -12,7 +12,14 @@ class ProgressStatusResp(CustomBaseModel):
     progress: float | int = Field(default=0, description='当前进度')
     is_running: bool = False
     update_ts: int = 0  # 最后更新时间
+    running_params: set = Field(default_factory=set, description='运行中的参数')
 
+    @computed_field
+    def update_time(self) -> str:
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.update_ts))
+    @computed_field
+    def start_time(self) -> str:
+        return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.start_ts))
 
 class BaseScrapyStatusResp(CustomBaseModel):
     succ_count: int = 0
@@ -69,7 +76,6 @@ class ProxyStatusResp(CustomBaseModel):
     mysql_sync_redis_ts: int = 0
     free_proxy_fetch_ts: int = 0
     sync_ts: int = 0  # 同步到redis的时间
-    sem_value: int = 0
 
     def is_need_sync(self) -> bool:
         return not (bool(self.sync_ts) and self.sync_ts > int(time.time()) - 600)

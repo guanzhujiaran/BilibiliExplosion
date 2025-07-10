@@ -1,8 +1,10 @@
 import asyncio
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy import func, select, delete, and_, or_
+from sqlalchemy import func, select, delete, and_, or_, case
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -221,7 +223,7 @@ class AvailableProxySqlHelper:
                     # Rollback handled by context manager
                     raise  # Or handle differently
 
-    @sql_retry_wrapper
+    # @sql_retry_wrapper
     async def update_available_proxy_details(self, proxy_tab: ProxyTab, available: bool, resp_code: int):
         """
         Updates specific fields (available, resp_code, timestamps) of an AvailableProxy record
@@ -229,34 +231,58 @@ class AvailableProxySqlHelper:
         If the record does not exist and `available` is True, a new record is inserted.
         If the record does not exist and `available` is False, no action is taken.
         """
-        proxy_id = proxy_tab.proxy_id
-        computed_proxy_str = proxy_tab.computed_proxy_str
-        async with self.session() as session:
-            stmt = select(AvailableProxy).where(AvailableProxy.proxy_tab_id == proxy_id).limit(1)
-            result = await session.execute(stmt)
-            proxy = result.scalars().first()  # This is the AvailableProxy object
+        try:
+            proxy_id = proxy_tab.proxy_id
+            computed_proxy_str = proxy_tab.computed_proxy_str
             now = datetime.now()
-            if proxy:
-                proxy.available = available
-                proxy.resp_code = resp_code
-                proxy.latest_used_ts = now
-                if resp_code == -352:
-                    proxy.latest_352_ts = now
-            elif available:
-                new_proxy = AvailableProxy(
-                    proxy_tab_id=proxy_id,
-                    ip=computed_proxy_str,  # Assuming proxy_tab.ip is accessible or passed
-                    available=True,  # Explicitly True as this is the insert condition
-                    resp_code=resp_code,  # Set initial resp_code
-                    counter=1,  # Start counter at 0 for a new available proxy
-                    latest_used_ts=now,
-                    max_counter_ts=datetime.fromtimestamp(17000000),  # No max counter reached yet
-                    latest_352_ts=now if resp_code == -352 else None
-                )
-                session.add(new_proxy)
-            await session.commit()
+            latest_352_ts = now if resp_code == -352 else None
+            new_values = {
+                "ip": computed_proxy_str,
+                "available": available,
+                "resp_code": resp_code,
+                "counter": AvailableProxy.counter if not available else 1,  # Increment counter
+                "latest_used_ts": now,
+                "max_counter_ts": case(
+                    (AvailableProxy.counter >= 30, now),  # Example condition to update max_counter_ts
+                    else_=AvailableProxy.max_counter_ts
+                ),
+                "latest_352_ts": latest_352_ts
+            }
 
+            async with self.session() as session:
+                stmt = mysql_insert(AvailableProxy).values(
+                    proxy_tab_id=proxy_id,
+                    **new_values
+                )
+
+                # On duplicate key update specified fields
+                update_stmt = stmt.on_duplicate_key_update(**new_values)
+
+                result = await session.execute(update_stmt)
+                await session.commit()
+
+                return result
+        except Exception as e:
+            self.log.error(f"Error updating available proxy details for proxy_id={proxy_tab}: {e}")
 
 sql_helper = AvailableProxySqlHelper()
 if __name__ == "__main__":
-    print(asyncio.run(sql_helper.get_rand_available_proxy_sql()))
+    async def _test_update_available_proxy_details():
+        await sql_helper.update_available_proxy_details(
+            ProxyTab(
+                proxy_id=2588172,
+                proxy="{'http':'http://192.168.1.201:3128','https':'http://192.168.1.201:3128'}",
+                status=0,
+                update_ts=int(time.time()),
+                score=1,
+                add_ts=int(time.time()),
+                success_times=1,
+                zhihu_status=0,
+                computed_proxy_str='https://111.200.255.18:7081'
+            ),
+            True,
+            0
+        )
+
+
+    print(asyncio.run(_test_update_available_proxy_details()))

@@ -4,12 +4,14 @@
 """
 import asyncio
 from contextlib import asynccontextmanager
+
+import fastapi_cdn_host
 import objgraph
-from fastapi_cache.backends.inmemory import InMemoryBackend
 import uvicorn
 from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
-import fastapi_cdn_host
+from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi接口.controller.v1.samsClub import samsClubController
 from fastapi接口.models.common import CommonResponseModel
 from pydantic import BaseModel as PydanticBaseModel
 from loguru import logger
@@ -17,12 +19,14 @@ from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from fastapi接口.service.samsclub.Sql.SdlHelper import graphql_app
-
 log = logger.bind(name='fastapi')
+
+
 class BaseModel(PydanticBaseModel):
     class Config:
         arbitrary_types_allowed = True
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
@@ -34,16 +38,21 @@ async def lifespan(_app: FastAPI):
     # await asyncio_gather(*back_ground_tasks)
     yield
 
+
 app = FastAPI(
     lifespan=lifespan,
 
-              )
+)
+
 fastapi_cdn_host.patch_docs(app)
-app.include_router(graphql_app,prefix='/graphql')
-@app.get('/memory_objgraph',)
-async def memory_objgraph(limit:int=50):
+app.include_router(samsClubController.router)
+
+
+@app.get('/memory_objgraph', )
+async def memory_objgraph(limit: int = 50):
     common_types = await asyncio.to_thread(objgraph.most_common_types, limit=limit)
     return [{"type": item[0], "count": item[1]} for item in common_types]
+
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, e: Exception):
@@ -63,9 +72,5 @@ def validation_exception_handler(request: Request, e: RequestValidationError):
     ).model_dump())
 
 
-
-
-
-
 if __name__ == '__main__':
-    uvicorn.run(app='dev_env_main:app', host='127.0.0.1', port=3090,loop='uvloop')
+    uvicorn.run(app='dev_env_main:app', host='127.0.0.1', port=3090, loop='uvloop')

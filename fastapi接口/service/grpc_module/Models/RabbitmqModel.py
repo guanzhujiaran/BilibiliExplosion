@@ -1,14 +1,13 @@
-from dataclasses import dataclass
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
 
-@dataclass
-class VoucherInfo:
-    voucher: str
-    ua: str
-    generate_ts: int  # 生成时间
-    ck: str
-    origin: str
-    referer: str
-    ticket: str
-    version: str
-    session_id:str
+class VoucherInfo(CustomBaseModel):
+    voucher: str | None
+    ua: str | None
+    generate_ts: int | None  # 生成时间
+    ck: str | None
+    origin: str | None
+    referer: str | None
+    ticket: str | None
+    version: str | None
+    session_id: str | None

@@ -71,7 +71,7 @@ class ProgressCounter(BaseSuccCounter):
 
     def __init__(self):
         super().__init__()
-
+        self.running_params = set()
     @property
     def total_num(self):
         # 返回私有变量_total_num的值

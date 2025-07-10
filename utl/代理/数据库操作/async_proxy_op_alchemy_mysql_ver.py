@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from CONFIG import CONFIG, database
 from fastapi接口.log.base_log import sql_log
 from fastapi接口.models.v1.background_service.background_service_model import ProxyStatusResp
-from fastapi接口.utils.Common import GLOBAL_SCHEDULER, sql_retry_wrapper, GLOBAL_SEM, asyncio_gather
+from fastapi接口.utils.Common import GLOBAL_SCHEDULER, sql_retry_wrapper, asyncio_gather
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, AvailableProxy
@@ -257,10 +257,9 @@ class SQLHelperClass:
             self.async_egn,
             **CONFIG.sql_alchemy_config.session_config
         )
-        self.schd = GLOBAL_SCHEDULER
-        self.schd.add_job(self.refresh_proxy, 'interval', seconds=600, next_run_time=datetime.datetime.now(),
+        GLOBAL_SCHEDULER.add_job(self.refresh_proxy, 'interval', seconds=600, next_run_time=datetime.datetime.now(),
                           misfire_grace_time=600)
-        self.schd.add_job(self.sync_proxy_database_redis, 'interval', seconds=1 * 60 * 60,
+        GLOBAL_SCHEDULER.add_job(self.sync_proxy_database_redis, 'interval', seconds=1 * 60 * 60,
                           next_run_time=datetime.datetime.now(),
                           misfire_grace_time=600)
         self.sub_redis_store = SubRedisStore()
@@ -626,52 +625,50 @@ class SQLHelperClass:
             return 0
 
     # region 定时任务
+    @sql_retry_wrapper
     async def refresh_proxy(self):
         start_ts = int(time.time())
-        while 1:
-            try:
-                sql_log.critical('开始刷新数据库中代理')
-                avaliable_score = -50
-                available_status = 0
-                now = int(time.time())
-                _412_sep_time = self._412_sep_time
-                # async with self.session() as session:
-                #     async with session.begin():
-                #         del_num = 0
-                #         ____sql = delete(ProxyTab).where(and_(
-                #             ProxyTab.status != 0,
-                #             ProxyTab.success_times < -50
-                #         ))
-                #         del_num += (await session.execute(____sql)).rowcount  # 刷新超过12小时的无效代理，改变status和score
-                #         await session.commit()
-                # sql_log.debug(f'【刷新代理池】\t删除无效代理，影响数量：{del_num}个！')
-                ___sql = update(ProxyTab).where(and_(
-                    ProxyTab.status != available_status,
-                    now - ProxyTab.update_ts >= _412_sep_time,
-                    ProxyTab.score >= avaliable_score,
-                    ProxyTab.success_times >= MIN_REFRESH_SUCCESS_TIME
-                ),
-                ).values(
-                    status=available_status,
-                    update_ts=now
-                )
-                __sql = update(ProxyTab).where(
-                    and_(ProxyTab.score < avaliable_score,
-                         now - ProxyTab.update_ts >= self._underscore_spe_time)
-                ).values(
-                    status=available_status,
-                    update_ts=now,
-                    score=50
-                )
-                async with self.session() as session:
-                    async with session.begin():
-                        await session.execute(___sql)  # 刷新超过两小时的412风控代理 不改变分数，只改变status
-                        await session.execute(__sql)  # 刷新超过12小时的无效代理，改变status和score
-                        await session.commit()
-                sql_log.critical(f'刷新数据库中代理完成！耗时：{int(time.time() - start_ts)}秒')
-                return
-            except Exception as e:
-                sql_log.exception(e)
+        sql_log.critical('开始刷新数据库中代理')
+        avaliable_score = -50
+        available_status = 0
+        now = int(time.time())
+        _412_sep_time = self._412_sep_time
+        # async with self.session() as session:
+        #     async with session.begin():
+        #         del_num = 0
+        #         ____sql = delete(ProxyTab).where(and_(
+        #             ProxyTab.status != 0,
+        #             ProxyTab.success_times < -50
+        #         ))
+        #         del_num += (await session.execute(____sql)).rowcount  # 刷新超过12小时的无效代理，改变status和score
+        #         await session.commit()
+        # sql_log.debug(f'【刷新代理池】\t删除无效代理，影响数量：{del_num}个！')
+        ___sql = update(ProxyTab).where(and_(
+            ProxyTab.status != available_status,
+            now - ProxyTab.update_ts >= _412_sep_time,
+            ProxyTab.score >= avaliable_score,
+            ProxyTab.success_times >= MIN_REFRESH_SUCCESS_TIME
+        ),
+        ).values(
+            status=available_status,
+            update_ts=now
+        )
+        __sql = update(ProxyTab).where(
+            and_(ProxyTab.score < avaliable_score,
+                 now - ProxyTab.update_ts >= self._underscore_spe_time)
+        ).values(
+            status=available_status,
+            update_ts=now,
+            score=50
+        )
+        async with self.session() as session:
+            async with session.begin():
+                await session.execute(___sql)  # 刷新超过两小时的412风控代理 不改变分数，只改变status
+                await session.execute(__sql)  # 刷新超过12小时的无效代理，改变status和score
+                await session.commit()
+        sql_log.critical(f'刷新数据库中代理完成！耗时：{int(time.time() - start_ts)}秒')
+        return
+
 
     async def sync_proxy_database_redis(self):
         sql_log.critical('开始同步redis和数据库中代理')
@@ -720,7 +717,6 @@ class SQLHelperClass:
             sql_helper.get_num(True),  # 获取可用代理的数量
             log=sql_log
         )
-        sem_value = GLOBAL_SEM._value
         # 将获取到的代理状态转换为ProxyStatusResp对象
         ret_model = ProxyStatusResp(
             mysql_sync_redis_ts=mysql_sync_redis_ts,
@@ -730,7 +726,6 @@ class SQLHelperClass:
             proxy_usable_count=proxy_usable_count,
             free_proxy_fetch_ts=free_proxy_fetch_ts,
             sync_ts=int(time.time()),
-            sem_value=sem_value
         )
         return ret_model
 

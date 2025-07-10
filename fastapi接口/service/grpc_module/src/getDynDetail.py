@@ -2,12 +2,9 @@
     通过grpc获取所有的图片动态
 """
 import asyncio
-import copy
 import datetime
 import json
-import random
 import time
-import urllib.parse
 from typing import Any
 
 from CONFIG import CONFIG
@@ -15,7 +12,7 @@ from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign, get_lot_notice, reserve_relation_info
+from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice, reserve_relation_info
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.DynObjectClass import dynAllDetail
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
@@ -24,7 +21,6 @@ from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import Base
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from fastapi接口.utils.Common import sem_gen, asyncio_gather
 from utl.pushme.pushme import pushme
-from utl.代理.request_with_proxy import request_with_proxy
 
 
 class StopCounter(BaseStopCounter):
@@ -45,27 +41,9 @@ class SuccCounter(BaseSuccCounter):
 
 
 class DynDetailScrapy(UnlimitedCrawler):
-    async def handle_fetch(self, rid: int):
-        detail = (await self.get_grpc_single_dynDetail(rid))[0]
-        await self.Sqlhelper.upsert_DynDetail(
-            doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-            dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-            dynamic_created_time=detail.get('dynamic_created_time')
-        )
-
-    async def key_params_gen(self, latest_rid: int):
-        latest_rid -= 500
-        while 1:
-            yield latest_rid
-            latest_rid += 1
-
-    async def is_stop(self) -> bool:
-        return self.stop_counter.stop_flag
-
     def __init__(self):
-        max_sem = 100
+        max_sem = 500
         self.offset = 10  # 每次获取rid的数量，数值最好不要超过10，太大的话传输会出问题
-        self.proxy_req = request_with_proxy()
         self.BiliGrpc = bili_grpc
         self.succ_times = 0
         self.comm_headers = {
@@ -83,7 +61,7 @@ class DynDetailScrapy(UnlimitedCrawler):
         self.Sqlhelper = grpc_sql_helper
         self.stop_counter: StopCounter = StopCounter()  # 停止标志
         self.stop_Flag_lock = asyncio.Lock()
-        self.scrapy_sem = sem_gen(10)  # 同时运行的协程数量
+        self.scrapy_sem = sem_gen()  # 同时运行的协程数量
         self.stop_limit_time = 2 * 3600  # 提前多少时间停止
         self.succ_counter = SuccCounter()
         self._BiliLotDataPublisher = None
@@ -93,6 +71,23 @@ class DynDetailScrapy(UnlimitedCrawler):
             _logger=official_lot_logger,
             plugins=[self.status_plugin]
         )
+
+    async def handle_fetch(self, rid: int):
+        detail = (await self.get_grpc_single_dynDetail(rid))[0]
+        await self.Sqlhelper.upsert_DynDetail(
+            doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
+            dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
+            dynamic_created_time=detail.get('dynamic_created_time')
+        )
+
+    async def key_params_gen(self, latest_rid: int):
+        latest_rid -= 500
+        while 1:
+            yield latest_rid
+            latest_rid += 1
+
+    async def is_stop(self) -> bool:
+        return self.stop_counter.stop_flag
 
     @property
     def BiliLotDataPublisher(self):
@@ -117,35 +112,6 @@ class DynDetailScrapy(UnlimitedCrawler):
         return timeStamp
 
     # region 从api获取信息操作
-    async def get_dynamic_id_by_doc_id(self, doc_id):
-        """
-        通过doc_id获取dynamic_id的接口，现在被加上了大概5-10s左右的限制！
-        :param doc_id:
-        :return:
-        """
-
-        pm = {
-            '_device': 'android',
-            'appkey': '1d8b6e7d45233436',
-            'build': 7380300,
-            'doc_id': doc_id,
-            'platform': 'android',
-            '_hwid': 'SX1NL0wuHCsaKRt4BHhIfRguTXxOfj5WN1BkBTdLfhstTn9NfUouFiUV',
-            'mobi_app': 'android',
-            'ts': int(time.time()),
-            'version': '7.38.0',
-            'trace_id': f"{datetime.datetime.now().strftime('%Y%m%d%M%S')}000{random.randint(0, 9)}{random.randint(0, 9)}",
-            'src': 'meizu'
-        }
-        signed_params = appsign(pm)
-
-        url = 'http://api.vc.bilibili.com/link_draw/v2/doc/dynamic_id' + '?' + urllib.parse.urlencode(signed_params)
-        new_headers = copy.deepcopy(self.comm_headers)
-        new_headers.update({
-            'Referer': 'http://www.bilibili.com/',
-            "user-agent": "Mozilla/5.0 BiliDroid/7.38.0 (bbcallen@gmail.com)",
-        })
-        return await self.proxy_req.request_with_proxy(url=url, method='get', headers=new_headers, params=signed_params)
 
     async def resolve_dynamic_details_card(self, dynData: dict, is_running_scrapy=True):
         """
@@ -298,35 +264,6 @@ class DynDetailScrapy(UnlimitedCrawler):
         ret_dict_list.sort(key=lambda x: x['rid'])
         return ret_dict_list
 
-    async def get_dynamic_ids_by_rids(self, rids: list[int]) -> list[dict]:
-        """
-        通过rid列表获取dynamic_id然后再获取动态id列表 # 已经失效了
-        :param rids:
-        :return: [{'rid': rid:int, 'dynamic_id': doc_id_2_dynamic_id_resp.get('data').get('dynamic_id')}:str,...]
-        """
-        async with self.stop_Flag_lock:
-            if self.stop_counter.stop_flag:
-                self.log.debug('遇到停止标志，不进行动态获取')
-                return []
-        ret_dynamic_ids = []
-        for rid in rids:
-            doc_id_2_dynamic_id_resp = await self.get_dynamic_id_by_doc_id(rid)
-            cd = doc_id_2_dynamic_id_resp.get('code')
-            if cd == 0:
-                ret_dynamic_ids.append(
-                    {'rid': rid, 'dynamic_id': doc_id_2_dynamic_id_resp.get('data').get('dynamic_id')})
-            elif cd == -1:  # -1就是没有这个dynamic_id
-                ret_dynamic_ids.append(
-                    {'rid': rid, 'dynamic_id': -1})
-            elif cd == -9999:
-                async with self.stop_Flag_lock:
-                    self.log.exception(f'动态响应没有动态id了，停止爬取！\n{doc_id_2_dynamic_id_resp}')
-                    self.stop_counter.set_max_stop_num()  # 没有动态id了，停止爬取
-            else:
-                self.log.error(
-                    f'http://api.vc.bilibili.com/link_draw/v2/doc/dynamic_id?doc_id={rid}\tInvalid Response:{json.dumps(doc_id_2_dynamic_id_resp)}')
-        return ret_dynamic_ids
-
     async def get_grpc_single_dynDetail(self, rid: int) -> list[dict[str, Any] | dict[str, int | str]]:
         """
         获取单个grpc的动态详情
@@ -371,7 +308,7 @@ class DynDetailScrapy(UnlimitedCrawler):
         """
         获取单个grpc的动态详情
         通过这个获取的rid是负数，防止干扰正常rid
-        :param rid:
+        :param dynamic_id: 动态id
         :return:
         """
         self.log.info(f'当前获取dynamic_id：{dynamic_id}，跳转连接：http://t.bilibili.com/{dynamic_id}')
@@ -428,40 +365,6 @@ class DynDetailScrapy(UnlimitedCrawler):
                 return rid_list
             except Exception as e:
                 self.log.exception(e)
-
-    async def get_all_details_by_rid_list(self, rid_list: list[int]) -> list[int]:
-        async with self.scrapy_sem:
-            try:
-                rid_dynamic_id_dict_list = await self.get_dynamic_ids_by_rids(rid_list)
-                # self.log.debug(f'\n获取rid_dynamic列表：\n{rid_dynamic_id_dict_list}')
-                all_detail_list = await self.get_grpc_dynDetails(rid_dynamic_id_dict_list)
-                for detail in all_detail_list:
-                    await self.Sqlhelper.upsert_DynDetail(
-                        doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-                        dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-                        dynamic_created_time=detail.get('dynamic_created_time')
-                    )
-            except Exception as e:
-                self.log.exception(e)
-            return rid_list
-
-    async def get_discontious_dynamics(self):
-        all_rids = await self.Sqlhelper.get_discountious_rids()
-        self.log.info(f'共有{len(all_rids)}条缺失动态')
-        task_args_list = []  # [[1,2,3,4,5,6,7,8],[9,10,11,12,13,14,15],...]
-        for rid_index in range(len(all_rids) // self.offset + 1):
-            rids_list = all_rids[self.offset * rid_index:self.offset * (rid_index + 1)]
-            task_args_list.append(rids_list)
-        thread_num = 50
-        task_list = []
-        for task_index in range(len(task_args_list) // thread_num + 1):
-            args_list = task_args_list[
-                        thread_num * task_index:thread_num * (task_index + 1)]  # 将task切片成[[0...49],[50....99]]
-            for args in args_list:
-                self.log.info(args)
-                task = asyncio.create_task(self.get_all_details_by_rid_list(args))
-                task_list.append(task)
-        await asyncio_gather(*task_list, log=self.log)
 
     async def get_discontious_dynamics_by_single_detail(self):
         """

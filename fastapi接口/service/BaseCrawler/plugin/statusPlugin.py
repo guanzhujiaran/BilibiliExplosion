@@ -1,3 +1,4 @@
+import inspect
 import time
 from typing import Any, Optional
 
@@ -52,6 +53,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
                 self._end_success_params = worker_model.params
             if worker_model.fetchStatus == WorkerStatus.nullData:
                 self._null_count += 1
+        self._end_params = worker_model.params
         # Log current speed by calling the property, which calculates it on demand
         self.log.debug(
             f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
@@ -148,6 +150,26 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
     def succ_count(self) -> int:
         """成功处理的任务数量"""
         return self._succ_count
+
+    def get_all_status(self) -> dict:
+        """
+            使用反射自动收集所有 @property 属性的当前值。
+        """
+        result = {}
+
+        # 获取当前实例的类类型
+        cls = type(self)
+
+        # 遍历类的所有成员，找出是 property 的属性
+        for name, prop in inspect.getmembers(cls, predicate=lambda x: isinstance(x, property)):
+            try:
+                # 通过 getattr 动态获取属性值
+                value = getattr(self, name)
+                result[name] = value
+            except Exception as e:
+                result[name] = f"<Error: {str(e)}>"
+
+        return result
 
 
 class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):

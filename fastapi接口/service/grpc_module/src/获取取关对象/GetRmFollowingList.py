@@ -15,7 +15,8 @@ from fastapi接口.log.base_log import get_rm_following_list_logger
 from fastapi接口.service.grpc_module.Utils.GrpcDynamicRespUtils import DynTool, ObjDynInfo
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.获取取关对象.db.models import UserInfo, SpaceDyn
-from fastapi接口.utils.Common import sem_retry_wrapper, sem_gen, asyncio_gather
+from fastapi接口.utils.Common import sem_gen, asyncio_gather, retry_wrapper
+
 current_dir = os.path.dirname(__file__)
 def get_file_path(relative_path: str):
     return os.path.join(current_dir, relative_path)
@@ -264,7 +265,7 @@ class GetRmFollowingListV1:
             except Exception as e:
                 self.logger.exception(f'Exception while check is lot up!{uid}\n{e}')
 
-    @sem_retry_wrapper
+    @retry_wrapper
     async def check_db_exist_up(self, uid: Union[int, str]) -> bool:
         """
         检查数据库中是否存在up，并返回数据库中的up是否为抽奖up

@@ -25,11 +25,10 @@ from socksio import ProtocolError
 
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import BiliGrpcApi_logger
-from fastapi接口.service.MQ.base.MQServer.VoucherMQServer import voucher_rabbit_mq
 from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request352Error
 from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataWrapper
 from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
-from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import GeetestV3Breaker
+from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import  geetest_v3_breaker
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_latest_version_builds, resource_abtest_abserver
 from fastapi接口.service.grpc_module.grpc.bapi.models import LatestVersionBuild
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
@@ -38,11 +37,8 @@ from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.d
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.dynamic.v2.dynamic_pb2_grpc import DynamicStub
 from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, \
     APIExClimbWuzhi
-from fastapi接口.utils.Common import asyncio_gather
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from utl.designMode.asyncPool import BaseAsyncPool
 from utl.代理.SealedRequests import my_async_httpx
-from utl.代理.request_with_proxy import request_with_proxy
 from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
 from utl.代理.数据库操作.ProxyEvent import handle_proxy_succ, handle_proxy_request_fail, handle_proxy_352, \
     handle_proxy_unknown_err
@@ -142,7 +138,6 @@ class BiliGrpc:
         self.brand_list = ['Xiaomi', 'Huawei', 'Samsung', 'Vivo', 'Oppo', 'Oneplus', 'Meizu', 'Nubia', 'Sony', 'Zte',
                            'Honor', 'Lenovo', 'Lg', 'Blu', 'Asus', 'Panasonic', 'Htc', 'Nokia', 'Motorola', 'Realme',
                            'Alcatel', 'BlackBerry']
-        self.__req = request_with_proxy()
         self.channel = None
         self.proxy: ProxyTab | None = None
 
@@ -150,8 +145,6 @@ class BiliGrpc:
         self.cookies = None
         self.cookies_ts = 0
         self.latest_352_ts = 0
-        self._352MQServer = voucher_rabbit_mq
-        self.GeetestV3BreakerPool = BaseAsyncPool(10, GeetestV3Breaker, 'a_validate_form_voucher_ua')
 
     @property
     def proxy_id(self):
@@ -451,24 +444,20 @@ class BiliGrpc:
                     if not validate_token:
                         # self.grpc_api_any_log.debug(f'未携带validate_token报错-352')
                         parsed_url = urlparse(url)
-                        validate_token, _ = await asyncio_gather(
-                            *[self.GeetestV3BreakerPool.do(
-                                v_voucher=resp.headers.get('x-bili-gaia-vvoucher'),
-                                ua=headers.get('user-agent'),
-                                ck=headers.get('buvid'),
-                                ori=f"https://{parsed_url.netloc}",
-                                ref=url,
-                                ticket=headers.get('x-bili-ticket'),
-                                version=md.version_name,
-                                session_id=md.session_id,
-                            ),
-                                ExClimbWuzhi.verifyExClimbWuzhi(
-                                    url="https://www.bilibili.com/",
-                                    my_cfg=md.exclimb_wuzhi_cfg,
-                                    _from="h5"
-                                )
-                            ],
-                            log=self.grpc_api_any_log
+                        validate_token = await geetest_v3_breaker.a_validate_form_voucher_ua(
+                            v_voucher=resp.headers.get('x-bili-gaia-vvoucher'),
+                            ua=headers.get('user-agent'),
+                            ck=headers.get('buvid'),
+                            ori=f"https://{parsed_url.netloc}",
+                            ref=url,
+                            ticket=headers.get('x-bili-ticket'),
+                            version=md.version_name,
+                            session_id=md.session_id,
+                        )
+                        await ExClimbWuzhi.verifyExClimbWuzhi(
+                            url="https://www.bilibili.com/",
+                            my_cfg=md.exclimb_wuzhi_cfg,
+                            _from="h5"
                         )
                         if validate_token:
                             self.grpc_api_any_log.debug(f'获取到-352验证token:{validate_token}')

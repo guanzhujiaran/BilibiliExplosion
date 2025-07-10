@@ -19,7 +19,6 @@ from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import Base
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from fastapi接口.utils.Common import asyncio_gather
-from utl.代理.request_with_proxy import request_with_proxy
 
 BAPI = Bilibili_methods.all_methods.methods()
 
@@ -96,9 +95,6 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         self.now_round_id = 0
         self.ids_list = []
         self.ids_change_lock = asyncio.Lock()
-        self.proxy_request = request_with_proxy()
-        self.proxy_request.mode = 'rand'
-        # {"proxy":{"http":1.1.1.1},"status":"可用|-412|失效","update_ts":time.time(), }
         self.EndTimeSeconds = 3 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
         self.encounter_end_time_seconds_times = 0
         self.rollback_num = 100  # 获取完之后的回滚数量

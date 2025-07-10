@@ -2,6 +2,7 @@ import copy
 import os
 from dataclasses import dataclass
 from enum import Enum
+
 from fake_useragent import UserAgent
 from sqlalchemy import AsyncAdaptedQueuePool
 
@@ -68,6 +69,9 @@ class database:
             self.db: int = db
             self.pwd: str = '114514'
 
+        def toUrl(self):
+            return f'redis://:{self.pwd}@{self.host}:{self.port}/{self.db}'
+
     followingup_db_RUI = 'sqlite+aiosqlite:////mnt/g/database/Following_Usr.db?check_same_thread=False'  # 取关up数据库地址
     aiobili_live_monitor_db_URI = fr'sqlite+aiosqlite:////mnt/h/liveLotMonitorDB/Bili_live_database.db''?check_same_thread=False'
     MYSQL = _MYSQL()
@@ -77,12 +81,11 @@ class database:
     ipInfoRedisObj = _REDISINFO(2)
     getOtherLotRedis = _REDISINFO(15)
 
-
 class SqlAlchemyConfig:
     engine_config = dict(
         echo=False,
         poolclass=AsyncAdaptedQueuePool,
-        pool_size=100,  # 默认是5
+        pool_size=5000,  # 默认是5
         max_overflow=-1,
         pool_recycle=True,
         pool_timeout=30,
@@ -96,7 +99,6 @@ class SqlAlchemyConfig:
 
 class RabbitMQConfig:
     class QueueName(Enum):
-        bili_352_voucher = 'bili_352_voucher'
         ipv6_change = 'ipv6_change'
 
     host = '192.168.1.200'
