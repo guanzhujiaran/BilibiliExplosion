@@ -967,6 +967,62 @@ class GetProxyMethods(UnlimitedCrawler):
             get_proxy_success = False
         return proxy_queue, get_proxy_success
 
+    async def get_proxy_from_saisuiu_Lionkings_Http_Proxys_Proxies(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/saisuiu/Lionkings-Http-Proxys-Proxies/refs/heads/main/free.txt'
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                       proxies=_github_proxy)
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if _ := i.strip():
+                    append_dict = format_proxy(_, protocol='http')
+                    if not append_dict:
+                        self.log.exception(f'代理格式错误！{_}')
+                        continue
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            get_proxy_success = False
+        return proxy_queue, get_proxy_success
+
+    async def get_proxy_from_Xnidada_proxylist(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/Xnidada/proxylist/refs/heads/main/proxylist.json'
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                       proxies=_github_proxy)
+        if req:
+            proxies = []
+            for i in req.json():
+                if _ := i:
+                    append_dict = format_proxy(_.get('proxy'), protocol='http')
+                    if not append_dict:
+                        self.log.exception(f'代理格式错误！{_}')
+                        continue
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            get_proxy_success = False
+        return proxy_queue, get_proxy_success
+
     async def get_proxy_from_databay_labs_lists_http(self) -> tuple[list, bool]:
         headers = {
             'user-agent': CONFIG.rand_ua
@@ -1823,6 +1879,33 @@ class GetProxyMethods(UnlimitedCrawler):
 
             get_proxy_success = False
         return proxy_queue, get_proxy_success
+    async def get_proxy_from_gitrecon1455_fresh_proxy_list(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/gitrecon1455/fresh-proxy-list/refs/heads/main/proxylist.txt'
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False)
+
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if _ := i.strip():
+                    append_dict = format_proxy(_, protocol='http')
+                    if not append_dict:
+                        self.log.exception(f'代理格式错误！{_}')
+                        continue
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            get_proxy_success = False
+        return proxy_queue, get_proxy_success
 
     async def get_proxy_from_api_openproxylist_xyz_https(self) -> tuple[list, bool]:
         headers = {
@@ -1852,7 +1935,36 @@ class GetProxyMethods(UnlimitedCrawler):
             get_proxy_success = False
         return proxy_queue, get_proxy_success
 
-    async def get_proxy_from_monosans_proxy_list(self) -> tuple[list, bool]:
+    async def get_proxy_from_dpangestuw_Free_Proxy(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/dpangestuw/Free-Proxy/refs/heads/main/All_proxies.txt'
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                       proxies=_github_proxy)
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if _ := i.strip():
+                    append_dict = format_proxy(_)
+                    if not append_dict:
+                        self.log.exception(f'代理格式错误！{_}')
+                        continue
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            get_proxy_success = False
+        return proxy_queue, get_proxy_success
+
+
+    async def get_proxy_from_casa_ls_proxy_list_socks5(self) -> tuple[list, bool]:
 
         headers = {
             'user-agent': CONFIG.rand_ua
@@ -1860,8 +1972,64 @@ class GetProxyMethods(UnlimitedCrawler):
         get_proxy_success = True
         req = ''
         proxy_queue = []
-        url = f'https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/http.txt'
+        url = f'https://raw.githubusercontent.com/casa-ls/proxy-list/refs/heads/main/socks5'
         req = await my_async_httpx.get(url=url, headers=headers, verify=False, 
+                                       proxies=_github_proxy)
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if _ := i.strip():
+                    append_dict = format_proxy(_, protocol='socks5')
+                    if not append_dict:
+                        self.log.exception(f'代理格式错误！{_}')
+                        continue
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            get_proxy_success = False
+        return proxy_queue, get_proxy_success
+
+    async def get_proxy_from_casa_ls_proxy_list_http(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/casa-ls/proxy-list/refs/heads/main/http'
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False,
+                                       proxies=_github_proxy)
+        if req:
+            proxies = []
+            for i in req.text.split('\n'):
+                if _ := i.strip():
+                    append_dict = format_proxy(_, protocol='http')
+                    if not append_dict:
+                        self.log.exception(f'代理格式错误！{_}')
+                        continue
+                    proxy_queue.append(append_dict)
+            if len(proxy_queue) < 10:
+                self.log.info(f'{req.text}, {url}')
+            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+        else:
+            self.log.info(f'{req.text}, {url}')
+
+            get_proxy_success = False
+        return proxy_queue, get_proxy_success
+
+    async def get_proxy_from_casa_ls_proxy_list_http(self) -> tuple[list, bool]:
+        headers = {
+            'user-agent': CONFIG.rand_ua
+        }
+        get_proxy_success = True
+        req = ''
+        proxy_queue = []
+        url = f'https://raw.githubusercontent.com/casa-ls/proxy-list/refs/heads/main/http'
+        req = await my_async_httpx.get(url=url, headers=headers, verify=False,
                                        proxies=_github_proxy)
         if req:
             proxies = []

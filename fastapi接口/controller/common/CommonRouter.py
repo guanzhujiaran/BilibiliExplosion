@@ -9,7 +9,7 @@ from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserve
 from fastapi接口.service.bili_live_monitor.src.monitor import BiliLiveLotRedisManager
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingListV2 import GetRmFollowingListV2
+from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingListV2 import GetRmFollowingListV2, gmflv2
 from fastapi接口.service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import \
     toutiaoSpaceFeedLotService
 from fastapi接口.service.zhihu.获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import zhihu_lotScrapy
@@ -63,10 +63,7 @@ async def v1_post_rm_following_list(data: list[int | str]):
     :param data: list[int] 关注列表 直接传列表即可
     :return:
     """
-    gmflv2 = GetRmFollowingListV2()
-    result = deepcopy(await gmflv2.main(data))
-    del gmflv2
-    return result
+    return await gmflv2.get_rm_following_list(data)
 
 
 # endregion
@@ -115,7 +112,7 @@ async def api_get_others_big_reserve() -> list[reserveInfo]:
     return reserveInfos
 
 
-@router.get('/zhihu/get_others_lot_pins')
+@router.get('/zhihu/get_others_lot_pins', description='获取知乎抽奖内容，返回url列表，直接访问即可')
 async def zhuhu_avaliable_api():
     myfastapi_logger.info('开始获取zhihu抽奖内容')
     resp = await zhihu_lotScrapy.api_get_all_pins()

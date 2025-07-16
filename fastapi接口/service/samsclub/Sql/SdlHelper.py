@@ -194,6 +194,7 @@ class Query:
             spuNewTagTagMarkList: list[str] | None = None,
             spuInfoTitle: str | None = None,
             spuInfoUpdateAsc: bool | None = False,
+            spuInfoCreateAsc: bool | None = False,
             priceDiffMaxAsc: bool | None = None,
             priceDiffCurAsc: bool | None = None,
             priceDiffLatestAsc: bool | None = None,
@@ -280,9 +281,11 @@ class Query:
             order_columns.append(desc("cur_price_diff") if not priceDiffCurAsc else asc("cur_price_diff"))
         if priceDiffLatestAsc is not None:
             order_columns.append(desc("latest_price_diff") if not priceDiffLatestAsc else asc("latest_price_diff"))
-
+        if spuInfoCreateAsc is not None:
+            order_columns.append(desc(SpuInfo.create_time) if not spuInfoCreateAsc else asc(SpuInfo.create_time))
         # Add default/fallback sorting
         order_columns.append(desc(SpuInfo.update_time) if not spuInfoUpdateAsc else asc(SpuInfo.update_time))
+
         stmt = stmt.order_by(*order_columns)
 
         # --- 步骤 6: 应用分页并执行最终查询 ---

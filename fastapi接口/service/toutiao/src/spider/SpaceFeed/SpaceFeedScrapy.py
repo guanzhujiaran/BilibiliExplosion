@@ -18,7 +18,9 @@ current_dir = os.path.dirname(__file__)
 
 
 def get_file_p(file_relative_path: str):
-    return os.path.join(current_dir, file_relative_path)
+    full_path = os.path.join(current_dir, file_relative_path)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    return full_path
 
 
 def Singleton(cls):

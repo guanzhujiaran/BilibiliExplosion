@@ -1,10 +1,17 @@
 import copy
 import os
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 
 from fake_useragent import UserAgent
 from sqlalchemy import AsyncAdaptedQueuePool
+
+
+class PlaywrightUserDir(StrEnum):
+    """
+    枚举类，用于表示不同的用户数据目录
+    """
+    zhihu = "zhihu"
 
 
 @dataclass
@@ -81,6 +88,7 @@ class database:
     ipInfoRedisObj = _REDISINFO(2)
     getOtherLotRedis = _REDISINFO(15)
 
+
 class SqlAlchemyConfig:
     engine_config = dict(
         echo=False,
@@ -113,6 +121,17 @@ class RabbitMQConfig:
 class _SeleniumConfig:
     edge_path = 'C:/WebDriver/bin/msedgedriver.exe'
     linux_edge_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webDriver/linux/msedgedriver')
+
+
+@dataclass
+class _UrlConfig:
+    host: str = 'http://localhost'
+    port: int = 23333
+    protocol: str = 'http://'
+
+    @property
+    def url(self):
+        return f'{self.protocol}://{self.host}:{self.port}'
 
 
 # endregion
@@ -156,10 +175,11 @@ class _CONFIG:
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
     unidbg_addr = "http://192.168.1.200:23335"
+    aiomonitor_webui = _UrlConfig(port=23336)
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()
     sql_alchemy_config = SqlAlchemyConfig()
-
+    playwright_user_dir = PlaywrightUserDir
     _pc_ua = UserAgent(platforms=["desktop", "tablet"])
     _mobile_ua = UserAgent(platforms=["mobile"])
 

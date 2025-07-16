@@ -83,7 +83,9 @@ class AvailableProxySqlHelper:
         Adjusts the internal flag 'use_good_proxy_flag' based on availability.
         """
         available_num = await self.get_num(is_available=True)
-        while 1:
+        retry_time = 0
+        while retry_time < 2:
+            retry_time += 1
             if available_num > self.MIN_USABLE_PROXY_NUM and self.use_good_proxy_flag:
                 now = datetime.now()
                 two_hours_ago = now - timedelta(hours=2)
@@ -123,6 +125,7 @@ class AvailableProxySqlHelper:
 
                             if proxy_available.resp_code == -352 and proxy_available.latest_352_ts < two_hours_ago:
                                 proxy_available.resp_code = 0
+
                             # --- Check if ProxyTab was loaded ---
                             if not proxy_available.proxy_tab:
                                 return None, available_num  # Treat as failure
@@ -136,6 +139,8 @@ class AvailableProxySqlHelper:
                 if available_num < self.MIN_USABLE_PROXY_NUM:
                     self.use_good_proxy_flag = False
                 return None, available_num
+
+        return None, available_num
 
     # --- Keep existing methods ---
     @sql_retry_wrapper
@@ -265,8 +270,14 @@ class AvailableProxySqlHelper:
         except Exception as e:
             self.log.error(f"Error updating available proxy details for proxy_id={proxy_tab}: {e}")
 
+
 sql_helper = AvailableProxySqlHelper()
 if __name__ == "__main__":
+    async def _test_get_rand_available_proxy_sql():
+        result = await sql_helper.get_rand_available_proxy_sql()
+        print(result)
+
+
     async def _test_update_available_proxy_details():
         await sql_helper.update_available_proxy_details(
             ProxyTab(
@@ -285,4 +296,4 @@ if __name__ == "__main__":
         )
 
 
-    print(asyncio.run(_test_update_available_proxy_details()))
+    print(asyncio.run(_test_get_rand_available_proxy_sql()))

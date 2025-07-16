@@ -6,6 +6,7 @@ from typing import Any, AsyncGenerator
 from fastapi接口.log.base_log import get_rm_following_list_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus, WorkerModel
+from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper
@@ -17,31 +18,31 @@ running_uids = set()
 
 class GetRmFollowingListV2(UnlimitedCrawler[int]):
     def __init__(self):
+        self.status = StatsPlugin(self)
         super().__init__(
             max_sem=10,
-            _logger=get_rm_following_list_logger
+            _logger=get_rm_following_list_logger,
+            plugins=[
+                self.status
+            ]
         )
-        self.following_list = []
-        self.running_uids = running_uids
+        self.following_set = set()
+        self.following_params_queue = asyncio.Queue()
         self._lock = asyncio.Lock()
         self.check_up_sep_days = 7  # 每个uid的检查间隔
         self.round_id = 1
         self.max_gap_time = 86400 * 60  # 取关多少天未发抽奖动态的up主
-        self.is_use_available_proxy = False
+        self._is_use_available_proxy = False
 
     async def is_stop(self) -> bool:
         pass
 
     async def key_params_gen(self, params: int) -> AsyncGenerator[int, None]:
-        for uid in self.following_list:
+        while not self.following_params_queue.empty():
+            uid = await self.following_params_queue.get()
             yield uid
 
     async def handle_fetch(self, params: int) -> WorkerStatus | Any:
-        if params in self.running_uids:
-            async with self._lock:
-                while params in self.running_uids:
-                    await asyncio.sleep(10)
-        self.running_uids.add(params)
         return await self.fetch_uid_space_dyn(params)
 
     async def fetch_uid_space_dyn(self, uid: int) -> WorkerStatus | Any:
@@ -51,7 +52,7 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
         bsu = BiliSpaceUserItem(
             lot_round_id=self.round_id,
             uid=uid,
-            is_use_available_proxy=self.is_use_available_proxy
+            is_use_available_proxy=self._is_use_available_proxy
         )
         await bsu.get_user_space_dynamic_id(
             secondRound=True,
@@ -62,9 +63,6 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
         dyn_set = set(bsu.dynamic_infos)
         await asyncio_gather(
             *[x.judge_lottery(highlight_word_list=HighlightWordList, lotRound_id=self.round_id) for x in dyn_set])
-
-    async def on_worker_end(self, worker_model: WorkerModel):
-        self.running_uids.discard(worker_model.params)
 
     async def _get_round_id(self) -> int:
         round_info = await SqlHelper.getLatestFinishedRound()
@@ -80,6 +78,9 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
             return 1
         return round_info.lotRound_id
 
+    async def on_worker_end(self, worker_model: WorkerModel):
+        self.following_set.discard(worker_model.params)
+
     async def check_lot_up_from_database(self, uid) -> bool:
         """
         返回bool值，true表示这个uid是发起抽奖的up
@@ -91,17 +92,30 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
             return True
         return False
 
-    async def main(self, following_list: list[int], *args, **kwargs) -> list[int]:
+    async def main(self, following_list: list[int] = None, *args, **kwargs):
+        if following_list is None:
+            following_list = []
         if type(following_list) is not list:
-            return []
-        self.following_list = following_list
+            return
+        async with self._lock:
+            for uid in following_list:
+                if uid in running_uids:
+                    continue
+                self.following_set.add(uid)
+                await self.following_params_queue.put(uid)
         self.round_id = await self._get_round_id()
-        await self.run(0)
+        if not self.status.is_running:
+            async with self._lock:
+                if not self.status.is_running:
+                    await self.run(0)
+
+    async def get_rm_following_list(self, following_list: list[int]):
+        await self.main(following_list)
+        while self.status.is_running:
+            await asyncio.sleep(10)
         result = [x for x in following_list if not await self.check_lot_up_from_database(x)]
         self.log.debug(result)
         return result
 
 
-if __name__ == '__main__':
-    a = GetRmFollowingListV2()
-    asyncio.run(a.main([532791]))
+gmflv2 = GetRmFollowingListV2()

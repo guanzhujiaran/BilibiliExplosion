@@ -1,8 +1,10 @@
-from enum import Enum
-from typing import List, Optional, Union
-from pydantic import Field
+import asyncio
 # windows中如果出现编码错误. 在引入execjs之前. 插入以下代码即可.
 import os
+from enum import Enum
+from typing import List, Optional
+
+from pydantic import Field
 
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
 
@@ -26,7 +28,7 @@ class LotType(Enum):
     unknown = "未知活动"
 
 
-class CvItem(CustomBaseModel):
+class CvTopicItem(CustomBaseModel):
     jumpUrl: str
     title: str
     lot_type_list: Optional[List[LotType]] = Field(default_factory=lambda: [])
@@ -92,7 +94,7 @@ class CvContentAttr(CustomBaseModel):
 
 class CvContentOps(CustomBaseModel):
     attributes: Optional[CvContentAttr] = Field(None, description="插入文字属性")
-    insert: Union[str, CutOff]
+    insert: str | CutOff
 
 
 with open(
@@ -125,5 +127,8 @@ class CvContent(CustomBaseModel):
                 continue
         return ''.join(content_ls)
 
-    def toOpusContent(self, _type: OpusType):
-        return toOpusContent.call('toOpusContent', _type.value, self.rawContent)
+    async def toOpusContent(self, _type: OpusType):
+        return await asyncio.to_thread(
+            toOpusContent.call,
+            'toOpusContent', _type.value, self.rawContent
+        )

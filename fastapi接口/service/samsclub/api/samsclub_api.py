@@ -1,10 +1,9 @@
 import asyncio
 import json
 import os
-
 import aiofiles
 from curl_cffi.requests.exceptions import RequestException
-
+from httpx import HTTPError
 from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.service.samsclub.exceptions.error import UnknownError
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import update_do_encrypt_key
@@ -111,7 +110,7 @@ class SamsClubApi:
                     data=body_str,
                     # proxies=CONFIG.custom_proxy
                 )
-            except RequestException as e:
+            except (RequestException, HTTPError) as e:
                 await asyncio.sleep(10)
                 continue
             except Exception as e:

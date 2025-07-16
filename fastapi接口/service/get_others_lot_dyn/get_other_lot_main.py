@@ -845,15 +845,19 @@ class BiliDynamicItem:
                 get_others_lot_log.debug(
                     f'动态【{self.dynamic_id}】使用api获取\n{dynamic_req}\n{dynamic_detail_resp}')
                 if str(self.dynamic_type) != '2' and not self.dynamic_id:
-                    dynamic_req = await get_polymer_web_dynamic_detail(rid=self.dynamic_rid,
-                                                                       dynamic_type=self.dynamic_type,
-                                                                       is_use_available_proxy=self.is_use_available_proxy)
+                    dynamic_req = await get_polymer_web_dynamic_detail(
+                        rid=self.dynamic_rid,
+                        dynamic_type=self.dynamic_type,
+                        is_use_available_proxy=self.is_use_available_proxy
+                    )
                 else:
-                    dynamic_req = await get_polymer_web_dynamic_detail(dynamic_id=self.dynamic_id,
-                                                                       is_use_available_proxy=self.is_use_available_proxy)
+                    dynamic_req = await get_polymer_web_dynamic_detail(
+                        dynamic_id=self.dynamic_id,
+                        is_use_available_proxy=self.is_use_available_proxy
+                    )
         except Exception as e:
             get_others_lot_log.exception(e)
-            await asyncio.sleep(30)
+            await asyncio.sleep(10)
             return await self._get_dyn_detail_resp()
         self.dynamic_raw_resp = dynamic_req
         return dynamic_req
@@ -1235,11 +1239,11 @@ class BiliSpaceUserItem:
             else:
                 start_ts = time.time()
                 get_others_lot_log.debug(f'正在前往获取用户【{self.uid}】空间动态请求！')
-                dyreq_dict = await get_space_dynamic_req_with_proxy(
+                dyreq_dict = await asyncio.create_task(get_space_dynamic_req_with_proxy(
                     self.uid,
                     cur_offset if cur_offset else "",
                     is_use_available_proxy=self.is_use_available_proxy
-                )
+                ))
                 code = dyreq_dict.get('code')
                 msg = dyreq_dict.get('message')
                 if code != 0:
@@ -1346,13 +1350,13 @@ class BiliSpaceUserItem:
         ))
         if not secondRound:
             get_others_lot_log.debug(f'更新lot_user_info最终状态')
-            await self.get_user_space_dynamic_id(
+            await asyncio.create_task(self.get_user_space_dynamic_id(
                 secondRound=True,
                 isPubLotUser=isPubLotUser,
                 isPreviousRoundFinished=isPreviousRoundFinished,
                 SpareTime=SpareTime,
                 succ_counter=succ_counter
-            )
+            ))
         if n <= 50 and time.time() - time_list[-1] >= SpareTime and secondRound == False and not isPubLotUser:
             get_others_lot_log.critical(
                 f'{self.uid}\t当前UID获取到的动态太少，前往：\nhttps://space.bilibili.com/{self.uid}\n查看详情')
@@ -1478,23 +1482,19 @@ class GetOthersLotDynRobot:
         self.scrapy_info = RobotScrapyInfo()
         self.space_succ_counter = ProgressCounter()
         self.dyn_succ_counter = ProgressCounter()
-        self.goto_check_dynamic_item_set = set()
+        self.goto_check_dynamic_item_set: Set[BiliDynamicItem] = set()
 
     # region 获取uidlist中的空间动态
 
     async def __do_space_task(self, __bili_space_user: BiliSpaceUserItem, isPubLotUser: bool):
-        try:
-            self.space_succ_counter.running_params.add(__bili_space_user.uid)
-            await __bili_space_user.get_user_space_dynamic_id(
-                isPubLotUser=isPubLotUser,
-                SpareTime=self.SpareTime,
-                succ_counter=self.space_succ_counter
-            )
-            self.space_succ_counter.running_params.discard(__bili_space_user.uid)
-            self.space_succ_counter.succ_count += 1
-        except Exception as _e:
-            get_others_lot_log.exception(_e)
-            raise _e
+        self.space_succ_counter.running_params.add(__bili_space_user.uid)
+        await __bili_space_user.get_user_space_dynamic_id(
+            isPubLotUser=isPubLotUser,
+            SpareTime=self.SpareTime,
+            succ_counter=self.space_succ_counter
+        )
+        self.space_succ_counter.running_params.discard(__bili_space_user.uid)
+        self.space_succ_counter.succ_count += 1
 
     async def get_all_space_dyn_id(
             self,
@@ -1509,6 +1509,7 @@ class GetOthersLotDynRobot:
                 name=f'{i.uid}'
             )
             tasks.add(task)
+            task.add_done_callback(tasks.discard)
         await asyncio_gather(*tasks, log=get_others_lot_log)
         get_others_lot_log.info(f'{len(bili_space_user_items)}个空间获取完成')
         self.space_succ_counter.is_running = False
@@ -1571,7 +1572,6 @@ class GetOthersLotDynRobot:
                                 646327721,
                                 1803790683,
                                 8544035,
-                                3546605886114075,
                                 1123570168,
                                 3494361237031878,
                                 223712517,
@@ -1607,7 +1607,8 @@ class GetOthersLotDynRobot:
     async def __judge_dynamic(self,
                               item: BiliDynamicItem,
                               highlight_word_list: List[str],
-                              lotRound_id: int
+                              lotRound_id: int,
+                              queue: asyncio.Queue
                               ):
         """
         判断抽奖
@@ -1616,14 +1617,12 @@ class GetOthersLotDynRobot:
         :param lotRound_id:
         :return:
         """
-        try:
-            self.dyn_succ_counter.running_params.add(self.__hash__())
-            await item.judge_lottery(highlight_word_list=highlight_word_list, lotRound_id=lotRound_id)
-            self.dyn_succ_counter.running_params.discard(self.__hash__())
-            self.dyn_succ_counter.succ_count += 1
-        except Exception as _e:
-            get_others_lot_log.exception(_e)
-            raise _e
+        queue.get_nowait()
+        self.dyn_succ_counter.running_params.add(self.__hash__())
+        await item.judge_lottery(highlight_word_list=highlight_word_list, lotRound_id=lotRound_id)
+        self.dyn_succ_counter.running_params.discard(self.__hash__())
+        self.dyn_succ_counter.succ_count += 1
+        return
 
     async def main(self):
         await self.__init()
@@ -1645,12 +1644,15 @@ class GetOthersLotDynRobot:
         get_others_lot_log.critical(f'{len(self.goto_check_dynamic_item_set)}条待检查动态')
         self.dyn_succ_counter.total_num = len(self.goto_check_dynamic_item_set)
         tasks = set()
+        queue = asyncio.Queue(50)
         for x in self.goto_check_dynamic_item_set:
+            await queue.put(1)
             task = asyncio.create_task(
-                self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id),
-                name=f'{x.dynId}'
+                self.__judge_dynamic(x, self.highlight_word_list, self.nowRound.lotRound_id, queue=queue),
+                name=f'{x.dynamic_id} {x.dynamic_rid} {x.dynamic_type}'
             )
             tasks.add(task)
+            task.add_done_callback(tasks.discard)
         await asyncio_gather(*tasks, log=get_others_lot_log)
         self.dyn_succ_counter.is_running = False
         await self._after_scrapy()
@@ -1781,7 +1783,7 @@ class GetOthersLotDyn:
                     ' '.join([f'https://space.bilibili.com/{recent_lots[i].upmid}/dynamic', recent_lots[i].text]))
                 ret_list.append(recent_lots[i])
         if ret_info_list:
-            await  asyncio.to_thread(
+            await asyncio.to_thread(
                 pushme,
                 f"必抽的预约抽奖【{len(ret_info_list)}】条", '\n'.join(ret_info_list),
                 'text'
@@ -1887,4 +1889,15 @@ class GetOthersLotDyn:
 get_others_lot_dyn = GetOthersLotDyn()
 
 if __name__ == '__main__':
-    asyncio.run(get_others_lot_dyn.get_new_dyn())
+    import aiomonitor
+
+
+    async def main():
+        loop = asyncio.get_running_loop()
+        run_forever = loop.create_future()
+        loop.create_task(get_others_lot_dyn.get_new_dyn())
+        with aiomonitor.start_monitor(loop):
+            await run_forever
+
+
+    asyncio.run(main())

@@ -13,8 +13,10 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
 
     def __init__(self,
                  plugins: List[CrawlerPlugin[ParamsType]] = None,
+                 requeue_on_fetch_fail: bool = True,
                  *args, **kwargs
                  ):
+        self.requeue_on_fetch_fail = requeue_on_fetch_fail
         if plugins is None:
             plugins = []
         super().__init__(*args, **kwargs)
@@ -25,7 +27,6 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
     @property
     def plugins(self) -> List[CrawlerPlugin[ParamsType]]:
         return self._plugins
-
 
     def __register_plugin(self, plugin: CrawlerPlugin[ParamsType]):
         if plugin not in self._plugins:
@@ -66,6 +67,8 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
                 self.log.exception(f'爬取异常：{e}')
                 fetch_result = WorkerStatus.fail
                 await asyncio.sleep(100)
+                if self.requeue_on_fetch_fail:
+                    await self.task_queue.put(worker_model)
             if not isinstance(fetch_result, WorkerStatus):
                 worker_model.fetchStatus = WorkerStatus.complete
             else:
@@ -106,11 +109,10 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         self.log.info(f'任务生成完成。正在等待剩余线程完成任务，当前存活线程数量：{len(task_set)}')
         await asyncio_gather(*task_set, log=self.log)
         self.log.info(f'所有任务已完成。')
-
         await self.on_run_end(last_param_yielded if last_param_yielded is not None else init_params)
-
-        for plugin in self._plugins:
-            await plugin.on_run_end(last_param_yielded if last_param_yielded is not None else init_params)
+        await asyncio_gather(*[x.on_run_end(last_param_yielded if last_param_yielded is not None else init_params)
+                               for x in self._plugins],
+                             log=self.log)
 
         self.log.info(f"Crawler {self.__class__.__name__} run finished.")
         while not self.task_queue.empty():

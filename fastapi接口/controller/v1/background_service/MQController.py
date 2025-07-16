@@ -1,11 +1,12 @@
 from typing import Dict
+
+from faststream.rabbit.fastapi import RabbitMessage
+
 from fastapi接口.log.base_log import MQ_logger
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataFastStream import official_reserve_charge_lot, \
     upsert_official_reserve_charge_lot, upsert_lot_data_by_dynamic_id, upsert_topic_lot, router, \
     upsert_milvus_bili_lot_data, bili_voucher
-from faststream.rabbit.fastapi import RabbitMessage
-
 from fastapi接口.service.grpc_module.Models.RabbitmqModel import VoucherInfo
 
 
@@ -84,12 +85,14 @@ async def handle_upsert_milvus_bili_lot_data(
         msg,
     )
 
-@router.subscriber(queue=bili_voucher.mq_props.rabbit_queue,
-                   exchange=bili_voucher.mq_props.exchange,
-                   retry=True,
-                   )
+
+@router.subscriber(
+    queue=bili_voucher.mq_props.rabbit_queue,
+    exchange=bili_voucher.mq_props.exchange,
+    retry=True,
+)
 async def handle_bili_voucher(
-        body:VoucherInfo,
+        body: VoucherInfo,
         msg: RabbitMessage,
 ) -> None:
     MQ_logger.debug(f'【{msg.raw_message.routing_key}】队列 消费消息：{body}')
@@ -97,4 +100,3 @@ async def handle_bili_voucher(
         body,
         msg,
     )
-

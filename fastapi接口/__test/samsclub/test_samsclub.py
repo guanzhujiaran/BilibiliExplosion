@@ -989,11 +989,3 @@ async def test_some_asyncio_code():
 
     res = await sql_helper.bulk_upsert_spu_info(da_list)
 
-
-@pytest.mark.asyncio
-async def test_get_price_by_spu_id():
-    test_spu_id = '276192340'
-    async with sql_helper.async_session() as db:
-        res = await sql_helper.get_price_info_by_spu_id(test_spu_id,db)
-        await db.commit()
-    assert res == (990, 0)

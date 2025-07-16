@@ -1,12 +1,18 @@
 import asyncio
 import concurrent.futures
-from typing import Callable
+from typing import Callable, TypeVar, Awaitable, Any
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import _logger
 from sqlalchemy.exc import InternalError, OperationalError
+
 from fastapi接口.log.base_log import myfastapi_logger, sql_log
+
 GLOBAL_SCHEDULER: AsyncIOScheduler = AsyncIOScheduler()
 _comm_lock = asyncio.Lock()
+
+TResult = TypeVar("TResult")
+FuncT = TypeVar("FuncT", bound=Callable[..., Awaitable[Any]])
 
 
 def sem_gen(sem_limit=100):
@@ -71,8 +77,8 @@ async def run_in_executor(func, *args):
         return await future
 
 
-def sql_retry_wrapper(_func: Callable) -> Callable:
-    async def wrapper(*args, **kwargs):
+def sql_retry_wrapper(_func: FuncT) -> FuncT:
+    async def wrapper(*args: Any, **kwargs: Any) -> TResult:
         while True:
             try:
                 res = await _func(*args, **kwargs)
@@ -90,7 +96,7 @@ def sql_retry_wrapper(_func: Callable) -> Callable:
                 await asyncio.sleep(60)
                 continue
             except Exception as e:
-                sql_log.exception(e)
+                sql_log.exception(f'{args}\n{kwargs}\n{e}')
                 await asyncio.sleep(60)
                 continue
 
@@ -103,4 +109,3 @@ async def asyncio_gather(*coros_or_futures, log: _logger = myfastapi_logger):
         if isinstance(result, Exception):
             log.opt(exception=True).exception(result)
     return results
-

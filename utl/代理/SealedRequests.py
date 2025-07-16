@@ -1,11 +1,12 @@
 import asyncio
 import random
+import ssl
 import typing
 from typing import Union
-from curl_cffi import CurlHttpVersion, Response
-from curl_cffi.requests import AsyncSession, BrowserTypeLiteral
+
+from httpx import AsyncClient
 from httpx._types import RequestContent, RequestFiles, QueryParamTypes, HeaderTypes, CookieTypes, RequestData
-import ssl
+
 from utl.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 
 
@@ -67,6 +68,7 @@ class SSLFactory:
 
 
 sslgen = SSLFactory()
+asyncio_timeout = 60
 
 def format_transport(request_proxy: dict | None):
     # if format_ip_str := get_scheme_ip_port_form_proxy_dict(request_proxy):
@@ -86,147 +88,9 @@ def format_httpx_proxy(request_proxy: dict | None) -> str | None:
         return None
 
 
-# class MYASYNCHTTPX:
-#     @comm_wrapper
-#     async def get(self, url, headers=None, verify=False, proxies: Union[dict, None] = None, timeout=10, params=None,
-#                   *args, **kwargs):
-#         """
-#
-#         :param url:
-#         :param headers:
-#         :param verify:
-#         :param proxies: like {
-#             'http':'http://1.1.1.1',
-#             'https':'http://1.1.1.1'
-#         }
-#         :param timeout:
-#         :param params:
-#         :param args:
-#         :param kwargs:
-#         :return:
-#         """
-#         format_proxy_str = format_httpx_proxy(proxies)
-#         async with AsyncClient(
-#                 transport=format_transport(proxies),
-#                 proxy=format_proxy_str,
-#                 http2=True,
-#                 verify=False,
-#                 timeout=timeout
-#         ) as client:
-#             client.headers.clear()
-#             resp = await client.get(url=url, headers=headers, params=params, timeout=timeout, follow_redirects=True,
-#                                    )
-#             return resp
-#
-#     @comm_wrapper
-#     async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10, *args, **kwargs):
-#         format_proxy_str = format_httpx_proxy(proxies)
-#         async with AsyncClient(
-#                 transport=format_transport(proxies),
-#                 proxy=format_proxy_str,
-#                 http2=True,
-#                 verify=False,
-#                 timeout=timeout
-#         ) as client:
-#             client.headers.clear()
-#             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True)
-#             return resp
-#
-#     @comm_wrapper
-#     async def request(self, url,
-#                       data: typing.Optional[RequestData] = None,
-#                       method='GET',
-#                       headers: typing.Optional[HeaderTypes] = None,
-#                       verify=False,
-#                       proxies=None,
-#                       timeout=10,
-#                       content: typing.Optional[RequestContent] = None,
-#                       files: typing.Optional[RequestFiles] = None,
-#                       json: typing.Optional[typing.Any] = None,
-#                       params: typing.Optional[QueryParamTypes] = None,
-#                       cookies: typing.Optional[CookieTypes] = None,
-#                       extensions: typing.Optional[dict] = None, *args, **kwargs):
-#         """
-#
-#         :param url:
-#         :param data:
-#         :param method:
-#         :param headers:
-#         :param verify:
-#         :param proxies: {"http":"xxx.xxx.xxx.xxx", "https":"xxx.xxx.xxx.xxx"}
-#         :param timeout:
-#         :param content:
-#         :param files:
-#         :param json:
-#         :param params:
-#         :param cookies:
-#         :param extensions:
-#         :return:
-#         """
-#         ca = False
-#         if (
-#                 'api.bilibili.com/x/gaia-vgate/v1/register' in url or
-#                 'api.bilibili.com/x/gaia-vgate/v1/validate' in url
-#         ):
-#             ca = sslgen()
-#             format_proxy_str = None
-#             format_transport_ins = None
-#         else:
-#             format_proxy_str = format_httpx_proxy(proxies)
-#             format_transport_ins = format_transport(proxies)
-#         async with AsyncClient(
-#                 transport=format_transport_ins,
-#                 proxy=format_proxy_str,
-#                 verify=ca,
-#                 http2=True,
-#                 http1=False,
-#                 follow_redirects=True,
-#                 timeout=timeout
-#         ) as client:
-#             client.headers.clear()
-#             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
-#                                         content=content, files=files, json=json, params=params, cookies=cookies,
-#                                         extensions=extensions, follow_redirects=True
-#                                         )
-#             return resp
-#
-#     async def cffi_request(self, url,
-#                            data: typing.Optional[RequestData] = None,
-#                            method='GET',
-#                            headers: typing.Optional[HeaderTypes] = None,
-#                            verify=False,
-#                            proxies=None,
-#                            timeout=10,
-#                            files: typing.Optional[RequestFiles] = None,
-#                            json: typing.Optional[typing.Any] = None,
-#                            params: typing.Optional[QueryParamTypes] = None,
-#                            cookies: typing.Optional[CookieTypes] = None,
-#                            *args,
-#                            **kwargs
-#                            ):
-#         if type(headers) is tuple:
-#             headers = list(headers)
-#         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
-#         async with AsyncSession(
-#                 impersonate=impersonate,
-#                 # extra_fp=fp,
-#                 default_headers=False,
-#                 timeout=timeout,
-#                 verify=False
-#         ) as client:
-#             client.headers.clear()
-#             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
-#                                         files=files, json=json, params=params, cookies=cookies,
-#                                         proxies=proxies,
-#                                         verify=False,
-#                                         default_headers=False,
-#                                         )
-#         return resp
-
-
 class MYASYNCHTTPX:
     async def get(self, url, headers=None, verify=False, proxies: Union[dict, None] = None, timeout=10, params=None,
-                  *args, **kwargs) -> Response:
+                  *args, **kwargs):
         """
 
         :param url:
@@ -243,50 +107,35 @@ class MYASYNCHTTPX:
         :return:
         """
         format_proxy_str = format_httpx_proxy(proxies)
-        if type(headers) is tuple:
-            headers = list(headers)
-        impersonate = random.choice(list(BrowserTypeLiteral.__args__))
-        async with AsyncSession(
-                impersonate=impersonate,
-                # extra_fp=fp,
-                default_headers=False,
-                timeout=timeout,
+        async with AsyncClient(
+                transport=format_transport(proxies),
+                proxy=format_proxy_str,
+                http2=True,
                 verify=False,
-                http_version=CurlHttpVersion.V2TLS,
-                allow_redirects=True
+                timeout=timeout
         ) as client:
             client.headers.clear()
-            resp = await client.get(url=url, headers=headers, timeout=timeout,
-                                    params=params,
-                                    proxy=format_proxy_str,
-                                    verify=False,
-                                    default_headers=False,
-                                    )
-        return resp
+            resp = await asyncio.wait_for(
+                client.get(url=url, headers=headers, params=params, timeout=timeout, follow_redirects=True,
+                           ),
+                timeout=asyncio_timeout)
+            return resp
 
-    async def post(self, url, data=None, headers=None, verify=False, proxies:dict=None, timeout=10,
-                   json: dict | list | None = None, *args, **kwargs) -> Response:
+    async def post(self, url, data=None, headers=None, verify=False, proxies=None, timeout=10, *args, **kwargs):
         format_proxy_str = format_httpx_proxy(proxies)
-        if type(headers) is tuple:
-            headers = list(headers)
-        impersonate = random.choice(list(BrowserTypeLiteral.__args__))
-        async with AsyncSession(
-                impersonate=impersonate,
-                default_headers=False,
-                timeout=timeout,
+        async with AsyncClient(
+                transport=format_transport(proxies),
+                proxy=format_proxy_str,
+                http2=True,
                 verify=False,
-                http_version=CurlHttpVersion.V2TLS,
-                allow_redirects=True,
-                max_redirects=-1,
+                timeout=timeout
         ) as client:
             client.headers.clear()
-            resp = await client.post(url=url, data=data, headers=headers, timeout=timeout,
-                                     proxy=format_proxy_str,
-                                     verify=False,
-                                     default_headers=False,
-                                     json=json
-                                     )
-        return resp
+            resp = await asyncio.wait_for(
+                client.post(url=url, data=data, headers=headers, timeout=timeout, follow_redirects=True),
+                timeout=asyncio_timeout
+            )
+            return resp
 
     async def request(self, url,
                       data: typing.Optional[RequestData] = None,
@@ -300,7 +149,7 @@ class MYASYNCHTTPX:
                       json: typing.Optional[typing.Any] = None,
                       params: typing.Optional[QueryParamTypes] = None,
                       cookies: typing.Optional[CookieTypes] = None,
-                      extensions: typing.Optional[dict] = None, *args, **kwargs) -> Response:
+                      extensions: typing.Optional[dict] = None, *args, **kwargs):
         """
 
         :param url:
@@ -318,66 +167,191 @@ class MYASYNCHTTPX:
         :param extensions:
         :return:
         """
+        ca = False
         if (
                 'api.bilibili.com/x/gaia-vgate/v1/register' in url or
                 'api.bilibili.com/x/gaia-vgate/v1/validate' in url
         ):
+            ca = sslgen()
             format_proxy_str = None
+            format_transport_ins = None
         else:
             format_proxy_str = format_httpx_proxy(proxies)
-        if type(headers) is tuple:
-            headers = list(headers)
-        impersonate = random.choice(list(BrowserTypeLiteral.__args__))
-        async with AsyncSession(
-                impersonate=impersonate,
-                # extra_fp=fp,
-                default_headers=False,
-                timeout=timeout,
-                verify=False,
-                http_version=CurlHttpVersion.V2TLS,
-                allow_redirects=True
+            format_transport_ins = format_transport(proxies)
+        async with AsyncClient(
+                transport=format_transport_ins,
+                proxy=format_proxy_str,
+                verify=ca,
+                http2=True,
+                http1=False,
+                follow_redirects=True,
+                timeout=timeout
         ) as client:
             client.headers.clear()
-            resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
-                                        files=files, json=json, params=params, cookies=cookies,
-                                        proxy=format_proxy_str,
-                                        verify=False,
-                                        default_headers=False,
-                                        )
-        return resp
+            resp = await asyncio.wait_for(
+                client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
+                               content=content, files=files, json=json, params=params, cookies=cookies,
+                               extensions=extensions, follow_redirects=True
+                               ),
+                timeout=asyncio_timeout
+            )
+            return resp
 
-    async def cffi_request(self, url,
-                           data: typing.Optional[RequestData] = None,
-                           method='GET',
-                           headers: typing.Optional[HeaderTypes] = None,
-                           verify=False,
-                           proxies=None,
-                           timeout=10,
-                           files: typing.Optional[RequestFiles] = None,
-                           json: typing.Optional[typing.Any] = None,
-                           params: typing.Optional[QueryParamTypes] = None,
-                           cookies: typing.Optional[CookieTypes] = None,
-                           *args,
-                           **kwargs
-                           ) -> Response:
-        if type(headers) is tuple:
-            headers = list(headers)
-        impersonate = random.choice(list(BrowserTypeLiteral.__args__))
-        async with AsyncSession(
-                impersonate=impersonate,
-                # extra_fp=fp,
-                default_headers=False,
-                timeout=timeout,
-                verify=False,
-                http_version=CurlHttpVersion.V2TLS
-        ) as client:
-            client.headers.clear()
-            resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
-                                        files=files, json=json, params=params, cookies=cookies,
-                                        verify=False,
-                                        default_headers=False,
-                                        )
-        return resp
+
+# class MYASYNCHTTPX:
+#     async def get(self, url, headers=None, verify=False, proxies: Union[dict, None] = None, timeout=10, params=None,
+#                   *args, **kwargs) -> Response:
+#         """
+#
+#         :param url:
+#         :param headers:
+#         :param verify:
+#         :param proxies: like {
+#             'http':'http://1.1.1.1',
+#             'https':'http://1.1.1.1'
+#         }
+#         :param timeout:
+#         :param params:
+#         :param args:
+#         :param kwargs:
+#         :return:
+#         """
+#         format_proxy_str = format_httpx_proxy(proxies)
+#         if type(headers) is tuple:
+#             headers = list(headers)
+#         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
+#         async with AsyncSession(
+#                 impersonate=impersonate,
+#                 # extra_fp=fp,
+#                 default_headers=False,
+#                 timeout=timeout,
+#                 verify=False,
+#                 http_version=CurlHttpVersion.V2TLS,
+#                 allow_redirects=True
+#         ) as client:
+#             client.headers.clear()
+#             resp = await client.get(url=url, headers=headers, timeout=timeout,
+#                                     params=params,
+#                                     proxy=format_proxy_str,
+#                                     verify=False,
+#                                     default_headers=False,
+#                                     )
+#         return resp
+#
+#     async def post(self, url, data=None, headers=None, verify=False, proxies:dict=None, timeout=10,
+#                    json: dict | list | None = None, *args, **kwargs) -> Response:
+#         format_proxy_str = format_httpx_proxy(proxies)
+#         if type(headers) is tuple:
+#             headers = list(headers)
+#         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
+#         async with AsyncSession(
+#                 impersonate=impersonate,
+#                 default_headers=False,
+#                 timeout=timeout,
+#                 verify=False,
+#                 http_version=CurlHttpVersion.V2TLS,
+#                 allow_redirects=True,
+#                 max_redirects=-1,
+#         ) as client:
+#             client.headers.clear()
+#             resp = await client.post(url=url, data=data, headers=headers, timeout=timeout,
+#                                      proxy=format_proxy_str,
+#                                      verify=False,
+#                                      default_headers=False,
+#                                      json=json
+#                                      )
+#         return resp
+#
+#     async def request(self, url,
+#                       data: typing.Optional[RequestData] = None,
+#                       method='GET',
+#                       headers: typing.Optional[HeaderTypes] = None,
+#                       verify=False,
+#                       proxies=None,
+#                       timeout=10,
+#                       content: typing.Optional[RequestContent] = None,
+#                       files: typing.Optional[RequestFiles] = None,
+#                       json: typing.Optional[typing.Any] = None,
+#                       params: typing.Optional[QueryParamTypes] = None,
+#                       cookies: typing.Optional[CookieTypes] = None,
+#                       extensions: typing.Optional[dict] = None, *args, **kwargs) -> Response:
+#         """
+#
+#         :param url:
+#         :param data:
+#         :param method:
+#         :param headers:
+#         :param verify:
+#         :param proxies: {"http":"xxx.xxx.xxx.xxx", "https":"xxx.xxx.xxx.xxx"}
+#         :param timeout:
+#         :param content:
+#         :param files:
+#         :param json:
+#         :param params:
+#         :param cookies:
+#         :param extensions:
+#         :return:
+#         """
+#         if (
+#                 'api.bilibili.com/x/gaia-vgate/v1/register' in url or
+#                 'api.bilibili.com/x/gaia-vgate/v1/validate' in url
+#         ):
+#             format_proxy_str = None
+#         else:
+#             format_proxy_str = format_httpx_proxy(proxies)
+#         if type(headers) is tuple:
+#             headers = list(headers)
+#         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
+#         async with AsyncSession(
+#                 impersonate=impersonate,
+#                 # extra_fp=fp,
+#                 default_headers=False,
+#                 timeout=timeout,
+#                 verify=False,
+#                 http_version=CurlHttpVersion.V2TLS,
+#                 allow_redirects=True
+#         ) as client:
+#             client.headers.clear()
+#             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
+#                                         files=files, json=json, params=params, cookies=cookies,
+#                                         proxy=format_proxy_str,
+#                                         verify=False,
+#                                         default_headers=False,
+#                                         )
+#         return resp
+#
+#     async def cffi_request(self, url,
+#                            data: typing.Optional[RequestData] = None,
+#                            method='GET',
+#                            headers: typing.Optional[HeaderTypes] = None,
+#                            verify=False,
+#                            proxies=None,
+#                            timeout=10,
+#                            files: typing.Optional[RequestFiles] = None,
+#                            json: typing.Optional[typing.Any] = None,
+#                            params: typing.Optional[QueryParamTypes] = None,
+#                            cookies: typing.Optional[CookieTypes] = None,
+#                            *args,
+#                            **kwargs
+#                            ) -> Response:
+#         if type(headers) is tuple:
+#             headers = list(headers)
+#         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
+#         async with AsyncSession(
+#                 impersonate=impersonate,
+#                 # extra_fp=fp,
+#                 default_headers=False,
+#                 timeout=timeout,
+#                 verify=False,
+#                 http_version=CurlHttpVersion.V2TLS
+#         ) as client:
+#             client.headers.clear()
+#             resp = await client.request(url=url, data=data, method=method, headers=headers, timeout=timeout,
+#                                         files=files, json=json, params=params, cookies=cookies,
+#                                         verify=False,
+#                                         default_headers=False,
+#                                         )
+#         return resp
 
 
 my_async_httpx = MYASYNCHTTPX()

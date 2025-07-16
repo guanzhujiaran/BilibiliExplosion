@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import copy
 import datetime
 import json
@@ -6,25 +7,31 @@ import os
 import random
 import time
 from typing import List, Sequence
+
 from bs4 import BeautifulSoup
-from fastapi接口.log.base_log import topic_lot_logger
-from fastapi接口.utils.Common import asyncio_gather
+from py_mini_racer import MiniRacer
+
 import b站cookie.globalvar as gl
 from CONFIG import CONFIG
+from fastapi接口.log.base_log import topic_lot_logger
 from fastapi接口.service.opus新版官方抽奖.Base.generate_cv import GenerateCvBase
-from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvItem, LotType, CvContent, Color, CvContentOps, \
+from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvTopicItem, LotType, CvContent, Color, \
+    CvContentOps, \
     CvContentAttr, CutOff
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficCard
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.model.EraBlackBoard import EraTask, EraLotteryConfig, \
     EraVideoSourceCONFIG, \
     H5ActivityLottery, H5ActivityLotteryGiftSource, MatchLotteryTask, MatchLottery, EvaContainerTruck
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
+from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficCard
+from fastapi接口.utils.Common import asyncio_gather
 from utl.pushme.pushme import pushme
-import asyncio
 from utl.代理.SealedRequests import my_async_httpx
-from py_mini_racer import MiniRacer
+
 
 class GenerateTopicLotCv(GenerateCvBase):
+
+    def zhuanlan_data_sort_by_date(self, zhuanlan_data: list) -> list:
+        pass
 
     def __init__(self, cookie, ua, csrf, buvid, abstract: str = ''):
         super().__init__(cookie, ua, csrf, buvid)
@@ -32,7 +39,7 @@ class GenerateTopicLotCv(GenerateCvBase):
         self.sql = topic_sqlhelper
         self.abstract = abstract  # 只会添加在手动发布的里面，自动的太麻烦了
 
-    def zhuanlan_format(self, lottery_infos: dict[str, List[CvItem]],
+    def zhuanlan_format(self, lottery_infos: dict[str, List[CvTopicItem]],
                         blank_space: int = 1, sep_str: str = ' ') -> (CvContent, int):
         """
 
@@ -126,7 +133,8 @@ class GenerateTopicLotCv(GenerateCvBase):
         )
         return ret, words
 
-    def zhuanlan_date_sort(self, cv_items: List[CvItem]) -> (List[CvItem], List[CvItem], List[CvItem], List[CvItem]):
+    def zhuanlan_date_sort(self, cv_items: List[CvTopicItem]) -> (
+            List[CvTopicItem], List[CvTopicItem], List[CvTopicItem], List[CvTopicItem]):
         activity = []
         dynamic = []
         era = []
@@ -156,8 +164,8 @@ class GenerateTopicLotCv(GenerateCvBase):
         return activity, dynamic, era, unknown
 
     @staticmethod
-    def gen_cv_item(x: TTrafficCard) -> CvItem:
-        cv_item = CvItem(
+    def gen_cv_item(x: TTrafficCard) -> CvTopicItem:
+        cv_item = CvTopicItem(
             jumpUrl=x.jump_url,
             title=x.name,
             end_date_str=x.card_desc
@@ -194,7 +202,7 @@ class GenerateTopicLotCv(GenerateCvBase):
             topic_lot_logger.exception(f'解析话题失败！{e}')
         return cv_item
 
-    async def get_topic_lottery(self) -> List[CvItem]:
+    async def get_topic_lottery(self) -> List[CvTopicItem]:
 
         all_traffic_card = await self.sql.get_all_available_traffic_info()
         ret_list = []
@@ -202,7 +210,7 @@ class GenerateTopicLotCv(GenerateCvBase):
             ret_list.append(GenerateTopicLotCv.gen_cv_item(__x))
         return ret_list
 
-    async def main(self, pub_cv: bool = True):
+    async def main(self, pub_cv: bool = True, save_to_local_file: bool = True) -> CvContent:
         """
 
         :param pub_cv: 是否直接发布专栏
@@ -210,31 +218,24 @@ class GenerateTopicLotCv(GenerateCvBase):
         """
         topic_lottery_list = await self.get_topic_lottery()
         activity, dynamic, era, unknown = self.zhuanlan_date_sort(topic_lottery_list)
-        cv_content, words = self.zhuanlan_format({'activity网址': activity,
-                                                  'dynamic网址': dynamic,
-                                                  'era网址': era,
-                                                  '未知网址': unknown
-                                                  })
+        cv_content, words = self.zhuanlan_format({
+            'activity网址': activity,
+            'dynamic网址': dynamic,
+            'era网址': era,
+            '未知网址': unknown
+        })
         today = datetime.datetime.today()
         _ = datetime.timedelta(days=1)
         next_day = today + _
         title = f'【{next_day.date().month}.{next_day.date().day}】话题抽奖信息'
-        if pub_cv:
-            local_title = title + '_需要提交'
-        else:
-            local_title = title
-        self.save_article_to_local(local_title + '_api_ver', cv_content.rawContent)
-        self.save_article_to_local(local_title + '_手动专栏_ver', self.abstract + cv_content.manualSubmitContent)
-        aid = 0
-        if pub_cv:
-            aid = await self.article_creative_draft_addupdate(
-                title=title,
-                banner_url="",
-                article_content=cv_content,
-                words=words,
-            )
-        if aid and pub_cv:
-            await self.dynamic_feed_create_opus(draft_id_str=aid, title=title, article_content=cv_content)
+        return await self.pub_cv(
+            title=title,
+            abstract=self.abstract,
+            cv_content=cv_content,
+            words=words,
+            pub_cv=pub_cv,
+            save_to_local_file=save_to_local_file
+        )
 
 
 class ExtractTopicLottery:
@@ -421,7 +422,7 @@ class ExtractTopicLottery:
                 x.continueTimes,
                 [y.model_dump_json() for y in x.list]
             ) for x in h5_lottery
-            ],log=topic_lot_logger)
+            ], log=topic_lot_logger)
             await asyncio_gather(*[self.sql.add_activity_match_task(
                 traffic_card_id,
                 x.task_desc,
@@ -430,13 +431,13 @@ class ExtractTopicLottery:
                 x.task_name,
                 x.url
             ) for x in match_task
-            ],log=topic_lot_logger)
+            ], log=topic_lot_logger)
             await asyncio_gather(*[self.sql.add_activity_match_lottery(
                 traffic_card_id,
                 x.lottery_id,
                 x.activity_id
             ) for x in match_lottery
-            ],log=topic_lot_logger)
+            ], log=topic_lot_logger)
 
             topic_lot_logger.info(f'{url}\th5抽奖任务：{h5_lottery}')
             topic_lot_logger.info(f'{url}\t活动抽奖任务：{match_task}')
@@ -519,21 +520,21 @@ class ExtractTopicLottery:
         pushme('话题抽奖已更新', f'话题抽奖：更新{num}条数据\n{[x.__dict__ for x in all_unread_traffic_card]}')
 
 
-async def _test():
-    _a = ExtractTopicLottery()
-    print(await _a.spider_all_unread_traffic_card([0, 3, None]))
-
-
-async def _test_generate_cv():
-    gc = GenerateTopicLotCv(
-        # cookie="buvid3=434282F4-E364-7403-51C6-038E401B27F052974infoc; b_nut=1716813352; _uuid=5AC6FF4A-855E-55ED-51042-7E37D8753E2B57600infoc; enable_web_push=DISABLE; buvid4=68D497D9-DFB7-2DD5-EFBD-2640CA8327F167277-024052712-bkFP%2BfBKxK1jqmu4RNRApvMLVSVZSoxPLJw6dSJ1uURlMto45X0VJk1NHJXI5NTX; DedeUserID=4237378; DedeUserID__ckMd5=94093e21fe6687f9; hit-dyn-v2=1; rpdid=0zbfAHGGaN|BL7JC6EG|1za|3w1SbA29; buvid_fp_plain=undefined; header_theme_version=CLOSE; LIVE_BUVID=AUTO5417169088699210; CURRENT_BLACKGAP=0; PVID=1; home_feed_column=5; fingerprint=3c0395c5734f117c8547ff054c538ef7; CURRENT_FNVAL=4048; CURRENT_QUALITY=116; browser_resolution=1463-754; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjUyNDU3OTcsImlhdCI6MTcyNDk4NjUzNywicGx0IjotMX0.v7ZUi1Cj18rBWbYy6hsDFjI09ny1nd8SZWZ1iDuKc-w; bili_ticket_expires=1725245737; b_lsid=F5B37A103_191A38FEF3E; SESSDATA=213503be%2C1740578775%2C2cfb8%2A82CjBBtuR1OtNFGOyuCaOPH5WDmz4WVtQvqPXzTUdeZGLHUFxcj53LLZfP77LdfBWMo9YSVjcwTzlReGw4d2lKQVpnRzdJNFdHSm02SERyWENSUlVTbDg4azRVajlVVlNnWk9BOU9IQllxNEU3TXZlSlEyT0VySEVWa0ptWFRsalhxWFdpMEtwODR3IIEC; bili_jct=38d76480d1837d76e6c7c84d86511d06; sid=6w71b423; buvid_fp=3c0395c5734f117c8547ff054c538ef7; bp_t_offset_4237378=971489059387998208",
-        cookie="",
-        ua=CONFIG.rand_ua,
-        csrf='38d76480d1837d76e6c7c84d86511d06',
-        buvid="434282F4-E364-7403-51C6-038E401B27F052974infoc"
-    )
-    await gc.main()
-
-
 if __name__ == "__main__":
+    async def _test():
+        _a = ExtractTopicLottery()
+        print(await _a.spider_all_unread_traffic_card([0, 3, None]))
+
+
+    async def _test_generate_cv():
+        gc = GenerateTopicLotCv(
+            # cookie="buvid3=434282F4-E364-7403-51C6-038E401B27F052974infoc; b_nut=1716813352; _uuid=5AC6FF4A-855E-55ED-51042-7E37D8753E2B57600infoc; enable_web_push=DISABLE; buvid4=68D497D9-DFB7-2DD5-EFBD-2640CA8327F167277-024052712-bkFP%2BfBKxK1jqmu4RNRApvMLVSVZSoxPLJw6dSJ1uURlMto45X0VJk1NHJXI5NTX; DedeUserID=4237378; DedeUserID__ckMd5=94093e21fe6687f9; hit-dyn-v2=1; rpdid=0zbfAHGGaN|BL7JC6EG|1za|3w1SbA29; buvid_fp_plain=undefined; header_theme_version=CLOSE; LIVE_BUVID=AUTO5417169088699210; CURRENT_BLACKGAP=0; PVID=1; home_feed_column=5; fingerprint=3c0395c5734f117c8547ff054c538ef7; CURRENT_FNVAL=4048; CURRENT_QUALITY=116; browser_resolution=1463-754; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjUyNDU3OTcsImlhdCI6MTcyNDk4NjUzNywicGx0IjotMX0.v7ZUi1Cj18rBWbYy6hsDFjI09ny1nd8SZWZ1iDuKc-w; bili_ticket_expires=1725245737; b_lsid=F5B37A103_191A38FEF3E; SESSDATA=213503be%2C1740578775%2C2cfb8%2A82CjBBtuR1OtNFGOyuCaOPH5WDmz4WVtQvqPXzTUdeZGLHUFxcj53LLZfP77LdfBWMo9YSVjcwTzlReGw4d2lKQVpnRzdJNFdHSm02SERyWENSUlVTbDg4azRVajlVVlNnWk9BOU9IQllxNEU3TXZlSlEyT0VySEVWa0ptWFRsalhxWFdpMEtwODR3IIEC; bili_jct=38d76480d1837d76e6c7c84d86511d06; sid=6w71b423; buvid_fp=3c0395c5734f117c8547ff054c538ef7; bp_t_offset_4237378=971489059387998208",
+            cookie="",
+            ua=CONFIG.rand_ua,
+            csrf='38d76480d1837d76e6c7c84d86511d06',
+            buvid="434282F4-E364-7403-51C6-038E401B27F052974infoc"
+        )
+        await gc.main()
+
+
     asyncio.run(_test())

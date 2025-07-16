@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 
 
@@ -22,4 +23,5 @@ async def main():
 
 # 运行事件循环
 if __name__ == "__main__":
-    asyncio.run(main())
+    logging.basicConfig(level=logging.DEBUG)
+    asyncio.run(main(),debug=True)

@@ -1,19 +1,20 @@
+import base64
 import hashlib
 import hmac
-import base64
 import io
 import json
+import random
 import string
 import struct
+import time
 from dataclasses import dataclass, field
 from typing import Optional, Literal
 from urllib.parse import quote
+
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import activeExclimbWuzhi_logger
-from utl.加密 import utils
-import random
-import time
 from utl.代理.SealedRequests import my_async_httpx as MyAsyncReq
+from utl.加密 import utils
 from utl.加密.utils import get_time_milli
 
 MOD = 1 << 64
@@ -75,7 +76,7 @@ class APIExClimbWuzhi:
     bili_ticket_expires: str | int = ""
     deviceMemory: int = 8
     CPUCoreNum: int = 4
-    _uuid: str = field(default_factory=lambda :UuidInfoc.gen())
+    _uuid: str = field(default_factory=lambda: UuidInfoc.gen())
     language: str = "zh-CN"
     timezone: str = "Asia/Shanghai"
     timezoneOffset: int = -480
@@ -471,7 +472,6 @@ def hmac_sha256(key, message):
 class ExClimbWuzhi:
     proxy_ip = CONFIG.custom_proxy
 
-    # proxy_ip = None
     @staticmethod
     async def _get_b3_b4_buvidfp_ticket_Cookie(payload: str, apiExClimbWuzhi: APIExClimbWuzhi = APIExClimbWuzhi(),
                                                useProxy=True,
@@ -484,32 +484,39 @@ class ExClimbWuzhi:
         if _from == "web":
             cookie = [
                 f'buvid_fp={fingerprint}',
-                f'fingerprint={fingerprint}',
+                #f'fingerprint={fingerprint}',
+                'hit-dyn-v2=1'
             ]
         else:
             cookie = [
                 f'Buvid={apiExClimbWuzhi.Buvid}',
                 f'buvid_fp={fingerprint}',
+                'hit-dyn-v2=1'
             ]
         cookie.append("=".join(['b_lsid', utils.lsid()]))
         cookie.append("=".join(['_uuid', apiExClimbWuzhi.uuid]))
         cookie.append("=".join(['b_nut', str(int(time.time()))]))
-        try:
-            response = await MyAsyncReq.request(method="get",
-                                                url=apiExClimbWuzhi.spi,
-                                                headers={
-                                                    "referer": 'https://www.bilibili.com/',
-                                                    "user-agent": apiExClimbWuzhi.ua,
-                                                    "cookie": "; ".join(cookie),
-                                                },
-                                                proxies=ExClimbWuzhi.proxy_ip
-                                                )
-            response_dict = response.json()
-            cookie.append("=".join(['buvid3', quote(response_dict['data']['b_3'], safe='')]))
-            cookie.append("=".join(['buvid4', quote(response_dict['data']['b_4'], safe='')]))
-        except Exception as e:
-            activeExclimbWuzhi_logger.exception(f"获取buvid3和buvid4失败: {e}")
-            ExClimbWuzhi.proxy_ip = None
+        retry_time = 0
+        proxy = ExClimbWuzhi.proxy_ip
+        while retry_time < 2:
+            try:
+                response = await MyAsyncReq.request(method="get",
+                                                    url=apiExClimbWuzhi.spi,
+                                                    headers={
+                                                        "referer": 'https://www.bilibili.com/',
+                                                        "user-agent": apiExClimbWuzhi.ua,
+                                                        "cookie": "; ".join(cookie),
+                                                    },
+                                                    proxies=proxy
+                                                    )
+                response_dict = response.json()
+                cookie.append("=".join(['buvid3', quote(response_dict['data']['b_3'], safe='')]))
+                cookie.append("=".join(['buvid4', quote(response_dict['data']['b_4'], safe='')]))
+            except Exception as e:
+                if retry_time == 1:
+                    activeExclimbWuzhi_logger.error(f"获取buvid3和buvid4失败: {type(e)}")
+                proxy = None
+            retry_time += 1
         apiExClimbWuzhi.cookie = "; ".join(cookie)
         try:
             if apiExClimbWuzhi.bili_ticket and apiExClimbWuzhi.bili_ticket_expires:
@@ -526,28 +533,37 @@ class ExClimbWuzhi:
 
     @staticmethod
     async def _get_bili_ticket_web(apiExClimbWuzhi: APIExClimbWuzhi = APIExClimbWuzhi()):
-        o = hmac_sha256("XgwSnGZ1p", f"ts{int(time.time())}")
-        params = {
-            "key_id": "ec02",
-            "hexsign": o,
-            "context[ts]": f"{int(time.time())}",
-            "csrf": ''
-        }
-        headers = {
-            'user-agent': apiExClimbWuzhi.ua,
-            'cookie': apiExClimbWuzhi.cookie
-        }
-        resp = await MyAsyncReq.request(url=apiExClimbWuzhi.GenWebTicket,
-                                        method='post',
-                                        params=params,
-                                        headers=headers,
-                                        proxies=ExClimbWuzhi.proxy_ip
-                                        )
-        resp_json = resp.json()
-        return {
-            "bili_ticket": resp_json['data']['ticket'],
-            'bili_ticket_expires': resp_json['data']['created_at']
-        }
+        retry_time = 0
+        proxy = ExClimbWuzhi.proxy_ip
+        while retry_time < 2:
+            try:
+                o = hmac_sha256("XgwSnGZ1p", f"ts{int(time.time())}")
+                params = {
+                    "key_id": "ec02",
+                    "hexsign": o,
+                    "context[ts]": f"{int(time.time())}",
+                    "csrf": ''
+                }
+                headers = {
+                    'user-agent': apiExClimbWuzhi.ua,
+                    'cookie': apiExClimbWuzhi.cookie
+                }
+                resp = await MyAsyncReq.request(url=apiExClimbWuzhi.GenWebTicket,
+                                                method='post',
+                                                params=params,
+                                                headers=headers,
+                                                proxies=proxy
+                                                )
+                resp_json = resp.json()
+                return {
+                    "bili_ticket": resp_json['data']['ticket'],
+                    'bili_ticket_expires': resp_json['data']['created_at']
+                }
+            except Exception as e:
+                if retry_time == 1:
+                    activeExclimbWuzhi_logger.exception(f"获取bili_ticket失败:{e}")
+                proxy = None
+            retry_time += 1
 
     @staticmethod
     async def verifyExClimbWuzhi(url: str = "https://www.bilibili.com/",
@@ -579,9 +595,6 @@ class ExClimbWuzhi:
             "dnt": "1",
             "origin": "https://www.bilibili.com",
             "referer": "https://www.bilibili.com/",
-            "sec-ch-ua": "\"Not A(Brand\";v=\"99\", \"Microsoft Edge\";v=\"121\", \"Chromium\";v=\"121\"",
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": "\"Windows\"",
             "sec-fetch-dest": "empty",
             "sec-fetch-mode": "cors",
             "sec-fetch-site": "same-site",
@@ -605,19 +618,27 @@ class ExClimbWuzhi:
             headers = tuple(headers.items())
             for i in cookie.split(';'):
                 headers += (('cookie', i.strip(),),)
-        try:
-            resp = await MyAsyncReq.request(
-                url=my_cfg.giaGateWayExClimbWuzhi,
-                method='post',
-                data=payload,
-                headers=headers,
-                proxies=ExClimbWuzhi.proxy_ip
-            )
-            resp_dict = resp.json()
-            if resp_dict.get('code') != 0:
-                activeExclimbWuzhi_logger.error(f'{resp_dict} ExClimbWuzhi提交失败！参数：\n{payload}')
-        except Exception as e:
-            activeExclimbWuzhi_logger.exception(f'ExClimbWuzhi提交失败！参数：\n{payload}\n错误信息：{type(e)}{e}')
+        retry_time = 0
+        proxy = ExClimbWuzhi.proxy_ip
+        while retry_time < 2:
+            try:
+                resp = await MyAsyncReq.request(
+                    url=my_cfg.giaGateWayExClimbWuzhi,
+                    method='post',
+                    data=payload,
+                    headers=headers,
+                    proxies=proxy
+                )
+                resp_dict = resp.json()
+                if resp_dict.get('code') != 0:
+                    if retry_time == 1:
+                        activeExclimbWuzhi_logger.error(f'{resp_dict} ExClimbWuzhi提交失败！参数：\n{payload}')
+                break
+            except Exception as e:
+                proxy = None
+                if retry_time == 1:
+                    activeExclimbWuzhi_logger.error(f'ExClimbWuzhi提交失败！参数：\n{payload}\n错误信息：{type(e)}{e}')
+            retry_time += 1
         return cookie
 
 

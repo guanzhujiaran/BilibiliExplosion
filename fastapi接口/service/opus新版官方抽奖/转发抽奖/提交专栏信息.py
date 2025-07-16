@@ -17,6 +17,7 @@ from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer 
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
+from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvContent
 from fastapi接口.service.opus新版官方抽奖.Model.OfficialLotModel import LotDetail
 from fastapi接口.service.opus新版官方抽奖.转发抽奖.生成专栏信息 import GenerateOfficialLotCv
 from fastapi接口.utils.Common import asyncio_gather
@@ -30,10 +31,6 @@ class ExtractOfficialLottery:
         self.__dir = os.path.dirname(os.path.abspath(__file__))
         self.log_path = os.path.join(self.__dir, 'log')
         self.result_path = os.path.join(self.__dir, 'result')
-        if not os.path.exists(self.log_path):
-            os.mkdir(self.log_path)
-        if not os.path.exists(self.result_path):
-            os.mkdir(self.result_path)
         self.oringinal_official_lots: [dict] = []
 
         self.all_offcial_lots: [dict] = []  # 所有的抽奖
@@ -337,10 +334,10 @@ class ExtractOfficialLottery:
         fabu_text = ''
         # if latest_official_lot_detail or force_push:
 
-        gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
+        await gc.main(all_official_lot_detail, latest_official_lot_detail, lot_type="官方抽奖")  # 官方抽奖
         fabu_text += '官方抽奖专栏\n'
         # if latest_charge_lot_detail or force_push:
-        gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
+        await gc.main(all_charge_lot_detail, latest_charge_lot_detail, lot_type="充电抽奖")  # 充电抽奖
         fabu_text += '充电抽奖专栏\n'
         if fabu_text:
             fabu_text = '已发布专栏：\n' + fabu_text
@@ -356,8 +353,14 @@ class ExtractOfficialLottery:
 
         return latest_official_lot_detail, latest_charge_lot_detail
 
-    async def save_article(self, latest_lots_judge_ts: int = 20 * 3600, abstract: str = '',
-                           is_api_update: bool = False):
+    async def save_article(self,
+                           latest_lots_judge_ts: int = 20 * 3600,
+                           abstract: str = '',
+                           is_api_update: bool = False,
+                           save_dir: str = '',
+                           pub_cv: bool = True,
+                           save_to_local_file: bool = True,
+                           ) -> tuple[CvContent, CvContent]:
         """
 
         :param latest_lots_judge_ts:
@@ -371,9 +374,23 @@ class ExtractOfficialLottery:
             is_api_update=is_api_update
         )  # 获取并更新抽奖信息！
         gc = GenerateOfficialLotCv('', '', '', '', abstract=abstract)
-        gc.official_lottery(all_official_lot_detail, latest_official_lot_detail)  # 官方抽奖
-        gc.charge_lottery(all_charge_lot_detail, latest_charge_lot_detail)  # 充电抽奖
-        return latest_official_lot_detail, latest_charge_lot_detail
+        if save_dir:
+            gc.save_dir = save_dir
+        official_cv_content = await gc.main(
+            all_official_lot_detail,
+            latest_official_lot_detail,
+            lot_type="官方抽奖",
+            pub_cv=pub_cv,
+            save_to_local_file=save_to_local_file
+        )  # 官方抽奖
+        charge_cv_content = await gc.main(
+            all_charge_lot_detail,
+            latest_charge_lot_detail,
+            lot_type="充电抽奖",
+            pub_cv=pub_cv,
+            save_to_local_file=save_to_local_file
+        )  # 充电抽奖
+        return official_cv_content, charge_cv_content
 
 
 if __name__ == '__main__':

@@ -12,6 +12,7 @@ from fastapi接口.service.bili_live_monitor.src.monitor import bili_live_async_
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from fastapi接口.service.grpc_module.src.监控up动态.bili_dynamic_monitor import bili_space_monitor
+from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingListV2 import gmflv2
 from fastapi接口.service.opus新版官方抽奖.bili_lottery_api.refresh_bili_lot_database import \
     refresh_bili_lot_database_crawler
 from fastapi接口.service.opus新版官方抽奖.bili_lottery_api.scrapyLotteryDataFromBapi import lottery_api_robot_dyn, \
@@ -70,7 +71,12 @@ class BackgroundService:
         default_interval_seconds=15 * 3600,
         crawler_name='lottery_api_robot_reserve'
     )
-
+    gmflv2_scheduler = GenericCrawlerScheduler(
+        crawler=gmflv2,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=15 * 3600,
+        crawler_name='gmflv2'
+    )
 
 def start_background_service(show_log: bool):
     back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log)),
@@ -143,7 +149,7 @@ def get_scrapy_status(scrapy_type: Literal[
                     progress=other_lot_class.robot.space_succ_counter.show_pace(),
                     is_running=other_lot_class.robot.space_succ_counter.is_running,
                     update_ts=other_lot_class.robot.space_succ_counter.update_ts,
-                    running_params=other_lot_class.robot.dyn_succ_counter.running_params
+                    running_params=other_lot_class.robot.space_succ_counter.running_params
                 )
             else:
                 return ProgressStatusResp()
@@ -274,7 +280,10 @@ def background_service_status():
                 if isinstance(plugin, StatsPlugin):
                     ret_list.append(
                         {
-                            f'{name}.{StatsPlugin.__name__}': plugin.get_all_status()
+                            f'{name}': {
+                                StatsPlugin.__name__: plugin.get_all_status(),
+                                'last_exec_time': value.exec_info.last_exec_time
+                            }
                         }
                     )
     return CommonResponseModel(data=ret_list)

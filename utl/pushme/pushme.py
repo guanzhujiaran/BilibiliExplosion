@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import datetime
 import json
 import traceback
+from collections import deque
 from functools import wraps
 from typing import Literal, Optional
 
 import requests
 from requests import Response
+
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import pushme_logger
-from collections import deque
 
 push_msg_d = deque(maxlen=50)
 
@@ -29,8 +31,19 @@ def __preprocess_content(content: str) -> str:
     return content
 
 
-def pushme(title: str, content: str, __type: Optional[Literal[
-    'text', 'data', "markdata", "html", "txt", "json", "markdown", "cloudMonitor", "jenkins", "route", "pay"]] = 'text') -> Response:
+def pushme(title: str, content: str, __type: Literal[
+                                                 "text",
+                                                 "data",
+                                                 "markdata",
+                                                 "html",
+                                                 "txt",
+                                                 "json",
+                                                 "markdown",
+                                                 "cloudMonitor",
+                                                 "jenkins",
+                                                 "route",
+                                                 "pay"
+                                             ] | None = 'text') -> Response:
     resp = Response()
     if content in push_msg_d:
         return Response()
@@ -132,6 +145,14 @@ def async_pushme_try_catch_decorator(func):
             raise e
 
     return wrapper
+
+
+async def a_pushme(title: str, content: str, __type: Optional[Literal[
+    'text', 'data', "markdata", "html", "txt", "json", "markdown", "cloudMonitor", "jenkins", "route", "pay"]] = 'text') -> Response:
+    return await asyncio.to_thread(
+        pushme,
+        title, content, __type
+    )
 
 
 if __name__ == '__main__':

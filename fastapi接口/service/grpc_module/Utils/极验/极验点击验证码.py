@@ -159,51 +159,6 @@ class GeetestV3Breaker:
 
     # endregion
 
-    def validate_form_voucher_ua(self, v_voucher: str,
-                                 ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
-                                           "Safari/537.36 Edg/125.0.0.0",
-                                 ck: str = "",
-                                 ori: str = "",
-                                 ref: str = "",
-                                 ticket: str = "",
-                                 version: str = "",
-                                 session_id: str = "",
-                                 use_bili_ticket_gt=True,
-                                 ):
-        h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
-        self.log.info(
-            f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')
-        try:
-            geetest_reg_info = GeetestV3Breaker.get_geetest_reg_info(v_voucher, h5_ua, ck, ori, ref, ticket=ticket,
-                                                                     version=version)
-            if geetest_reg_info is False:
-                return ""
-            # 验证码获取成功才加1
-            self.succ_stats.total_time += 1
-            if 1 or use_bili_ticket_gt:
-                if validation := self.click.simple_match_retry(geetest_reg_info.geetest_gt,
-                                                         geetest_reg_info.geetest_challenge):
-                    self.log.critical(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
-                    validate_result = GeetestV3Breaker.validate_geetest(
-                        geetest_reg_info.geetest_challenge,
-                        geetest_reg_info.token,
-                        validation,
-                        h5_ua,
-                        ck,
-                        ori,
-                        ref,
-                        ticket=ticket,
-                        version=version
-                    )
-                    if validate_result:
-                        self.succ_stats.succ_time += 1
-                    return validate_result
-        except Exception as e:
-            self.log.error(f'极验验证失败！{e}')
-            self.succ_stats.total_time -= 1
-        finally:
-            ...
-
     async def a_validate_form_voucher_ua(self, v_voucher: str,
                                          ua: str = "Dalvik/2.1.0 (Linux; U; Android 9; PCRT00 Build/PQ3A.190605.05081124) 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 channel/master innerVer/8130300 osVer/9 network/2",
                                          ck: str = "",

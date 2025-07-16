@@ -12,7 +12,7 @@ from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotD
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper as bili_dynamic_sqlhelper
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
-from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvItem
+from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvTopicItem
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import GenerateTopicLotCv
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper as bili_topic_sqlhelper
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
@@ -143,7 +143,7 @@ async def get_charge_lottery(limit_time: int, page_num: int = 0, page_size: int 
 
 async def get_topic_lottery(page_num: int = 0, page_size: int = 0) -> tuple[list[TopicLotteryResp], int]:
     all_lots, total_num = await bts.get_all_available_traffic_info_by_page(page_num, page_size)
-    all_charge_lottery_resp_infos: List[CvItem] = [GenerateTopicLotCv.gen_cv_item(
+    all_charge_lottery_resp_infos: List[CvTopicItem] = [GenerateTopicLotCv.gen_cv_item(
         x
     ) for x in all_lots]
     ret_list = [

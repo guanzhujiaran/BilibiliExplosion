@@ -20,6 +20,7 @@ from fastapi接口.service.samsclub.Sql.models import (
 )
 from fastapi接口.utils.Common import sql_retry_wrapper
 
+
 class SQLHelper:
     def __init__(self):
         self.engine = create_async_engine(
@@ -42,33 +43,21 @@ class SQLHelper:
         }
 
     @sql_retry_wrapper
-    async def get_price_info_by_spu_id(self, spu_id: str, db: AsyncSession) -> tuple[int, int]:
+    async def get_price_info_by_spu_id_type(self, spu_id: str, price_type: int, db: AsyncSession) -> int:
         """
         返回 现价,原价
         """
         stmt = select(
-            func.max(
-                case(
-                    (SpuPriceInfo.priceType == 0, SpuPriceInfo.price),
-                    else_=0
-                )
-            ).label("price0"),
-            func.max(
-                case(
-                    (SpuPriceInfo.priceType == 1, SpuPriceInfo.price),
-                    else_=0
-                )
-            ).label("price1")
+            SpuPriceInfo.price
         ).where(
             SpuPriceInfo.spu_id == spu_id,
-            SpuPriceInfo.priceType.in_([0, 1])
-        )
-
+            SpuPriceInfo.priceType == price_type
+        ).order_by(
+            SpuPriceInfo.pk.desc()
+        ).limit(1)
         res = await db.execute(stmt)
         result = res.first()
-        if result and result.price0 is not None and result.price1 is not None:
-            return result.price1, result.price0
-        return 0, 0
+        return result and result.price or 0
 
     def gen_update_obj(self, model_class, data_item: dict, spu_id: int | str) -> dict:
         not_in_list = list(self.relationships.keys())
@@ -107,21 +96,19 @@ class SQLHelper:
                     case "stockInfo":
                         obj_list.append(self.gen_update_obj(model_class, items, spu_id))
                     case "priceInfo":
-                        cur_price, prev_price = await self.get_price_info_by_spu_id(spu_id, db)
                         for item in items:
                             price = item.get('price')
-                            if item.get('priceTypeName') == '销售价':
-                                if str(price) != str(cur_price):
-                                    obj_list.append(self.gen_update_obj(model_class, item, spu_id))
-                                    sams_club_logger.critical(
-                                        f'商品id** {spu_id} ** {spu_title}的销售价有变化：{cur_price}->{price}')
-                            elif item.get('priceTypeName') == '原始价':
-                                if str(price) != str(prev_price):
-                                    obj_list.append(self.gen_update_obj(model_class, item, spu_id))
-                                    sams_club_logger.critical(
-                                        f'商品id** {spu_id} ** {spu_title}的原始价有变化：{prev_price}->{price}')
-                            else:
-                                raise ValueError("priceTypeName is invalid")
+                            priceType = item.get('priceType')
+                            priceTypeName = item.get('priceTypeName')
+                            origin_price = await self.get_price_info_by_spu_id_type(
+                                spu_id=spu_id,
+                                price_type=priceType,
+                                db=db
+                            )
+                            if str(origin_price) != str(price):
+                                obj_list.append(self.gen_update_obj(model_class, item, spu_id))
+                                sams_club_logger.critical(
+                                    f'商品id** {spu_id} ** {spu_title}的{priceTypeName}有变化：{origin_price}->{price}')
                     case _:
                         for item in items:
                             obj_list.append(self.gen_update_obj(model_class, item, spu_id))
@@ -362,7 +349,7 @@ class SQLHelper:
 
     async def get_front_category_ids(self, firstCategoryId, secondCategoryId):
         second_grouping_info = await self.get_grouping_info_by_category_id(secondCategoryId)
-        if second_grouping_info.title != '为您推荐':
+        if second_grouping_info and second_grouping_info.title != '为您推荐':
             frontCategoryIds = [int(secondCategoryId)] + [int(child.get('groupingId')) for child in
                                                           second_grouping_info.children]
         else:
@@ -497,15 +484,24 @@ if __name__ == '__main__':
 
 
     async def _test_query_spu_info():
-        res = await sql_helper.query_spu_info(1)
+        res = await sql_helper.get_spu_info_by_id(1)
         print(res)
 
+
     async def _test_query_price():
-        async with sql_helper.async_session()as db:
+        async with sql_helper.async_session() as db:
             res = await sql_helper.get_price_info_by_spu_id(
-                325257813,db
+                325257813, db
             )
             print(res)
 
 
-    asyncio.run(_test_query_price())
+    async def _test_get_price_info_by_spu_id_type():
+        async with sql_helper.async_session() as db:
+            res = await sql_helper.get_price_info_by_spu_id_type(
+                316210211, 4, db
+            )
+            print(res)
+
+
+    asyncio.run(_test_get_price_info_by_spu_id_type())

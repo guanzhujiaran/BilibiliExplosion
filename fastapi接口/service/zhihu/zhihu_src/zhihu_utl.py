@@ -16,11 +16,11 @@ from fastapi接口.log.base_log import zhihu_api_logger
 _lock = asyncio.Lock()
 
 
-class zhihu_method:
+class ZhihuMethod:
     current_file = os.path.dirname(os.path.abspath(__file__))
     LOG = zhihu_api_logger
     request_with_proxy = request_with_proxy_internal
-    login_cookie = 'd_c0=AdDf-LrYsxiPTtfg9wL167EIuUaeWgI2j54=|1717166161; z_c0=2|1:0|10:1748342233|4:z_c0|80:MS4xZFZEd0J3QUFBQUFtQUFBQVlBSlZUZG5qSW1rMnhFOEQ4cVVsNE84VksxNmVzTU1ZS1plQ1F3PT0=|b7d222144eac0d8c8b56ff715e0e953d1b2f52c9ce124e63b355a00839ecfd6c; __zse_ck=004_w1F0jzH=3s=Q1ho2SGX4fXczq5NyCYfHFUDhxJfTx7FRD5/sCrHLBgjnqwhZWTeAPgDjccTo7v0zaR9TMBfNr3C=ptHcstX74twxUEbfgdpn/nrTRwiFvapF4zF3xwY/-YkkoWcmsvXXYA1UOHmWdjELLFI7Ed5vCPShrXGQVT27KnbUvo915Iy3h6FAO8hTb7vIBp5UiW4WaLtk8x4Kals549d9gjO6X3X2+o8VTrdLbhPtLfc8cQHN2s6E6X6I0r/AWegcId6UwlQ4VzbdA1QpAQxxbIhL63zvWuHL4cbY=;'
+    login_cookie = '_xsrf=CU2MUeK1W7Q8DUuYZ03kokwlUqoF3L6S; __zse_ck=004_4ThcbzvwtBMbzuEXaG07nxdv1kGJUGaLklvSW4EWAsdZaLKrUU0RcLkz1hAkXM0awS0ZM4Ds5SVA6o22VLvfGdWg7zqK2Tkkp0U2pPfD01RHKRH4LkMb5essE0=F3VL5-g1tVFdHc36ChatoD7fbCimZE3JLXJHtjYDzYMGokVns5ZsCkb//o2Gpr+MWomIi8xbTUv7nhzYiLmL/RG6gjKPt8eBNX0qqjb2BfoinZn06NTWb0Wa3pIOQEu+kTWFus9IDmgEDIC6UmLuONbr+rooa8yfJiIN8Jy1QgHy7njJ0=; _zap=8bec4112-691a-41aa-94c4-af37b238d268; d_c0=GPCTsuSBvhqPToPZ60eaiI7YRYylldl3iY0=|1752241333; Hm_lvt_98beee57fd2ef70ccdd5ca52b9740c49=1752241335; HMACCOUNT=DFBE1B944ABDFA24; BEC=4589376d83fd47c9203681b16177ae43; captcha_session_v2=2|1:0|10:1752241335|18:captcha_session_v2|88:VEFXa0hVaVZXS0VqQkRGajBxUVVvaTVMTzVqMitKeW83ampvcXlOTkJGUkZuWFB5V1NKYzJWVzZxR3ltakhRVA==|709a49923965271bb69836c6ff5b86b75d77a0267b5ab5e9c0c7c89849cd2111; captcha_ticket_v2=2|1:0|10:1752241343|17:captcha_ticket_v2|728:eyJ2YWxpZGF0ZSI6IkNOMzFfWGlKZU9reEpUTHlVOUpnZVY4alY1dEZhLldMcmlpMUFjWWFNYWthdGFockNCLkhsNllQTlNzKmw1TTI0aXFmd3o4bng0Nk9XQmtJUXE1MVNDQzVRS1ZSYVJGbFZ3VDJhZzAwX1FwNU12a3cxVG1fMjB4X1FkSmhoRHVSUDZubGg5b1lJdFZPUVh5YXpJQ1U1YmhFVEhjTjUuTmwuVGwxLnBscG9ja2dDcFNoRlRuZWJOMHlWcWZ5a0tXcFMuODZ0QVI0d3oxQk1SSGZsSjlyQ3JXcG54OUQzWkk2NWxiTTI4UVc0Unc2YklCT3puNmFmUnZPUm5ELlR6cnBFYXZHbU5WUnhZVzJFOWR6UktLRGlZcVNzdzJmbmxoLkI5eDlOd0pGbWhJalhnVURJTjVwLjUwWnNwbjRSUENoTFE5ckFYQ3Z3emFhZFFFd19ma2twMVZsbHpkUmZwZnhHYTRTS0hHaXh1TERXc2xteCpuUVowRVNGWm9aekRGOUFLa01iaWVrMm9Pd1lsQ2dNdnJJYXFnV0RlOWJ0eHc2KllzKmNXMmJfclBRa1N5aEc0RTRDNUI0WGJsYXJNQW5vMmUyZ2l0cmxia2xTU1RTQnJwU0tqZXc5THFxUTlQQ21EaFZWSEg4SyouX0sxb1FpVSpuSDNKbnFZU1V2MTJ5dTZTUHc4RGNzV1k3N192X2lfMSJ9|ea5597ae302ffab5c700018661ad16a223f244273250e431a27113eb3dc7858c; z_c0=2|1:0|10:1752241356|4:z_c0|92:Mi4xZFZEd0J3QUFBQUFZOEpPeTVJRy1HaVlBQUFCZ0FsVk56R0plYVFDTnFpTkJUSnJwU2w3Z2pkcUhQcTFjbXN2Z2RB|f1a2665ab1a4b3de420ab23a72a37e766948646c6f621891cee186e109bc5666; Hm_lpvt_98beee57fd2ef70ccdd5ca52b9740c49=1752241358'
     request_headers = {
         'cookie': login_cookie,
         'x-zse-93': x_zse_93,
@@ -183,7 +183,9 @@ class zhihu_method:
         initialState = json.loads(soup.select('#js-initialData')[0].text).get('initialState')
         return initialState
 
+    
+
 if __name__ =="__main__":
-    c =zhihu_method()
+    c =ZhihuMethod()
     res = asyncio.run(c.get_moments_pin_by_user_id('tao-guang-yang-hui-1-50',0))
     print(res)

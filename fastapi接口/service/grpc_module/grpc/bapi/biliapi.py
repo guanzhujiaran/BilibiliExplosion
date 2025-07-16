@@ -33,7 +33,7 @@ def _request_wrapper(func):
             except RequestKnownError:
                 continue
             except Exception as e:
-                bapi_log.exception(f'{func.__name__} 请求失败！{e}')
+                bapi_log.error(f'方法：【{func.__name__}】 请求失败！{e}')
                 await asyncio.sleep(10)
 
     return wrapper
@@ -196,26 +196,27 @@ async def get_lot_notice(business_type: str | int, business_id: str | int, origi
                 f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
             await asyncio.sleep(100)
             continue
-        resp_business_id = resp.get('data', {}).get('business_id')
-        resp_business_type = resp.get('data', {}).get('business_type')
-        if str(business_type) != '2' and str(business_id) != str(resp_business_id):  # 非图片动态响应才使用business_id判断
-            bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            await asyncio.to_thread(
-                pushme,
-                f'get_lot_notice响应内容错误，business_type{business_type}！',
-                f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
-                f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            await asyncio.sleep(10)
-            continue
-        if str(business_type) == '2' and origin_dynamic_id and str(origin_dynamic_id) != str(resp_business_id):
-            bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            await asyncio.to_thread(
-                pushme,
-                f'get_lot_notice响应内容错误，business_type{business_type}！',
-                f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
-                f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
-            await asyncio.sleep(100)
-            continue
+        # resp_business_id = resp.get('data', {}).get('business_id')
+        # resp_business_type = resp.get('data', {}).get('business_type')
+        # if str(business_type) != '2' and str(business_id) != str(resp_business_id):  # 非图片动态响应才使用business_id判断
+        #     bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+        #     await asyncio.to_thread(
+        #         pushme,
+        #         f'get_lot_notice响应内容错误，business_type{business_type}！',
+        #         f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+        #         f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+        #     await asyncio.sleep(10)
+        #     continue
+        # 用的是自己的代理就不需要检查返回的是不是正确的响应了
+        # if str(business_type) == '2' and origin_dynamic_id and str(origin_dynamic_id) != str(resp_business_id):
+        #     bapi_log.error(f'get_lot_notice响应内容错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+        #     await asyncio.to_thread(
+        #         pushme,
+        #         f'get_lot_notice响应内容错误，business_type{business_type}！',
+        #         f'https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type='
+        #         f'{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}')
+        #     await asyncio.sleep(100)
+        #     continue
         return resp
 
 
@@ -302,8 +303,6 @@ async def get_polymer_web_dynamic_detail(
     headers = _gen_headers({
         "origin": "https://t.bilibili.com",
         'referer': f"https://t.bilibili.com/{dynamic_id}" if dynamic_id else f"https://t.bilibili.com/{rid}?type={dynamic_type}",
-        'te': 'trailers',
-        'cookie': '1'
     })
     if dynamic_id:
         data = {
@@ -311,7 +310,7 @@ async def get_polymer_web_dynamic_detail(
             'platform': 'web',
             'gaia_source': 'main_web',
             'id': dynamic_id,
-            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible',
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible,avatarAutoTheme',
             'web_location': '333.1368',
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
             "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
@@ -323,7 +322,7 @@ async def get_polymer_web_dynamic_detail(
             'gaia_source': 'main_web',
             'rid': rid,
             'type': dynamic_type,
-            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible',
+            'features': 'itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible,avatarAutoTheme',
             'web_location': '333.1368',
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(',', ':')),
             "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(',', ':'))
@@ -580,4 +579,4 @@ async def xlive_web_interface_v1_index_getWebAreaList(
 
 if __name__ == "__main__":
     # _custom_proxy = {'http': 'http://127.0.0.1:48978', 'https': 'http://127.0.0.1:48978'}
-    print(asyncio.run(get_lot_notice(1, 1083058471376519249, use_custom_proxy=True)))
+    print(asyncio.run(get_polymer_web_dynamic_detail(962043520082771991, use_custom_proxy=True)))

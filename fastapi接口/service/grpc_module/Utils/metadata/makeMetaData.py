@@ -728,10 +728,7 @@ async def get_bili_ticket(device_info: bytes,
                 method='post',
                 data=data,
                 headers=tuple(new_headers),
-                # proxies={
-                #     'http': proxy['proxy']['http'],
-                #     'https': proxy['proxy']['https']
-                # } if proxy else CONFIG.custom_proxy,
+                proxies=CONFIG.custom_proxy,
                 verify=False
             )
             gresp = GetTicketResponse()
@@ -743,15 +740,9 @@ async def get_bili_ticket(device_info: bytes,
                 BiliGrpcApi_logger.error(f'获取ticket失败！\n{resp.content}\n{resp.headers}')
             return gresp
         except Exception as e:
-            BiliGrpcApi_logger.exception(f'获取bili_ticket失败！\n{type(e)}\t{e}')
-            await asyncio.sleep(30)
+            BiliGrpcApi_logger.error(f'获取bili_ticket失败！\n{type(e)}\t{e}')
             if not proxy:
-                proxy = {'proxy':
-                    {
-                        'http': CONFIG.my_ipv6_addr,
-                        'https': CONFIG.my_ipv6_addr
-                    }
-                }
+                proxy = CONFIG.custom_proxy
             else:
                 proxy = None
 

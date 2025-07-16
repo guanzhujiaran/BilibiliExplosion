@@ -39,7 +39,11 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
         self.api = sams_club_api
         # 设置配置
         self.concurrent_num = 1
-        self.sleep_time_gen = SleepTimeGenerator()
+        self.sleep_time_gen = SleepTimeGenerator(
+            short_wait_range=(5, 10),
+            medium_wait_range=(10, 20),
+            long_wait_range=(30, 60),
+        )
         self.delay_gen = self.sleep_time_gen.continuous_generator()
         self.sql_helper = sql_helper
         self.fetch_grouping_id_ts = 0

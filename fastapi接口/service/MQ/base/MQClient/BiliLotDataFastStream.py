@@ -247,16 +247,18 @@ class BiliVoucher(BaseFastStreamMQ):
                 f"【{module_name}】收到消息：{voucher_info}")
             if int(time.time()) - voucher_info.generate_ts > 10:
                 return await msg.ack()
-            geetest_v3_breaker.validate_form_voucher_ua(
-                voucher_info.voucher,
-                voucher_info.ua,
-                voucher_info.ck,
-                voucher_info.origin,
-                voucher_info.referer,
-                voucher_info.ticket,
-                voucher_info.version,
-                voucher_info.session_id,
-                True,
+            await asyncio.wait_for(
+                geetest_v3_breaker.a_validate_form_voucher_ua(
+                    voucher_info.voucher,
+                    voucher_info.ua,
+                    voucher_info.ck,
+                    voucher_info.origin,
+                    voucher_info.referer,
+                    voucher_info.ticket,
+                    voucher_info.version,
+                    voucher_info.session_id,
+                    True,
+                ), 10
             )
             return await msg.ack()
         except Exception as e:

@@ -19,7 +19,7 @@ from exceptiongroup import ExceptionGroup
 from google.protobuf.json_format import MessageToDict  # 这是第三方包，不用管
 from google.protobuf.message import DecodeError, EncodeError
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
-    Response, WriteError, NetworkError
+    Response, WriteError, NetworkError, HTTPStatusError, HTTPError
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
 
@@ -28,7 +28,7 @@ from fastapi接口.log.base_log import BiliGrpcApi_logger
 from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request352Error
 from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataWrapper
 from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
-from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import  geetest_v3_breaker
+from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import geetest_v3_breaker
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_latest_version_builds, resource_abtest_abserver
 from fastapi接口.service.grpc_module.grpc.bapi.models import LatestVersionBuild
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
@@ -61,6 +61,7 @@ def grpc_error(err):
 
 class BiliGrpc:
     def __init__(self):
+        self.base_uri = 'app.bilibili.com'
         self.debug_mode = False
         self.metadata_pool_size = 30  # 元数据（headers）池大小
         self.metadata_list = []  # 元数据（headers）池大小列表
@@ -191,7 +192,7 @@ class BiliGrpc:
         proxy_tab, _ = await get_available_proxy(is_use_available_proxy)
         channel = None
         if is_need_channel:
-            channel = grpc.aio.secure_channel('grpc.biliapi.net:443', grpc.ssl_channel_credentials(),
+            channel = grpc.aio.secure_channel(f'{self.base_uri}:443', grpc.ssl_channel_credentials(),
                                               options=[],
                                               compression=grpc.Compression.NoCompression
                                               )  # Connect to the gRPC server
@@ -489,11 +490,11 @@ class BiliGrpc:
                     ConnectionError, ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout,
                     ReadError, WriteError,
                     InvalidURL, NetworkError, ValueError, OverflowError, ExceptionGroup, ProxyConnectionError,
-                    ProxyTimeoutError, SocksProxyError, ProtocolError, SSLError,
+                    ProxyTimeoutError, SocksProxyError, ProtocolError, SSLError, HTTPStatusError, HTTPError,
                     curl_cffi.requests.exceptions.ConnectionError,
                     curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
-                    curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError
-
+                    curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError,
+                    TimeoutError
             ) as httpx_err:
                 if proxy_flag:
                     await handle_proxy_request_fail(proxy_tab=proxy, )
@@ -611,7 +612,7 @@ class BiliGrpc:
             rid = int(rid)
         if type(rid) is not int:
             raise TypeError(f'rid must be number! rid:{rid}')
-        url = "https://grpc.biliapi.net/bilibili.app.dynamic.v2.Dynamic/DynDetail"
+        url = f"https://{self.base_uri}/bilibili.app.dynamic.v2.Dynamic/DynDetail"
         data_dict = {
             # 'uid': random.randint(1, 3537105317792299),
             'dyn_type': dynamic_type,
@@ -646,7 +647,7 @@ class BiliGrpc:
             dynamic_id = str(dynamic_id)
         if type(dynamic_id) is not str or not str.isdigit(dynamic_id):
             raise TypeError(f'dynamic_id must be string type number! dynamic_id:{dynamic_id}')
-        url = "https://grpc.biliapi.net/bilibili.app.dynamic.v2.Dynamic/DynDetail"
+        url = f"https://{self.base_uri}/bilibili.app.dynamic.v2.Dynamic/DynDetail"
         data_dict = {
             # 'uid': random.randint(1, 3537105317792299),
             'dynamic_id': dynamic_id,
@@ -681,7 +682,7 @@ class BiliGrpc:
         if type(uid) is not int or type(history_offset) is not str:
             raise TypeError(
                 f'uid must be a number and history_offset must be str! uid:{uid} history_offset:{history_offset}')
-        url = "https://grpc.biliapi.net/bilibili.app.dynamic.v2.Dynamic/DynSpace"
+        url = f"https://{self.base_uri}/bilibili.app.dynamic.v2.Dynamic/DynSpace"
         data_dict = {
             'host_uid': int(uid),
             'history_offset': history_offset,

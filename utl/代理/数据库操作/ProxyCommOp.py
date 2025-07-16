@@ -26,6 +26,7 @@ async def get_available_proxy(
     :param is_use_available_proxy: Whether to prioritize using proxies from the AvailableProxy table.
     :param initial_retry_delay_seconds: The base delay in seconds before retrying after acquisition fails or finds no new proxies.
     :return: A ProxyTab object. This function will not return None.
+             A boolean indicating whether the returned proxy was from the AvailableProxy table.
     """
     global __available_proxy_num, __latest_sync_ts
     attempt = -1  # Keep track of attempts for logging and backoff
@@ -39,7 +40,7 @@ async def get_available_proxy(
         attempt += 1
         proxy_tab: Optional[ProxyTab] = None
         # --- Attempt 1: Use AvailableProxy table (if requested) ---
-        if is_use_available_proxy or __available_proxy_num > 300:  # 1千个以上随便用
+        if is_use_available_proxy or __available_proxy_num > 300:  # 300个以上随便用
             try:
                 # This function now selects AND updates the chosen AvailableProxy
                 available_proxy: Optional[AvailableProxy]
@@ -53,6 +54,7 @@ async def get_available_proxy(
 
         # --- Attempt 2: Fallback to general ProxyTab table ---
         if not proxy_tab:  # Only if Attempt 1 failed or wasn't requested
+            used_available_proxy = False
             try:
                 # Assuming select_proxy tries to get a potentially usable one from the general pool
                 proxy_tab = await SQLHelper.select_proxy("rand")  # Or 'rand_potentially_good' if you adapt it
@@ -74,3 +76,8 @@ async def get_available_proxy(
     return proxy_tab, used_available_proxy
     # The while True loop ensures this point is never reached if a proxy is eventually found.
     # If acquisition *never* yields a proxy, this function will wait forever.
+
+
+if __name__ == "__main__":
+    result = asyncio.run(get_available_proxy(is_use_available_proxy=True))
+    print(result)

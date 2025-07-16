@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
+import abc
+import asyncio
 import datetime
 import os
 import random
 import time
 import urllib.parse
 from typing import Union
+import aiofiles
 from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvContent, OpusType
-import requests
-
-from utl.pushme.pushme import pushme
+from utl.pushme.pushme import a_pushme
+from utl.代理.SealedRequests import my_async_httpx
 from utl.加密.wbi加密 import get_wbi_params
 
 
@@ -26,28 +28,13 @@ class GenerateCvBase:
         self.buvid = buvid
         self.ua = ua
         self.cookie = cookie
-        self.s = requests.Session()
+        self.s = my_async_httpx
         self.username = ''
         self.uid = ''
         self.post_flag = True  # 是否直接发布
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
-
-        def login_check(_cookie, _ua):
-            headers = {
-                'User-Agent': _ua,
-                'cookie': _cookie
-            }
-            url = 'https://api.bilibili.com/x/web-interface/nav'
-            res = requests.get(url=url, headers=headers).json()
-            if res['data']['isLogin'] == True:
-                self.username = res['data']['uname']
-                self.uid = res['data']['mid']
-                print(f'登录成功,当前账号用户名为{self.username}\tuid:{self.uid}')
-                return 1
-            else:
-                print('登陆失败,请重新登录')
-
-        login_check(self.cookie, self.ua)
+        _ = f'../PubArticle/'
+        self.save_dir = os.path.join(self.current_dir, _)
 
     def upload_id_gen(self):
         """
@@ -73,6 +60,7 @@ class GenerateCvBase:
         lottery_end_date = datetime.datetime.strptime(Date_str, '%Y-%m-%d %H:%M:%S')
         return lottery_end_date < datetime.datetime.now()  # 如果比当前时间大，返回True
 
+    @abc.abstractmethod
     def zhuanlan_format(self, *args, **kwargs) -> str:
         """
 
@@ -82,6 +70,7 @@ class GenerateCvBase:
         """
         raise NotImplementedError(f'没有实现方法【{self.zhuanlan_format.__name__}】')
 
+    @abc.abstractmethod
     def zhuanlan_date_sort(self, *args, **kwargs):
         '''
         为字典添加了etime_str的日期文字格式
@@ -92,6 +81,7 @@ class GenerateCvBase:
         '''
         raise NotImplementedError(f'没有实现方法【{self.zhuanlan_date_sort.__name__}】')
 
+    @abc.abstractmethod
     def zhuanlan_data_sort_by_date(self, zhuanlan_data: list) -> list:
         '''
         将所有专栏抽奖数据按开奖日期日期排序
@@ -100,9 +90,10 @@ class GenerateCvBase:
         raise NotImplementedError(f'没有实现方法【{self.zhuanlan_data_sort_by_date.__name__}】')
 
     # region 提交专栏方法，只有在api接口发送变动的情况下需要修改（已经是老的api接口了，悲T_T
-    def get_cv_aid(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint, tags,
-                   image_urls,
-                   origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, csrf):
+    async def get_cv_aid(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint,
+                         tags,
+                         image_urls,
+                         origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, csrf):
         if not self.uid or not self.csrf or not self.username:
             return
         url = 'https://api.bilibili.com/x/article/creative/draft/addupdate'
@@ -143,20 +134,21 @@ class GenerateCvBase:
             'csrf': csrf
         }
         data = urllib.parse.urlencode(data)
-        req = self.s.post(url=url,
-                          data=data,
-                          headers=headers
-                          )
+        req = await self.s.post(url=url,
+                                data=data,
+                                headers=headers
+                                )
         print(req.text)
         if req.json().get('code') == 0:
             return req.json().get('data').get('aid')
         else:
-            pushme(f'提交专栏【{title}】失败！', req.text)
+            await a_pushme(f'提交专栏【{title}】失败！', req.text)
 
-    def submit_cv(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint, tags,
-                  image_urls,
-                  origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, aid, up_reply_closed,
-                  comment_selected, publish_time, items, platform, buvid, device, build, mobi_app, csrf):
+    async def submit_cv(self, title, banner_url, article_content, summary, words, category, list_id, tid, reprint, tags,
+                        image_urls,
+                        origin_image_urls, dynamic_intro, media_id, spoiler, original, top_video_bvid, aid,
+                        up_reply_closed,
+                        comment_selected, publish_time, items, platform, buvid, device, build, mobi_app, csrf):
         if not self.uid or not self.csrf or not self.username:
             return
         data = {
@@ -207,16 +199,16 @@ class GenerateCvBase:
             'user-agent': self.ua,
         }
         if self.post_flag:
-            req = self.s.post(url='https://api.bilibili.com/x/article/creative/article/submit',
-                              data=data,
-                              headers=headers
-                              )
+            req = await self.s.post(url='https://api.bilibili.com/x/article/creative/article/submit',
+                                    data=data,
+                                    headers=headers
+                                    )
 
             if req.json().get('code') == 0:
                 print(req.text)
                 return True
             else:
-                pushme(f'提交专栏【{title}】失败！', req.text)
+                await a_pushme(f'提交专栏【{title}】失败！', req.text)
         return True
 
     # endregion
@@ -298,16 +290,16 @@ class GenerateCvBase:
             'w_rid': wbi_sign['w_rid'],
             'wts': wbi_sign['wts']
         }
-        req = self.s.post(url=url,
-                          params=params,
-                          data=data,
-                          headers=headers
-                          )
+        req = await self.s.post(url=url,
+                                params=params,
+                                data=data,
+                                headers=headers
+                                )
         print(req.text)
         if req.json().get('code') == 0:
             return req.json().get('data').get('aid')
         else:
-            pushme(f'保存专栏【{title}】失败！', req.text)
+            await a_pushme(f'保存专栏【{title}】失败！', req.text)
 
     async def dynamic_feed_create_opus(self, draft_id_str: Union[str, int], title: str, article_content: CvContent,
                                        category: int = 15, list_id: int = 0):
@@ -351,7 +343,7 @@ class GenerateCvBase:
                         "reproduced": 0,
                         "biz_tags": []
                     },
-                    "content": article_content.toOpusContent(OpusType.ARTICLE),
+                    "content": await article_content.toOpusContent(OpusType.ARTICLE),
                     "opus_source": 2,
                     "pub_info": {},
                     "title": title
@@ -363,32 +355,59 @@ class GenerateCvBase:
         }
         wbi = await get_wbi_params(params)
         params.update(wbi)
-        req = self.s.post(url=url,
-                          params=params,
-                          json=data,
-                          headers=headers
-                          )
+        req = await self.s.post(url=url,
+                                params=params,
+                                json=data,
+                                headers=headers
+                                )
         print(req.text)
         if req.json().get('code') == 0:
             return req.json().get('data').get('aid')
         else:
-            pushme(f'提交专栏【{title}】失败！', req.text)
+            await a_pushme(f'提交专栏【{title}】失败！', req.text)
 
     # endregion
 
-    def save_article_to_local(self, title: str, content, ):
+    async def save_article_to_local(self, title: str, content, ):
         try:
             illegal_chars = r'<>:"/\|?*'
 
             # 逐一替换非法字符为下划线
             for char in illegal_chars:
                 title = title.replace(char, '_')
-            article_path = os.path.join(self.current_dir, f'../PubArticle/')
+            article_path = os.path.join(self.save_dir)
             print(f'保存文章【{title}】')
             if not os.path.exists(article_path):
                 os.mkdir(article_path)
-            with open(os.path.join(article_path, f'{title}.txt'), 'w', encoding='utf-8') as f:
-                f.write(content)
+            async with aiofiles.open(os.path.join(article_path, f'{title}.txt'), 'w', encoding='utf-8') as f:
+                await f.write(content)
         except Exception as e:
             print(f'保存文章【{title}】失败！\n{str(e)}')
-            pushme(f'保存文章【{title}】失败！', str(e))
+            await a_pushme(f'保存文章【{title}】失败！\n{str(e)}')
+
+    async def pub_cv(self,
+                     title: str,
+                     abstract: str,
+                     cv_content: CvContent,
+                     words: int,
+                     pub_cv: bool,
+                     save_to_local_file: bool) -> CvContent:
+        if pub_cv:
+            local_title = title + '_需要提交'
+        else:
+            local_title = title
+        if save_to_local_file:
+            await self.save_article_to_local(local_title + '_api_ver', cv_content.rawContent)
+            await self.save_article_to_local(local_title + '_手动专栏_ver',
+                                             abstract + cv_content.manualSubmitContent)
+        aid = 0
+        if pub_cv:
+            aid = await self.article_creative_draft_addupdate(
+                title=title,
+                banner_url="",
+                article_content=cv_content,
+                words=words,
+            )
+        if aid and pub_cv:
+            await self.dynamic_feed_create_opus(draft_id_str=aid, title=title, article_content=cv_content)
+        return cv_content

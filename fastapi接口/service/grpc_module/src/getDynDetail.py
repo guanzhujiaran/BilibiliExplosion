@@ -42,7 +42,7 @@ class SuccCounter(BaseSuccCounter):
 
 class DynDetailScrapy(UnlimitedCrawler):
     def __init__(self):
-        max_sem = 500
+        max_sem = 10
         self.offset = 10  # 每次获取rid的数量，数值最好不要超过10，太大的话传输会出问题
         self.BiliGrpc = bili_grpc
         self.succ_times = 0

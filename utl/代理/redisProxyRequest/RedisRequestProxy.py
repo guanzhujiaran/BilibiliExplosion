@@ -14,7 +14,7 @@ from typing import Union
 import curl_cffi
 from exceptiongroup import ExceptionGroup
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
-    WriteError, NetworkError, TooManyRedirects
+    WriteError, NetworkError, TooManyRedirects, HTTPError
 from loguru import logger
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
@@ -98,7 +98,6 @@ class RequestWithProxy:
         self.fake_cookie_list: list[CookieWrapper] = []
         self.cookie_queue_num = 0
         self.task_set = set()
-
 
     async def Get_Bili_Cookie(self, ua: str) -> CookieWrapper:
         """
@@ -210,7 +209,7 @@ class RequestWithProxy:
                                                timeout=self.timeout if not used_available_proxy else self.available_proxy_timeout,
                                                proxies=proxy.proxy)
             req_text = req.text
-            if 'code' not in req_text and 'bili' in req.url:  # 如果返回的不是json那么就打印出来看看是什么
+            if 'code' not in req_text and 'bili' in str(req.url):  # 如果返回的不是json那么就打印出来看看是什么
                 self.log.info(req_text.replace('\n', ''))
             if '<div class="txt-item err-text">由于触发哔哩哔哩安全风控策略，该次访问请求被拒绝。</div>' in req_text:
                 raise Request412Error(req_text, -412)
@@ -276,12 +275,13 @@ class RequestWithProxy:
             raise RequestKnownError(_err)
         except (
                 TooManyRedirects, SSLError, JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError,
-                ConnectTimeout,
+                ConnectTimeout, HTTPError,
                 ReadTimeout, ReadError, WriteError, InvalidURL, NetworkError, RequestProxyResponseError,
                 ExceptionGroup, ProxyConnectionError, ProxyTimeoutError, SocksProxyError,
                 ValueError, ProtocolError, curl_cffi.requests.exceptions.ConnectionError,
                 curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
-                curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError
+                curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError,
+                TimeoutError
         ) as _err:
             self.log.debug(f'请求时发生网络错误：{type(_err)}\n{_err}')
             if proxy:
