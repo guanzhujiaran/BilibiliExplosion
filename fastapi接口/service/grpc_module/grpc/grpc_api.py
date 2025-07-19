@@ -24,7 +24,7 @@ from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyE
 from socksio import ProtocolError
 
 from CONFIG import CONFIG
-from fastapi接口.log.base_log import BiliGrpcApi_logger
+from fastapi接口.log.base_log import BiliGrpcApi_logger, Voucher352_logger
 from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request352Error
 from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataWrapper
 from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
@@ -508,6 +508,7 @@ class BiliGrpc:
                     if get_scheme_ip_port_form_proxy_dict(proxy.proxy) == self.my_proxy_addr:
                         self.latest_352_ts = int(time.time())
                         self.grpc_api_any_log.debug(f'设置本地代理最后-352时间为：{self.latest_352_ts}')
+                    Voucher352_logger.critical(f"代理{proxy.proxy} 报错-352 被封禁\n{url}\n{new_headers}\n{grpc_req_message}")
                     await handle_proxy_352(
                         proxy_tab=proxy,
                     )

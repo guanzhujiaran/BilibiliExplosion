@@ -1258,8 +1258,7 @@ class BiliSpaceUserItem:
                     if code == 4101129:
                         get_others_lot_log.critical(
                             f'用户【{self.uid}】空间动态请求失败！\n{msg}')
-                        await asyncio.sleep(3)
-                        continue
+                        break
                 get_others_lot_log.info(
                     f'获取用户【{self.uid}】空间动态请求成功！耗时：{time.time() - start_ts}秒\n响应：\n{dyreq_dict}')
                 resp_dyn_ids = await self.__add_space_card_to_db(dyreq_dict)

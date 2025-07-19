@@ -4,13 +4,10 @@ import random
 import time
 from typing import Dict
 
-import pandas
-
-import b站cookie.globalvar as gl
 from fastapi接口.service.opus新版官方抽奖.Base.generate_cv import GenerateCvBase
 from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvContentOps, CvContentAttr, CvContent, CutOff, \
     Color
-from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
+from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo, TReserveRoundInfo
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import ReserveScrapyRobot
 
@@ -25,6 +22,8 @@ class GenerateReserveLotCv(GenerateCvBase):
 
     def zhuanlan_format(self,
                         zhuanlan_dict: Dict[str, list[TUpReserveRelationInfo]],
+                        last_round: TReserveRoundInfo,
+                        *,
                         blank_space: int = 0,
                         inline_sep_str: str = '\t'
                         ) -> (CvContent, int):
@@ -46,28 +45,37 @@ class GenerateReserveLotCv(GenerateCvBase):
 
         ret: CvContent = CvContent(ops=[])
         words = 0
+        change_line_ops = CvContentOps(
+            insert="\n"
+        )
         for _ in range(blank_space):
             cut_off_ops = CvContentOps(  # 分隔符不占用文字长度，不需要计算
                 attributes=CvContentAttr(**{"class": "cut-off"}),
                 insert=CutOff.cut_off_5.value
             )
             ret.ops.append(cut_off_ops)
-
         for lottery_end_date, reserve_info_list in zhuanlan_dict.items():
             selected_color_class_key = random.choice(list(Color))
+            rand_color_ops = CvContentAttr(color=selected_color_class_key)
             ret.ops.append(handle_lot_detail_ops(
                 show_str=lottery_end_date,
                 attr_type=CvContentAttr(color=selected_color_class_key)
             ))
-            ret.ops.append(
-                CvContentOps(
-                    insert="\n"
-                )
-            )
+            ret.ops.append(change_line_ops)  # 日期换行
             for i in reserve_info_list:
                 selected_color_class_key = random.choice(list(Color))
                 ops_list = []
-                if pandas.notna(i.dynamicId):
+                if i.reserve_round_id >= last_round.round_id:
+                    _str = '【新】' + inline_sep_str
+                else:
+                    _str = '【\u3000】' + inline_sep_str
+                ops_list.append(
+                    handle_lot_detail_ops(
+                        show_str=_str,
+                        attr_type=rand_color_ops
+                    )
+                )
+                if i.dynamicId:
                     _str = '动态链接' + inline_sep_str
                     ops_list.append(
                         handle_lot_detail_ops(
@@ -82,9 +90,7 @@ class GenerateReserveLotCv(GenerateCvBase):
                     ops_list.append(
                         handle_lot_detail_ops(
                             show_str=_str,
-                            attr_type=CvContentAttr(
-                                link=f"https://t.bilibili.com/{i.dynamicId}?tab=2",
-                            )
+                            attr_type=CvContentAttr(color=selected_color_class_key)
                         )
                     )
                 _str = '发布者空间' + inline_sep_str
@@ -107,14 +113,12 @@ class GenerateReserveLotCv(GenerateCvBase):
                 )
 
                 ret.ops.extend(ops_list)
-            ret.ops.append(
-                CvContentOps(
-                    insert="\n"
-                )
-            )
+                ret.ops.append(change_line_ops)  # 单条数据换行
+            ret.ops.append(change_line_ops)  # 下一个日期换行
         return ret, words
 
     def zhuanlan_date_sort(self, zhuanlan_data_order_by_date: list[TUpReserveRelationInfo],
+
                            limit_date_switch: bool = False,
                            limit_date: int = 10) -> Dict[str, list[TUpReserveRelationInfo]]:
         '''
@@ -155,7 +159,7 @@ class GenerateReserveLotCv(GenerateCvBase):
         return sorted(zhuanlan_data, key=lambda x: x['etime'])
 
     async def main(self, is_api_update: bool = False,
-                   pub_cv: bool = True,
+                   pub_cv: bool = False,
                    save_to_local_file: bool = True
                    ) -> CvContent:
         '''
@@ -167,28 +171,14 @@ class GenerateReserveLotCv(GenerateCvBase):
             -300 ：已经失效
         :return:
         '''
-        last_round = await self.sqlhelper.get_latest_reserve_round(readonly=True)
+        last_round: TReserveRoundInfo = await self.sqlhelper.get_latest_reserve_round(readonly=True)
         zhuanlan_data: list[
             TUpReserveRelationInfo] = await self.sqlhelper.get_all_available_reserve_lotterys()  # 获取所有有效的预约抽奖 （按照etime升序排列
         if is_api_update:
             reserve_robot = ReserveScrapyRobot()
             await reserve_robot.refresh_not_drawn_lottery()
         zhuanlan_data_date_sort = self.zhuanlan_date_sort(zhuanlan_data)
-        cv_content, words = self.zhuanlan_format(zhuanlan_data_date_sort)
-
-        zhuanlan_data1 = [x for x in zhuanlan_data if x.reserve_round_id == last_round.round_id]
-        zhuanlan_data_date_sort1 = self.zhuanlan_date_sort(zhuanlan_data1)
-        cv_content1, words1 = self.zhuanlan_format(zhuanlan_data_date_sort1)
-
-        if zhuanlan_data1:
-            cv_content2, words2 = self.zhuanlan_format({"更新内容": []}, 3)
-        else:
-            cv_content2 = CvContent(ops=[])
-            words2 = 0
-
-        cv_content.ops.extend(cv_content2.ops)
-        cv_content.ops.extend(cv_content1.ops)
-        words += words1 + words2
+        cv_content, words = self.zhuanlan_format(zhuanlan_data_date_sort, last_round)
         today = datetime.datetime.today()
         _ = datetime.timedelta(days=1)
         next_day = today + _
@@ -210,13 +200,13 @@ if __name__ == '__main__':
         :param is_post:是否直接发布
         :return:
         """
-        ua3 = gl.get_value('ua3')
-        csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
-        cookie3 = gl.get_value('cookie3')
-        buvid3 = gl.get_value('buvid3_3')
+        ua3 = ""
+        csrf3 = ""  # 填入自己的csrf
+        cookie3 = ""
+        buvid3 = ""
         gc = GenerateReserveLotCv(cookie3, ua3, csrf3, buvid3)
         gc.post_flag = is_post
         await gc.main()
 
 
-    asyncio.run(submit_reserve__lot_main(True))
+    asyncio.run(submit_reserve__lot_main(False))

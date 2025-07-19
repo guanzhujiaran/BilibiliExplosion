@@ -347,10 +347,6 @@ class SQLHelperClass:
                     if int(time.time()) - self.sub_redis_store.sync_sep_ts > self.sub_redis_store.sync_ts or force or self.sub_redis_store.sync_ts == 0:
                         proxy_zset_count = await self.sub_redis_store.redis_bili_proxy_zset_count()
                         self.is_checking_redis_data = True
-                        if not force:  # 10万代理以下的时候才同步
-                            sql_log.critical(f'代理数量{proxy_zset_count}个，数量过多，无需同步')
-                            self.is_checking_redis_data = False
-                            return
                         try:
                             redis_sync_ts = await self.sub_redis_store.get_sync_ts()
                             if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:

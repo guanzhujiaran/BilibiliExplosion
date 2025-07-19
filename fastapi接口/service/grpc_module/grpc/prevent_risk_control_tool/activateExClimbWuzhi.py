@@ -484,7 +484,7 @@ class ExClimbWuzhi:
         if _from == "web":
             cookie = [
                 f'buvid_fp={fingerprint}',
-                #f'fingerprint={fingerprint}',
+                # f'fingerprint={fingerprint}',
                 'hit-dyn-v2=1'
             ]
         else:
@@ -505,13 +505,14 @@ class ExClimbWuzhi:
                                                     headers={
                                                         "referer": 'https://www.bilibili.com/',
                                                         "user-agent": apiExClimbWuzhi.ua,
-                                                        "cookie": "; ".join(cookie),
+                                                        # "cookie": "; ".join(cookie),
                                                     },
                                                     proxies=proxy
                                                     )
                 response_dict = response.json()
                 cookie.append("=".join(['buvid3', quote(response_dict['data']['b_3'], safe='')]))
                 cookie.append("=".join(['buvid4', quote(response_dict['data']['b_4'], safe='')]))
+                break
             except Exception as e:
                 if retry_time == 1:
                     activeExclimbWuzhi_logger.error(f"获取buvid3和buvid4失败: {type(e)}")
@@ -546,7 +547,8 @@ class ExClimbWuzhi:
                 }
                 headers = {
                     'user-agent': apiExClimbWuzhi.ua,
-                    'cookie': apiExClimbWuzhi.cookie
+                    "referer": 'https://www.bilibili.com/',
+                    # 'cookie': apiExClimbWuzhi.cookie
                 }
                 resp = await MyAsyncReq.request(url=apiExClimbWuzhi.GenWebTicket,
                                                 method='post',

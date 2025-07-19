@@ -73,7 +73,8 @@ class PinDetail:
 
 
 class LotScrapy:
-    def __init__(self, ):
+    def __init__(self, *, headless: bool = False):
+        self._headless = headless
         self.get_pin_ts = 0
         self.is_getting_dyn_flag = False
         self.log = zhihu_api_logger
@@ -108,7 +109,11 @@ class LotScrapy:
         self.non_lot_pin_details: list[PinDetail] = []
         self.all_pins: list[int] = []
         self.BM = methods()
-        self.playwright = PlaywrightOperator(CONFIG.playwright_user_dir.zhihu.value, headless=False)
+        self.playwright = PlaywrightOperator(
+            CONFIG.playwright_user_dir.zhihu.value,
+            headless=self._headless,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
+        )
 
     async def init(self):
         await self.playwright.launch()
@@ -375,12 +380,22 @@ class LotScrapy:
         except Exception:
             raise ValueError('数据为空')
 
-    async def login(self):
+    async def _login(self):
         await self.playwright.launch()
+        await self.playwright.goto("https://www.browserscan.net/zh/bot-detection")
+
         await asyncio.get_running_loop().create_future()
 
+    async def _test_robot_tech(self):
+        await self.playwright.launch()
+        # "https://kaliiiiiiiiii.github.io/brotector/"
+        # "https://www.browserscan.net/zh/bot-detection"
+        await self.playwright.goto("https://www.xiaohongshu.com")
+        await asyncio.sleep(5)
+        await self.playwright.page.screenshot(path='./1.pdf', full_page=True)
 
-zhihu_lotScrapy = LotScrapy()
+
+zhihu_lotScrapy = LotScrapy(headless=True)
 
 if __name__ == "__main__":
-    asyncio.run(zhihu_lotScrapy.login())
+    asyncio.run(zhihu_lotScrapy._test_robot_tech())

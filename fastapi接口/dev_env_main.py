@@ -10,7 +10,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 # from fastapi接口.controller.v1.samsClub import samsClubController
-from fastapi接口.controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
+# from fastapi接口.controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
+from fastapi接口.controller.damo import DamoML
 from fastapi接口.models.common import CommonResponseModel
 from pydantic import BaseModel as PydanticBaseModel
 from loguru import logger
@@ -46,8 +47,8 @@ app = FastAPI(
 )
 
 fastapi_cdn_host.patch_docs(app)
-app.include_router(zhuanlanController.router)
-
+# app.include_router(zhuanlanController.router)
+app.include_router(DamoML.router)
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, e: Exception):
     return JSONResponse(CommonResponseModel(

@@ -191,8 +191,6 @@ class TopicRobot(UnlimitedCrawler[int]):
             else:
                 self.start_topic_id = await self.sql.get_max_topic_id()
             await self.run(self.start_topic_id)
-            e = ExtractTopicLottery()
-            await e.main()
         except Exception as e:
             topic_lot_logger.error(f'发生异常！{e}')
             pushme(title=f'爬取话题异常', content=str(e))

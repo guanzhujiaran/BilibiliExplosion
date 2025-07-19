@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
+import ast
 import asyncio
 import datetime
+import json
+import time
 from copy import deepcopy
 from typing import Literal, List, Sequence, Union, Optional
+
 import numpy as np
 from sqlalchemy import select, and_, exists, func, String, text, or_, JSON
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
+
+from CONFIG import CONFIG
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
 from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
-import time
-import ast
-from CONFIG import CONFIG
-from fastapi接口.service.grpc_module.src.SQLObject.models import Bilidyndetail, Lotdata
-import json
+from fastapi接口.service.grpc_module.src.SQLObject.models import Bilidyndetail, Lotdata, ArticlePubRecord
 
 sql_log = myfastapi_logger
 
@@ -487,7 +489,7 @@ VALUES (:lottery_id);
                 插入 返回{'mode':'insert'}
                 失败 返回{'mode': 'error'}
         '''
-        async with (self._session() as session):
+        async with self._session() as session:
             lottery_id = lot_data_dict.get('lottery_id')
             if lottery_id is None:
                 return {'mode': 'error'}
@@ -511,7 +513,10 @@ VALUES (:lottery_id);
         :return:
         """
         async with self._session() as session:
-            stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(
+            stmt = select(Lotdata).options(
+                joinedload(Lotdata.bilidyndetail),
+                joinedload(Lotdata.article_pub_record)
+            ).where(
                 and_(
                     Lotdata.lottery_result.is_(None),
                     Lotdata.status != -1,
@@ -660,7 +665,7 @@ ORDER BY
                 # 创建条件
                 condition = func.json_contains(
                     func.json_extract(Lotdata.lottery_result, json_path),
-                    func.cast(uid_int,JSON)
+                    func.cast(uid_int, JSON)
                 )
                 # 将条件添加到查询对象中
                 query = query.where(
@@ -679,7 +684,7 @@ ORDER BY
                     conditions.append(
                         func.json_contains(
                             func.json_extract(Lotdata.lottery_result, json_path),
-                            func.cast(uid_int,JSON)
+                            func.cast(uid_int, JSON)
                         )
                     )
                 # 将条件添加到查询对象中
@@ -848,6 +853,27 @@ ORDER BY
             ))
             result = await session.execute(stmt)
             return result.scalars().all()
+
+    @lock_wrapper
+    async def get_article_pub_record_round_id(self) -> int | None:
+        async with self._session() as session:
+            stmt = select(ArticlePubRecord.round_id).order_by(
+                ArticlePubRecord.round_id.desc()
+            ).limit(1)
+            result = await session.execute(stmt)
+            return result.one_or_none()
+
+    @lock_wrapper
+    async def upsert_article_pub_record(self, round_id: int, *business_ids):
+        async with self._session() as session:
+            stmt = insert(ArticlePubRecord).values(
+                [{'round_id': round_id, "lot_data_business_id": x} for x in business_ids]
+            )
+            stmt.on_duplicate_key_update(
+                round_id=round_id
+            )
+            await session.execute(stmt)
+            await session.commit()
 
 
 grpc_sql_helper = SQLHelper()

@@ -33,6 +33,7 @@ async def gen_dynamic_cv(is_api_update: bool):
 
 async def gen_reserve_cv(is_api_update: bool):
     gc = GenerateReserveLotCv('', '', '', '', abstract=__abstract_msg)
+    gc.save_dir = __save_path
     await gc.main(is_api_update=is_api_update)
 
 
@@ -46,4 +47,4 @@ async def gen_all_cv(is_api_update: bool = False):
 
 
 if __name__ == "__main__":
-    asyncio.run(gen_all_cv(False))
+    asyncio.run(gen_reserve_cv(False))

@@ -24,6 +24,7 @@ async def handle_proxy_352(proxy_tab: ProxyTab | None):
     if not proxy_tab:
         sql_log.warning("handle_proxy_352 called with None proxy_tab.")
         return
+
     proxy_tab.status = -352
     await SQLHelper.update_to_proxy_list(proxy_tab, change_score_num=10)
     await sql_helper.update_available_proxy_details(
@@ -38,7 +39,6 @@ async def handle_proxy_412(proxy_tab: ProxyTab | None):
     if not proxy_tab:
         sql_log.warning("handle_proxy_412 called with None proxy_tab.")
         return
-
     proxy_tab.status = -412
     await SQLHelper.update_to_proxy_list(proxy_tab, change_score_num=10)
     await sql_helper.update_available_proxy_details(

@@ -1,6 +1,6 @@
+import datetime
 import inspect
 import time
-from copy import deepcopy
 from typing import Any, Optional
 
 import numpy as np
@@ -8,6 +8,7 @@ import numpy as np
 from fastapi接口.service.BaseCrawler.base.core import ParamsType, BaseCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerModel, WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.base import CrawlerPlugin
+from fastapi接口.utils.Tool import ts_2_DateTime
 
 
 class StatsPlugin(CrawlerPlugin[ParamsType]):
@@ -112,6 +113,10 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         return self._last_update_time
 
     @property
+    def last_update_time_str(self) -> datetime.datetime:
+        return ts_2_DateTime(self.last_update_time)
+
+    @property
     def processed_items_count(self) -> int:
         """已处理的任务数量"""
         return self._processed_items_count
@@ -120,6 +125,10 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
     def start_time(self) -> float:
         """爬虫的启动时间 (Unix timestamp)"""
         return self._start_time
+
+    @property
+    def start_time_str(self) -> datetime.datetime:
+        return ts_2_DateTime(self.start_time)
 
     @property
     def total_run_duration(self) -> float:

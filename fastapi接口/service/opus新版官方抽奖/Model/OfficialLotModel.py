@@ -1,10 +1,13 @@
+from fastapi接口.service.grpc_module.src.SQLObject.models import ArticlePubRecord
+
+
 class LotDetail:
     """
     抽奖信息详情
     """
 
     def __init__(self, lottery_id, dynamic_id, lottery_time, first_prize, second_prize,
-                 third_prize, first_prize_cmt, second_prize_cmt, third_prize_cmt, participants):
+                 third_prize, first_prize_cmt, second_prize_cmt, third_prize_cmt, participants, article_pub_record):
         self.lottery_id: int = lottery_id
         self.dynamic_id: str = dynamic_id
         self.lottery_time: int = lottery_time  # 时间戳
@@ -22,3 +25,4 @@ class LotDetail:
                                                                                   third_prize)) / int(
             participants) * 100
         self.chance: str = "%.2f%%" % chance_number
+        self.article_pub_record: ArticlePubRecord | None = article_pub_record

@@ -73,7 +73,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
                 worker_model.fetchStatus = WorkerStatus.complete
             else:
                 worker_model.fetchStatus = fetch_result
-        await self.on_worker_end(worker_model)
+            await self.on_worker_end(worker_model)
 
     async def run(self, init_params: ParamsType):
         self.log.info(f"Crawler {self.__class__.__name__} starting with init_params: {init_params}")

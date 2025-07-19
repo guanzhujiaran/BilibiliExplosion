@@ -2,20 +2,23 @@ import asyncio
 import os
 import random
 import typing
-from math import sqrt
 
-from patchright.async_api import async_playwright, Browser, Page, Playwright
-from patchright.async_api._generated import Response
+import numpy as np
+from patchright.async_api import async_playwright, Page, Playwright, ProxySettings
+from patchright.async_api._generated import Response, BrowserContext
 
 
 class PlaywrightOperator:
-    def __init__(self, user_data_dir: str, *, headless=False):
+    def __init__(self, user_data_dir: str, *, headless=False, proxy: ProxySettings | None = None,
+                 user_agent: str | None = None):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.user_data_dir = os.path.join(current_dir, 'user_data', user_data_dir)
         print(f'用户数据目录: {self.user_data_dir}')
-        self.headless = headless
+        self._headless = headless
+        self._proxy = proxy
+        self._user_agent = user_agent
         self.playwright: Playwright | None = None
-        self.browser: Browser | None = None
+        self.browser_context: BrowserContext | None = None
         self.context = None
         self.page: Page | None = None
         self.mouse_x = 0
@@ -32,20 +35,22 @@ class PlaywrightOperator:
     async def launch(self):
         """启动浏览器"""
         async with self._lock:
-            if self.browser and self.browser.is_connected():
+            if self.browser_context and self.browser_context.browser.is_connected():
                 return
             if self.playwright:
                 await self.playwright.stop()
             self.playwright = await async_playwright().start()
-            self.browser = await self.playwright.chromium.launch_persistent_context(
+            self.browser_context = await self.playwright.chromium.launch_persistent_context(
                 user_data_dir=self.user_data_dir,
-                headless=self.headless
+                headless=self._headless,
+                proxy=self._proxy,
+                user_agent=self._user_agent
             )
-            pages = self.browser.pages
+            pages = self.browser_context.pages
             if pages:
                 self.page = pages[0]
             else:
-                self.page = await self.browser.new_page()
+                self.page = await self.browser_context.new_page()
             self.mouse_x = 0
             self.mouse_y = 0
 
@@ -130,8 +135,8 @@ class PlaywrightOperator:
 
     async def close(self):
         async with self._lock:
-            if self.browser:
-                await self.browser.close()
+            if self.browser_context:
+                await self.browser_context.close()
             if self.playwright:
                 await self.playwright.stop()
 
@@ -154,28 +159,48 @@ class PlaywrightOperator:
         y = random.uniform(y_min, y_max)
         return x, y
 
-    async def __move_mouse_to(self, x, y, steps=10, smooth=True):
+    async def __move_mouse_to(self, x: float, y: float,
+                              *,
+                              total_time_ms: float = None,
+                              micro_jitter: bool = True) -> None:
         """
-        自定义自然鼠标移动路径
-        :param x: 目标 x 坐标
-        :param y: 目标 y 坐标
-        :param steps: 移动步数
-        :param smooth: 是否根据距离调整步数
+        真人轨迹模拟（贝塞尔 + 变速 + 微抖动）
+        :param x: 目标 x
+        :param y: 目标 y
+        :param total_time_ms: 如果不给，就按距离自动算
+        :param micro_jitter: 是否插入微停顿 / 抖动
         """
-        dx = x - self.mouse_x
-        dy = y - self.mouse_y
-        distance = sqrt(dx ** 2 + dy ** 2)
+        src = np.array([self.mouse_x, self.mouse_y], dtype=float)
+        dst = np.array([x, y], dtype=float)
+        distance = np.linalg.norm(dst - src)
 
-        if smooth:
-            steps = max(steps, int(distance // 5))
+        # 1. 默认耗时：70 px ≈ 100 ms，额外 ±30% 随机
+        if total_time_ms is None:
+            total_time_ms = max(80, distance * 1.4)
+            total_time_ms *= random.uniform(0.7, 1.3)
 
-        for i in range(1, steps + 1):
-            progress = i / steps
-            nx = self.mouse_x + dx * progress + random.uniform(-3, 3)
-            ny = self.mouse_y + dy * progress + random.uniform(-3, 3)
-            await self.page.mouse.move(nx, ny)
-            self.mouse_x, self.mouse_y = nx, ny
-            await asyncio.sleep(random.uniform(0.02, 0.08))
+        # 2. 随机控制点 → 贝塞尔曲线（带 2-4 px 噪声）
+        mid = (src + dst) / 2
+        ctrl_offset = np.array([random.uniform(-60, 60), random.uniform(-60, 60)])
+        ctrl1 = mid + ctrl_offset
+        ctrl2 = mid - ctrl_offset
+        steps = max(15, int(distance // 2.5))  # 保证 5-10 ms 一步
+        t = np.linspace(0, 1, steps)
+        curve = ((1 - t) ** 3)[:, None] * src + 3 * ((1 - t) ** 2 * t)[:, None] * ctrl1 + 3 * ((1 - t) * (t ** 2))[:, None] * ctrl2 + (t ** 3)[:, None] * dst
+        curve += np.random.normal(0, 2, curve.shape)
+
+        # 3. 变速：对数正态分布给每段步长
+        ratios = np.random.dirichlet(np.ones(steps) * 6)  # 越大的 alpha 越平均
+        seg_times = ratios * total_time_ms
+
+        # 4. 发送坐标
+        for idx, ((cx, cy), dt) in enumerate(zip(curve, seg_times)):
+            # 微停顿 5% 概率
+            if micro_jitter and random.random() < 0.05:
+                await asyncio.sleep(random.uniform(0.01, 0.03))
+            await self.page.mouse.move(cx, cy)
+            self.mouse_x, self.mouse_y = cx, cy
+            await asyncio.sleep(max(0.005, dt / 1000))
 
     async def __random_delay(self, min_delay=0.5, max_delay=1.5):
         """随机延迟"""

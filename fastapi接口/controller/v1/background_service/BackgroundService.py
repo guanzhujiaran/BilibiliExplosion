@@ -74,7 +74,7 @@ class BackgroundService:
     gmflv2_scheduler = GenericCrawlerScheduler(
         crawler=gmflv2,
         cron_expr="0 0 * * *",
-        default_interval_seconds=15 * 3600,
+        default_interval_seconds=1,
         crawler_name='gmflv2'
     )
 

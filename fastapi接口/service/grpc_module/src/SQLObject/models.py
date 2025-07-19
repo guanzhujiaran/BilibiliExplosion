@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Column, Computed, ForeignKeyConstraint, Index, TIMESTAMP, Text, text
+from sqlalchemy import BigInteger, Column, Computed, ForeignKeyConstraint, Index, Integer, TIMESTAMP, Text, text
 from sqlalchemy.dialects.mysql import LONGTEXT, VARCHAR
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.orm.base import Mapped
@@ -54,13 +54,29 @@ class Lotdata(Base):
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
-    bilidyndetail: Mapped['Bilidyndetail'] = relationship('Bilidyndetail', uselist=True, back_populates='lot')
+    article_pub_record: Mapped['ArticlePubRecord'] = relationship('ArticlePubRecord', uselist=False, back_populates='lot_data_business')
+    bilidyndetail: Mapped['Bilidyndetail'] = relationship('Bilidyndetail', uselist=False, back_populates='lot')
+
+
+class ArticlePubRecord(Base):
+    __tablename__ = 'article_pub_record'
+    __table_args__ = (
+        ForeignKeyConstraint(['lot_data_business_id'], ['lotdata.business_id'], name='FK__lotdata'),
+        Index('lot_data_business_id', 'lot_data_business_id', unique=True),
+        {'comment': '发布专栏记录'}
+    )
+
+    lot_data_business_id = mapped_column(BigInteger, nullable=False)
+    pk = mapped_column(BigInteger, primary_key=True)
+    round_id = mapped_column(Integer, comment='每一轮的号码')
+
+    lot_data_business: Mapped['Lotdata'] = relationship('Lotdata', back_populates='article_pub_record')
 
 
 class Bilidyndetail(Base):
     __tablename__ = 'bilidyndetail'
     __table_args__ = (
-        ForeignKeyConstraint(['lot_id'], ['lotdata.lottery_id'], name='biliDynDetail_FK_0_0'),
+        ForeignKeyConstraint(['lot_id'], ['lotdata.lottery_id'], onupdate='CASCADE', name='biliDynDetail_FK_0_0'),
         Index('dynamic_id_int', 'dynamic_id_int'),
         Index('idx_dynamic_created_time', 'dynamic_created_time'),
         Index('idx_dynamic_id', 'dynamic_id'),

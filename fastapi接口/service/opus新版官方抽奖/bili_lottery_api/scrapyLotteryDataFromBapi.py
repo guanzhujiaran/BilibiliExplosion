@@ -10,7 +10,7 @@ from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.grpc_module.grpc.bapi import biliapi
-from utl.pushme.pushme import pushme
+from utl.pushme.pushme import a_pushme
 from utl.redisTool.RedisManager import RedisManagerBase
 
 
@@ -143,7 +143,7 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
                     ))
         except Exception as e:
             self.log.error(f'发生异常！{e}')
-            pushme(title=f'爬取B站lottery异常', content=str(e))
+            await a_pushme(title=f'爬取B站lottery异常', content=str(e))
 
 
 lottery_api_robot_dyn = LotteryApiRobot(business_type=2, sem_num=10)

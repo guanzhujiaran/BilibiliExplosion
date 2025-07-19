@@ -49,7 +49,7 @@ def create_logger(user: UserMap) -> Logger:
         level="WARNING",
         encoding="utf-8",
         enqueue=True,
-        rotation="500MB",
+        rotation="10MB",
         compression="zip",
         retention="15 days",
         filter=lambda record: record["extra"].get('user') == user_uq_value,
@@ -89,3 +89,4 @@ request_with_proxy_logger = create_logger(UserMap.request_with_proxy_logger)
 background_task_logger = create_logger(UserMap.background_task)
 
 httpx_logger = create_logger(UserMap.httpx)
+

@@ -11,7 +11,6 @@ from typing import List, Sequence
 from bs4 import BeautifulSoup
 from py_mini_racer import MiniRacer
 
-import b站cookie.globalvar as gl
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import topic_lot_logger
 from fastapi接口.service.opus新版官方抽奖.Base.generate_cv import GenerateCvBase
@@ -88,6 +87,7 @@ class GenerateTopicLotCv(GenerateCvBase):
                 ops = CvContentOps(
                     insert=_str,
                 )
+                words += len(_str)
                 ops_list.append(ops)
                 if cv_item.lot_type_list:
                     _str = '|'.join([x.value for x in cv_item.lot_type_list]) + sep_str
@@ -509,10 +509,10 @@ class ExtractTopicLottery:
         :return:
         """
         is_need_post, num, all_unread_traffic_card = await self.spider_all_unread_traffic_card()
-        ua3 = gl.get_value('ua3')
-        csrf3 = gl.get_value('csrf3')  # 填入自己的csrf
-        cookie3 = gl.get_value('cookie3')
-        buvid3 = gl.get_value('buvid3_3')
+        ua3 = ""
+        csrf3 = ""  # 填入自己的csrf
+        cookie3 = ""
+        buvid3 = ""
         gc = GenerateTopicLotCv(cookie3, ua3, csrf3, buvid3)
         # gc.post_flag = False  # 不直接发布
         await gc.main(pub_cv=is_need_post)

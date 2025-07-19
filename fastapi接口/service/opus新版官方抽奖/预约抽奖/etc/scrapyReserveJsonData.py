@@ -146,8 +146,10 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         while 1:
             if not is_refresh:
                 has_reserve_relation_ids = await self.sqlHelper.get_reserve_by_ids(sid)
-            else:
+                round_id = self.now_round_id
+            else:  # 如果是刷新
                 has_reserve_relation_ids = None
+                round_id = None
             if not is_force_api and has_reserve_relation_ids and has_reserve_relation_ids.code == 0 and has_reserve_relation_ids.sid is not None:
                 req1_dict = has_reserve_relation_ids.raw_JSON
             else:
@@ -157,7 +159,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
                     is_use_available_proxy=self._is_use_available_proxy
                 )
                 req1_dict.update({'ids': sid})
-                await self.sqlHelper.add_reserve_info_by_resp_dict(req1_dict, self.now_round_id)  # 添加预约json到数据库
+                await self.sqlHelper.add_reserve_info_by_resp_dict(req1_dict, round_id)  # 添加预约json到数据库
             if is_refresh:
                 return WorkerStatus.complete
             async with self.file_list_lock:

@@ -1,7 +1,9 @@
 import asyncio
 import gc
 import json
-from copy import deepcopy
+
+from fastapi import Body
+
 from fastapi接口.controller.common.base import new_router
 from fastapi接口.dao.redisConn import r
 from fastapi接口.log.base_log import myfastapi_logger
@@ -9,7 +11,7 @@ from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserve
 from fastapi接口.service.bili_live_monitor.src.monitor import BiliLiveLotRedisManager
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingListV2 import GetRmFollowingListV2, gmflv2
+from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingListV2 import gmflv2
 from fastapi接口.service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import \
     toutiaoSpaceFeedLotService
 from fastapi接口.service.zhihu.获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import zhihu_lotScrapy
@@ -56,8 +58,8 @@ async def app_avaliable_api():
 # endregion
 
 # region 基于Grpc api的功能实现
-@router.post('/v1/post/RmFollowingList')
-async def v1_post_rm_following_list(data: list[int | str]):
+@router.post('/v1/post/RmFollowingList', response_model=list, description='获取需要取关的up主列表')
+async def v1_post_rm_following_list(data: list[int | str] = Body()):
     """
     取关接口 调用的是b站appp端的grpc协议接口，没那么容易被风控
     :param data: list[int] 关注列表 直接传列表即可

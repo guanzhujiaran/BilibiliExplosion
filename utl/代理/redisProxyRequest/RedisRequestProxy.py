@@ -20,7 +20,7 @@ from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyE
 from socksio import ProtocolError
 
 from CONFIG import CONFIG
-from fastapi接口.log.base_log import request_with_proxy_logger
+from fastapi接口.log.base_log import request_with_proxy_logger, Voucher352_logger
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request412Error, Request352Error, \
     RequestProxyResponseError, RequestKnownError
@@ -265,6 +265,7 @@ class RequestWithProxy:
                             proxy_tab=proxy,
                         )
                     case -352:
+                        Voucher352_logger.critical(f"代理{proxy.proxy} 报错-352 被封禁\n{kwargs}")
                         await handle_proxy_352(
                             proxy_tab=proxy,
                         )

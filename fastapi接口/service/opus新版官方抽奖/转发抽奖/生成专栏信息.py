@@ -5,7 +5,7 @@
 import datetime
 import random
 import time
-from typing import Literal
+from typing import Literal, List
 
 from fastapi接口.service.opus新版官方抽奖.Base.generate_cv import GenerateCvBase
 from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvContent, CvContentOps, CvContentAttr, CutOff, \
@@ -20,7 +20,7 @@ class GenerateOfficialLotCv(GenerateCvBase):
         self.abstract = abstract
 
     def zhuanlan_format(self, zhuanlan_dict: dict[str, list[LotDetail]], blank_space: int = 0,
-                        inline_sep_str: str = '\t') -> (CvContent, int):
+                        inline_sep_str: str = ' ') -> (CvContent, int):
         """
 
         :param zhuanlan_dict:
@@ -39,6 +39,10 @@ class GenerateOfficialLotCv(GenerateCvBase):
 
         ret: CvContent = CvContent(ops=[])
         words = 0
+        change_line_ops = CvContentOps(
+            insert="\n"
+        )
+
         for _ in range(blank_space):
             cut_off_ops = CvContentOps(  # 分隔符不占用文字长度，不需要计算
                 attributes=CvContentAttr(**{"class": "cut-off"}),
@@ -52,18 +56,24 @@ class GenerateOfficialLotCv(GenerateCvBase):
             # 'subType', 'productIdPrice', 'ids', 'reserve_products' , 'etime_str'
         for lottery_end_date, __lot_detail_list in zhuanlan_dict.items():
             selected_color_class_key = random.choice(list(Color))
+            rand_color_ops = CvContentAttr(color=selected_color_class_key)
             ret.ops.append(handle_lot_detail_ops(
                 show_str=lottery_end_date,
                 attr_type=CvContentAttr(color=selected_color_class_key)
             ))
-            ret.ops.append(
-                CvContentOps(
-                    insert="\n"
-                )
-            )
+            ret.ops.append(change_line_ops)  # 日期换行
             for __lot_detail in __lot_detail_list:
-                selected_color_class_key = random.choice(list(Color))
                 ops_list = []
+                if not __lot_detail.article_pub_record:
+                    _str = '【新】' + inline_sep_str
+                else:
+                    _str = '【\u3000】' + inline_sep_str
+                ops_list.append(
+                    handle_lot_detail_ops(
+                        show_str=_str,
+                        attr_type=rand_color_ops
+                    )
+                )
                 if __lot_detail.dynamic_id:
                     _str = '动态链接' + inline_sep_str
                     ops_list.append(
@@ -89,7 +99,7 @@ class GenerateOfficialLotCv(GenerateCvBase):
                         handle_lot_detail_ops(
                             show_str=_str,
                             attr_type=CvContentAttr(
-                                link=f"https://www.bilibili.com/opus/{__lot_detail.dynamic_id}",
+                                color=selected_color_class_key
                             )
                         )
                     )
@@ -97,9 +107,7 @@ class GenerateOfficialLotCv(GenerateCvBase):
                 ops_list.append(
                     handle_lot_detail_ops(
                         show_str=_str,
-                        attr_type=CvContentAttr(
-                            color=selected_color_class_key
-                        )
+                        attr_type=rand_color_ops
                     )
                 )
                 if __lot_detail.second_prize_cmt:
@@ -107,9 +115,7 @@ class GenerateOfficialLotCv(GenerateCvBase):
                     ops_list.append(
                         handle_lot_detail_ops(
                             show_str=_str,
-                            attr_type=CvContentAttr(
-                                color=selected_color_class_key
-                            )
+                            attr_type=rand_color_ops
                         )
                     )
                 if __lot_detail.third_prize_cmt:
@@ -117,36 +123,27 @@ class GenerateOfficialLotCv(GenerateCvBase):
                     ops_list.append(
                         handle_lot_detail_ops(
                             show_str=_str,
-                            attr_type=CvContentAttr(
-                                color=selected_color_class_key
-                            )
+                            attr_type=rand_color_ops
                         )
                     )
                 _str = f"概率:{__lot_detail.chance}{inline_sep_str}"
                 ops_list.append(
                     handle_lot_detail_ops(
                         show_str=_str,
-                        attr_type=CvContentAttr(
-                            color=selected_color_class_key
-                        )
+                        attr_type=rand_color_ops
                     )
                 )
                 _str = __lot_detail.__dict__.get('etime_str')
                 ops_list.append(
                     handle_lot_detail_ops(
                         show_str=_str,
-                        attr_type=CvContentAttr(
-                            color=selected_color_class_key
-                        )
+                        attr_type=rand_color_ops
                     )
                 )
 
                 ret.ops.extend(ops_list)
-            ret.ops.append(
-                CvContentOps(
-                    insert="\n"
-                )
-            )
+                ret.ops.append(change_line_ops)  # 单条数据换行
+            ret.ops.append(change_line_ops)  # 下个日期换行
         return ret, words
 
     def zhuanlan_date_sort(self, zhuanlan_data_order_by_date: [LotDetail], limit_date_switch: bool = False,
@@ -195,8 +192,7 @@ class GenerateOfficialLotCv(GenerateCvBase):
         return sorted(zhuanlan_data, key=lambda x: x['etime'])
 
     async def main(self,
-                   all_official_lot_detail: [LotDetail],
-                   latest_official_lot_detail: [LotDetail],
+                   all_official_lot_detail: List[LotDetail],
                    lot_type: Literal["官方抽奖", "充电抽奖"],
                    pub_cv: bool = True,
                    save_to_local_file: bool = True
@@ -207,19 +203,6 @@ class GenerateOfficialLotCv(GenerateCvBase):
         all_official_lot_detail.sort(key=lambda x: x.lottery_time, reverse=True)  # 降序
         zhuanlan_data = self.zhuanlan_date_sort(all_official_lot_detail)
         cv_content, words = self.zhuanlan_format(zhuanlan_data)
-
-        latest_official_lot_detail.sort(key=lambda x: x.lottery_time, reverse=True)  # 降序
-        zhuanlan_data1 = self.zhuanlan_date_sort(latest_official_lot_detail)
-        cv_content1, words1 = self.zhuanlan_format(zhuanlan_data1)
-
-        if zhuanlan_data1:
-            cv_content2, words2 = self.zhuanlan_format({"更新内容": []}, 3)
-        else:
-            cv_content2 = CvContent(ops=[])
-            words2 = 0
-        cv_content.ops.extend(cv_content2.ops)
-        cv_content.ops.extend(cv_content1.ops)
-        words += words1 + words2
         today = datetime.datetime.today()
         _ = datetime.timedelta(days=1)
         next_day = today + _

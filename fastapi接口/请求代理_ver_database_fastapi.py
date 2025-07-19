@@ -2,8 +2,6 @@
 import asyncio
 import uvloop
 
-from fastapi接口.controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
-
 uvloop.install()
 import io
 import os
@@ -48,6 +46,7 @@ from fastapi接口.controller.common import CommonRouter
 from fastapi接口.controller.v1.background_service import MQController
 from fastapi接口.controller.v1.samsClub import samsClubController
 from fastapi接口.models.common import CommonResponseModel
+from fastapi接口.controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
 
 @asynccontextmanager

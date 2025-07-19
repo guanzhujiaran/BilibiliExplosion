@@ -10,8 +10,13 @@ class lotteryArticleReq(CustomBaseModel):
     save_to_local_file: bool = Field(False, description="是否保存到本地文件")
 
 
-class lotteryArticleResp(CustomBaseModel):
-    reserve: str
-    official: str
-    charge: str
-    topic: str
+class ArticleInfo(CustomBaseModel):
+    title: str
+    content: str
+
+
+class LotteryArticleResp(CustomBaseModel):
+    reserve: ArticleInfo
+    official: ArticleInfo
+    charge: ArticleInfo
+    topic: ArticleInfo

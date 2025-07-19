@@ -13,5 +13,4 @@
 >> # __可选功能__
 > >> [根据日期获取抽奖信息](fastapi接口/service/grpc_module/src/根据日期获取抽奖动态/getLotDynSortByDate.py)\
 [根据关键词查询动态](fastapi接口/service/grpc_module/src/获取特殊关键词动态/getKeyWordDynDetail.py)\
-[获取取关信息脚本](fastapi接口/service/grpc_module/src/获取取关对象/GetRmFollowingList.py)\
 [获取别人空间和gitee里面的抽奖](fastapi接口/service/get_others_lot_dyn/get_other_lot_main.py)

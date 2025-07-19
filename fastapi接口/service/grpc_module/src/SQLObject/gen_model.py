@@ -1,8 +1,5 @@
 import os
-
-if __name__ == '__main__':
-    # 创建数据库命令
-    # Base.metadata.create_all(checkfirst=True, bind=engine)
-    from CONFIG import CONFIG
-    SQLITE_URI = CONFIG.database.MYSQL.dyn_detail
-    os.system(f'sqlacodegen_v2 {SQLITE_URI} > models.py')
+from sqlacodegen_v2 import generate_models
+from CONFIG import CONFIG
+SQL_URI = CONFIG.database.MYSQL.dyn_detail.replace('+aiomysql', '+pymysql').replace('&autocommit=true', '')
+generate_models(db_url=SQL_URI, outfile_path='./models.py')

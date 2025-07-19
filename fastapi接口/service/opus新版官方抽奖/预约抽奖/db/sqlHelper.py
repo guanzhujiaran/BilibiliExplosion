@@ -1,17 +1,19 @@
+import asyncio
 import json
 import time
-import asyncio
+from typing import Callable, Union, Sequence
 from urllib import parse
 from urllib.parse import urlparse
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from sqlalchemy.orm import InstrumentedAttribute
-from typing import Callable, Union, Sequence
+
 from sqlalchemy import inspect, select, and_, func
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.orm import InstrumentedAttribute
+
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import reserve_lot_logger
+from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from utl.pushme.pushme import pushme
-from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 
 lock = asyncio.Lock()
 
@@ -102,8 +104,6 @@ class _SqlHelper:
         reserve_info.raw_JSON = origin_resp_dict
         if round_id:
             reserve_info.reserve_round_id = round_id
-        else:
-            reserve_info.reserve_round_id = None
         if new_field:
             reserve_info.new_field = str(new_field)
         await self._add_reserve_info_by_resp_dict(reserve_info)
@@ -112,6 +112,8 @@ class _SqlHelper:
     async def get_latest_reserve_round(self, readonly=False) -> TReserveRoundInfo:
         async with self._session() as session:
             sql = select(TReserveRoundInfo).order_by(TReserveRoundInfo.id.desc()).limit(1)
+            if readonly:
+                sql = sql.where(TReserveRoundInfo.is_finished == True)
             result = await session.execute(sql)
             result = result.scalars().first()
             if not result:
@@ -219,10 +221,7 @@ class _SqlHelper:
             sql = select(TUpReserveRelationInfo).filter(
                 and_(
                     TUpReserveRelationInfo.lotteryType == 1,
-                    TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
-                    TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
-                    TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
-                    TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
+                    TUpReserveRelationInfo.state.notin_([-100, -300, -110, 150])
                 )
             ).order_by(TUpReserveRelationInfo.etime.asc())
             result = await session.execute(sql)
@@ -241,10 +240,8 @@ class _SqlHelper:
                 and_(
                     TUpReserveRelationInfo.lotteryType == 1,
                     TUpReserveRelationInfo.etime >= int(time.time()),
-                    TUpReserveRelationInfo.state != -100,  # 失效的预约抽奖
-                    TUpReserveRelationInfo.state != -300,  # 失效的预约抽奖
-                    TUpReserveRelationInfo.state != -110,  # 开了的预约抽奖
-                    TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
+                    TUpReserveRelationInfo.state.notin_([-100, -300, -110, 150])
+
                 )
             ).order_by(TUpReserveRelationInfo.etime.asc())
             result = await session.execute(sql)
@@ -315,7 +312,7 @@ bili_reserve_sqlhelper = _SqlHelper()
 # region 测试用代码
 
 async def _test_solve_reserve_resp():
-    a = await bili_reserve_sqlhelper.get_all_available_reserve_lotterys()
+    a = await bili_reserve_sqlhelper.get_latest_reserve_round(readonly=True)
     print(a)
 
 

@@ -1,13 +1,14 @@
 # -*- coding: utf-8 -*-
 import abc
-import asyncio
 import datetime
 import os
 import random
 import time
 import urllib.parse
 from typing import Union
+
 import aiofiles
+
 from fastapi接口.service.opus新版官方抽奖.Model.GenerateCvModel import CvContent, OpusType
 from utl.pushme.pushme import a_pushme
 from utl.代理.SealedRequests import my_async_httpx
@@ -383,7 +384,7 @@ class GenerateCvBase:
                 await f.write(content)
         except Exception as e:
             print(f'保存文章【{title}】失败！\n{str(e)}')
-            await a_pushme(f'保存文章【{title}】失败！\n{str(e)}')
+            await a_pushme(f'保存文章【{title}】失败！', f'保存文章【{title}】失败！\n{str(e)}')
 
     async def pub_cv(self,
                      title: str,
@@ -402,12 +403,12 @@ class GenerateCvBase:
                                              abstract + cv_content.manualSubmitContent)
         aid = 0
         if pub_cv:
-            aid = await self.article_creative_draft_addupdate(
-                title=title,
-                banner_url="",
-                article_content=cv_content,
-                words=words,
-            )
-        if aid and pub_cv:
-            await self.dynamic_feed_create_opus(draft_id_str=aid, title=title, article_content=cv_content)
+            if aid := await self.article_creative_draft_addupdate(
+                    title=title,
+                    banner_url="",
+                    article_content=cv_content,
+                    words=words,
+            ):
+                await self.dynamic_feed_create_opus(draft_id_str=aid, title=title, article_content=cv_content)
+        cv_content.title = title
         return cv_content

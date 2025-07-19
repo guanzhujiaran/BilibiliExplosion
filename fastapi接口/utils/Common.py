@@ -92,7 +92,7 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
                     sql_log.error(operational_error)
                     await asyncio.sleep(120)
                     continue
-                sql_log.error(operational_error)
+                sql_log.error(f'{_func} \t{operational_error}')
                 await asyncio.sleep(60)
                 continue
             except Exception as e:

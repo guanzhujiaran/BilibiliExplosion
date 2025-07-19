@@ -109,6 +109,7 @@ with open(
 
 class CvContent(CustomBaseModel):
     ops: List[CvContentOps]
+    title: str = ''
 
     @property
     def rawContent(self) -> str:
@@ -121,7 +122,7 @@ class CvContent(CustomBaseModel):
             if x.insert and type(x.insert) is str:
                 content_ls.append(x.insert)
             if x.attributes and x.attributes.link:
-                content_ls.append(x.attributes.link)
+                content_ls.append(x.attributes.link + ' ')  # 连接后面都加一个空格
             if x.insert == CutOff.cut_off_5.value:
                 content_ls.append('\n\n\n')
                 continue
