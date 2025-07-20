@@ -861,7 +861,9 @@ ORDER BY
                 ArticlePubRecord.round_id.desc()
             ).limit(1)
             result = await session.execute(stmt)
-            return result.one_or_none()
+            if row := result.one_or_none():
+                return row.round_id
+            return None
 
     @lock_wrapper
     async def upsert_article_pub_record(self, round_id: int, *business_ids):
@@ -881,8 +883,7 @@ grpc_sql_helper = SQLHelper()
 if __name__ == "__main__":
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.get_all_lot_not_drawn(
-        )
+        result = await grpc_sql_helper.get_article_pub_record_round_id()
         sql_log.debug(len(result))
 
 

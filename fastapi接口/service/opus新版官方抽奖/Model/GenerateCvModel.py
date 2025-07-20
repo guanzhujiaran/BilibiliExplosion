@@ -110,6 +110,7 @@ with open(
 class CvContent(CustomBaseModel):
     ops: List[CvContentOps]
     title: str = ''
+    abstract: str = ""
 
     @property
     def rawContent(self) -> str:
@@ -126,7 +127,7 @@ class CvContent(CustomBaseModel):
             if x.insert == CutOff.cut_off_5.value:
                 content_ls.append('\n\n\n')
                 continue
-        return ''.join(content_ls)
+        return f"{self.abstract}\n{''.join(content_ls)}"
 
     async def toOpusContent(self, _type: OpusType):
         return await asyncio.to_thread(

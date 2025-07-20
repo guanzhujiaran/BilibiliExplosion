@@ -65,7 +65,7 @@ class GenerateReserveLotCv(GenerateCvBase):
             for i in reserve_info_list:
                 selected_color_class_key = random.choice(list(Color))
                 ops_list = []
-                if i.reserve_round_id >= last_round.round_id:
+                if i.reserve_round_id >= last_round.round_id - 1:
                     _str = '【新】' + inline_sep_str
                 else:
                     _str = '【\u3000】' + inline_sep_str
@@ -206,7 +206,7 @@ if __name__ == '__main__':
         buvid3 = ""
         gc = GenerateReserveLotCv(cookie3, ua3, csrf3, buvid3)
         gc.post_flag = is_post
-        await gc.main()
-
+        result = await gc.main()
+        print(result)
 
     asyncio.run(submit_reserve__lot_main(False))

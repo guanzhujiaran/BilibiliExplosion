@@ -411,4 +411,5 @@ class GenerateCvBase:
             ):
                 await self.dynamic_feed_create_opus(draft_id_str=aid, title=title, article_content=cv_content)
         cv_content.title = title
+        cv_content.abstract = abstract
         return cv_content

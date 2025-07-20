@@ -109,7 +109,7 @@ class GenerateTopicLotCv(GenerateCvBase):
                     _str = cv_item.lottery_sid + sep_str
                     ops = CvContentOps(
                         insert=_str,
-                        attributes=CvContentAttr(link=cv_item.jumpUrl)
+                        attributes=CvContentAttr(color=selected_color_class_key)
                     )
                     words += len(_str)
                     ops_list.append(ops)

@@ -269,13 +269,12 @@ class ExtractOfficialLottery:
         """
 
         :param latest_lots_judge_ts:
-        :param abstract:
         :param is_api_update:  是否使用b站api更新一下数据库里的未开奖数据
         :return:
         """
         self.log.debug(f'开始提取官方抽奖和充电抽奖专栏信息！')
         if round_id := await self.sql.get_article_pub_record_round_id():
-            round_id = round_id
+            round_id = round_id + 1
         else:
             round_id = 1
         all_official_lot_detail, all_charge_lot_detail = await self.get_all_lots(

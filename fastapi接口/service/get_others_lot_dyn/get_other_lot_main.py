@@ -1888,15 +1888,12 @@ class GetOthersLotDyn:
 get_others_lot_dyn = GetOthersLotDyn()
 
 if __name__ == '__main__':
-    import aiomonitor
-
-
     async def main():
-        loop = asyncio.get_running_loop()
-        run_forever = loop.create_future()
-        loop.create_task(get_others_lot_dyn.get_new_dyn())
-        with aiomonitor.start_monitor(loop):
-            await run_forever
+        await get_others_lot_dyn.get_new_dyn()
 
 
-    asyncio.run(main())
+    import logging
+    import loguru
+    loguru.logger.remove()
+    logging.basicConfig(level=logging.DEBUG)
+    asyncio.run(main(),debug=True)

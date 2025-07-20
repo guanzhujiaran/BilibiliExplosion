@@ -17,15 +17,14 @@ router = new_router()
 )
 async def get_lottery_article(body: lotteryArticleReq):
     gc_topic = GenerateTopicLotCv(cookie="", ua="", csrf='', buvid="", abstract=body.abstract_msg)
-
-    e = ExtractOfficialLottery()
+    extract_official_lottery = ExtractOfficialLottery()
     gc_reserve = GenerateReserveLotCv('', '', '', '', abstract=body.abstract_msg)
     topic, (official, charge), reserve = await asyncio.gather(
         gc_topic.main(
             pub_cv=False,
             save_to_local_file=body.save_to_local_file
         ),
-        e.save_article(
+        extract_official_lottery.save_article(
             abstract=body.abstract_msg,
             pub_cv=False,
             save_to_local_file=body.save_to_local_file
