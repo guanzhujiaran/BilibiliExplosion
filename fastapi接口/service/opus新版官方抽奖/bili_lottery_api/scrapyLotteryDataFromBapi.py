@@ -8,7 +8,7 @@ from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
+from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.grpc_module.grpc.bapi import biliapi
 from utl.pushme.pushme import a_pushme
 from utl.redisTool.RedisManager import RedisManagerBase
@@ -86,7 +86,7 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
 
     async def solve_reserve_data(self, data: dict):
         reserve_sid = data.get('business_id')
-        reserve_resp = await biliapi.reserve_relation_info(ids=reserve_sid, use_custom_proxy=True)
+        reserve_resp = await biliapi.reserve_relation_info(ids=reserve_sid)
         if da := reserve_resp.get('data', {}):
             stime = da.get('list', {}).get(str(reserve_sid), {}).get('stime')
             if isinstance(stime, int):
@@ -104,7 +104,7 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
             business_id: BusinessIdType
     ) -> WorkerStatus:
         try:
-            resp_dict = await biliapi.get_lot_notice(business_type, business_id, use_custom_proxy=True)
+            resp_dict = await biliapi.get_lot_notice(business_type, business_id)
             self.log.debug(f'params 【{business_type},{business_id}】\n'
                            f' {resp_dict} \n'
                            f'latest_ts:{self.latest_ts}\n'

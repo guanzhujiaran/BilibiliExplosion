@@ -1,9 +1,11 @@
 import asyncio
 import json
 import os
+
 import aiofiles
 from curl_cffi.requests.exceptions import RequestException
 from httpx import HTTPError
+
 from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.service.samsclub.exceptions.error import UnknownError
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import update_do_encrypt_key
@@ -140,8 +142,11 @@ class SamsClubApi:
         if is_succ is not True:
             match resp_code:
                 case "SPU_NOT_EXIST":
-                    self.log.debug(f'{resp_code}')
-                case "AUTH_FAIL" | "INTERNAL_ERROR":
+                    self.log.debug(f'{resp_dict}')
+                case "INTERNAL_ERROR":
+                    self.log.critical(f'{resp_dict}')
+                    await asyncio.sleep(30)
+                case "AUTH_FAIL":
                     if is_updated_encrypt_key:
                         return False
                     self.log.critical(f"被强制登出！{resp_dict}")

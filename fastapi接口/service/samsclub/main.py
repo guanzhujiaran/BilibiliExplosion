@@ -11,11 +11,12 @@ import aiofiles
 from fastapi接口.log.base_log import sams_club_logger
 from fastapi接口.models.v1.background_service.background_service_model import ProgressStatusResp
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
-from fastapi接口.service.BaseCrawler.model.base import WorkerStatus, ParamsType
+from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.service.samsclub.Sql.SqlHelper import sql_helper
 from fastapi接口.service.samsclub.api.samsclub_api import sams_club_api
 from fastapi接口.utils.SleepTimeGen import SleepTimeGenerator
+from utl.pushme.pushme import a_pushme
 
 
 class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
@@ -60,7 +61,6 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
 
     class FilePath:
         fetch_grouping_id_ts = os.path.join(os.path.dirname(__file__), 'fetch_grouping_id_ts.txt')
-        fetch_spu_info_ts = os.path.join(os.path.dirname(__file__), 'fetch_spu_info_ts.txt')
         grouping_data_list = lambda first_cate, second_cate, pn: os.path.join(os.path.dirname(__file__), f'csv/'
                                                                                                          f'{datetime.datetime.now().year}/'
                                                                                                          f'{datetime.datetime.now().month}/'
@@ -147,37 +147,24 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
             is_finished=True
         )
 
-    async def on_run_end(self, end_param: ParamsType):
-        async with aiofiles.open(self.FilePath.fetch_spu_info_ts, 'w') as f:
-            await f.write(str(int(time.time())))
-
-    async def check_latest_run_time(self) -> bool:
-        fetch_spu_info_ts = 0
-        if os.path.exists(self.FilePath.fetch_spu_info_ts):
-            async with aiofiles.open(self.FilePath.fetch_spu_info_ts, 'r') as f:
-                if content := await f.read():
-                    try:
-                        fetch_spu_info_ts = int(content)
-                    except Exception as e:
-                        self.log.error(f"读取文件{self.FilePath.fetch_grouping_id_ts}内容失败，{e}")
-        return int(time.time()) - fetch_spu_info_ts > 15 * 60 * 60
-
     async def main(self):
+        if self.stats_plugin.is_running:
+            async with self.main_lock:
+                if self.stats_plugin.is_running:
+                    return
         async with self.main_lock:
-            if await self.check_latest_run_time():
-                self.log.info(f'已超过15小时，开始更新数据')
-                try:
-                    await self.api.init_headers_info()  # 先更新一下版本信息之类的
-                    await self.grouping_id_downloader()
-                    self.unfinished_tasks = await sql_helper.get_unfinished_tasks()
-                    for task in self.unfinished_tasks:
-                        await self.grouping_list_downloader(**task)  # 继续抓取逻辑
-
-                    self.task_params_list = await self.sql_helper.get_grouping_infos_by_level(
-                        2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
-                    await self.run((0, 0))
-                except Exception as e:
-                    self.log.exception(f"发生异常：{e}")
+            try:
+                await self.api.init_headers_info()  # 先更新一下版本信息之类的
+                await self.grouping_id_downloader()
+                self.unfinished_tasks = await sql_helper.get_unfinished_tasks()
+                for task in self.unfinished_tasks:
+                    await self.grouping_list_downloader(**task)  # 继续抓取逻辑
+                self.task_params_list = await self.sql_helper.get_grouping_infos_by_level(
+                    2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
+                await self.run((0, 0))
+            except Exception as e:
+                self.log.exception(f"发生异常：{e}")
+                await a_pushme(f'[SamsClubCrawler] 发生异常：{e}')
 
     async def get_status(self) -> ProgressStatusResp:
         return ProgressStatusResp(

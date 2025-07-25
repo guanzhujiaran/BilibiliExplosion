@@ -155,8 +155,6 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             else:
                 req1_dict = await reserve_relation_info(
                     sid,
-                    use_custom_proxy=self._use_custom_proxy,
-                    is_use_available_proxy=self._is_use_available_proxy
                 )
                 req1_dict.update({'ids': sid})
                 await self.sqlHelper.add_reserve_info_by_resp_dict(req1_dict, round_id)  # 添加预约json到数据库

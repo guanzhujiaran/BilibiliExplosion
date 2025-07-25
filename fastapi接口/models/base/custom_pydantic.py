@@ -1,23 +1,20 @@
 from typing import Optional, Any, Union, Dict, List
-from pydantic import BaseModel, Field, ConfigDict
+
+from pydantic import BaseModel, Field, ConfigDict, computed_field
+
 
 class CustomBaseModel(BaseModel):
-    extra_fields: Optional[dict] = Field(default_factory=dict, exclude=True)
+    # extra_fields: Optional[Dict[str, Any]] = Field(default_factory=dict, exclude=True)
     model_config = ConfigDict(
-        extra='ignore',
+        extra='allow',
     )
 
-    def __init__(self, **data):
-        # 初始化模型，将多余字段存入 extra_fields 中
-        super().__init__(**data)
-        # 过滤出传入的多余字段
-        if extra := {k: v for k, v in data.items() if k not in self.model_fields}:
-            object.__setattr__(self, 'extra_fields', extra)
-        else:
-            object.__setattr__(self, 'extra_fields', None)
+    @computed_field
+    def extra_fields(self) -> Optional[Dict[str, Any]]:
+        return self.model_extra
 
     def dict(self, **kwargs):
-        original_data  = super().dict(**kwargs)
+        original_data = super().model_dump(**kwargs)
         converted_data = self._convert_large_ints_to_str(original_data)
         return converted_data
 
@@ -32,3 +29,15 @@ class CustomBaseModel(BaseModel):
             return str(data)
         else:
             return data
+
+
+if __name__ == '__main__':
+    class _Test(CustomBaseModel):
+        abcdefg: bool = Field(True, description='a', alias='badjawdl')
+        awdasdwasb: bool = Field(False)
+
+
+    _test = _Test(
+        c=12324
+    )
+    print(_test.dict(by_alias=True))

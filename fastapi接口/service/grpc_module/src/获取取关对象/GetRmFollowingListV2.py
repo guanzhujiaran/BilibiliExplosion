@@ -7,7 +7,7 @@ from fastapi接口.log.base_log import get_rm_following_list_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus, WorkerModel
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
-from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
+from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import BiliSpaceUserItem, HighlightWordList

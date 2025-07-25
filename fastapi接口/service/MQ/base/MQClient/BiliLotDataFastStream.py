@@ -87,7 +87,6 @@ class OfficialReserveChargeLot(BaseFastStreamMQ):
                 business_id=_body.business_id,
                 business_type=_body.business_type,
                 origin_dynamic_id=_body.origin_dynamic_id,
-                use_custom_proxy=True
             )
             newly_lot_data = lot_data.get('data')
             if newly_lot_data:

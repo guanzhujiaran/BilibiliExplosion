@@ -16,7 +16,7 @@ from sqlalchemy.orm import joinedload
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
-from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
+from fastapi接口.utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 from fastapi接口.service.grpc_module.src.SQLObject.models import Bilidyndetail, Lotdata, ArticlePubRecord
 
 sql_log = myfastapi_logger

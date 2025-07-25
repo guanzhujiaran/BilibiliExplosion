@@ -234,12 +234,12 @@ class MYASYNCHTTPX:
             headers = list(headers)
         impersonate = random.choice(list(BrowserTypeLiteral.__args__))
         resp = await self.session.get(url=url,
-                                      headers=headers,
+                                      # headers=headers,
                                       timeout=timeout,
                                       params=params,
                                       proxy=format_proxy_str,
                                       verify=False,
-                                      default_headers=False,
+                                      # default_headers=False,
                                       impersonate=impersonate
                                       )
         return resp

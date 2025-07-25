@@ -15,7 +15,6 @@ import Bilibili_methods.all_methods
 from fastapi接口.log.base_log import get_others_lot_logger as get_others_lot_log
 from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotuserspaceresp, TLotdyninfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
@@ -29,7 +28,9 @@ from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import 
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper as mysq
 from fastapi接口.utils.Common import asyncio_gather
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 from utl.pushme.pushme import pushme
+from utl.代理.mdoel.RequestConf import RequestConf
 
 BAPI = Bilibili_methods.all_methods.methods()
 ctx = MiniRacer()
@@ -848,12 +849,12 @@ class BiliDynamicItem:
                     dynamic_req = await get_polymer_web_dynamic_detail(
                         rid=self.dynamic_rid,
                         dynamic_type=self.dynamic_type,
-                        is_use_available_proxy=self.is_use_available_proxy
+                        request_conf=RequestConf(is_use_available_proxy=self.is_use_available_proxy)
                     )
                 else:
                     dynamic_req = await get_polymer_web_dynamic_detail(
                         dynamic_id=self.dynamic_id,
-                        is_use_available_proxy=self.is_use_available_proxy
+                        request_conf=RequestConf(is_use_available_proxy=self.is_use_available_proxy)
                     )
         except Exception as e:
             get_others_lot_log.exception(e)
@@ -1239,11 +1240,13 @@ class BiliSpaceUserItem:
             else:
                 start_ts = time.time()
                 get_others_lot_log.debug(f'正在前往获取用户【{self.uid}】空间动态请求！')
-                dyreq_dict = await asyncio.create_task(get_space_dynamic_req_with_proxy(
-                    self.uid,
-                    cur_offset if cur_offset else "",
-                    is_use_available_proxy=self.is_use_available_proxy
-                ))
+                dyreq_dict = await asyncio.create_task(
+                    get_space_dynamic_req_with_proxy(
+                        self.uid,
+                        cur_offset if cur_offset else "",
+                        RequestConf(is_use_available_proxy=self.is_use_available_proxy)
+                    )
+                )
                 code = dyreq_dict.get('code')
                 msg = dyreq_dict.get('message')
                 if code != 0:
@@ -1894,6 +1897,7 @@ if __name__ == '__main__':
 
     import logging
     import loguru
+
     loguru.logger.remove()
     logging.basicConfig(level=logging.DEBUG)
-    asyncio.run(main(),debug=True)
+    asyncio.run(main(), debug=True)

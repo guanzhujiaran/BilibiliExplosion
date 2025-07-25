@@ -5,63 +5,10 @@ from fastapi接口.service.grpc_module.Utils.CONST import ANDROID_VERSIONS
 
 
 class UserAgentParser:
-    def __init__(self, user_agent, is_mobile=False, fetch_dest='empty', fetch_mode='cors', fetch_site='same-site'):
+    def __init__(self, user_agent, is_mobile=False):
         self.user_agent = user_agent
         self.is_mobile = is_mobile
-        self.fetch_dest = fetch_dest
-        self.fetch_mode = fetch_mode
-        self.fetch_site = fetch_site
-        self.sec_ch_ua = self.parse_user_agent()
-        self.sec_ch_ua_mobile = self.parse_sec_ch_ua_mobile()
-        self.sec_ch_ua_platform = self.parse_sec_ch_ua_platform()
 
-    def parse_user_agent(self):
-        # 解析User-Agent字符串
-        if 'Chrome' in self.user_agent:
-            match = re.search(r'Chrome/(\d+)', self.user_agent)
-            if match:
-                chrome_version = match.group(1)
-                return f'"Chromium";v="{chrome_version}", "Google Chrome";v="{chrome_version}", "Not;A=Brand";v="99"'
-
-        if 'Edg' in self.user_agent:
-            match = re.search(r'Edg/(\d+)', self.user_agent)
-            if match:
-                edge_version = match.group(1)
-                return f'"Chromium";v="{edge_version}", "Microsoft Edge";v="{edge_version}", "Not;A=Brand";v="24"'
-
-        if 'Firefox' in self.user_agent:
-            match = re.search(r'Firefox/(\d+\.\d+)', self.user_agent)
-            if match:
-                firefox_version = match.group(1)
-                return f'"Not;A=Brand";v="99", "Mozilla Firefox";v="{firefox_version}"'
-
-        if 'Safari' in self.user_agent and 'Version' in self.user_agent:
-            match = re.search(r'Version/(\d+\.\d+)', self.user_agent)
-            if match:
-                safari_version = match.group(1)
-                return f'"Not;A=Brand";v="99", "Safari";v="{safari_version}"'
-
-        # 如果没有匹配到已知的浏览器，返回默认值
-        return '"Unknown";v="0"'
-
-    def parse_sec_ch_ua_mobile(self):
-        # 根据is_mobile属性设置sec-ch-ua-mobile
-        return '?1' if self.is_mobile else '?0'
-
-    def parse_sec_ch_ua_platform(self):
-        # 解析平台信息
-        if 'Windows' in self.user_agent:
-            return '"Windows"'
-        elif 'Mac' in self.user_agent:
-            return '"macOS"'
-        elif 'Linux' in self.user_agent:
-            return '"Linux"'
-        elif 'Android' in self.user_agent:
-            return '"Android"'
-        elif 'iOS' in self.user_agent:
-            return '"iOS"'
-        else:
-            return '"Unknown"'
 
     def get_headers_dict(self, *args) -> dict:
         origin_headers = {
@@ -69,16 +16,6 @@ class UserAgentParser:
             'accept': '*/*',
             'accept-language': 'zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2',
             'accept-encoding': 'gzip, deflate, br, zstd',
-            'referer': '',
-            'origin': '',
-            'cookie': '',
-            'priority': 'u=4',
-            'sec-ch-ua': self.sec_ch_ua,
-            'sec-ch-ua-mobile': self.sec_ch_ua_mobile,
-            'sec-ch-ua-platform': self.sec_ch_ua_platform,
-            'sec-fetch-dest': self.fetch_dest,
-            'sec-fetch-mode': self.fetch_mode,
-            'sec-fetch-site': self.fetch_site,
         }
         filtered_headers_dict = {key: value for key, value in origin_headers.items() if value}
         origin_headers.update(*args)

@@ -279,7 +279,7 @@ async def make_metadata(
         ).SerializeToString()),
         ("x-bili-metadata-bin", Metadata(**metadata_params).SerializeToString()),
         ("x-bili-metadata-ip-region", "CN"),
-        ("x-bili-metadata-legal-region","CN"),
+        ("x-bili-metadata-legal-region", "CN"),
         ("x-bili-network-bin", Network(type=NetworkType.WIFI, oid=random.choice(['46000',
                                                                                  '46002',
                                                                                  '46007',
@@ -721,14 +721,15 @@ async def get_bili_ticket(device_info: bytes,
     proto_bytes = reqdata.SerializeToString()
     compressed_proto_bytes = gzip.compress(proto_bytes, compresslevel=6)
     data = b"\01" + len(compressed_proto_bytes).to_bytes(4, "big") + compressed_proto_bytes
+    proxy = CONFIG.custom_proxy
     while 1:
         try:
             resp = await myreq.request(
                 url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',
-                method='post',
+                method='POST',
                 data=data,
                 headers=tuple(new_headers),
-                proxies=CONFIG.custom_proxy,
+                proxies=proxy,
                 verify=False
             )
             gresp = GetTicketResponse()

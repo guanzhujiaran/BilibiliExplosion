@@ -11,7 +11,7 @@ from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
-from fastapi接口.service.common_utils.dynamic_id_caculate import dynamic_id_2_ts
+from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice, reserve_relation_info
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.DynObjectClass import dynAllDetail
@@ -42,7 +42,7 @@ class SuccCounter(BaseSuccCounter):
 
 class DynDetailScrapy(UnlimitedCrawler):
     def __init__(self):
-        max_sem = 30
+        max_sem = 500
         self.offset = 10  # 每次获取rid的数量，数值最好不要超过10，太大的话传输会出问题
         self.BiliGrpc = bili_grpc
         self.succ_times = 0

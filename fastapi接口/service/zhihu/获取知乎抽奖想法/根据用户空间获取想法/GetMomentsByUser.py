@@ -112,7 +112,6 @@ class LotScrapy:
         self.playwright = PlaywrightOperator(
             CONFIG.playwright_user_dir.zhihu.value,
             headless=self._headless,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
         )
 
     async def init(self):
@@ -395,7 +394,7 @@ class LotScrapy:
         await self.playwright.page.screenshot(path='./1.pdf', full_page=True)
 
 
-zhihu_lotScrapy = LotScrapy(headless=True)
+zhihu_lotScrapy = LotScrapy(headless=False)
 
 if __name__ == "__main__":
     asyncio.run(zhihu_lotScrapy._test_robot_tech())

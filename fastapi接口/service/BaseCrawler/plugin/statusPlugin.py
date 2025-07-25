@@ -27,6 +27,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self._processed_items_count: int = 0  # Fundamental counter
         self._null_count: int = 0
         self._succ_count: int = 0
+        self._running_params_set: set[str] = set()  # 把参数转换成字符串,避免unhashable的参数
 
     async def on_run_start(self, init_params: ParamsType):
         """
@@ -40,6 +41,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self._processed_items_count = 0
         self._null_count = 0
         self._succ_count = 0
+        self._running_params_set = set()
         await super().on_run_start(init_params)
 
     async def on_worker_end(self, worker_model: WorkerModel):
@@ -57,10 +59,15 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
                 self._null_count += 1
         self._end_params = worker_model.params
         # Log current speed by calling the property, which calculates it on demand
+        self._running_params_set.discard(str(worker_model.params))
         self.log.debug(
             f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
             f"Current Speed: {self.crawling_speed:.2f} items/s")
         await super().on_worker_end(worker_model)
+
+    async def on_worker_start(self, worker_model: WorkerModel):
+        self._running_params_set.add(str(worker_model.params))
+        await super().on_worker_start(worker_model)
 
     async def on_run_end(self, end_param: ParamsType):
         """
@@ -160,6 +167,10 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
     def succ_count(self) -> int:
         """成功处理的任务数量"""
         return self._succ_count
+
+    @property
+    def running_params_str_set(self) -> set[str]:
+        return self._running_params_set
 
     def get_all_status(self) -> dict:
         """

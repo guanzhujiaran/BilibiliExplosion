@@ -9,14 +9,12 @@ from patchright.async_api._generated import Response, BrowserContext
 
 
 class PlaywrightOperator:
-    def __init__(self, user_data_dir: str, *, headless=False, proxy: ProxySettings | None = None,
-                 user_agent: str | None = None):
+    def __init__(self, user_data_dir: str, *, headless=False, proxy: ProxySettings | None = None, **kwargs):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.user_data_dir = os.path.join(current_dir, 'user_data', user_data_dir)
         print(f'用户数据目录: {self.user_data_dir}')
         self._headless = headless
         self._proxy = proxy
-        self._user_agent = user_agent
         self.playwright: Playwright | None = None
         self.browser_context: BrowserContext | None = None
         self.context = None
@@ -35,7 +33,7 @@ class PlaywrightOperator:
     async def launch(self):
         """启动浏览器"""
         async with self._lock:
-            if self.browser_context and self.browser_context.browser.is_connected():
+            if self.browser_context and self.browser_context.browser and self.browser_context.browser.is_connected():
                 return
             if self.playwright:
                 await self.playwright.stop()
@@ -44,7 +42,7 @@ class PlaywrightOperator:
                 user_data_dir=self.user_data_dir,
                 headless=self._headless,
                 proxy=self._proxy,
-                user_agent=self._user_agent
+                no_viewport=True,
             )
             pages = self.browser_context.pages
             if pages:
@@ -186,7 +184,10 @@ class PlaywrightOperator:
         ctrl2 = mid - ctrl_offset
         steps = max(15, int(distance // 2.5))  # 保证 5-10 ms 一步
         t = np.linspace(0, 1, steps)
-        curve = ((1 - t) ** 3)[:, None] * src + 3 * ((1 - t) ** 2 * t)[:, None] * ctrl1 + 3 * ((1 - t) * (t ** 2))[:, None] * ctrl2 + (t ** 3)[:, None] * dst
+        curve = ((1 - t) ** 3)[:, None] * src + 3 * ((1 - t) ** 2 * t)[:, None] * ctrl1 + 3 * ((1 - t) * (t ** 2))[:,
+                                                                                              None] * ctrl2 + (t ** 3)[
+                                                                                                              :,
+                                                                                                              None] * dst
         curve += np.random.normal(0, 2, curve.shape)
 
         # 3. 变速：对数正态分布给每段步长

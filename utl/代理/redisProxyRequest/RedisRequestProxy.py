@@ -30,6 +30,7 @@ from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateEx
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.SealedRequests import my_async_httpx
+from utl.代理.mdoel.RequestConf import RequestConf
 from utl.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods
 from utl.代理.数据库操作.ProxyCommOp import get_available_proxy
 from utl.代理.数据库操作.ProxyEvent import handle_proxy_412, handle_proxy_352, handle_proxy_request_fail, \
@@ -142,19 +143,19 @@ class RequestWithProxy:
         return await SQLHelper.select_proxy('rand', channel=self.channel)
 
     async def request_with_proxy(self,
-                                 is_use_available_proxy: bool = False,
-                                 is_use_cookie: bool = False,
-                                 is_use_custom_proxy: bool = False,
-                                 is_return_raw_response: bool = False,
-                                 **kwargs) -> dict | list[dict]:
+                                 request_conf: RequestConf = RequestConf(),
+                                 **kwargs) -> dict | list[dict] | curl_cffi.requests.models.Request:
         """
-        :param is_use_available_proxy:
-        :param args:
+        :param request_conf:
         :param kwargs:
         :mode single|rand 设置代理是否选择最高的单一代理还是随机
         :hybrid 是否将本地ipv6代理加入随机选择中
         :return:
         """
+        is_use_available_proxy: bool = request_conf.is_use_available_proxy
+        is_use_cookie: bool = request_conf.is_use_cookie
+        is_use_custom_proxy: bool = request_conf.is_use_custom_proxy
+        is_return_raw_response: bool = request_conf.is_return_raw_response
         use_my_ipv6_proxy_pool_weights = 10  # 使用自己的ipv6代理池的权重
         use_real_proxy_weights = 1000  # 使用抓取的代理的权重
         status = 0
@@ -213,50 +214,51 @@ class RequestWithProxy:
                 self.log.info(req_text.replace('\n', ''))
             if '<div class="txt-item err-text">由于触发哔哩哔哩安全风控策略，该次访问请求被拒绝。</div>' in req_text:
                 raise Request412Error(req_text, -412)
-            req_dict = req.json()
-            if type(req_dict) is list:
-                if proxy:
-                    # self.log.critical(
-                    #     f'获取请求成功代理：{proxy.proxy}\n{kwargs.get("url")}')
-                    await handle_proxy_succ(
-                        proxy_tab=proxy,
-                    )
-                return req_dict
-            if type(req_dict) is not dict:
-                self.log.critical(f'请求获取的req_dict类型出错！{req_dict}')
-            if ((req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict == {'code': 5,
-                                                                                                       'message': 'Not Found'}) or req_dict.get(
-                'msg') == 'system error' and 'bili' in req.url.host):
-                raise RequestProxyResponseError(f'代理返回真实响应错误！\n{req.text}\n{kwargs}\n', -500)
+            if not is_return_raw_response:
+                req_dict = req.json()
+                if type(req_dict) is list:
+                    if proxy:
+                        # self.log.critical(
+                        #     f'获取请求成功代理：{proxy.proxy}\n{kwargs.get("url")}')
+                        await handle_proxy_succ(
+                            proxy_tab=proxy,
+                        )
+                    return req_dict
+                if type(req_dict) is not dict:
+                    self.log.critical(f'请求获取的req_dict类型出错！{req_dict}')
+                if ((req_dict.get('code') is None or type(req_dict.get('code')) is not int or req_dict == {'code': 5,
+                                                                                                           'message': 'Not Found'}) or req_dict.get(
+                    'msg') == 'system error' and 'bili' in req.url.host):
+                    raise RequestProxyResponseError(f'代理返回真实响应错误！\n{req.text}\n{kwargs}\n', -500)
 
-            if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
-                if cookie_data:
-                    cookie_data.times_352 += 1
-                status = -412
-                err_msg = f'{req_dict.get("code")}报错,换个ip\t{proxy}\t{self._timeshift(time.time())}\t{req_dict}\n{kwargs}\n{req.headers}'
-                if req_dict.get('code') == 65539:
-                    pass
-                if req_dict.get('code') == -412:
-                    raise Request412Error(err_msg, -412)
-                elif req_dict.get('code') == -352:
-                    voucher = req.headers.get('x-bili-gaia-vvoucher')
-                    ua = req.request.headers.get('user-agent')
-                    task = asyncio.create_task(BiliLotDataPublisher.pub_bili_voucher(body=VoucherInfo(
-                        voucher=voucher,
-                        ua=ua,
-                        generate_ts=int(time.time()),
-                        ck=cookie_data.ck if cookie_data else "",
-                        origin=origin,
-                        referer=referer,
-                        ticket='',
-                        version="",
-                        session_id=""
-                    ))
-                    )
-                    self.task_set.add(task)
-                    task.add_done_callback(self.task_set.discard)
-                    raise Request352Error(err_msg, -352)
-                raise Request412Error(err_msg, req_dict.get('code'))
+                if req_dict.get('code') == -412 or req_dict.get('code') == -352 or req_dict.get('code') == 65539:
+                    if cookie_data:
+                        cookie_data.times_352 += 1
+                    status = -412
+                    err_msg = f'{req_dict.get("code")}报错,换个ip\t{proxy}\t{self._timeshift(time.time())}\t{req_dict}\n{kwargs}\n{req.headers}'
+                    if req_dict.get('code') == 65539:
+                        pass
+                    if req_dict.get('code') == -412:
+                        raise Request412Error(err_msg, -412)
+                    elif req_dict.get('code') == -352:
+                        voucher = req.headers.get('x-bili-gaia-vvoucher')
+                        ua = req.request.headers.get('user-agent')
+                        task = asyncio.create_task(BiliLotDataPublisher.pub_bili_voucher(body=VoucherInfo(
+                            voucher=voucher,
+                            ua=ua,
+                            generate_ts=int(time.time()),
+                            ck=cookie_data.ck if cookie_data else "",
+                            origin=origin,
+                            referer=referer,
+                            ticket='',
+                            version="",
+                            session_id=""
+                        ))
+                        )
+                        self.task_set.add(task)
+                        task.add_done_callback(self.task_set.discard)
+                        raise Request352Error(err_msg, -352)
+                    raise Request412Error(err_msg, req_dict.get('code'))
         except (Request412Error, Request352Error) as _err:
             if proxy:
                 match (_err.code):
@@ -309,7 +311,7 @@ class RequestWithProxy:
                     proxy_tab=proxy,
                 )
             raise _err
-        if req_dict is False:
+        if req_dict is False and is_return_raw_response is False:
             raise ValueError('请求返回的req_dict是False')
         if proxy:
             # self.log.critical(

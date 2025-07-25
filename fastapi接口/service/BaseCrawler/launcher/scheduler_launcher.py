@@ -109,11 +109,15 @@ class GenericCrawlerScheduler:
     def _add_or_update_job(self):
         job = GLOBAL_SCHEDULER.get_job(self.job_id)
         if job:
-            GLOBAL_SCHEDULER.reschedule_job(job_id=self.job_id, trigger=self.trigger)
+            GLOBAL_SCHEDULER.reschedule_job(
+                job_id=self.job_id,
+                trigger=self.trigger,
+            )
         else:
             # 强制首次任务立即执行
             GLOBAL_SCHEDULER.add_job(
                 self.run,
+                name=self.job_id,
                 trigger=self.trigger,
                 id=self.job_id,
                 next_run_time=datetime.now(),  # 立即执行第一次

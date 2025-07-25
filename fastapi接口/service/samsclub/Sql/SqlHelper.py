@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Sequence
 
 from sqlalchemy import update, select, func, and_, case
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -264,7 +264,7 @@ class SQLHelper:
         return res
 
     @sql_retry_wrapper
-    async def get_grouping_infos_by_parent_grouping_id(self, paren_grouping_id: int | str) -> List[GroupingInfo]:
+    async def get_grouping_infos_by_parent_grouping_id(self, paren_grouping_id: int | str) -> Sequence[GroupingInfo]:
         async with self.async_session() as db:
             result = await db.execute(
                 select(GroupingInfo)
@@ -274,7 +274,7 @@ class SQLHelper:
         return res
 
     @sql_retry_wrapper
-    async def get_grouping_infos_by_level(self, level: int) -> List[GroupingInfo]:
+    async def get_grouping_infos_by_level(self, level: int) -> Sequence[GroupingInfo]:
         """
         查询所有未完成的任务（is_finished != 1）
         返回 [ {first_category_id: int, second_category_id: int}, ... ]

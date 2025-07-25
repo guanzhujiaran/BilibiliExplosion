@@ -10,7 +10,7 @@ from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from CONFIG import CONFIG
-from fastapi接口.service.common_utils.dynamic_id_caculate import ts_2_fake_dynamic_id
+from fastapi接口.utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotdyninfo, \
     TLotuserspaceresp, TRiddynid
 from fastapi接口.utils.Common import sql_retry_wrapper

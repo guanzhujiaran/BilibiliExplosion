@@ -29,17 +29,16 @@ class ZhihuMethod:
         'x-requested-with': 'fetch'
     }
 
-    async def __request(self, *args, **kwargs) -> (dict, str):
+    async def __request(self,**kwargs) -> (dict, str):
         while 1:
             try:
                 proxy_flag = kwargs.pop('proxy_flag') if 'proxy_flag' in list(kwargs.keys()) else False
                 resp = None
                 if proxy_flag:
-                    req_dict = await self.request_with_proxy.request_with_proxy(*args, **kwargs, mode='single')
+                    req_dict = await self.request_with_proxy.request_with_proxy( **kwargs)
                     resp_text = json.dumps(req_dict)
                 else:
                     resp = await my_async_httpx.request(
-                        *args,
                         **kwargs,
                         proxies=CONFIG.custom_proxy
                     )

@@ -52,6 +52,9 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         运行的主函数的逻辑，可以加一些乱七八糟的函数进去
         """
 
+    async def on_worker_start(self, worker_model: WorkerModel):
+        await asyncio_gather(*[x.on_worker_start(worker_model) for x in self._plugins], log=self.log)
+
     async def on_worker_end(self, worker_model: WorkerModel):
         await asyncio_gather(*[x.on_worker_end(worker_model) for x in self._plugins], log=self.log)
 
@@ -61,6 +64,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
     async def worker(self):
         async with self.sem:
             worker_model: WorkerModel = await self.task_queue.get()
+            await self.on_worker_start(worker_model)
             try:
                 fetch_result = await self.handle_fetch(worker_model.params)
             except Exception as e:
@@ -110,9 +114,6 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         await asyncio_gather(*task_set, log=self.log)
         self.log.info(f'所有任务已完成。')
         await self.on_run_end(last_param_yielded if last_param_yielded is not None else init_params)
-        await asyncio_gather(*[x.on_run_end(last_param_yielded if last_param_yielded is not None else init_params)
-                               for x in self._plugins],
-                             log=self.log)
 
         self.log.info(f"Crawler {self.__class__.__name__} run finished.")
         while not self.task_queue.empty():
