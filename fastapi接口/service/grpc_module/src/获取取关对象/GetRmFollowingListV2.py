@@ -20,7 +20,7 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
     def __init__(self):
         self.status = StatsPlugin(self)
         super().__init__(
-            max_sem=10,
+            max_sem=500,
             _logger=get_rm_following_list_logger,
             plugins=[
                 self.status

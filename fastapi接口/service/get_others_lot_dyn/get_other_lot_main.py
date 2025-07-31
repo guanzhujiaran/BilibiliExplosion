@@ -19,7 +19,7 @@ from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TL
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigLot.judgeBigLot import big_lot_predict
 from fastapi接口.service.get_others_lot_dyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_space_dynamic_req_with_proxy, \
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import get_space_dynamic_req_with_proxy, \
     get_polymer_web_dynamic_detail, get_reply_main
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
@@ -1244,7 +1244,10 @@ class BiliSpaceUserItem:
                     get_space_dynamic_req_with_proxy(
                         self.uid,
                         cur_offset if cur_offset else "",
-                        RequestConf(is_use_available_proxy=self.is_use_available_proxy)
+                        RequestConf(
+                            is_use_available_proxy=self.is_use_available_proxy,
+                            is_use_cookie=True,
+                        )
                     )
                 )
                 code = dyreq_dict.get('code')
@@ -1258,6 +1261,11 @@ class BiliSpaceUserItem:
                         f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}',
                         'text'
                     )
+                    if code == 4101128:
+                        get_others_lot_log.critical(
+                            f'用户【{self.uid}】空间动态发生异常，准备重新尝试！\n{msg}')
+                        await asyncio.sleep(30)
+                        continue
                     if code == 4101129:
                         get_others_lot_log.critical(
                             f'用户【{self.uid}】空间动态请求失败！\n{msg}')
@@ -1282,7 +1290,7 @@ class BiliSpaceUserItem:
             except Exception as e:
                 get_others_lot_log.critical(f'解析空间动态失败！\n{e}\n{self.uid} {cur_offset}')
                 get_others_lot_log.exception(e)
-                continue
+                break
             if not repost_dynamic_id_list:
                 get_others_lot_log.info(f'{self.uid}空间动态数量为0!{repost_dynamic_id_list}')
                 break

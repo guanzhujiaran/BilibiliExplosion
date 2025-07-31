@@ -17,7 +17,7 @@ from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_s
 from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
 from fastapi接口.service.grpc_module.Models.RabbitmqModel import VoucherInfo
 from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import geetest_v3_breaker
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import get_lot_notice
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy

@@ -6,10 +6,8 @@ from fastapi接口.log.base_log import topic_lot_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin
-from fastapi接口.service.grpc_module.grpc.bapi import biliapi
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import RequestConf
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import RequestConf,get_web_topic
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import ExtractTopicLottery
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, \
     TTrafficCard, \
@@ -171,7 +169,7 @@ class TopicRobot(UnlimitedCrawler[int]):
 
     async def pipeline(self, topic_id) -> WorkerStatus:
         try:
-            resp_dict = await biliapi.get_web_topic(topic_id, request_conf=RequestConf(use_custom_proxy=True))
+            resp_dict = await get_web_topic(topic_id)
             topic_lot_logger.debug(f'topic_id 【{topic_id}】 {resp_dict}')
             async with self._traffic_card_lock:
                 return await self.save_resp(topic_id, resp_dict)

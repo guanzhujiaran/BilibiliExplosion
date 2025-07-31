@@ -9,8 +9,7 @@ class UserAgentParser:
         self.user_agent = user_agent
         self.is_mobile = is_mobile
 
-
-    def get_headers_dict(self, *args) -> dict:
+    def get_headers_dict(self, extra_headers_dict: dict | None=None) -> dict:
         origin_headers = {
             'user-agent': self.user_agent,
             'accept': '*/*',
@@ -18,7 +17,8 @@ class UserAgentParser:
             'accept-encoding': 'gzip, deflate, br, zstd',
         }
         filtered_headers_dict = {key: value for key, value in origin_headers.items() if value}
-        origin_headers.update(*args)
+        if extra_headers_dict:
+            filtered_headers_dict.update(extra_headers_dict)
         return filtered_headers_dict
 
     @staticmethod
@@ -91,5 +91,5 @@ class UserAgentParser:
 if __name__ == "__main__":
     # 使用示例
     user_agent = 'Dalvik/2.1.0 (Linux; U; Android 5.1; Impress Style Build/LMY47I) 8.2.0 os/android model/Impress Style mobi_app/android build/8020300 channel/360 innerVer/8020300 osVer/5.1 network/2'
-    ua_parser = UserAgentParser.parse_h5_ua(user_agent, '114514','1919810')
+    ua_parser = UserAgentParser.parse_h5_ua(user_agent, '114514', '1919810')
     print(ua_parser)

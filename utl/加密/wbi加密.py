@@ -1,17 +1,20 @@
-from copy import deepcopy
 import base64
 import json
-from enum import StrEnum
 import random
-from typing import Literal, Dict
-import requests
 import time
 import urllib.parse
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from functools import reduce
 from hashlib import md5
+from typing import Literal, Dict
+
+import requests
+
 from utl.redisTool.RedisManager import RedisManagerBase
+from utl.加密.utils import GenWebCookieParams
 
 HEADERS = {
     "authority": "api.bilibili.com",
@@ -204,7 +207,13 @@ async def get_wbi_params(params: dict) -> Dict[Literal["w_rid", "wts"], str]:
     return encWbi(new_pm, img_key, sub_key)
 
 
-def gen_dm_args(params: dict):
+def get_dm_cover_img_str(gen_bili_web_cookie_params: GenWebCookieParams):
+    sss = gen_bili_web_cookie_params.webgl_renderer
+    dm_cover_img_str = base64_encode(sss)
+    return dm_cover_img_str
+
+
+def gen_dm_args(params: dict,gen_bili_web_cookie_params:GenWebCookieParams):
     """reference: https://github.com/Nemo2011/bilibili-api/blob/49b47197adb29f5ae9a974f090165dfe69ed0bba/bilibili_api/utils/network.py#L1890"""
 
     # def gen_dm_img():
@@ -217,7 +226,7 @@ def gen_dm_args(params: dict):
     #     _dm_cover_img_str = base64_encode(sss)
     #     return _dm_cover_img_str
 
-    dm_rand = 'ABCDEFGHIJK'
+    # dm_rand = 'ABCDEFGHIJK'
     # dm_img_list = json.dumps([gen_dm_img() for _ in range(random.randint(1, 3))],
     #                          separators=(',', ':'))
     # dm_img_str = ''.join(
@@ -231,27 +240,30 @@ def gen_dm_args(params: dict):
     #                                                            150)
     #                                           )
     #                            )  # "QU5HTEUgKEludGVsLCBJbnRlbChSKSBIRCBHcmFwaGljcyA2MzAgKDB4MDAwMDU5MUIpIERpcmVjdDNEMTEgdnNfNV8wIHBzXzVfMCwgRDNEMTEpR29vZ2xlIEluYy4gKEludGVsKQ"
-    # same_of = random.randint(300, 500)
-    # dm_img_inter = json.dumps({
-    #     "ds": [],
-    #     "wh": [
-    #         # random.randint(1800, 1920),
-    #         # random.randint(950, 1080),
-    #         # random.randint(40, 100)
-    #     ],
-    #     "of": [
-    #         # same_of,
-    #         # random.randint(600, 900),
-    #         # same_of
-    #     ]
-    # },
-    #     separators=(',', ':'))
+    of_middle = random.randint(100, 900)
+    same_of = random.randint(100, of_middle)
+    dm_img_inter = json.dumps(
+        {
+            "ds": [],
+            "wh": [
+                random.randint(1800, 1920),
+                random.randint(950, 1080),
+                random.randint(20, 150)
+            ],
+            "of": [
+                same_of,
+                random.randint(100, 900),
+                same_of
+            ]
+        },
+        separators=(',', ':')
+    )
     params.update(
         {
             "dm_img_list": "[]",  # 鼠标/键盘操作记录
-            "dm_img_str": "".join(random.sample(dm_rand, 2)),
-            "dm_cover_img_str": "".join(random.sample(dm_rand, 2)),
-            "dm_img_inter": '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
+            "dm_img_str": "V2ViR0wgMS4wIChPcGVuR0wgRVMgMi4wIENocm9taXVtKQ",
+            "dm_cover_img_str": get_dm_cover_img_str(gen_bili_web_cookie_params),
+            "dm_img_inter": dm_img_inter,
         }
     )
 

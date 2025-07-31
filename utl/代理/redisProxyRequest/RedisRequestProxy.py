@@ -1,34 +1,28 @@
 # -*- coding: utf-8 -*-
 # 由redis和mysql实现数据的统一
 import asyncio
-import json
 import random
 import time
 from dataclasses import dataclass
-from enum import StrEnum
 from functools import reduce
 from json import JSONDecodeError
 from ssl import SSLError
-from typing import Union
 
 import curl_cffi
 from exceptiongroup import ExceptionGroup
 from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout, ReadTimeout, ReadError, InvalidURL, \
     WriteError, NetworkError, TooManyRedirects, HTTPError
-from loguru import logger
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
 
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import request_with_proxy_logger, Voucher352_logger
+from fastapi接口.models.AntiRisk.Bili.WebCookie import BiliWebCookie, CookieWrapper
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.grpc_module.Models.CustomRequestErrorModel import Request412Error, Request352Error, \
-    RequestProxyResponseError, RequestKnownError
+    RequestProxyResponseError, RequestKnownError, RequestUnknownError
 from fastapi接口.service.grpc_module.Models.RabbitmqModel import VoucherInfo
-from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import ExClimbWuzhi, \
-    APIExClimbWuzhi
 from fastapi接口.utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from utl.redisTool.RedisManager import RedisManagerBase
 from utl.代理.SealedRequests import my_async_httpx
 from utl.代理.mdoel.RequestConf import RequestConf
 from utl.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods
@@ -39,100 +33,15 @@ from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from utl.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 
 
-@dataclass
-class CookieWrapper:
-    ck: str
-    ua: str
-    expire_ts: int
-    times_352: bool = 0
-
-    @property
-    def able(self) -> bool:
-        if self.times_352 > 10:
-            return False
-        return True
-
-
-@dataclass
-class CheckProxyTime:
-    last_checked_ts: int = 0
-    checked_ts_sep: int = 2 * 3600
-
-    def to_dict(self) -> dict:
-        return {
-            'last_checked_ts': self.last_checked_ts,
-            'checked_ts_sep': self.checked_ts_sep
-        }
-
-
-class ProxyRedisManager(RedisManagerBase):
-    class RedisMap(StrEnum):
-        check_proxy_time = 'check_proxy_time'
-
-    def __init__(self):
-        super().__init__()
-
-    async def get_check_proxy_time(self) -> CheckProxyTime:
-        resp = await self._get(self.RedisMap.check_proxy_time.value)
-        if not resp:
-            default_value = CheckProxyTime()
-            await self._set(self.RedisMap.check_proxy_time.value, json.dumps(default_value.to_dict()))
-            return default_value
-        else:
-            return CheckProxyTime(**json.loads(resp))
-
-    async def set_check_proxy_time(self, check_proxy_time: CheckProxyTime):
-        return await self._set(self.RedisMap.check_proxy_time.value, json.dumps(check_proxy_time.to_dict()))
-
-
 class RequestWithProxy:
 
     def __init__(self):
-        self.redis = ProxyRedisManager()
         self.use_p_dict_flag = False
         self.channel = 'bili'
         self.log = request_with_proxy_logger
-        self.check_proxy_time: CheckProxyTime = CheckProxyTime()
-        self.__dir_path = CONFIG.root_dir + 'utl/代理/'
         self.timeout = 30
         self.available_proxy_timeout = 30
-        self.fake_cookie_list: list[CookieWrapper] = []
-        self.cookie_queue_num = 0
         self.task_set = set()
-
-    async def Get_Bili_Cookie(self, ua: str) -> CookieWrapper:
-        """
-        获取b站cookie
-        :param ua:
-        :return:
-        """
-        cookie_data = None
-        if self.cookie_queue_num <= 50:
-            self.cookie_queue_num += 1
-            cookie_data: Union[CookieWrapper, None] = None
-        else:
-            ret_times = 0
-            while ret_times < 3:
-                ret_times += 1
-                if len(self.fake_cookie_list) > 0:
-                    cookie_data = random.choice(self.fake_cookie_list)
-                    if cookie_data.expire_ts < time.time() or cookie_data.able == False:
-                        self.cookie_queue_num -= 1
-                        self.fake_cookie_list.remove(cookie_data)
-                        continue
-                    break
-                if len(self.fake_cookie_list) == 0 and self.cookie_queue_num == 0:
-                    self.cookie_queue_num += 1
-                    cookie_data = None
-                    break
-        if not cookie_data:
-            logger.debug(
-                f'当前cookie池数量：{len(self.fake_cookie_list)}，总共{self.cookie_queue_num}个cookie信息，前往获取新的cookie')
-            ck = await ExClimbWuzhi.verifyExClimbWuzhi(my_cfg=APIExClimbWuzhi(ua=ua), use_proxy=False)
-            cookie_data = CookieWrapper(ck=ck, ua=ua, expire_ts=int(time.time() + 24 * 3600))  # cookie时间长一点应该没问题吧
-            self.fake_cookie_list.append(cookie_data)
-        # logger.debug(f'当前cookie池数量：{len(self.fake_cookie_list)}')
-        return cookie_data
 
     def _timeshift(self, timestamp):
         local_time = time.localtime(timestamp)
@@ -144,28 +53,24 @@ class RequestWithProxy:
 
     async def request_with_proxy(self,
                                  request_conf: RequestConf = RequestConf(),
+                                 cookie_data: CookieWrapper | None = None,
                                  **kwargs) -> dict | list[dict] | curl_cffi.requests.models.Request:
         """
         :param request_conf:
+        :param cookie_data:
         :param kwargs:
         :mode single|rand 设置代理是否选择最高的单一代理还是随机
         :hybrid 是否将本地ipv6代理加入随机选择中
         :return:
         """
         is_use_available_proxy: bool = request_conf.is_use_available_proxy
-        is_use_cookie: bool = request_conf.is_use_cookie
         is_use_custom_proxy: bool = request_conf.is_use_custom_proxy
         is_return_raw_response: bool = request_conf.is_return_raw_response
         use_my_ipv6_proxy_pool_weights = 10  # 使用自己的ipv6代理池的权重
         use_real_proxy_weights = 1000  # 使用抓取的代理的权重
         status = 0
-        headers = kwargs.get('headers', {})
-        ua = headers.get('user-agent', '') or kwargs.get('headers', {}).get('User-Agent',
-                                                                            '') or CONFIG.rand_ua
         origin = kwargs.get('headers', {}).get('origin', 'https://www.bilibili.com')
         referer = kwargs.get('headers', {}).get('referer', 'https://www.bilibili.com/')
-        kwargs.get('headers').update({'user-agent': ua})
-        cookie_data = None
         used_available_proxy = False
         my_ipv6_proxy = ProxyTab(
             **{
@@ -186,13 +91,6 @@ class RequestWithProxy:
                 use_my_ipv6_proxy_pool_weights if use_my_ipv6_proxy_pool_weights >= 0 else 0,
                 use_real_proxy_weights if use_real_proxy_weights >= 0 else 0
             ], k=1)[0]
-            if is_use_cookie or kwargs.get('headers', {}).get('cookie', '') or kwargs.get('headers', {}).get(
-                    'Cookie', '') and 'x/frontend/finger/spi' not in kwargs.get(
-                'url') and 'x/internal/gaia-gateway/ExClimbWuzhi' not in kwargs.get('url'):
-                cookie_data = await self.Get_Bili_Cookie(ua)
-                kwargs.get('headers').update({'cookie': cookie_data.ck, 'user-agent': cookie_data.ua})
-            else:
-                kwargs.get('headers', {}).update({'cookie': ''})
             if not proxy_flag or status != 0:
                 use_my_ipv6_proxy_pool_weights += 1
                 proxy, used_available_proxy = await get_available_proxy(is_use_available_proxy)
@@ -211,7 +109,8 @@ class RequestWithProxy:
                                                proxies=proxy.proxy)
             req_text = req.text
             if 'code' not in req_text and 'bili' in str(req.url):  # 如果返回的不是json那么就打印出来看看是什么
-                self.log.info(req_text.replace('\n', ''))
+                # self.log.info(req_text.replace('\n', ''))
+                ...
             if '<div class="txt-item err-text">由于触发哔哩哔哩安全风控策略，该次访问请求被拒绝。</div>' in req_text:
                 raise Request412Error(req_text, -412)
             if not is_return_raw_response:
@@ -247,7 +146,7 @@ class RequestWithProxy:
                             voucher=voucher,
                             ua=ua,
                             generate_ts=int(time.time()),
-                            ck=cookie_data.ck if cookie_data else "",
+                            ck=cookie_data.ck.to_str() if cookie_data else "",
                             origin=origin,
                             referer=referer,
                             ticket='',
@@ -275,7 +174,7 @@ class RequestWithProxy:
                         await handle_proxy_request_fail(
                             proxy_tab=proxy,
                         )
-            raise RequestKnownError(_err)
+            raise _err
         except (
                 TooManyRedirects, SSLError, JSONDecodeError, ProxyError, RemoteProtocolError, ConnectError,
                 ConnectTimeout, HTTPError,
@@ -291,14 +190,14 @@ class RequestWithProxy:
                 await handle_proxy_request_fail(
                     proxy_tab=proxy,
                 )
-            raise RequestKnownError(_err)
+            raise RequestProxyResponseError(_err)
         except AttributeError as _err:
             self.log.exception(f'请求时出错，一般错误：{_err}')
             if proxy:
                 await handle_proxy_request_fail(
                     proxy_tab=proxy,
                 )
-            raise RequestKnownError(_err)
+            raise RequestUnknownError(_err)
         except Exception as _err:
             self.log.exception(
                 f'未知请求错误！请求：\n{kwargs}'
@@ -310,7 +209,7 @@ class RequestWithProxy:
                 await handle_proxy_request_fail(
                     proxy_tab=proxy,
                 )
-            raise _err
+            raise RequestUnknownError(_err)
         if req_dict is False and is_return_raw_response is False:
             raise ValueError('请求返回的req_dict是False')
         if proxy:

@@ -4,7 +4,7 @@ from typing import Any, AsyncGenerator
 from fastapi接口.log.base_log import live_monitor_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import ParamsType, WorkerStatus
-from fastapi接口.service.grpc_module.grpc.bapi import biliapi
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import xlive_web_interface_v1_index_getWebAreaList
 
 
 class BiliLiveCrawler(UnlimitedCrawler[int]):
@@ -16,7 +16,7 @@ class BiliLiveCrawler(UnlimitedCrawler[int]):
         sync_live_area_ts = 0
         while 1:
             if int(time.time()) - sync_live_area_ts > 24 * 60 * 60:
-                live_area_list_resp = await biliapi.xlive_web_interface_v1_index_getWebAreaList(use_custom_proxy=True)
+                live_area_list_resp = await xlive_web_interface_v1_index_getWebAreaList(use_custom_proxy=True)
                 self.live_area_list = live_area_list_resp.get('data', {}).get('data', [])
                 sync_live_area_ts = int(time.time())
 

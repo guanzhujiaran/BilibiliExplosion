@@ -2,8 +2,6 @@ import secrets
 import time
 from dataclasses import dataclass, asdict, field
 
-from fastapi接口.service.grpc_module.grpc.prevent_risk_control_tool.activateExClimbWuzhi import APIExClimbWuzhi
-
 _352_cd = 30 * 60
 _max_used_times_one_round = 6
 
@@ -11,12 +9,11 @@ _max_used_times_one_round = 6
 @dataclass
 class MetaDataWrapper:
     md: tuple  # header
+    buvid: str
     expire_ts: int  # 秒级时间戳
     version_name: str  # 8.15.0
     session_id: str  # 会话id，需要保持不变
     guestid: str | int
-    exclimb_wuzhi_cfg: APIExClimbWuzhi
-    cookie: str = ""
     times_352: int = 0
     hash_id: str = field(default_factory=lambda: secrets.token_hex(16))
     used_times: int = 0  # 使用次数

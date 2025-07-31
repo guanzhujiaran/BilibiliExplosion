@@ -8,8 +8,12 @@ import string
 import struct
 import time
 from typing import Optional, Literal, Any
+
 from pydantic import Field
+
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
+from fastapi接口.utils.Constants import GPU_DATABASE
+
 config = {
     'bilibili': {
         'dmImgList': '[{"img_url": "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png"}, {"sub_url": "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png"}]'
@@ -164,14 +168,43 @@ class GenWebCookieParams(CustomBaseModel):
     language: Literal['zh-CN', 'zh-TW', 'en-US', 'en-GB', 'ja-JP', 'ko-KR'] = 'zh-CN'
     timezone: str = "Asia/Shanghai"
     timezoneOffset: int = -480
-    renderer_id: str = Field('')
-    renderer: str = Field('')
+
     payload_str: str = Field('')
     buvid_fp: str = Field('')
+    deviceMemory: int = Field(default_factory=lambda: random.choice(range(4, 33, 4)))
+    CPUCoreNum: int = Field(default_factory=lambda: random.choice(range(4, 25, 4)))
+
+    renderer_id: str = Field('')
+    renderer: str = Field('')
+    webgl_renderer: str = Field(
+        '',
+        description='''类似
+`ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)Google Inc. (AMD`
+''')
 
     def model_post_init(self, context: Any):
-        self.renderer_id = f"#X{''.join([random.choice(string.ascii_letters + '123456789') for x in range(9)])}"
-        self.renderer = f"ANGLE (NVIDIA, NVIDIA GeForce RTX {random.choice('12345')}0{random.choice('56789')}0 Laptop GPU (0x00002560) Direct3D11 vs_5_0 ps_5_0, D3D11) {self.renderer_id}"
+        """
+                在模型初始化后，自动生成并填充随机的 renderer 和 webgl 信息。
+                - webgl_renderer 格式为: ANGLE (...) Google Inc. (厂商)
+                - renderer 格式为: ANGLE (...) #X...随机ID...
+                """
+        # 1. 随机选择一个 GPU 配置
+        selected_gpu = random.choice(GPU_DATABASE)
+        manufacturer = selected_gpu['manufacturer']
+        gpu_name = selected_gpu['name']
+        gpu_id = selected_gpu['id']
+
+        # 2. 生成 renderer ID，它将被用在 renderer 字符串中
+        self.renderer_id = f"#X{''.join(random.choices(string.ascii_letters + string.digits, k=9))}"
+
+        # 3. 定义不变的 ANGLE 核心信息部分，方便复用
+        angle_core_info = f"ANGLE ({manufacturer}, {gpu_name} ({gpu_id}) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+
+        # 4. 生成 webgl_renderer (格式: ... Google Inc. (厂商))
+        self.webgl_renderer = f"{angle_core_info} Google Inc. ({manufacturer})"
+        # 5. 生成 renderer (格式: ... #X...ID...)
+        self.renderer = f"{angle_core_info} {self.renderer_id}"
+
         self.payload_str = BuvidFp.gen_payload(buvid_payload_params=self)
         self.buvid_fp = BuvidFp.gen(self.payload_str, 31)
 

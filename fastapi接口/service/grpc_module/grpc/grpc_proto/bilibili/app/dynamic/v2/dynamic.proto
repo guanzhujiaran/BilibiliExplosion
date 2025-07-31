@@ -5,6 +5,7 @@ package bilibili.app.dynamic.v2;
 import "google/protobuf/any.proto";
 import "bilibili/app/archive/middleware/v1/preload.proto";
 import "bilibili/dagw/component/avatar/v1/avatar.proto";
+import "bilibili/account/service/v1/service.proto";
 
 // v2动态, rpc 按字母顺序排列
 service Dynamic {
@@ -1723,7 +1724,9 @@ enum DynamicType {
     cour_up = 24;          // 
     topic_set = 25;        // 
     notice = 26;           // 
-    text_notice = 27;      // 
+    text_notice = 27;      //
+    onetime_notice = 28;   //
+    manga_ep = 29;         //
 }
 
 // 动态详情页-响应
@@ -1915,6 +1918,16 @@ enum DynModuleType {
     module_blocked = 33;
     module_text_notice = 34;
     module_opus_collection = 35;
+    module_onetime_notice = 36;
+    module_sneaking_ad = 37;
+    module_manga_horizontal_page_pic_content = 38;
+    module_manga_vertical_slide_pic_content = 39;
+    module_manga_cover_pic_content = 40;
+    module_author_for_subscribe = 41;
+    module_author_slim = 42;
+    module_manga_collection = 43;
+    module_cooperation = 44;
+    UNRECOGNIZED = -1;
 }
 
 // 推荐页-响应
@@ -3615,6 +3628,24 @@ message Module {
         ModuleTextNotice module_text_notice = 34;
         // 
         ModuleOpusCollection module_opus_collection = 35;
+        //
+        ModuleOnetimeNotice module_onetime_notice = 36;
+        //
+        ModuleSneakingAd module_sneaking_ad = 37;
+        //
+        ModuleMangaHorizontalPagePicContent module_manga_horizontal_page_pic_content = 38;
+        //
+        ModuleMangaVerticalSlidePicContent module_manga_vertical_slide_pic_content = 39;
+        //
+        ModuleMangaCoverPicContent module_manga_cover_pic_content = 40;
+        //
+        ModuleAuthorForSubscribe module_author_for_subscribe = 41;
+        //
+        ModuleAuthorSlim module_author_slim = 42;
+        //
+        ModuleMangaCollection module_manga_collection = 43;
+        //
+        ModuleCooperation module_cooperation = 44;
     }
 }
 
@@ -4058,6 +4089,180 @@ message ModuleNotice {
     int32 notice_type = 5;
 }
 
+//
+message MangaLikeBrowserGuidance{
+    //
+    bool show_page_right_to_left_guidance = 1;
+    //
+    string page_right_to_left_guidance_text = 2;
+}
+
+message ProtectedStaticResource {
+    //
+    string res_url = 1;
+    //
+    bool is_already_signed = 2;
+    //
+    string sign_param = 3;
+}
+
+//
+message MangaLikePic {
+    //
+    ProtectedStaticResource pic = 1;
+    //
+    int64 width = 2;
+    //
+    int64 height = 3;
+}
+message BasicUserInfoV2 {
+    //
+    int64 mid = 1;
+    //
+    string name = 2;
+    //
+    string face = 3;
+    //
+    bilibili.dagw.component.avatar.v1.AvatarItem avatar = 4;
+    //
+    int64 level = 5;
+    //
+    int64 is_senior_member = 6;
+    //
+    VipInfo vip = 7;
+    //
+    string jump_uri = 8;
+    //
+    Relation relation = 9;
+    //
+    string name_sub_text = 10;
+    //
+    bilibili.account.service.v1.NameRender name_render = 11;
+}
+
+message CooperationUpInfo {
+    BasicUserInfoV2 userInfo = 1;
+    string up_role = 2;
+}
+
+//
+message ModuleCooperation {
+    //
+    string oid = 1;
+    //
+    repeated CooperationUpInfo up_list = 2;
+    //
+    IconButton more_btn = 3;
+    //
+    repeated ThreePointItem tp_list = 4;
+    //
+    string float_title = 5;
+}
+
+//
+message ModuleMangaCollection {
+    //
+    string title_icon = 1;
+    //
+    string title = 2;
+    //
+    string sub_text_left = 3;
+    //
+    string sub_text_right = 4;
+    //
+    SubscribeButton subscribe_btn = 5;
+    //
+    OpusCollection manga_collection_info = 6;
+    //
+    string float_btn_prev_link = 7;
+    //
+    string float_btn_next_link = 8;
+}
+
+//
+message ModuleAuthorSlim {
+    //
+    BasicUserInfoV2 user_info = 1;
+
+}
+
+//
+message SubscribeButton {
+    //
+    message ButtonWithSubscribeParam{
+        //
+        string btn_text = 1;
+        //
+        string btn_icon = 2;
+        //
+        string subscribe_param = 3;
+    }
+    //
+    string subscription_identifier = 1;
+    //
+    bool is_subscribed = 2;
+    //
+    ButtonWithSubscribeParam subscribed_style = 3;
+    //
+    ButtonWithSubscribeParam not_subscribed_style = 4;
+}
+
+//
+message ModuleAuthorForSubscribe {
+
+    //
+    string cover = 1;
+    //
+    string title = 2;
+    //
+    string sub_title = 3;
+    //
+    SubscribeButton subscribe_btn = 4;
+}
+
+//
+message ModuleMangaCoverPicContent {
+    //
+    MangaLikePic manga_pic = 1;
+    //
+    int64 pic_click_action = 2;
+}
+
+//
+message ModuleMangaVerticalSlidePicContent {
+    //
+    MangaLikePic manga_pic = 1;
+    //
+    int64 pic_click_action = 2;
+}
+
+//
+message ModuleMangaHorizontalPagePicContent {
+    //
+    int64 page_direction = 1;
+    //
+    repeated MangaLikePic manga_pics = 2;
+    //
+    int64 pic_click_action = 3;
+    //
+    MangaLikeBrowserGuidance browser_guidance = 4;
+}
+
+//
+message ModuleSneakingAd{
+    //
+    string client_action_type = 1;
+}
+
+//
+message ModuleOnetimeNotice{
+    //
+    string uuid =1;
+    //
+    TextParagraph text_notice = 2;
+    //
+    string jump_uri = 3;
+}
 // 
 message ModuleOpusCollection {
     // 

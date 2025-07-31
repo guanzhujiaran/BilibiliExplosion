@@ -12,8 +12,9 @@ from fastapi接口.log.base_log import Voucher352_logger
 from fastapi接口.service.grpc_module.Utils.UserAgentParser import UserAgentParser
 from fastapi接口.service.grpc_module.Utils.极验.models.captcha_models import GeetestRegInfo, \
     GeetestSuccessTimeCalc
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign, get_geetest_reg_info, validate_geetest
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import appsign
 from fastapi接口.service.grpc_module.Utils.metadata.makeMetaData import gen_trace_id
+from fastapi接口.service.grpc_module.grpc.bapi.GeetestHandler import get_geetest_reg_info, validate_geetest
 
 
 class GeetestV3Breaker:
@@ -168,6 +169,19 @@ class GeetestV3Breaker:
                                          version: str = "",
                                          session_id: str = "",
                                          use_bili_ticket_gt=True, ):
+        """
+        极验点击验证码
+        :param v_voucher:
+        :param ua:
+        :param ck: 传buvid的值就行了
+        :param ori:
+        :param ref:
+        :param ticket:
+        :param version:
+        :param session_id:
+        :param use_bili_ticket_gt:
+        :return:
+        """
         h5_ua = UserAgentParser.parse_h5_ua(ua, ck, session_id=session_id)
         self.log.info(
             f'\n当前成功率：{self.succ_stats.calc_succ_rate()}\n成功数：{self.succ_stats.succ_time}\t总尝试数：{self.succ_stats.total_time}')

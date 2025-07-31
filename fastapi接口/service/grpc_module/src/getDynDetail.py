@@ -12,7 +12,7 @@ from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice, reserve_relation_info
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import get_lot_notice, reserve_relation_info
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.DynObjectClass import dynAllDetail
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper

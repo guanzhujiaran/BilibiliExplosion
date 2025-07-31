@@ -67,41 +67,41 @@ class GetProxyMethods(UnlimitedCrawler):
 
 
 
-    async def get_proxy_from_cn_proxy_tools(self) -> tuple[list, bool]:
-        headers = {
-            'user-agent': CONFIG.rand_ua,
-        }
-        get_proxy_success = True
-        proxy_queue = []
-        for page in range(1, self.get_proxy_page + 1):
-
-            url = f'https://cn.proxy-tools.com/proxy?page={page}'
-            headers.update({'Referer': url})
-            req = await my_async_httpx.get(url=url, verify=False, headers=headers, )
-            if req:
-                html = bs4.BeautifulSoup(req.text, 'html.parser')
-                td = html.select('tr>td')
-                proxies = []
-                for i in range(len(td) // 9):
-                    proxies.append(f'{td[i * 9 + 2].text.strip().lower()}://{td[i * 9].text}')
-
-                # have_proxy = [x['proxy'] for x in self.proxy_list]
-
-                for i in proxies:
-                    if i:
-                        append_dict = format_proxy(i)
-                        if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
-                            continue
-                        # if append_dict not in have_proxy:
-                        proxy_queue.append(append_dict)
-                if len(proxy_queue) < 10:
-                    self.log.info(f'{req.text}, {url}')
-                self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
-            else:
-                self.log.info(f'{req.text}, {url}')
-                get_proxy_success = False
-        return proxy_queue, get_proxy_success
+    # async def get_proxy_from_cn_proxy_tools(self) -> tuple[list, bool]:
+    #     headers = {
+    #         'user-agent': CONFIG.rand_ua,
+    #     }
+    #     get_proxy_success = True
+    #     proxy_queue = []
+    #     for page in range(1, self.get_proxy_page + 1):
+    #
+    #         url = f'https://cn.proxy-tools.com/proxy?page={page}'
+    #         headers.update({'Referer': url})
+    #         req = await my_async_httpx.get(url=url, verify=False, headers=headers, )
+    #         if req:
+    #             html = bs4.BeautifulSoup(req.text, 'html.parser')
+    #             td = html.select('tr>td')
+    #             proxies = []
+    #             for i in range(len(td) // 9):
+    #                 proxies.append(f'{td[i * 9 + 2].text.strip().lower()}://{td[i * 9].text}')
+    #
+    #             # have_proxy = [x['proxy'] for x in self.proxy_list]
+    #
+    #             for i in proxies:
+    #                 if i:
+    #                     append_dict = format_proxy(i)
+    #                     if not append_dict:
+    #                         self.log.exception(f'代理格式错误！{i}\n{td}')
+    #                         continue
+    #                     # if append_dict not in have_proxy:
+    #                     proxy_queue.append(append_dict)
+    #             if len(proxy_queue) < 10:
+    #                 self.log.info(f'{req.text}, {url}')
+    #             self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+    #         else:
+    #             self.log.info(f'{req.text}, {url}')
+    #             get_proxy_success = False
+    #     return proxy_queue, get_proxy_success
 
     async def get_proxy_from_kuaidaili_dps(self) -> tuple[list, bool]:
         headers = {
@@ -2248,64 +2248,64 @@ class GetProxyMethods(UnlimitedCrawler):
             get_proxy_success = False
         return proxy_queue, get_proxy_success
 
-    async def get_proxy_from_elliottophellia_proxylist_http(self) -> tuple[list, bool]:
-        headers = {
-            'user-agent': CONFIG.rand_ua
-        }
-        get_proxy_success = True
-        req = ''
-        proxy_queue = []
-        url = f'https://cdn.rei.my.id/proxy/pHTTP'
-        req = await my_async_httpx.get(
-            url=url,
-            headers=headers,
-            verify=False,
-            
-            proxies=_github_proxy
-        )
-        if req:
-            proxies = []
-            for i in req.text.split('\n'):
-                if _ := i.strip():
-                    append_dict = format_proxy(_)
-                    if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
-                        continue
-                    proxy_queue.append(append_dict)
-            if len(proxy_queue) < 10:
-                self.log.info(f'{req.text}, {url}')
-            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
-        else:
-            self.log.info(f'{req.text}, {url}')
+    # async def get_proxy_from_elliottophellia_proxylist_http(self) -> tuple[list, bool]:
+    #     headers = {
+    #         'user-agent': CONFIG.rand_ua
+    #     }
+    #     get_proxy_success = True
+    #     req = ''
+    #     proxy_queue = []
+    #     url = f'https://cdn.rei.my.id/proxy/pHTTP'
+    #     req = await my_async_httpx.get(
+    #         url=url,
+    #         headers=headers,
+    #         verify=False,
+    #
+    #         proxies=_github_proxy
+    #     )
+    #     if req:
+    #         proxies = []
+    #         for i in req.text.split('\n'):
+    #             if _ := i.strip():
+    #                 append_dict = format_proxy(_)
+    #                 if not append_dict:
+    #                     self.log.exception(f'代理格式错误！{_}')
+    #                     continue
+    #                 proxy_queue.append(append_dict)
+    #         if len(proxy_queue) < 10:
+    #             self.log.info(f'{req.text}, {url}')
+    #         self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+    #     else:
+    #         self.log.info(f'{req.text}, {url}')
+    #
+    #         get_proxy_success = False
+    #     return proxy_queue, get_proxy_success
 
-            get_proxy_success = False
-        return proxy_queue, get_proxy_success
-
-    async def get_proxy_from_elliottophellia_proxylist_socks5(self) -> tuple[list, bool]:
-        headers = {
-            'user-agent': CONFIG.rand_ua
-        }
-        get_proxy_success = True
-        req = ''
-        proxy_queue = []
-        url = f'https://cdn.rei.my.id/proxy/pSOCKS5'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
-        if req:
-            proxies = []
-            for i in req.text.split('\n'):
-                if _ := i.strip():
-                    append_dict = format_proxy(_, protocol='socks5')
-                    if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
-                        continue
-                    proxy_queue.append(append_dict)
-            if len(proxy_queue) < 10:
-                self.log.info(f'{req.text}, {url}')
-            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
-        else:
-            self.log.info(f'{req.text}, {url}')
-            get_proxy_success = False
-        return proxy_queue, get_proxy_success
+    # async def get_proxy_from_elliottophellia_proxylist_socks5(self) -> tuple[list, bool]:
+    #     headers = {
+    #         'user-agent': CONFIG.rand_ua
+    #     }
+    #     get_proxy_success = True
+    #     req = ''
+    #     proxy_queue = []
+    #     url = f'https://cdn.rei.my.id/proxy/pSOCKS5'
+    #     req = await my_async_httpx.get(url=url, headers=headers, verify=False, )
+    #     if req:
+    #         proxies = []
+    #         for i in req.text.split('\n'):
+    #             if _ := i.strip():
+    #                 append_dict = format_proxy(_, protocol='socks5')
+    #                 if not append_dict:
+    #                     self.log.exception(f'代理格式错误！{_}')
+    #                     continue
+    #                 proxy_queue.append(append_dict)
+    #         if len(proxy_queue) < 10:
+    #             self.log.info(f'{req.text}, {url}')
+    #         self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
+    #     else:
+    #         self.log.info(f'{req.text}, {url}')
+    #         get_proxy_success = False
+    #     return proxy_queue, get_proxy_success
 
     async def get_proxy_from_officialputuid_KangProxy_KangProxy_https(self) -> tuple[list, bool]:
         headers = {

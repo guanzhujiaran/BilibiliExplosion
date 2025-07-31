@@ -104,8 +104,12 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
 
 
 async def asyncio_gather(*coros_or_futures, log: _logger = myfastapi_logger):
-    results = await asyncio.gather(*coros_or_futures, return_exceptions=True)
-    for result in results:
-        if isinstance(result, Exception):
-            log.opt(exception=True).exception(result)
+    async def _handle_coroutine(coro):
+        try:
+            return await coro
+        except Exception as e:
+            log.exception(f"协程 [{coro._coro.cr_code}] 执行失败.")
+
+    coros_or_futures_wrapped = map(_handle_coroutine, coros_or_futures)
+    results = await asyncio.gather(*coros_or_futures_wrapped, return_exceptions=True)
     return results

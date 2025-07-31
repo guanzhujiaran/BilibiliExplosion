@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import uvloop
-
 uvloop.install()
 import io
 import os
@@ -15,7 +14,6 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 from loguru import logger
 from starlette.requests import Request
 from starlette.responses import Response
-import aiomonitor
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../'))  # 将CONFIG导入
 current_dir = os.path.dirname(__file__)
@@ -48,25 +46,22 @@ from fastapi接口.controller.v1.samsClub import samsClubController
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    loop = asyncio.get_running_loop()
-    with aiomonitor.start_monitor(loop, hook_task_factory=True, webui_port=CONFIG.aiomonitor_webui.port):
-        myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
-        show_log = False
-        back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
-        GLOBAL_SCHEDULER.start()
-        yield
-        myfastapi_logger.critical("正在取消其他服务")
-        [
-            x.cancel() for x in back_ground_tasks
-        ]
-        await asyncio_gather(*back_ground_tasks, log=myfastapi_logger)
-        myfastapi_logger.critical("其他服务已取消")
+    myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
+    show_log = False
+    back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
+    GLOBAL_SCHEDULER.start()
+    yield
+    myfastapi_logger.critical("正在取消其他服务")
+    [
+        x.cancel() for x in back_ground_tasks
+    ]
+    await asyncio_gather(*back_ground_tasks, log=myfastapi_logger)
+    myfastapi_logger.critical("其他服务已取消")
 
 
-app = FastAPI(lifespan=lifespan, debug=True)
+app = FastAPI(lifespan=lifespan)
 fastapi_cdn_host.patch_docs(app)
 app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)
@@ -125,7 +120,7 @@ async def global_middleware(request: Request, call_next):
             None
         )
 
-        raise HTTPException(
+        return HTTPException(
             status_code=500,
             detail=CommonResponseModel(code=400, msg=str(err)),
         )

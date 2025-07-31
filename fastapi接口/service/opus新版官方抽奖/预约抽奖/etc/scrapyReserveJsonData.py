@@ -14,7 +14,7 @@ from fastapi接口.log.base_log import reserve_lot_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler, ParamsType
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import reserve_relation_info
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import reserve_relation_info
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, ProgressCounter
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper

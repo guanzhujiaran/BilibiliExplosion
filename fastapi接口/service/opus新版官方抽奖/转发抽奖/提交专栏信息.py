@@ -10,7 +10,7 @@ import pandas as pd
 
 from fastapi接口.log.base_log import official_lot_logger
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import get_lot_notice
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import get_lot_notice
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata

@@ -19,7 +19,7 @@ from fastapi接口.service.grpc_module.Models.GrpcApiBaseModel import MetaDataBa
 from fastapi接口.service.grpc_module.Utils.CONST import MemSizes, CPUFreqs, ProductDevices, Languages, Countries, \
     NetworkTypes, UsbStates, \
     CPUAbiLists, CPUHardwares, ANDROID_VERSIONS, BatteryStates, ANDROID_KERNELS, ScreenDPIs
-from fastapi接口.service.grpc_module.grpc.bapi.biliapi import appsign
+from fastapi接口.service.grpc_module.grpc.bapi.Utils import appsign
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.api.ticket.v1.ticket_pb2 import GetTicketResponse, \
     GetTicketRequest
 from fastapi接口.service.grpc_module.grpc.grpc_proto.bilibili.metadata.device.device_pb2 import Device
@@ -157,7 +157,7 @@ class MetaDataNeedInfo:
         else:
             BiliGrpcApi_logger.error('解析Dalvik失败！')
             BiliGrpcApi_logger.error(f'{Dalvik}\n{build, device_model, osver, version_name, brand, channel}')
-        self.ua = (f'grpc-c++/1.47.0 {Dalvik} '
+        self.ua = (f'grpc-c++/1.66.2 {Dalvik} '
                    f'{self.version_name} '
                    f'os/android '
                    f'model/{self.device_model} '
@@ -168,7 +168,7 @@ class MetaDataNeedInfo:
                    f'osVer/{self.osver} '
                    f'network/2 '
                    f'grpc-java-ignet/1.36.1 '
-                   f'grpc-c/25.0.0 '
+                   f'grpc-c/43.0.0 '
                    f'(android; ignet_http)')
 
     def init_from_ua(self, ua: str, brand: str):
@@ -259,7 +259,7 @@ async def make_metadata(
         ("grpc-accept-encoding", "identity, deflate, gzip"),
         ("grpc-encoding", "gzip"),
         ("grpc-timeout", "18S"),
-        ("ignet_grpc_annotation_id", f"{random.choice(range(100, 200))}"),
+        ("ignet_grpc_annotation_id", f"{random.choice(range(1, 200))}"),
         ("te", "trailers"),
         ("user-agent", metaDataNeedInfo.ua),
         ('x-bili-aurora-eid', ''),
