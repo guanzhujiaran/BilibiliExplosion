@@ -33,3 +33,5 @@ ecosystem.config.js
 /.virtual_documents
 /.ipynb_checkpoints
 /fastapi接口/__test
+fastapi接口/service/toutiao/src/Tools/Enc/node_modules
+fastapi接口/service/grpc_module/Utils/极验/Geetest_html
