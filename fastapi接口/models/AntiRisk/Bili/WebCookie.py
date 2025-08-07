@@ -34,7 +34,6 @@ class BiliWebCookie(CustomBaseModel):
         self.buvid_fp = self.gen_web_cookie_params.buvid_fp
         self.uuid = self.gen_web_cookie_params.uuid
         self.browser_resolution = f'{self.gen_web_cookie_params.avail_w}-{self.gen_web_cookie_params.avail_h}'
-        self._is_used = False
 
     def to_str(self, include_keys: List["BiliWebCookie.model_fields"] | None = None) -> str:
         """
@@ -45,14 +44,11 @@ class BiliWebCookie(CustomBaseModel):
         if include_keys is None:
             include_keys = order
         exclude_keys = ['gen_web_cookie_params','extra_fields']
-        if self._is_used:
-            exclude_keys.append('__at_once')
         order[:] = [x for x in order if x not in exclude_keys]
         ret = ''
         for key in order:
             if key in include_keys and cookie_dict.get(key):
                 ret += f'{key}={cookie_dict.get(key)}; '
-        self._is_used = True
         return ret.strip('; ')
 
 @dataclass

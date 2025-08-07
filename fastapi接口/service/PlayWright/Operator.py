@@ -12,7 +12,6 @@ class PlaywrightOperator:
     def __init__(self, user_data_dir: str, *, headless=False, proxy: ProxySettings | None = None, **kwargs):
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.user_data_dir = os.path.join(current_dir, 'user_data', user_data_dir)
-        print(f'用户数据目录: {self.user_data_dir}')
         self._headless = headless
         self._proxy = proxy
         self.playwright: Playwright | None = None

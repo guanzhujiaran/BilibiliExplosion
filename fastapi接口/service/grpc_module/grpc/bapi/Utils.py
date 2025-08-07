@@ -36,7 +36,7 @@ def request_wrapper(func: Callable):
             try:
                 resp_dict = await func(*args, **kwargs)
                 return resp_dict
-            except RequestKnownError:
+            except RequestKnownError as e:
                 # 已知可忽略的错误，直接重试
                 continue
             except Exception as e:
