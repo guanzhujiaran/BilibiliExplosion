@@ -5,13 +5,13 @@ from typing import Optional, AsyncGenerator, Any
 
 import aiofiles
 from apscheduler.triggers.cron import CronTrigger
-from loguru import logger as default_logger  # 统一别名为 default_logger
+from loguru import logger as default_logger
 
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import ParamsType, WorkerStatus
 from fastapi接口.utils.Common import GLOBAL_SCHEDULER
 from utl.pushme.pushme import async_pushme_try_catch_decorator
-
+import asyncio
 
 class CrawlerExecutionInfo:
     def __init__(
@@ -80,12 +80,12 @@ class GenericCrawlerScheduler:
             crawler_name: Optional[str] = None
     ):
         self.crawler = crawler
+        self.crawler_asyncio_task = None
         self.crawler_name = crawler_name if crawler_name else crawler.__class__.__name__
         self.cron_expr = cron_expr
         self.default_interval_seconds = default_interval_seconds
         self.job_id = f"crawler_job_{self.crawler_name}"
         self.logger = self.crawler.log
-
         # 初始化执行信息管理器
         self.exec_info = CrawlerExecutionInfo(
             crawler_name=self.crawler_name,
@@ -102,7 +102,7 @@ class GenericCrawlerScheduler:
             month=month,
             day_of_week=day_of_week
         )
-
+        self._task_asyncio_instance: asyncio.Task | None = None
         # 添加或更新任务
         self._add_or_update_job()
 
@@ -134,12 +134,27 @@ class GenericCrawlerScheduler:
         if self.exec_info.is_need_to_execute():
             try:
                 self.logger.info(f"[{self.crawler_name}] 开始执行爬虫任务...")
-                await self.crawler.main()  # 调用异步 main 函数
+                # 调用异步 main 函数
+                self.crawler_asyncio_task = asyncio.create_task(
+                    self.crawler.main()
+                )  # 获取异步包装的Task实例
+                await self.crawler_asyncio_task  # 等待异步任务完成
                 await self.exec_info.save_last_exec_time()
+            except asyncio.CancelledError as e:
+                self.logger.error(f"[{self.crawler_name}] 爬虫主动终止：{e}")
             except Exception as e:
                 self.logger.exception(f"[{self.crawler_name}] 爬虫执行出错：{e}")
         else:
             self.logger.info(f"[{self.crawler_name}] 当前不满足执行条件，跳过本次任务。")
+
+    def terminate(self):
+        """
+        终止当前正在执行的任务
+        """
+        if self.crawler_asyncio_task:
+            self.crawler_asyncio_task.cancel()
+            return True
+        return False
 
     def start(self):
         if not GLOBAL_SCHEDULER.running:
@@ -147,14 +162,19 @@ class GenericCrawlerScheduler:
         GLOBAL_SCHEDULER.resume_job(self.job_id)
 
     def pause(self):
+        """
+        暂停任务计划，对当前正在执行任务无影响
+        """
         GLOBAL_SCHEDULER.pause_job(self.job_id)
 
     def remove(self):
+        """
+        移除将来的任务计划，对当前正在执行的任务无影响
+        """
         GLOBAL_SCHEDULER.remove_job(self.job_id)
 
 
 if __name__ == '__main__':
-    import asyncio
 
 
     class MockCrawler(UnlimitedCrawler):
