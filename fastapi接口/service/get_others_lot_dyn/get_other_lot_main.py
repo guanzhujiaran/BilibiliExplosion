@@ -1605,7 +1605,8 @@ class GetOthersLotDynRobot:
                                 499023056,
                                 565064296,
                                 693445761,
-                                7538278
+                                7538278,
+                                3546876406139528
                                 ]
                 self.bili_space_user_items_set.update(
                     [BiliSpaceUserItem(uid=x, lot_round_id=self.nowRound.lotRound_id) for x in default_list])

@@ -13,7 +13,7 @@ class BaseLLM:
             OpenAiclient=ChatOpenAI(
                 openai_api_key=x.open_ai_api_key,
                 openai_api_base=x.baseurl,
-                model_name="gpt-3.5-turbo"
+                model_name=x.model_name
             ),
             base_url=x.baseurl
         )

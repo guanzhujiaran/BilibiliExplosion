@@ -18,6 +18,7 @@ class PlaywrightUserDir(StrEnum):
 class ChatGptSettings:
     baseurl: str = "https://api.chatanywhere.tech/v1"
     open_ai_api_key: str = 'sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS'
+    model_name: str = "gpt-3.5-turbo"
 
 
 # region 基本配置
@@ -143,6 +144,11 @@ class _CONFIG:
     lm_studio_url = 'http://192.168.1.200:1234'
     pushnotify = pushnotify()  # 推送设置
     database = database()
+    local_llm_setting = ChatGptSettings(
+        baseurl=f'{lm_studio_url}/v1',
+        open_ai_api_key='114514',
+        model_name='google/gemma-3-12b'
+    )
     chat_gpt_configs = [
         ChatGptSettings(
             baseurl="https://api.chatanywhere.tech/v1",
@@ -168,10 +174,7 @@ class _CONFIG:
             baseurl='https://api.openai-hk.com/v1',
             open_ai_api_key='hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25'
         ),
-        ChatGptSettings(
-            baseurl='http://192.168.1.200:1234/v1',
-            open_ai_api_key='114514',
-        ),
+        local_llm_setting
     ]
     my_ipv6_addr = 'http://192.168.1.201:3128'
     unidbg_addr = "http://192.168.1.200:23335"

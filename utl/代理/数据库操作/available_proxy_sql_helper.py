@@ -230,14 +230,17 @@ class AvailableProxySqlHelper:
 
     # @sql_retry_wrapper
     async def update_available_proxy_details(self, proxy_tab: ProxyTab, available: bool, resp_code: int):
-        """
-        Updates specific fields (available, resp_code, timestamps) of an AvailableProxy record
-        identified by its associated proxy_tab_id.
-        If the record does not exist and `available` is True, a new record is inserted.
-        If the record does not exist and `available` is False, no action is taken.
-        """
         try:
             proxy_id = proxy_tab.proxy_id
+            # 检查 proxy_id 是否存在于 proxy_tab 表中
+            async with self.session() as session:
+                proxy_exists = await session.execute(
+                    select(1).where(ProxyTab.proxy_id == proxy_id)
+                )
+                proxy_exists = proxy_exists.scalar()
+                if not proxy_exists:
+                    return None
+
             computed_proxy_str = proxy_tab.computed_proxy_str
             now = datetime.now()
             latest_352_ts = now if resp_code == -352 else None
@@ -245,10 +248,10 @@ class AvailableProxySqlHelper:
                 "ip": computed_proxy_str,
                 "available": available,
                 "resp_code": resp_code,
-                "counter": AvailableProxy.counter if not available else 1,  # Increment counter
+                "counter": AvailableProxy.counter if not available else 1,
                 "latest_used_ts": now,
                 "max_counter_ts": case(
-                    (AvailableProxy.counter >= 30, now),  # Example condition to update max_counter_ts
+                    (AvailableProxy.counter >= 30, now),
                     else_=AvailableProxy.max_counter_ts
                 ),
                 "latest_352_ts": latest_352_ts
@@ -259,13 +262,9 @@ class AvailableProxySqlHelper:
                     proxy_tab_id=proxy_id,
                     **new_values
                 )
-
-                # On duplicate key update specified fields
                 update_stmt = stmt.on_duplicate_key_update(**new_values)
-
                 result = await session.execute(update_stmt)
                 await session.commit()
-
                 return result
         except Exception as e:
             self.log.error(f"Error updating available proxy details for proxy_id={proxy_tab}: {e}")

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List, Sequence
 
-from sqlalchemy import update, select, func, and_, case
+from sqlalchemy import update, select, func, and_
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
@@ -25,13 +25,11 @@ class SQLHelper:
     def __init__(self):
         self.engine = create_async_engine(
             CONFIG.database.MYSQL.sams_club_URI,
-            pool_pre_ping=True,
-            echo=False
+            **CONFIG.sql_alchemy_config.engine_config
         )
-        self.async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
+        self.async_session: async_sessionmaker = async_sessionmaker(
             bind=self.engine,
-            expire_on_commit=False,
-            class_=AsyncSession
+            **CONFIG.sql_alchemy_config.session_config
         )
         self.relationships = {
             'categoryIdList': SpuCategory,

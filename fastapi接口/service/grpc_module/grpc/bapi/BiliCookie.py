@@ -78,7 +78,6 @@ async def _bili_web_cookie_gen_once() -> BiliWebCookie:
         log=bapi_log
     )
     await _active_exclimb_wuzhi(cookie)
-    cookie._is_used = False
     return cookie
 
 

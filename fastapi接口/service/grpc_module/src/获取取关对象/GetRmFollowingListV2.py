@@ -7,11 +7,11 @@ from fastapi接口.log.base_log import get_rm_following_list_logger
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus, WorkerModel
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
-from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import BiliSpaceUserItem, HighlightWordList
 from fastapi接口.utils.Common import asyncio_gather
+from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 
 running_uids = set()
 
@@ -20,7 +20,7 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
     def __init__(self):
         self.status = StatsPlugin(self)
         super().__init__(
-            max_sem=500,
+            max_sem=100,
             _logger=get_rm_following_list_logger,
             plugins=[
                 self.status
@@ -28,7 +28,7 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
         )
         self.following_params_queue = asyncio.Queue()
         self._lock = asyncio.Lock()
-        self.check_up_sep_days = 7  # 每个uid的检查间隔
+        self.check_up_sep_days = 15  # 每个uid的检查间隔的天数，超过这个时间就重新访问b站api检查
         self.round_id = 1
         self.max_gap_time = 86400 * 60  # 取关多少天未发抽奖动态的up主
         self._is_use_available_proxy = False

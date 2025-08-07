@@ -122,7 +122,8 @@ async def get_lot_notice(
         origin_dynamic_id: str | int | None = None,
         request_conf: RequestConf = RequestConf(
             is_use_custom_proxy=True,
-            is_use_available_proxy=False
+            is_use_available_proxy=False,
+            is_use_cookie=True
         )
 ):
     """
@@ -138,8 +139,23 @@ async def get_lot_notice(
         params = {
             "business_type": business_type,
             "business_id": business_id,
+            "web_location": "333.1330",
+            "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(",", ":")),
         }
-        cookie_data, headers = await prepare_request_data(request_conf)
+        cookie_data, headers = await prepare_request_data(
+            request_conf,
+            cookie_include_list=[
+                'buvid3',
+                'b_nut',
+                'b_lsid',
+                '_uuid',
+                'hit-dyn-v2',
+                'bili_ticket',
+                'bili_ticket_expires',
+                'buvid4',
+                'buvid_fp'
+            ]
+        )
         resp = await request_with_proxy_internal.request_with_proxy(
             method="GET",
             url=url,

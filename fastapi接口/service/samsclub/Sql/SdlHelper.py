@@ -1,10 +1,13 @@
+from datetime import datetime
 from typing import Optional, List, TypeVar
 
 import strawberry
+from fastapi.requests import Request
 from sqlalchemy import select, asc, desc, func, case, and_
 from sqlalchemy.sql.functions import coalesce
 from strawberry import Info
 from strawberry.fastapi import GraphQLRouter
+from strawberry.http.temporal_response import TemporalResponse
 from strawberry_sqlalchemy_mapper import StrawberrySQLAlchemyMapper
 
 from .SqlHelper import sql_helper
@@ -12,11 +15,6 @@ from .models import SpuInfo, SpuCategory, SpuNewTagInfo, SpuPriceInfo, SpuStockI
 
 # 初始化映射器
 mapper = StrawberrySQLAlchemyMapper()
-
-
-async def get_context():
-    async with sql_helper.async_session() as db:
-        yield {"db": db}
 
 
 @mapper.type(SpuInfo)
@@ -29,75 +27,75 @@ class SpuInfoType:
 
     @strawberry.field
     async def allPriceInfos(self, info: Info, limit: int = 100) -> List["SpuPriceInfoType"]:
-        db = info.context['db']
-        result = await db.execute(
-            select(SpuPriceInfo)
-            .where(SpuPriceInfo.spu_id == self.spuId)
-            .limit(limit)
-            .order_by(SpuPriceInfo.pk.desc())
-        )
-        return result.scalars().all()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(
+                select(SpuPriceInfo)
+                .where(SpuPriceInfo.spu_id == self.spuId)
+                .limit(limit)
+                .order_by(SpuPriceInfo.pk.desc())
+            )
+            return result.scalars().all()
 
     @strawberry.field
     async def latestPriceInfo(self, info: Info) -> Optional["SpuPriceInfoType"]:
-        db = info.context['db']
-        result = await db.execute(
-            select(SpuPriceInfo)
-            .where(SpuPriceInfo.spu_id == self.spuId)
-            .order_by(SpuPriceInfo.pk.desc())
-            .limit(1)
-        )
-        return result.scalars().first()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(
+                select(SpuPriceInfo)
+                .where(SpuPriceInfo.spu_id == self.spuId)
+                .order_by(SpuPriceInfo.pk.desc())
+                .limit(1)
+            )
+            return result.scalars().first()
 
     @strawberry.field
     async def categories(self, info: Info) -> List["SpuCategoryType"]:
-        db = info.context['db']
-        result = await db.execute(
-            select(SpuCategory)
-            .where(SpuCategory.spu_id == self.spuId)
-            .order_by(SpuCategory.pk.desc())
-        )
-        return result.scalars().all()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(
+                select(SpuCategory)
+                .where(SpuCategory.spu_id == self.spuId)
+                .order_by(SpuCategory.pk.desc())
+            )
+            return result.scalars().all()
 
     @strawberry.field
     async def newTagInfos(self, info: Info) -> List["SpuNewTagInfoType"]:
-        db = info.context['db']
-        result = await db.execute(
-            select(SpuNewTagInfo)
-            .where(SpuNewTagInfo.spu_id == self.spuId)
-            .order_by(SpuNewTagInfo.pk.desc())
-        )
-        return result.scalars().all()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(
+                select(SpuNewTagInfo)
+                .where(SpuNewTagInfo.spu_id == self.spuId)
+                .order_by(SpuNewTagInfo.pk.desc())
+            )
+            return result.scalars().all()
 
     @strawberry.field
     async def tagInfos(self, info: Info) -> List["SpuTagInfoType"]:
-        db = info.context['db']
-        result = await db.execute(
-            select(SpuTagInfo)
-            .where(SpuTagInfo.spu_id == self.spuId)
-            .order_by(SpuTagInfo.pk.desc())
-        )
-        return result.scalars().all()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(
+                select(SpuTagInfo)
+                .where(SpuTagInfo.spu_id == self.spuId)
+                .order_by(SpuTagInfo.pk.desc())
+            )
+            return result.scalars().all()
 
     @strawberry.field
     async def videoInfos(self, info: Info) -> List["SpuVideoInfoType"]:
-        db = info.context['db']
-        result = await db.execute(
-            select(SpuVideoInfo)
-            .where(SpuVideoInfo.spu_id == self.spuId)
-            .order_by(SpuVideoInfo.pk.desc())
-        )
-        return result.scalars().all()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(
+                select(SpuVideoInfo)
+                .where(SpuVideoInfo.spu_id == self.spuId)
+                .order_by(SpuVideoInfo.pk.desc())
+            )
+            return result.scalars().all()
 
     @strawberry.field
     async def stockInfo(self, info: Info) -> Optional["SpuStockInfoType"]:
-        db = info.context['db']
-        result = await db.execute(
-            select(SpuStockInfo)
-            .where(SpuStockInfo.spu_id == self.spuId)
-            .order_by(SpuStockInfo.pk.desc())
-        )
-        return result.scalars().first()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(
+                select(SpuStockInfo)
+                .where(SpuStockInfo.spu_id == self.spuId)
+                .order_by(SpuStockInfo.pk.desc())
+            )
+            return result.scalars().first()
 
 
 @mapper.type(SpuPriceInfo)
@@ -117,9 +115,9 @@ class SpuNewTagInfoType:
     @strawberry.field
     async def tagMarkGroup(self, info: Info) -> List[str]:
         stmt = select(SpuNewTagInfo.tagMark).group_by(SpuNewTagInfo.tagMark)
-        db = info.context['db']
-        result = await db.execute(stmt)
-        return result.scalars().all()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(stmt)
+            return result.scalars().all()
 
 
 @mapper.type(SpuStockInfo)
@@ -172,16 +170,16 @@ class Query:
             SpuNewTagInfo.tagMark,
             func.any_value(SpuNewTagInfo.title).label("title")
         ).group_by(SpuNewTagInfo.tagMark)
-        db = info.context['db']
-        result = await db.execute(stmt)
-        return result.all()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(stmt)
+            return result.all()
 
     @strawberry.field
     async def getMaxPrice(self, info: Info) -> int:
         stmt = select(func.max(SpuPriceInfo.price))
-        db = info.context['db']
-        result = await db.execute(stmt)
-        return result.scalar_one()
+        async with sql_helper.async_session() as db:
+            result = await db.execute(stmt)
+            return result.scalar_one()
 
     # region 主查询：查询所有 SpuInfo
     @strawberry.field
@@ -201,126 +199,137 @@ class Query:
             priceAsc: bool | None = None,
             priceMin: int | None = None,
             priceMax: int | None = None,
+            lastUpdateBeforeTss: int | None = None,
+            lastUpdateAfterTss: int | None = None,
     ) -> SpuInfoPaginator[SpuInfoType]:
-        session = info.context["db"]
+        async with sql_helper.async_session() as session:
 
-        # --- 步骤 1: 构建基础查询语句 (stmt) with Unconditional Price Calculations ---
+            # --- 步骤 1: 构建基础查询语句 (stmt) with Unconditional Price Calculations ---
 
-        # The price calculation logic is now applied to EVERY query.
-        # Use a window function to rank prices for each spu_id
-        ranked_prices = select(
-            SpuPriceInfo.spu_id,
-            SpuPriceInfo.price,
-            func.row_number().over(
-                partition_by=SpuPriceInfo.spu_id,
-                order_by=SpuPriceInfo.pk.desc()
-            ).label("rn")
-        ).subquery("ranked_prices")
+            # The price calculation logic is now applied to EVERY query.
+            # Use a window function to rank prices for each spu_id
+            ranked_prices = select(
+                SpuPriceInfo.spu_id,
+                SpuPriceInfo.price,
+                func.row_number().over(
+                    partition_by=SpuPriceInfo.spu_id,
+                    order_by=SpuPriceInfo.pk.desc()
+                ).label("rn")
+            ).subquery("ranked_prices")
 
-        # CTE to calculate latest, previous, max, and min prices
-        price_calcs_cte = select(
-            ranked_prices.c.spu_id,
-            func.max(case((ranked_prices.c.rn == 1, ranked_prices.c.price))).label("latest_price"),
-            func.max(case((ranked_prices.c.rn == 2, ranked_prices.c.price))).label("previous_price"),
-            func.max(ranked_prices.c.price).label("max_price"),
-            func.min(ranked_prices.c.price).label("min_price")
-        ).group_by(ranked_prices.c.spu_id).cte("price_calcs_cte")
+            # CTE to calculate latest, previous, max, and min prices
+            price_calcs_cte = select(
+                ranked_prices.c.spu_id,
+                func.max(case((ranked_prices.c.rn == 1, ranked_prices.c.price))).label("latest_price"),
+                func.max(case((ranked_prices.c.rn == 2, ranked_prices.c.price))).label("previous_price"),
+                func.max(ranked_prices.c.price).label("max_price"),
+                func.min(ranked_prices.c.price).label("min_price")
+            ).group_by(ranked_prices.c.spu_id).cte("price_calcs_cte")
 
-        # Start the main statement by selecting from SpuInfo
-        stmt = select(SpuInfo)
+            # Start the main statement by selecting from SpuInfo
+            stmt = select(SpuInfo)
 
-        # ALWAYS join the main query with the CTE
-        # We use an outer join to ensure we don't lose SpuInfo records that have no price entries.
-        stmt = stmt.join(price_calcs_cte, SpuInfo.spuId == price_calcs_cte.c.spu_id, isouter=True)
+            # ALWAYS join the main query with the CTE
+            # We use an outer join to ensure we don't lose SpuInfo records that have no price entries.
+            stmt = stmt.join(price_calcs_cte, SpuInfo.spuId == price_calcs_cte.c.spu_id, isouter=True)
 
-        # ALWAYS add the calculated columns to the select statement.
-        # Use coalesce to handle cases with no prices (outer join) and provide default 0 values.
-        stmt = stmt.add_columns(
-            coalesce(price_calcs_cte.c.max_price - price_calcs_cte.c.min_price, 0).label("max_price_diff"),
-            coalesce(price_calcs_cte.c.max_price - price_calcs_cte.c.latest_price, 0).label("cur_price_diff"),
-            coalesce(price_calcs_cte.c.previous_price - price_calcs_cte.c.latest_price, 0).label(
-                "latest_price_diff"),
-            coalesce(price_calcs_cte.c.latest_price, 0).label("latest_price")
-            # Also add latest_price for filtering/sorting
-        )
-
-        # --- 步骤 2: 条件性地添加其他 JOINS ---
-        where_conditions = []
-        if spuNewTagTagMarkList:
-            stmt = stmt.join(SpuNewTagInfo, SpuInfo.spuId == SpuNewTagInfo.spu_id).distinct()
-            where_conditions.append(SpuNewTagInfo.tagMark.in_(spuNewTagTagMarkList))
-
-        # --- 步骤 3: 收集并应用 WHERE 条件 ---
-        if spuId:
-            where_conditions.append(SpuInfo.spuId == spuId)
-        if spuInfoTitle:
-            where_conditions.append(SpuInfo.title.ilike(f"%{spuInfoTitle}%"))
-
-        # Price range filtering now works directly on the calculated `latest_price` column
-        if priceMin is not None:
-            where_conditions.append(price_calcs_cte.c.latest_price >= priceMin)
-        if priceMax is not None:
-            where_conditions.append(price_calcs_cte.c.latest_price <= priceMax)
-
-        if where_conditions:
-            stmt = stmt.where(and_(*where_conditions))
-
-        # --- 步骤 4: 查询总数 ---
-        # The count query is derived from the statement with all joins and filters.
-        count_subquery = stmt.with_only_columns(func.count(SpuInfo.spuId.distinct())).order_by(None)
-        total_result = await session.execute(count_subquery)
-        total = total_result.scalar_one()
-
-        # --- 步骤 5: 添加排序逻辑 ---
-        order_columns = []
-        if priceAsc is not None:
-            order_columns.append(desc("latest_price") if not priceAsc else asc("latest_price"))
-        if priceDiffMaxAsc is not None:
-            order_columns.append(desc("max_price_diff") if not priceDiffMaxAsc else asc("max_price_diff"))
-        if priceDiffCurAsc is not None:
-            order_columns.append(desc("cur_price_diff") if not priceDiffCurAsc else asc("cur_price_diff"))
-        if priceDiffLatestAsc is not None:
-            order_columns.append(desc("latest_price_diff") if not priceDiffLatestAsc else asc("latest_price_diff"))
-        if spuInfoCreateAsc is not None:
-            order_columns.append(desc(SpuInfo.create_time) if not spuInfoCreateAsc else asc(SpuInfo.create_time))
-        # Add default/fallback sorting
-        order_columns.append(desc(SpuInfo.update_time) if not spuInfoUpdateAsc else asc(SpuInfo.update_time))
-
-        stmt = stmt.order_by(*order_columns)
-
-        # --- 步骤 6: 应用分页并执行最终查询 ---
-        offset = (pn - 1) * ps
-        paginated_stmt = stmt.limit(ps).offset(offset)
-
-        result = await session.execute(paginated_stmt)
-
-        # --- 步骤 7: 正确处理查询结果 ---
-        # Since we always join and add columns, the result is always a list of Row objects.
-        # We no longer need the if/else for simple vs complex queries.
-        items = []
-        rows = result.unique().all()
-        for row in rows:
-            spu_info_obj = row.SpuInfo
-
-            # ALWAYS attach the calculated properties to the object instance.
-            # Strawberry will read these attributes to resolve the GraphQL fields.
-            spu_info_obj.maxPriceDiff = row.max_price_diff
-            spu_info_obj.curPriceDiff = row.cur_price_diff
-            spu_info_obj.latestPriceDiff = row.latest_price_diff
-
-            items.append(spu_info_obj)
-
-        return SpuInfoPaginator(
-            items=items,
-            page_info=PageInfoType(
-                total=total,
-                page=pn,
-                page_size=ps,
-                has_next_page=(offset + ps) < total
+            # ALWAYS add the calculated columns to the select statement.
+            # Use coalesce to handle cases with no prices (outer join) and provide default 0 values.
+            stmt = stmt.add_columns(
+                coalesce(price_calcs_cte.c.max_price - price_calcs_cte.c.min_price, 0).label("max_price_diff"),
+                coalesce(price_calcs_cte.c.max_price - price_calcs_cte.c.latest_price, 0).label("cur_price_diff"),
+                coalesce(price_calcs_cte.c.previous_price - price_calcs_cte.c.latest_price, 0).label(
+                    "latest_price_diff"),
+                coalesce(price_calcs_cte.c.latest_price, 0).label("latest_price")
+                # Also add latest_price for filtering/sorting
             )
-        )
+
+            # --- 步骤 2: 条件性地添加其他 JOINS ---
+            where_conditions = []
+            if spuNewTagTagMarkList:
+                stmt = stmt.join(SpuNewTagInfo, SpuInfo.spuId == SpuNewTagInfo.spu_id).distinct()
+                where_conditions.append(SpuNewTagInfo.tagMark.in_(spuNewTagTagMarkList))
+
+            # 添加时间范围筛选条件
+            if lastUpdateBeforeTss is not None:
+                before_datetime = datetime.fromtimestamp(lastUpdateBeforeTss)
+                where_conditions.append(SpuInfo.update_time <= before_datetime)
+
+            if lastUpdateAfterTss is not None:
+                after_datetime = datetime.fromtimestamp(lastUpdateAfterTss)
+                where_conditions.append(SpuInfo.update_time >= after_datetime)
+
+            # --- 步骤 3: 收集并应用 WHERE 条件 ---
+            if spuId:
+                where_conditions.append(SpuInfo.spuId == spuId)
+            if spuInfoTitle:
+                where_conditions.append(SpuInfo.title.ilike(f"%{spuInfoTitle}%"))
+
+            # Price range filtering now works directly on the calculated `latest_price` column
+            if priceMin is not None:
+                where_conditions.append(price_calcs_cte.c.latest_price >= priceMin)
+            if priceMax is not None:
+                where_conditions.append(price_calcs_cte.c.latest_price <= priceMax)
+
+            if where_conditions:
+                stmt = stmt.where(and_(*where_conditions))
+
+            # --- 步骤 4: 查询总数 ---
+            # The count query is derived from the statement with all joins and filters.
+            count_subquery = stmt.with_only_columns(func.count(SpuInfo.spuId.distinct()))
+            total_result = await session.execute(count_subquery)
+            total = total_result.scalar_one()
+
+            # --- 步骤 5: 添加排序逻辑 ---
+            order_columns = []
+            if priceAsc is not None:
+                order_columns.append(desc("latest_price") if not priceAsc else asc("latest_price"))
+            if priceDiffMaxAsc is not None:
+                order_columns.append(desc("max_price_diff") if not priceDiffMaxAsc else asc("max_price_diff"))
+            if priceDiffCurAsc is not None:
+                order_columns.append(desc("cur_price_diff") if not priceDiffCurAsc else asc("cur_price_diff"))
+            if priceDiffLatestAsc is not None:
+                order_columns.append(desc("latest_price_diff") if not priceDiffLatestAsc else asc("latest_price_diff"))
+            if spuInfoCreateAsc is not None:
+                order_columns.append(desc(SpuInfo.create_time) if not spuInfoCreateAsc else asc(SpuInfo.create_time))
+            # Add default/fallback sorting
+            order_columns.append(desc(SpuInfo.update_time) if not spuInfoUpdateAsc else asc(SpuInfo.update_time))
+
+            stmt = stmt.order_by(*order_columns)
+
+            # --- 步骤 6: 应用分页并执行最终查询 ---
+            offset = (pn - 1) * ps
+            paginated_stmt = stmt.limit(ps).offset(offset)
+
+            result = await session.execute(paginated_stmt)
+
+            # --- 步骤 7: 正确处理查询结果 ---
+            # Since we always join and add columns, the result is always a list of Row objects.
+            # We no longer need the if/else for simple vs complex queries.
+            items = []
+            rows = result.unique().all()
+            for row in rows:
+                spu_info_obj = row.SpuInfo
+
+                # ALWAYS attach the calculated properties to the object instance.
+                # Strawberry will read these attributes to resolve the GraphQL fields.
+                spu_info_obj.maxPriceDiff = row.max_price_diff
+                spu_info_obj.curPriceDiff = row.cur_price_diff
+                spu_info_obj.latestPriceDiff = row.latest_price_diff
+
+                items.append(spu_info_obj)
+
+            return SpuInfoPaginator(
+                items=items,
+                page_info=PageInfoType(
+                    total=total,
+                    page=pn,
+                    page_size=ps,
+                    has_next_page=(offset + ps) < total
+                )
+            )
     # endregion
 
 
 schema = strawberry.Schema(Query)
-graphql_app = GraphQLRouter(schema, context_getter=get_context)
+graphql_app = GraphQLRouter(schema)

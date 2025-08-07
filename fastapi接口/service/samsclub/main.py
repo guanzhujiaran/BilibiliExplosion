@@ -154,7 +154,7 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
                     return
         async with self.main_lock:
             try:
-                await self.api.init_headers_info()  # 先更新一下版本信息之类的
+                await self.api.init_api_info()  # 先更新一下版本信息之类的
                 await self.grouping_id_downloader()
                 self.unfinished_tasks = await sql_helper.get_unfinished_tasks()
                 for task in self.unfinished_tasks:
