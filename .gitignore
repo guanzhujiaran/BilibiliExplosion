@@ -7,7 +7,6 @@ go.sum
 login_info.txt
 users.yaml
 *.tmp
-.venv
 *.csv
 *.svg
 *.txt
@@ -25,7 +24,6 @@ users.yaml
 /fastapi接口/service/PlayWright/user_data
 !/fastapi接口/service/grpc_module/Utils/user-agents_dalvik_application_2-1.json
 CONFIG.py
-ecosystem.config.js
 /jupyter
 /webDriver
 /venv
@@ -33,5 +31,6 @@ ecosystem.config.js
 /.virtual_documents
 /.ipynb_checkpoints
 /fastapi接口/__test
-fastapi接口/service/toutiao/src/Tools/Enc/node_modules
-fastapi接口/service/grpc_module/Utils/极验/Geetest_html
+/fastapi接口/service/toutiao/src/Tools/Enc/node_modules
+/fastapi接口/service/grpc_module/Utils/极验/Geetest_html
+/fastapi接口/service/grpc_module/grpc/grpc_proto/google
