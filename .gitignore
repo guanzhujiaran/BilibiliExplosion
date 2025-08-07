@@ -25,6 +25,7 @@ users.yaml
 *.png
 /models
 /NUL
+/fastapi接口/__test/
 /github/ChatGLM2-6B/.idea/inspectionProfiles/profiles_settings.xml
 /github/ChatGLM2-6B/.idea/inspectionProfiles/Project_Default.xml
 /github/ChatGLM2-6B/.idea/ChatGLM2-6B.iml
