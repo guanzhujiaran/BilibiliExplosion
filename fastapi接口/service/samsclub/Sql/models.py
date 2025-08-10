@@ -45,6 +45,9 @@ class GroupingInfo(Base):
 
 class SpuInfo(Base):
     __tablename__ = 'spu_info'
+    __table_args__ = (
+        Index('title', 'title', 'update_time', 'spuId', 'create_time'),
+    )
 
     spuId = mapped_column(VARCHAR(50), primary_key=True, comment='SPU ID')
     title = mapped_column(String(255), nullable=False)
@@ -97,6 +100,7 @@ class SpuCategory(Base):
     __tablename__ = 'spu_category'
     __table_args__ = (
         ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], ondelete='CASCADE', name='spu_category_ibfk_1'),
+        Index('create_time', 'create_time', 'update_time', 'categoryId', 'spu_id', 'pk'),
         Index('uq_spuId_categoryId', 'spu_id', 'categoryId', unique=True)
     )
 
@@ -113,7 +117,7 @@ class SpuNewTagInfo(Base):
     __tablename__ = 'spu_new_tag_info'
     __table_args__ = (
         ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], ondelete='CASCADE', name='spu_new_tag_info_ibfk_1'),
-        Index('title', 'title'),
+        Index('title', 'title', 'spu_id'),
         Index('uq_spuId_tagManageId', 'spu_id', 'tagManageId', unique=True)
     )
 
@@ -152,8 +156,8 @@ class SpuNewTagInfo(Base):
 class SpuPriceInfo(Base):
     __tablename__ = 'spu_price_info'
     __table_args__ = (
-        ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], ondelete='CASCADE', name='spu_price_info_ibfk_1'),
-        Index('spu_id', 'spu_id')
+        ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], name='FK_spu_price_info_spu_info'),
+        Index('spu_id', 'spu_id', 'price', 'priceType', 'update_time', 'create_time')
     )
 
     pk = mapped_column(BigInteger, primary_key=True)
@@ -191,7 +195,8 @@ class SpuTagInfo(Base):
     __tablename__ = 'spu_tag_info'
     __table_args__ = (
         ForeignKeyConstraint(['spu_id'], ['spu_info.spuId'], ondelete='CASCADE', name='spu_tag_info_ibfk_1'),
-        Index('spu_id_tag_id', 'spu_id', 'tagMark', unique=True)
+        Index('spu_id_tag_Id', 'spu_id', 'id', unique=True),
+        Index('spu_id_tag_mark', 'spu_id', 'tagMark', unique=True)
     )
 
     pk = mapped_column(BigInteger, primary_key=True)

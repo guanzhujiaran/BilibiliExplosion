@@ -2,12 +2,10 @@ from datetime import datetime
 from typing import Optional, List, TypeVar
 
 import strawberry
-from fastapi.requests import Request
 from sqlalchemy import select, asc, desc, func, case, and_
 from sqlalchemy.sql.functions import coalesce
 from strawberry import Info
 from strawberry.fastapi import GraphQLRouter
-from strawberry.http.temporal_response import TemporalResponse
 from strawberry_sqlalchemy_mapper import StrawberrySQLAlchemyMapper
 
 from .SqlHelper import sql_helper
@@ -201,6 +199,8 @@ class Query:
             priceMax: int | None = None,
             lastUpdateBeforeTss: int | None = None,
             lastUpdateAfterTss: int | None = None,
+            lastCreateBeforeTss: int | None = None,
+            lastCreateAfterTss: int | None = None,
     ) -> SpuInfoPaginator[SpuInfoType]:
         async with sql_helper.async_session() as session:
 
@@ -250,14 +250,21 @@ class Query:
                 stmt = stmt.join(SpuNewTagInfo, SpuInfo.spuId == SpuNewTagInfo.spu_id).distinct()
                 where_conditions.append(SpuNewTagInfo.tagMark.in_(spuNewTagTagMarkList))
 
-            # 添加时间范围筛选条件
+            # region 添加时间范围筛选条件
             if lastUpdateBeforeTss is not None:
                 before_datetime = datetime.fromtimestamp(lastUpdateBeforeTss)
                 where_conditions.append(SpuInfo.update_time <= before_datetime)
-
             if lastUpdateAfterTss is not None:
                 after_datetime = datetime.fromtimestamp(lastUpdateAfterTss)
                 where_conditions.append(SpuInfo.update_time >= after_datetime)
+
+            if lastCreateBeforeTss is not None:
+                before_datetime = datetime.fromtimestamp(lastCreateBeforeTss)
+                where_conditions.append(SpuInfo.create_time <= before_datetime)
+            if lastCreateAfterTss is not None:
+                after_datetime = datetime.fromtimestamp(lastCreateAfterTss)
+                where_conditions.append(SpuInfo.create_time >= after_datetime)
+            # endregion
 
             # --- 步骤 3: 收集并应用 WHERE 条件 ---
             if spuId:
