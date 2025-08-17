@@ -8,6 +8,7 @@ class SamsClubAppStorage(CustomBaseModel):
     mobile: str = ""
     storeInfoVOList: list[dict] = Field(default_factory=list)
     storeList: list[str] = Field(default_factory=list)
+    version_str: str = "5.0.125"
 
 
 class SamsClubHeadersModel(CustomBaseModel):

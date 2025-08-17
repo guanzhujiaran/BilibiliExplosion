@@ -24,3 +24,4 @@ fastapi接口/__test
 fastapi接口/service/toutiao/src/Tools/Enc/node_modules
 fastapi接口/service/grpc_module/Utils/极验/Geetest_html
 fastapi接口/service/grpc_module/grpc/grpc_proto/google
+fastapi接口/service/samsclub/api/app_storage.json

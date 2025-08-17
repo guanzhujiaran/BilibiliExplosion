@@ -56,7 +56,7 @@ class SamsClubHeadersGen:
     device_os_version = "11"
     device_name = "OnePlus_ONEPLUS+A6000"
     device_str = "d3e9907ab1881aac891aff90100016e1950c"
-    version_str = "5.0.122"
+    version_str = "5.0.125"
     longitude = 121.463874
     latitude = 31.258597
     auth_token = ""
