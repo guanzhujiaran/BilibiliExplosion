@@ -1,9 +1,8 @@
 import time
 from typing import AsyncGenerator, Any
-
 from fastapi接口.dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
 from fastapi接口.log.base_log import background_task_logger
-from fastapi接口.models.base.custom_pydantic import CustomBaseModel
+from fastapi接口.models.base.custom_pydantic import CustomBaseModelHashable
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticRankDateTypeEnum
 from fastapi接口.scripts.database.同步向量数据库.sync_bili_lottery_data import sync_bili_lottery_data, \
@@ -18,13 +17,15 @@ from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.scrapyReserve
 from fastapi接口.utils.Common import asyncio_gather
 
 
-class RBDParamsType(CustomBaseModel):
+class RBDParamsType(CustomBaseModelHashable):
     BiliLotStatisticRankDateType: BiliLotStatisticRankDateTypeEnum
     BiliLotStatisticLotType: BiliLotStatisticLotTypeEnum
     BiliLotStatisticRankType: BiliLotStatisticRankTypeEnum
 
+    def __hash__(self):
+        return hash((self.BiliLotStatisticRankDateType, self.BiliLotStatisticLotType, self.BiliLotStatisticRankType))
 
-class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[None]):
+class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[RBDParamsType]):
     def __init__(self):
         max_sem = 100
         self.status_plugin = StatsPlugin(self)
@@ -39,7 +40,7 @@ class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[None]):
     async def is_stop(self) -> bool:
         ...
 
-    async def key_params_gen(self, params: None) -> AsyncGenerator[RBDParamsType, None]:
+    async def key_params_gen(self, params=None) -> AsyncGenerator[RBDParamsType, None]:
         for _lot_type in BiliLotStatisticLotTypeEnum:
             for j in BiliLotStatisticRankTypeEnum:
                 for k in BiliLotStatisticRankDateTypeEnum:
@@ -49,7 +50,7 @@ class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[None]):
                         BiliLotStatisticRankType=j
                     )
 
-    async def handle_fetch(self, params: RBDParamsType) -> WorkerStatus | Any:
+    async def handle_fetch(self, params: RBDParamsType) -> WorkerStatus|Any:
         k = params.BiliLotStatisticRankDateType
         _lot_type = params.BiliLotStatisticLotType
         j = params.BiliLotStatisticRankType
@@ -67,6 +68,7 @@ class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[None]):
                 )
             )
         )
+        return WorkerStatus.complete
 
     async def sync_bili_user_info_simple(self):
         res = await grpc_sql_helper.get_all_bili_user_info()
@@ -76,12 +78,12 @@ class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[None]):
         """
         运行的主函数
         """
-        await self.run(None)
+        await self.run()
         await self.sync_bili_user_info_simple()
         if is_api_update:
             await asyncio_gather(self.reserve_robot.refresh_not_drawn_lottery(),
                                  self.extract_official_lottery.get_all_lots(is_api_update=True), log=self.log)
-            await self.run(None)  # 第二遍同步
+            await self.run()  # 第二遍同步
             await asyncio_gather(
                 *[lottery_data_statistic_redis.set_sync_ts(lot_type=_lot_type, ts=int(time.time())) for _lot_type in
                   BiliLotStatisticLotTypeEnum], log=self.log

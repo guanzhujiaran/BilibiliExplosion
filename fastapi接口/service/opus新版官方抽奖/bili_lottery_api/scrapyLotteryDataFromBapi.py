@@ -3,7 +3,7 @@ import time
 from typing import AsyncGenerator, Literal, get_type_hints
 
 from fastapi接口.log.base_log import myfastapi_logger
-from fastapi接口.models.base.custom_pydantic import CustomBaseModel
+from fastapi接口.models.base.custom_pydantic import CustomBaseModelHashable
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
@@ -14,9 +14,12 @@ from utl.pushme.pushme import a_pushme
 from utl.redisTool.RedisManager import RedisManagerBase
 
 
-class BusinessParams(CustomBaseModel):
+class BusinessParams(CustomBaseModelHashable):
     business_id: int
     business_type: Literal[2, 10]
+
+    def __hash__(self):
+        return hash((self.business_id, self.business_type))
 
 
 BusinessIdType = get_type_hints(BusinessParams)['business_id']

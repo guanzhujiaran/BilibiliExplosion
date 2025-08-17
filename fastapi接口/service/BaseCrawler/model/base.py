@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import TypeVar, Any
+from typing import TypeVar
 
 from pydantic import Field
 
-from fastapi接口.models.base.custom_pydantic import CustomBaseModel
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel, CustomBaseModelHashable
 
-ParamsType = TypeVar("ParamsType", bound=Any)
+ParamsType = TypeVar("ParamsType", bound=CustomBaseModelHashable)
 
 
 class WorkerStatus(Enum):

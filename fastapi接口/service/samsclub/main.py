@@ -4,11 +4,12 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncGenerator
 
 import aiofiles
 
 from fastapi接口.log.base_log import sams_club_logger
+from fastapi接口.models.base.custom_pydantic import CustomBaseModelHashable
 from fastapi接口.models.v1.background_service.background_service_model import ProgressStatusResp
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
@@ -19,21 +20,32 @@ from fastapi接口.utils.SleepTimeGen import SleepTimeGenerator
 from utl.pushme.pushme import a_pushme
 
 
-class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
+class SamsClubCrawlerParams(CustomBaseModelHashable):
+    first_category: int | str
+    second_category: int | str
+
+    def __hash__(self):
+        return hash((self.first_category, self.second_category))
+
+
+class SamsClubCrawler(UnlimitedCrawler[SamsClubCrawlerParams]):
     async def is_stop(self) -> bool:
         return False
 
-    async def key_params_gen(self, params):
+    async def key_params_gen(self, params=None) -> AsyncGenerator[SamsClubCrawlerParams, None]:
         for grouping_info in self.task_params_list:
-            yield grouping_info.parentGroupingId, grouping_info.groupingIdInt
+            yield SamsClubCrawlerParams(
+                first_category=grouping_info.parentGroupingId,
+                second_category=grouping_info.groupingIdInt
+            )
             await asyncio.sleep(next(self.delay_gen))
 
-    async def handle_fetch(self, params) -> WorkerStatus | Any:
-        first_category, second_category = params
-        if {'firstCategoryId': first_category, 'secondCategoryId': second_category} in self.unfinished_tasks:
+    async def handle_fetch(self, params: SamsClubCrawlerParams) -> WorkerStatus | Any:
+        if {'firstCategoryId': params.first_category,
+            'secondCategoryId': params.second_category} in self.unfinished_tasks:
             self.log.debug('已经爬取完成的')
             return WorkerStatus.complete
-        await self.grouping_list_downloader(first_category, second_category)
+        await self.grouping_list_downloader(params.first_category, params.second_category)
         return WorkerStatus.complete
 
     def __init__(self):
@@ -48,11 +60,12 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
         self.delay_gen = self.sleep_time_gen.continuous_generator()
         self.sql_helper = sql_helper
         self.fetch_grouping_id_ts = 0
-        self.api.headers_gen.version_str = "5.0.123"
+        self.api.headers_gen.version_str = "5.0.125"
         self.stats_plugin = StatsPlugin(self)
         super().__init__(
             [self.stats_plugin],
             max_sem=self.concurrent_num,
+            requeue_on_fetch_fail=False,
             _logger=sams_club_logger
         )
         self.task_params_list = []
@@ -95,7 +108,7 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
                 children = item.get('children')
                 [x.update({"parentGroupingId": item.get('groupingId')}) for x in children]
                 await self.sql_helper.bulk_upsert_grouping_info(children)
-
+            await asyncio.sleep(next(self.delay_gen))
         self.log.info(f'grouping_id_downloader 完成')
         async with aiofiles.open(self.FilePath.fetch_grouping_id_ts, 'w') as f:
             await f.write(str(int(time.time())))
@@ -121,8 +134,12 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
             dataList = resp.json().get('data', {}).get('dataList', [])
             self.log.debug(f'插入数据：{dataList}')
             if not dataList:
-                self.log.critical(f'数据内容为空：{(firstCategoryId, secondCategoryId, frontCategoryIds,
-                                                   start_page_num, pageSize)}')
+                self.log.critical(f'数据内容为空：{(
+                    firstCategoryId,
+                    secondCategoryId,
+                    frontCategoryIds,
+                    start_page_num,
+                    pageSize)}')
             await self.sql_helper.bulk_upsert_spu_info(dataList)
             file_p = self.FilePath.grouping_data_list(firstCategoryId, secondCategoryId, start_page_num)
             await asyncio.to_thread(
@@ -161,10 +178,10 @@ class SamsClubCrawler(UnlimitedCrawler[tuple[int, int]]):
                     await self.grouping_list_downloader(**task)  # 继续抓取逻辑
                 self.task_params_list = await self.sql_helper.get_grouping_infos_by_level(
                     2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
-                await self.run((0, 0))
+                await self.run()
             except Exception as e:
                 self.log.exception(f"发生异常：{e}")
-                await a_pushme(f'[SamsClubCrawler] 发生异常：{e}')
+                await a_pushme(f'[SamsClubCrawler] 发生异常：{e}', str(e))
 
     async def get_status(self) -> ProgressStatusResp:
         return ProgressStatusResp(

@@ -13,7 +13,7 @@ from py_mini_racer import MiniRacer
 
 import Bilibili_methods.all_methods
 from fastapi接口.log.base_log import get_others_lot_logger as get_others_lot_log
-from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo
+from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo, BiliSpaceUserParamsType
 from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotuserspaceresp, TLotdyninfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
@@ -1138,13 +1138,31 @@ class BiliSpaceUserItem:
     """
     lot_round_id: int
     uid: int | str
-    offset: int | str | None = 0
+    _offset: int | str | None = field(default=0)
     lot_user_info: TLotuserinfo | None = field(default=None)  # 用户信息
     dynamic_infos: Set[BiliDynamicItem] = field(default_factory=set)  # 存放用户的空间动态详情
     pub_lot_users: Set['BiliSpaceUserItem'] = field(
         default_factory=set)  # 存放用户发布抽奖的用户详情，调用solve_space_dynamic的时候需要将isPubLotUser设置为True
     updateNum: int = field(default=0)
     is_use_available_proxy: bool = field(default=_is_use_available_proxy)
+    params: BiliSpaceUserParamsType|None = field(default=None)
+
+    def __post_init__(self):
+        if self.params is None:
+            self.params = BiliSpaceUserParamsType(
+                uid=self.uid,
+            )
+            self.params.offset = self._offset
+
+    @property
+    def offset(self):
+        return self._offset
+
+    @offset.setter
+    def offset(self, value):
+        self._offset = value
+        if type(value) is int:
+            self.params.offset = value
 
     def __hash__(self):
         return hash(int(self.uid))
@@ -1903,10 +1921,9 @@ if __name__ == '__main__':
     async def main():
         await get_others_lot_dyn.get_new_dyn()
 
-
-    import logging
-    import loguru
-
-    loguru.logger.remove()
-    logging.basicConfig(level=logging.DEBUG)
-    asyncio.run(main(), debug=True)
+    a = BiliSpaceUserItem(
+        lot_round_id=0,
+        uid=1,
+        _offset=2
+    )
+    print(a)

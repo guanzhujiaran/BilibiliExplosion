@@ -318,13 +318,17 @@ class LotScrapy:
                    header=False)
 
     async def main(self):
-        await self.init()
-        # self.log.info(f'获取过的所有{len(self.all_pins)}条pin:{self.all_pins}')
-        for u in self.uname_list:
-            await self.get_all_pins(u)
-        await self.playwright.close()
-        await self.end_write()
+        try:
+            await self.init()
+            # self.log.info(f'获取过的所有{len(self.all_pins)}条pin:{self.all_pins}')
+            for u in self.uname_list:
+                await self.get_all_pins(u)
 
+            await self.end_write()
+        except Exception as e:
+            raise e
+        finally:
+            await self.playwright.close()
     async def save_now_get_pin_ts(self, ts: int):
         async with aiofiles.open(get_file_p('get_pin_ts.txt'), 'w', encoding='utf-8') as f:
             self.get_pin_ts = ts
@@ -334,23 +338,28 @@ class LotScrapy:
         while self.is_getting_dyn_flag:
             self.log.debug('正在获取用户空间，请稍等...')
             await asyncio.sleep(30)
-        if os.path.exists(get_file_p('get_pin_ts.txt')):
-            async with aiofiles.open(get_file_p('get_pin_ts.txt'), 'r', encoding='utf-8') as f:
-                file_content = await f.read()
-                self.get_pin_ts: int = int(file_content) if file_content else 0
-                if not isinstance(self.get_pin_ts, int):
-                    self.get_pin_ts: int = 0
-        else:
-            self.get_pin_ts: int = 0
+        try:
+            if os.path.exists(get_file_p('get_pin_ts.txt')):
+                async with aiofiles.open(get_file_p('get_pin_ts.txt'), 'r', encoding='utf-8') as f:
+                    file_content = await f.read()
+                    self.get_pin_ts: int = int(file_content) if file_content else 0
+                    if not isinstance(self.get_pin_ts, int):
+                        self.get_pin_ts: int = 0
+            else:
+                self.get_pin_ts: int = 0
 
-        if int(time.time()) - self.get_pin_ts >= 0.8 * 24 * 3600:
-            start_ts = int(time.time())
-            self.is_getting_dyn_flag = True
-            await self._var_init()
-            await self.main()
-            await self.save_now_get_pin_ts(start_ts)
+            if int(time.time()) - self.get_pin_ts >= 0.8 * 24 * 3600:
+                start_ts = int(time.time())
+                self.is_getting_dyn_flag = True
+                await self._var_init()
+                await self.main()
+                await self.save_now_get_pin_ts(start_ts)
+                self.is_getting_dyn_flag = False
+            return self.solve_lot_csv()
+        except Exception as e:
+            raise e
+        finally:
             self.is_getting_dyn_flag = False
-        return self.solve_lot_csv()
 
     def solve_lot_csv(self):
         def filter_lot(lot_df: pd.DataFrame) -> list:

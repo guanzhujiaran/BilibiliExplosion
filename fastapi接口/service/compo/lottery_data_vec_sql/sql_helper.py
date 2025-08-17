@@ -23,8 +23,7 @@ class Sqlhelper:
 
     @lock_retry_wrapper
     async def upsert_bili_lot_data(self, data_ls: List[BiliLotData]):
-        return await self._client.upsert(collection_name=self.Collections.bili_lot_data,
-                                         data=[x.model_dump() for x in data_ls])
+        return await self._client.upsert(collection_name=self.Collections.bili_lot_data,data=[x.model_dump() for x in data_ls])
 
     @lock_retry_wrapper
     async def search_bili_lot_data(self, query_vec: list[float], limit: int = 10):

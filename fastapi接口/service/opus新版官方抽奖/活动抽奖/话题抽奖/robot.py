@@ -3,16 +3,24 @@ import time
 from typing import Union, List, AsyncGenerator
 
 from fastapi接口.log.base_log import topic_lot_logger
+from fastapi接口.models.base.custom_pydantic import CustomBaseModelHashable
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin
-from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import RequestConf,get_web_topic
+from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import get_web_topic
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, \
     TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic, TCapsule
 from utl.pushme.pushme import pushme
+
+
+class TopicParams(CustomBaseModelHashable):
+    topic_id: int | str
+
+    def __hash__(self):
+        return hash(self.topic_id)
 
 
 class SuccCounter(BaseSuccCounter):
@@ -24,22 +32,23 @@ class SuccCounter(BaseSuccCounter):
         super().__init__()
 
 
-class TopicRobot(UnlimitedCrawler[int]):
+class TopicRobot(UnlimitedCrawler[TopicParams]):
     async def is_stop(self) -> bool:
         return self._cur_stop_times >= self.__max_stop_times
 
-    async def key_params_gen(self, params: int) -> AsyncGenerator[int, None]:
+    async def key_params_gen(self, params: TopicParams = None) -> AsyncGenerator[TopicParams, None]:
         if self.has_get_failed_topic_ids:
+            topic_id = params.topic_id
             while 1:
-                yield params
-                params += 1
+                yield TopicParams(topic_id=topic_id)
+                topic_id += 1
         else:
             for i in self.get_failed_topic_ids:
-                yield i
+                yield TopicParams(topic_id=i)
             return
 
-    async def handle_fetch(self, params: int) -> WorkerStatus:
-        return await self.pipeline(params)
+    async def handle_fetch(self, params: TopicParams) -> WorkerStatus:
+        return await self.pipeline(params.topic_id)
 
     def __init__(self):
         self.sem_limit = 1
@@ -181,7 +190,7 @@ class TopicRobot(UnlimitedCrawler[int]):
         try:
             self.get_failed_topic_ids = await self.sql.get_recent_failed_topic_id(
                 self._max_stop_count + self.sem_limit + 5000)
-            await self.run(self.get_failed_topic_ids[0])
+            await self.run(TopicParams(topic_id=self.get_failed_topic_ids[0]))
 
             self.has_get_failed_topic_ids = True  # 获取失败的话题完成
             self._cur_stop_times = 0
@@ -189,11 +198,10 @@ class TopicRobot(UnlimitedCrawler[int]):
                 self.start_topic_id = start_topic_id
             else:
                 self.start_topic_id = await self.sql.get_max_topic_id()
-            await self.run(self.start_topic_id)
+            await self.run(TopicParams(topic_id=self.start_topic_id))
         except Exception as e:
             topic_lot_logger.error(f'发生异常！{e}')
             pushme(title=f'爬取话题异常', content=str(e))
-
 
 
 topic_robot = TopicRobot()

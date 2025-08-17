@@ -1,16 +1,14 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TypeVar, Any, Generic
-
+from typing import Generic
 from loguru._logger import Logger
 from loguru import logger
-
 from fastapi接口.service.BaseCrawler.model.base import WorkerModel, ParamsType
 from fastapi接口.utils.Common import sem_gen
 
 
 
-class BaseCrawler(ABC, Generic[ParamsType]):
+class BaseCrawler(ABC,Generic[ParamsType]):
     def __init__(self, max_sem: int = 50, _logger: Logger = logger):
         self.log = _logger
         self.max_sem = max_sem

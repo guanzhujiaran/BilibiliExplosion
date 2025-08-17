@@ -1,17 +1,16 @@
 from abc import ABC
 from typing import Optional, Generic, Any
+from fastapi接口.service.BaseCrawler.base.core import BaseCrawler
+from fastapi接口.service.BaseCrawler.model.base import WorkerModel, ParamsType
 
-from fastapi接口.service.BaseCrawler.base.core import ParamsType, BaseCrawler
-from fastapi接口.service.BaseCrawler.model.base import WorkerModel
 
-
-class CrawlerPlugin(ABC, Generic[ParamsType]):
+class CrawlerPlugin(ABC,Generic[ParamsType]):
     """
     爬虫插件的基类。
     插件可以在爬虫的各个生命周期事件中注入自定义逻辑。
     """
 
-    def __init__(self, crawler: Optional["BaseCrawler[ParamsType]"] = None):
+    def __init__(self, crawler: Optional[BaseCrawler[ParamsType]] = None):
         self.log = None
         self.crawler = crawler  # 插件可以访问到宿主爬虫实例
 

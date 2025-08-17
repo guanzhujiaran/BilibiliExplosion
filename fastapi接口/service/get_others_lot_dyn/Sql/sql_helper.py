@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Union, List, Sequence
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from CONFIG import CONFIG
@@ -353,6 +353,26 @@ class __SqlHelper:
             ret = res.scalars().first()
             return ret
 
+    @sql_retry_wrapper
+    async def getLatestLotDynInfoByUidList(self,uid_list:list[int|str]) -> Sequence[TLotdyninfo]:
+        async with self._session() as session:
+            subq = (
+                select(func.max(TLotdyninfo.dynId))
+                .where(
+                    TLotdyninfo.up_uid.in_(uid_list),
+                    TLotdyninfo.isLot == True
+                )
+                .group_by(TLotdyninfo.up_uid)
+                .scalar_subquery()  # 返回单个列的值
+            )
+
+            # 主查询：获取这些 dynId 对应的完整记录
+            stmt = select(TLotdyninfo).where(TLotdyninfo.dynId.in_(subq))
+
+            result = await session.execute(stmt)
+            records = result.scalars().all()
+            return records
+
 
 get_other_lot_redis_manager = GetOtherLotRedisManager()
 
@@ -360,7 +380,7 @@ SqlHelper = __SqlHelper()
 
 if __name__ == '__main__':
     async def __test__():
-        result = await SqlHelper.getLatestLotDynInfoByUid(3546740766541963)
+        result = await SqlHelper.getLatestLotDynInfoByUidList([3546740766541963,114514])
         print(result)
 
 

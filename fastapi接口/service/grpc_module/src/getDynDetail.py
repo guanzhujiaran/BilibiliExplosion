@@ -5,13 +5,13 @@ import asyncio
 import datetime
 import json
 import time
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import official_lot_logger
+from fastapi接口.models.base.custom_pydantic import CustomBaseModelHashable
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
-from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import get_lot_notice, reserve_relation_info
 from fastapi接口.service.grpc_module.grpc.grpc_api import bili_grpc
 from fastapi接口.service.grpc_module.src.DynObjectClass import dynAllDetail
@@ -20,6 +20,7 @@ from fastapi接口.service.grpc_module.src.根据日期获取抽奖动态.getLot
 from fastapi接口.service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
 from fastapi接口.service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from fastapi接口.utils.Common import sem_gen, asyncio_gather
+from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 from utl.pushme.pushme import pushme
 
 
@@ -40,7 +41,14 @@ class SuccCounter(BaseSuccCounter):
         return f"平均获取速度：{self.show_pace():.2f} s/个动态\t最初的动态：{self.first_dyn_id}\t获取时间：{datetime.datetime.fromtimestamp(self.start_ts).strftime('%Y-%m-%d %H:%M:%S')}"
 
 
-class DynDetailScrapy(UnlimitedCrawler):
+class DynDetailParams(CustomBaseModelHashable):
+    rid: int
+
+    def __hash__(self):
+        return hash(self.rid)
+
+
+class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
     def __init__(self):
         max_sem = 100
         self.offset = 10  # 每次获取rid的数量，数值最好不要超过10，太大的话传输会出问题
@@ -72,18 +80,18 @@ class DynDetailScrapy(UnlimitedCrawler):
             plugins=[self.status_plugin]
         )
 
-    async def handle_fetch(self, rid: int):
-        detail = (await self.get_grpc_single_dynDetail(rid))[0]
+    async def handle_fetch(self, params: DynDetailParams):
+        detail = (await self.get_grpc_single_dynDetail(params.rid))[0]
         await self.Sqlhelper.upsert_DynDetail(
             doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
             dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
             dynamic_created_time=detail.get('dynamic_created_time')
         )
 
-    async def key_params_gen(self, latest_rid: int):
-        latest_rid -= 500
+    async def key_params_gen(self, latest_params: DynDetailParams = None) -> AsyncGenerator[DynDetailParams, None]:
+        latest_rid = latest_params.rid
         while 1:
-            yield latest_rid
+            yield DynDetailParams(rid=latest_rid)
             latest_rid += 1
 
     async def is_stop(self) -> bool:
@@ -434,7 +442,7 @@ class DynDetailScrapy(UnlimitedCrawler):
             self.succ_counter.is_running = True
             self.log.info('开始执行获取动态详情')
             self.log.debug(f'爬虫，启动！最后的rid为：{latest_rid}\t往前回滚500个rid！')
-            task3 = asyncio.create_task(self.run(latest_rid))
+            task3 = asyncio.create_task(self.run(DynDetailParams(rid=latest_rid)))
             task_list.append(task3)
             await asyncio_gather(*task_list, log=self.log)
             self.log.error('爬取动态任务全部完成！')
@@ -471,18 +479,9 @@ class DynDetailScrapy(UnlimitedCrawler):
         self.log.info(f'共创建{len(task_list)}个进程！')
         await asyncio_gather(*task_list, log=self.log)
 
-    async def _test_run(self):
-        latest_rid = int(await self.Sqlhelper.get_latest_rid())
-        self.succ_counter = SuccCounter()
-        self.log.info(1)
-        asyncio.get_event_loop().call_later(10, self.stop_counter.set_max_stop_num, )
-        self.log.info(2)
-        await asyncio.create_task(self.run(latest_rid))
-
     # endregion
 
 
 dyn_detail_scrapy = DynDetailScrapy()
 
-if __name__ == "__main__":
-    asyncio.run(dyn_detail_scrapy._test_run())
+

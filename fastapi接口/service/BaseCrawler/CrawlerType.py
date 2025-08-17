@@ -2,8 +2,8 @@ import asyncio
 from abc import abstractmethod
 from typing import Any, AsyncGenerator, Optional, List
 
-from fastapi接口.service.BaseCrawler.base.core import BaseCrawler, ParamsType
-from fastapi接口.service.BaseCrawler.model.base import WorkerModel, WorkerStatus
+from fastapi接口.service.BaseCrawler.base.core import BaseCrawler
+from fastapi接口.service.BaseCrawler.model.base import WorkerModel, WorkerStatus, ParamsType
 from fastapi接口.service.BaseCrawler.plugin.base import CrawlerPlugin
 from fastapi接口.utils.Common import asyncio_gather
 
@@ -13,7 +13,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
 
     def __init__(self,
                  plugins: List[CrawlerPlugin[ParamsType]] = None,
-                 requeue_on_fetch_fail: bool = True,
+                 requeue_on_fetch_fail: bool = False,
                  *args, **kwargs
                  ):
         self.requeue_on_fetch_fail = requeue_on_fetch_fail
@@ -39,8 +39,8 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         ...
 
     @abstractmethod
-    async def key_params_gen(self, params: Any) -> AsyncGenerator[ParamsType, None]:
-        yield params
+    async def key_params_gen(self, params: ParamsType | Any | None) -> AsyncGenerator[ParamsType, None]:
+        yield ...
 
     @abstractmethod
     async def handle_fetch(self, params: ParamsType) -> WorkerStatus | Any:
@@ -79,7 +79,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
                 worker_model.fetchStatus = fetch_result
             await self.on_worker_end(worker_model)
 
-    async def run(self, init_params: ParamsType):
+    async def run(self, init_params: ParamsType | None = None):
         self.log.info(f"Crawler {self.__class__.__name__} starting with init_params: {init_params}")
         await asyncio_gather(*[x.on_run_start(init_params) for x in self._plugins], log=self.log)
         task_set = set()

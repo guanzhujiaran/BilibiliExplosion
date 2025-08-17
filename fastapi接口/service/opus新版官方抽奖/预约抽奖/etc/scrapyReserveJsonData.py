@@ -5,13 +5,12 @@ import time
 from dataclasses import dataclass
 from functools import reduce
 from typing import AsyncGenerator
-
 import aiofiles
 import pandas
-
 import Bilibili_methods.all_methods
 from fastapi接口.log.base_log import reserve_lot_logger
-from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler, ParamsType
+from fastapi接口.models.base.custom_pydantic import CustomBaseModelHashable
+from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin
 from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import reserve_relation_info
@@ -30,7 +29,7 @@ class SuccCounter(BaseSuccCounter):
 
 
 @dataclass
-class dynamic_timestamp_info:
+class DynamicTimestampInfo:
     dynamic_timestamp: int = 0
     ids: int = 0
 
@@ -44,7 +43,13 @@ class dynamic_timestamp_info:
         return f"{hours:02d}小时{minutes:02d}分{secs:02d}秒"
 
 
-class ReserveScrapyRobot(UnlimitedCrawler[int]):
+class ReserveParams(CustomBaseModelHashable):
+    reserve_id: int = 0
+
+    def __hash__(self):
+        return hash(self.reserve_id)
+
+class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
     async def on_run_end(self, end_param):
         """
             退出时必定执行
@@ -69,13 +74,14 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
                     f"最近的预约时间间隔过长{self.dynamic_timestamp.get_time_str_until_now()}")
         return False
 
-    async def key_params_gen(self, params: ParamsType) -> AsyncGenerator[ParamsType, None]:
+    async def key_params_gen(self, params: ReserveParams) -> AsyncGenerator[ReserveParams, None]:
+        reserve_id = params.reserve_id
         while 1:
-            params += 1
-            yield params
+            reserve_id += 1
+            yield ReserveParams(reserve_id=reserve_id)
 
-    async def handle_fetch(self, params: ParamsType) -> WorkerStatus:
-        return await self.resolve_reserve(params)
+    async def handle_fetch(self, params: ReserveParams) -> WorkerStatus:
+        return await self.resolve_reserve(params.reserve_id)
 
     def __init__(self):
         self.sem_limit = 1  # 因为用的是自己的代理，所以速度可以慢点
@@ -106,7 +112,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
         self.list_type_wrong = list()  # 出错动态内容
         self.list_deleted_maybe = list()  # 可能动态内容
         self.ids = int()
-        self.dynamic_timestamp: dynamic_timestamp_info = dynamic_timestamp_info()
+        self.dynamic_timestamp: DynamicTimestampInfo = DynamicTimestampInfo()
         self.getfail = None  # 文件
         self.unknown = None  # 文件
         # 文件
@@ -258,8 +264,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             async with self.ids_change_lock:
                 self.ids = self.ids_list[ids_index]
             async with self.dynamic_ts_lock:
-                self.dynamic_timestamp = dynamic_timestamp_info()
-            await self.run(self.ids_list[ids_index])
+                self.dynamic_timestamp = DynamicTimestampInfo()
+            await self.run(ReserveParams(reserve_id=self.ids_list[ids_index]))
             self.ids = self.stats_plugin.end_params  # 加上这个才是最终的ids，否则ids并不会改变
             totoal_count1 = self.stats_plugin.succ_count
             self.ids_list[ids_index] = self.ids
@@ -273,8 +279,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[int]):
             time.time()) - self.dynamic_timestamp.dynamic_timestamp < self.EndTimeSeconds else - self.null_time_quit
         totoal_count2 = self.stats_plugin.succ_count
         finnal_rid_list = [
-            str(self.ids_list[0] - self.rollback_num - none_num1),
-            str(self.ids_list[1] - self.rollback_num - none_num2)
+            str(self.ids_list[0].reserve_id - self.rollback_num - none_num1),
+            str(self.ids_list[1].reserve_id - self.rollback_num - none_num2)
         ]
         reserve_lot_logger.critical(
             f'{self.ids_list}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'

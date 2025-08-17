@@ -13,7 +13,7 @@ from fastapi接口.service.grpc_module.Models.RabbitmqModel import VoucherInfo
 @router.subscriber(
     queue=official_reserve_charge_lot.mq_props.rabbit_queue,
     exchange=official_reserve_charge_lot.mq_props.exchange,
-    retry=True,
+    retry=True, no_ack=True
 )
 async def handle_official_reserve_charge_lot(
         body: LotDataReq,
@@ -28,7 +28,7 @@ async def handle_official_reserve_charge_lot(
 
 @router.subscriber(queue=upsert_official_reserve_charge_lot.mq_props.rabbit_queue,
                    exchange=upsert_official_reserve_charge_lot.mq_props.exchange,
-                   retry=True,
+                   retry=True, no_ack=True
                    )
 async def handle_upsert_official_reserve_charge_lot(
         newly_lot_data: Dict,
@@ -43,7 +43,7 @@ async def handle_upsert_official_reserve_charge_lot(
 
 @router.subscriber(queue=upsert_lot_data_by_dynamic_id.mq_props.rabbit_queue,
                    exchange=upsert_lot_data_by_dynamic_id.mq_props.exchange,
-                   retry=True,
+                   retry=True, no_ack=True
                    )
 async def handle_upsert_lot_data_by_dynamic_id(
         lot_data_dynamic_req: LotDataDynamicReq,
@@ -59,6 +59,7 @@ async def handle_upsert_lot_data_by_dynamic_id(
 @router.subscriber(queue=upsert_topic_lot.mq_props.rabbit_queue,
                    exchange=upsert_topic_lot.mq_props.exchange,
                    retry=True,
+                   no_ack=True
                    )
 async def handle_upsert_topic_lot(
         body: TopicLotData,
@@ -74,6 +75,7 @@ async def handle_upsert_topic_lot(
 @router.subscriber(queue=upsert_milvus_bili_lot_data.mq_props.rabbit_queue,
                    exchange=upsert_milvus_bili_lot_data.mq_props.exchange,
                    retry=True,
+                   no_ack=True
                    )
 async def handle_upsert_milvus_bili_lot_data(
         body: Dict,
@@ -90,6 +92,7 @@ async def handle_upsert_milvus_bili_lot_data(
     queue=bili_voucher.mq_props.rabbit_queue,
     exchange=bili_voucher.mq_props.exchange,
     retry=True,
+    no_ack=True
 )
 async def handle_bili_voucher(
         body: VoucherInfo,

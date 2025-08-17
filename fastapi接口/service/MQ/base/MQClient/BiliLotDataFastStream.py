@@ -13,8 +13,7 @@ from fastapi接口.service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotD
 from fastapi接口.service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
     upsert_milvus_bili_lot_data_prop, router, get_broker, bili_voucher_prop
-from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
-from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls
+from fastapi接口.service.compo.text_embed import lot_data_2_bili_lot_data_ls, save_bili_lot_data_embeddings
 from fastapi接口.service.grpc_module.Models.RabbitmqModel import VoucherInfo
 from fastapi接口.service.grpc_module.Utils.极验.极验点击验证码 import geetest_v3_breaker
 from fastapi接口.service.grpc_module.grpc.bapi.BiliApi import get_lot_notice
@@ -220,7 +219,7 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
                 f"【{module_name}】收到消息：{_body}")
             lot_data = Lotdata(**_body)
             da = await lot_data_2_bili_lot_data_ls(lot_data)
-            await milvus_sql_helper.upsert_bili_lot_data(da)
+            await save_bili_lot_data_embeddings(da)
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{module_name} consume error: {e}')

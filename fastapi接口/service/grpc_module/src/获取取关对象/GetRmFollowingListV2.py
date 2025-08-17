@@ -4,10 +4,12 @@ from datetime import datetime
 from typing import Any, AsyncGenerator
 
 from fastapi接口.log.base_log import get_rm_following_list_logger
+from fastapi接口.models.base.custom_pydantic import CustomBaseModel
+from fastapi接口.models.get_other_lot_dyn.dyn_robot_model import BiliSpaceUserParamsType
 from fastapi接口.service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerStatus, WorkerModel
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
-from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo
+from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotmaininfo, TLotdyninfo
 from fastapi接口.service.get_others_lot_dyn.Sql.sql_helper import SqlHelper
 from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import BiliSpaceUserItem, HighlightWordList
 from fastapi接口.utils.Common import asyncio_gather
@@ -16,7 +18,12 @@ from fastapi接口.utils.dynamic_id_caculate import dynamic_id_2_ts
 running_uids = set()
 
 
-class GetRmFollowingListV2(UnlimitedCrawler[int]):
+class LotUpInfo(CustomBaseModel):
+    uid: int | str
+    isLotUp: bool  # False表示不是抽奖up，True表示是抽奖up
+
+
+class GetRmFollowingListV2(UnlimitedCrawler[BiliSpaceUserParamsType]):
     def __init__(self):
         self.status = StatsPlugin(self)
         super().__init__(
@@ -36,22 +43,23 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
     async def is_stop(self) -> bool:
         pass
 
-    async def key_params_gen(self, params: int) -> AsyncGenerator[int, None]:
+    async def key_params_gen(self, params: Any | None = None) -> AsyncGenerator[BiliSpaceUserParamsType, None]:
         while 1:  # 这里的循环必须一致执行,不然提前结束就无法获取了
             uid = await self.following_params_queue.get()
-            yield uid
+            yield BiliSpaceUserParamsType(uid=uid)
 
-    async def handle_fetch(self, params: int) -> WorkerStatus | Any:
+    async def handle_fetch(self, params: BiliSpaceUserParamsType) -> WorkerStatus | Any:
         return await self.fetch_uid_space_dyn(params)
 
-    async def fetch_uid_space_dyn(self, uid: int) -> WorkerStatus | Any:
-        uid_space_update_time = await SqlHelper.get_lot_user_info_updatetime_by_uid(uid)
+    async def fetch_uid_space_dyn(self, params: BiliSpaceUserParamsType) -> WorkerStatus | Any:
+        uid_space_update_time = await SqlHelper.get_lot_user_info_updatetime_by_uid(params.uid)
         if uid_space_update_time and (datetime.now() - uid_space_update_time).days < self.check_up_sep_days:
             return WorkerStatus.complete
         bsu = BiliSpaceUserItem(
             lot_round_id=self.round_id,
-            uid=uid,
-            is_use_available_proxy=self._is_use_available_proxy
+            uid=params.uid,
+            is_use_available_proxy=self._is_use_available_proxy,
+            params=params
         )
         await bsu.get_user_space_dynamic_id(
             secondRound=True,
@@ -79,19 +87,33 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
         return round_info.lotRound_id
 
     async def on_worker_end(self, worker_model: WorkerModel):
-        running_uids.discard(worker_model.params)
+        running_uids.discard(worker_model.params.uid)
         await super().on_worker_end(worker_model)
 
-    async def check_lot_up_from_database(self, uid) -> bool:
+    def _judge_lot_up(self, uid: int, latest_lot_dyn: TLotdyninfo | None) -> LotUpInfo:
+        if latest_lot_dyn:
+            if int(time.time()) - dynamic_id_2_ts(latest_lot_dyn.dynId) >= self.max_gap_time:
+                return LotUpInfo(isLotUp=False, uid=uid)
+            return LotUpInfo(isLotUp=True, uid=uid)
+        return LotUpInfo(isLotUp=False, uid=uid)
+
+    async def check_lot_up_from_database(self, uid: int) -> LotUpInfo:
         """
         返回bool值，true表示这个uid是发起抽奖的up
         """
         latest_lot_dyn = await SqlHelper.getLatestLotDynInfoByUid(uid)
-        if latest_lot_dyn:
-            if int(time.time()) - dynamic_id_2_ts(latest_lot_dyn.dynId) >= self.max_gap_time:
-                return False
-            return True
-        return False
+        return self._judge_lot_up(uid, latest_lot_dyn)
+
+    async def check_lot_up_from_database_bulk(self, uid_list: list[int]) -> list[LotUpInfo]:
+        latest_lot_dyn_list = await SqlHelper.getLatestLotDynInfoByUidList(uid_list)
+        judge_res = [self._judge_lot_up(x.up_uid, x) for x in latest_lot_dyn_list]
+        judged_uid_set = set(x.uid for x in judge_res)
+        res = []
+        for uid in uid_list:
+            if uid not in judged_uid_set:
+                res.append(LotUpInfo(isLotUp=False, uid=uid))
+        res.extend(judge_res)
+        return res
 
     async def add_following_params(self, following_list: list[int]):
         async with self._lock:
@@ -110,17 +132,19 @@ class GetRmFollowingListV2(UnlimitedCrawler[int]):
         if type(following_list) is not list:
             return
         self.round_id = await self._get_round_id()
-        await self.run(0)
+        await self.run()
 
     async def get_rm_following_list(self, following_list: list[int | str]):
         following_list = [int(x) for x in following_list]
+        following_list = list(set(following_list))  # 去个重
         await self.add_following_params(following_list)
         following_set = set(following_list)
         while following_set & running_uids:
-            await asyncio.sleep(1)
-        result = [x for x in following_list if not await self.check_lot_up_from_database(x)]
+            await asyncio.sleep(10)
+        result = await self.check_lot_up_from_database_bulk(following_list)
         self.log.critical(f'需要取关up主:{result}')
-        return result
+        res = [x.uid for x in result if not x.isLotUp]
+        return list(set(res))
 
 
 gmflv2 = GetRmFollowingListV2()

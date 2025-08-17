@@ -11,12 +11,11 @@
 *.jpg
 *.png
 .git/
-models
+/models
 fastapi接口/service/PlayWright/user_data
 !fastapi接口/service/grpc_module/Utils/user-agents_dalvik_application_2-1.json
 CONFIG.py
 jupyter
-webDriver
 venv
 node_modules
 .virtual_documents

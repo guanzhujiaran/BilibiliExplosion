@@ -2,9 +2,7 @@ import datetime
 import inspect
 import time
 from typing import Any, Optional
-
 import numpy as np
-
 from fastapi接口.service.BaseCrawler.base.core import ParamsType, BaseCrawler
 from fastapi接口.service.BaseCrawler.model.base import WorkerModel, WorkerStatus
 from fastapi接口.service.BaseCrawler.plugin.base import CrawlerPlugin
@@ -27,7 +25,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self._processed_items_count: int = 0  # Fundamental counter
         self._null_count: int = 0
         self._succ_count: int = 0
-        self._running_params_set: set[str] = set()  # 把参数转换成字符串,避免unhashable的参数
+        self._running_params_set: set[ParamsType] = set()  # 把参数转换成字符串,避免unhashable的参数
 
     async def on_run_start(self, init_params: ParamsType):
         """
@@ -59,14 +57,14 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
                 self._null_count += 1
         self._end_params = worker_model.params
         # Log current speed by calling the property, which calculates it on demand
-        self._running_params_set.discard(str(worker_model.params))
+        self._running_params_set.discard(worker_model.params)
         self.log.debug(
             f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
             f"Current Speed: {self.crawling_speed:.2f} items/s")
         await super().on_worker_end(worker_model)
 
     async def on_worker_start(self, worker_model: WorkerModel):
-        self._running_params_set.add(str(worker_model.params))
+        self._running_params_set.add(worker_model.params)
         await super().on_worker_start(worker_model)
 
     async def on_run_end(self, end_param: ParamsType):
@@ -169,7 +167,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         return self._succ_count
 
     @property
-    def running_params_str_set(self) -> set[str]:
+    def running_params_set(self) -> set[ParamsType]:
         return self._running_params_set
 
     def get_all_status(self) -> dict:

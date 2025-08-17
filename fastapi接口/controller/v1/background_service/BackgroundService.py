@@ -3,8 +3,7 @@ import inspect
 from typing import Literal, Union, Any
 
 from fastapi接口.models.common import CommonResponseModel
-from fastapi接口.models.v1.background_service.background_service_model import DynScrapyStatusResp, \
-    TopicScrapyStatusResp, ReserveScrapyStatusResp, AllLotScrapyStatusResp, ProgressStatusResp, ProxyStatusResp
+from fastapi接口.models.v1.background_service.background_service_model import AllLotScrapyStatusResp, ProgressStatusResp, ProxyStatusResp
 from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
 from fastapi接口.service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
@@ -78,6 +77,7 @@ class BackgroundService:
         crawler_name='gmflv2'
     )
 
+
 def start_background_service(show_log: bool):
     back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log)),
                          asyncio.create_task(async_monitor_ipv6_address_changes()),
@@ -93,53 +93,23 @@ def get_scrapy_status(scrapy_type: Literal[
     'dyn', 'topic', 'reserve',
     'other_space', 'other_dyn',
     'refresh_bili_official', 'refresh_bili_reserve'
-]) -> DynScrapyStatusResp | TopicScrapyStatusResp | ReserveScrapyStatusResp | ProgressStatusResp | None:
+]) -> Any | dict | ProgressStatusResp | None:
     match scrapy_type:
         case 'dyn':
             if dyn_detail_scrapy is not None:
-                return DynScrapyStatusResp(
-                    first_dyn_id=dyn_detail_scrapy.succ_counter.first_dyn_id or 0,
-                    succ_count=dyn_detail_scrapy.status_plugin.succ_count or 0,
-                    cur_stop_num=dyn_detail_scrapy.stop_counter.cur_stop_continuous_num or 0,
-                    latest_rid=dyn_detail_scrapy.status_plugin.end_params or 0,
-                    latest_succ_dyn_id=dyn_detail_scrapy.succ_counter.latest_succ_dyn_id or 0,
-                    start_ts=int(dyn_detail_scrapy.status_plugin.start_time),
-                    freq=dyn_detail_scrapy.status_plugin.crawling_speed,
-                    is_running=dyn_detail_scrapy.status_plugin.is_running,
-                    update_ts=int(dyn_detail_scrapy.status_plugin.last_update_time)
-                )
+                return dyn_detail_scrapy.status_plugin.get_all_status()
             else:
-                return DynScrapyStatusResp()
+                return dict()
         case 'topic':
             if topic_robot is not None:
-                return TopicScrapyStatusResp(
-                    succ_count=topic_robot.stats_plugin.succ_count,
-                    cur_stop_num=topic_robot.cur_stop_times or 0,
-                    start_ts=int(topic_robot.stats_plugin.start_time),
-                    freq=topic_robot.stats_plugin.crawling_speed,
-                    is_running=topic_robot.stats_plugin.is_running,
-                    latest_succ_topic_id=topic_robot.stats_plugin.end_success_params or 0,
-                    first_topic_id=topic_robot.stats_plugin.init_params or 0,
-                    latest_topic_id=topic_robot.stats_plugin.end_params or 0,
-                    update_ts=int(topic_robot.stats_plugin.last_update_time)
-                )
+                return topic_robot.stats_plugin.get_all_status()
             else:
-                return TopicScrapyStatusResp()
+                return dict()
         case 'reserve':
             if reserve_robot is not None:
-                return ReserveScrapyStatusResp(
-                    succ_count=reserve_robot.stats_plugin.processed_items_count,
-                    cur_stop_num=reserve_robot.null_stop_plugin.sequential_null_count or 0,
-                    start_ts=int(reserve_robot.stats_plugin.start_time),
-                    freq=reserve_robot.stats_plugin.crawling_speed,
-                    is_running=reserve_robot.stats_plugin.is_running,
-                    latest_succ_reserve_id=reserve_robot.stats_plugin.end_success_params or 0,
-                    first_reserve_id=reserve_robot.stats_plugin.init_params or 0,
-                    latest_reserve_id=reserve_robot.stats_plugin.end_params or 0,
-                    update_ts=int(reserve_robot.stats_plugin.last_update_time)
-                )
+                return reserve_robot.stats_plugin.get_all_status()
             else:
-                return ReserveScrapyStatusResp()
+                return dict()
         case 'other_space':
             if other_lot_class and other_lot_class.robot:
                 return ProgressStatusResp(
@@ -197,19 +167,19 @@ def get_scrapy_status(scrapy_type: Literal[
 
 
 @router.get('/GetDynamicScrapyStatus', description='获取动态爬虫状态',
-            response_model=CommonResponseModel[Union[DynScrapyStatusResp, None]])
+            response_model=CommonResponseModel[Union[Any, None]])
 def get_dynamic_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('dyn'))
 
 
 @router.get('/GetTopicScrapyStatus', description='获取话题爬虫状态',
-            response_model=CommonResponseModel[Union[TopicScrapyStatusResp, None]])
+            response_model=CommonResponseModel[Union[Any, None]])
 def get_topic_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('topic'))
 
 
 @router.get('/GetReserveScrapyStatus', description='获取预约爬虫状态',
-            response_model=CommonResponseModel[Union[ReserveScrapyStatusResp, None]])
+            response_model=CommonResponseModel[Union[Any, None]])
 def get_reserve_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('reserve'))
 
@@ -268,12 +238,11 @@ def global_schedule():
     return CommonResponseModel(data=ret)
 
 
-@router.get('/BackgroundService/AllStat', description='后台服务状态', response_model=CommonResponseModel[Any])
+@router.get('/BackgroundService/AllStat', description='后台服务状态', response_model=CommonResponseModel[Any],
+            response_model_exclude_none=True)
 def background_service_status():
     ret_list = []
-    # 获取 BackgroundService 类中定义的所有属性
     members = inspect.getmembers(BackgroundService)
-    # 过滤出那些是 GenericCrawlerScheduler 实例的属性
     for name, value in members:
         if isinstance(value, GenericCrawlerScheduler):
             for plugin in value.crawler.plugins:

@@ -78,7 +78,7 @@ class SamsClubHeadersGen:
         self.device_str = device_str
         self.version_str = version_str
 
-    async def _get_counter(self):
+    async def get_fetch_cnt(self):
         async with self._lock:
             ret = self._counter + 1
             self._counter = ret
@@ -91,7 +91,7 @@ class SamsClubHeadersGen:
             self,
             body: str,
     ) -> SamsClubHeadersModel:
-        cnt = await self._get_counter()
+        cnt = await self.get_fetch_cnt()
         ts = int(time.time() * 1000)  # 模拟Java的System.currentTimeMillis() 方法，返回当前时间的毫秒数
         ts_str = str(int(ts))
         treq_ts_10000 = int(ts * 10000) + self.random_gen.nextInt()
