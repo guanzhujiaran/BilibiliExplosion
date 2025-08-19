@@ -37,7 +37,7 @@ async def get_reply_main(
         _type,
         mode,
         request_conf: RequestConf = RequestConf(
-            use_custom_proxy=True,
+            is_use_custom_proxy=True,
             is_use_available_proxy=False
         ),
 ):
@@ -93,7 +93,7 @@ async def get_reply_main(
 async def get_web_topic(
         topic_id: int,
         request_conf: RequestConf = RequestConf(
-            use_custom_proxy=True,
+            is_use_custom_proxy=True,
             is_use_available_proxy=False
         ),
 ):
@@ -103,7 +103,6 @@ async def get_web_topic(
         "source": "Web"
     }
     cookie_data, headers = await prepare_request_data(request_conf)
-
     resp = await request_with_proxy_internal.request_with_proxy(
         method="GET",
         url=url,
@@ -479,4 +478,12 @@ if __name__ == "__main__":
         print(resp)
 
 
-    asyncio.run(_test_space())
+    async def _test_get_web_topic():
+        resp = await get_web_topic(
+            1312441
+        )
+        print(resp)
+        assert type(resp.get('code')) is int
+
+
+    asyncio.run(_test_get_web_topic())

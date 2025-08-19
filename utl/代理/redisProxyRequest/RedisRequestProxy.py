@@ -85,7 +85,7 @@ class RequestWithProxy:
                 'computed_proxy_str': CONFIG.my_ipv6_addr
             }
         )
-        proxy = None if not is_use_custom_proxy else my_ipv6_proxy
+        proxy = my_ipv6_proxy if is_use_custom_proxy else None
         while not proxy:  # 获取代理这里可以while 1 循环
             proxy_flag: bool = random.choices([True, False], weights=[
                 use_my_ipv6_proxy_pool_weights if use_my_ipv6_proxy_pool_weights >= 0 else 0,

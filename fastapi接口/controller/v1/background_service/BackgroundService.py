@@ -3,7 +3,8 @@ import inspect
 from typing import Literal, Union, Any
 
 from fastapi接口.models.common import CommonResponseModel
-from fastapi接口.models.v1.background_service.background_service_model import AllLotScrapyStatusResp, ProgressStatusResp, ProxyStatusResp
+from fastapi接口.models.v1.background_service.background_service_model import AllLotScrapyStatusResp, \
+    ProgressStatusResp, ProxyStatusResp
 from fastapi接口.scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
 from fastapi接口.service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
 from fastapi接口.service.BaseCrawler.plugin.statusPlugin import StatsPlugin
@@ -167,25 +168,30 @@ def get_scrapy_status(scrapy_type: Literal[
 
 
 @router.get('/GetDynamicScrapyStatus', description='获取动态爬虫状态',
-            response_model=CommonResponseModel[Union[Any, None]])
+            response_model=CommonResponseModel[Union[Any, None]],
+            response_model_exclude_none=True)
 def get_dynamic_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('dyn'))
 
 
 @router.get('/GetTopicScrapyStatus', description='获取话题爬虫状态',
-            response_model=CommonResponseModel[Union[Any, None]])
+            response_model=CommonResponseModel[Union[Any, None]],
+            response_model_exclude_none=True)
 def get_topic_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('topic'))
 
 
 @router.get('/GetReserveScrapyStatus', description='获取预约爬虫状态',
-            response_model=CommonResponseModel[Union[Any, None]])
+            response_model=CommonResponseModel[Union[Any, None]],
+            response_model_exclude_none=True)
 def get_reserve_scrapy_status():
     return CommonResponseModel(data=get_scrapy_status('reserve'))
 
 
 @router.get('/GetAllLotScrapyStatus', description='获取所有爬虫状态',
-            response_model=CommonResponseModel[Union[AllLotScrapyStatusResp, None]])
+            response_model=CommonResponseModel[Union[AllLotScrapyStatusResp, None]],
+            response_model_exclude_none=True
+            )
 def get_all_scrapy_status():
     return CommonResponseModel(
         data=AllLotScrapyStatusResp(
