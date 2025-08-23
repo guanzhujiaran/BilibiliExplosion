@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\nCbilibili/pangu/gallery/v1/openplatform/apiserver/v1alpha1/api.proto')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\nCbilibili/pangu/gallery/v1/openplatform/apiserver/v1alpha1/api.protob\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)

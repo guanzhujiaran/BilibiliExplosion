@@ -1,19 +1,21 @@
 import asyncio
 import json
 import os
+import random
 from typing import Literal, NewType
 
 import aiofiles
+from curl_cffi import Response
 from curl_cffi.requests.exceptions import RequestException
 from httpx import HTTPError
 
 from fastapi接口.log.base_log import sams_club_logger
-from fastapi接口.models.v1.samsclub.api_model import RespUserProfile
+from fastapi接口.models.v1.samsclub.api_model import RespUserProfile, ApiResponse, UserProfile
 from fastapi接口.models.v1.samsclub.samsclub_model import SamsClubAppStorage
 from fastapi接口.service.samsclub.exceptions.error import UnknownError
 from fastapi接口.service.samsclub.tools.do_samsclub_encryptor import update_do_encrypt_key
 from fastapi接口.service.samsclub.tools.headers_gen import SamsClubHeadersGen, sort_headers_with_missing_last
-from utl.pushme.pushme import pushme
+from utl.pushme.pushme import pushme, a_pushme
 from utl.代理.SealedRequests import my_async_httpx
 
 StringNumber = NewType('StringNumber', str)
@@ -31,7 +33,7 @@ class SamsClubApi:
 
     async def save_app_storage(self):
         async with aiofiles.open(self.FilePath.app_storage, 'w', encoding='utf-8') as f:
-            await f.write(self.app_storage.model_dump_json())
+            await f.write(self.app_storage.model_dump_json(exclude_none=True, exclude={'extra_fields'}))
 
     def __init__(self):
         auth_token = ''
@@ -53,6 +55,7 @@ class SamsClubApi:
         )
         self._lock = asyncio.Lock()
 
+    isInited = False
     log = sams_club_logger
     _base_url = "https://api-sams.walmartmobile.cn"
     app_storage: SamsClubAppStorage = SamsClubAppStorage()
@@ -118,6 +121,9 @@ class SamsClubApi:
             is_add_amap_headers: bool = True
     ):
         while 1:
+            if self.isInited:
+                for i in range(random.choice(range(10))):
+                    await self.__empty_request()
             cur_auth_token = self.headers_gen.auth_token
             body_str = self.body_to_json(body) if body else ''
             headers_model = await self.headers_gen.gen_headers(body_str)
@@ -127,7 +133,7 @@ class SamsClubApi:
             headers.update({'Content-Length': str(len(body_str.encode('utf-8')))})
             try:
                 self.log.debug(f'请求：{url} {method} {body_str}')
-                resp = await my_async_httpx.request(
+                resp: Response = await my_async_httpx.request(
                     url,
                     method=method,
                     params=params,
@@ -146,7 +152,7 @@ class SamsClubApi:
             if not is_succ:
                 await asyncio.sleep(10)
                 continue
-            self.log.debug(f'请求成功：{resp.text}')
+            self.log.info(f'请求成功：{resp.text}')
             return resp
 
     async def get_recommend_store_list_by_location(self):
@@ -158,12 +164,14 @@ class SamsClubApi:
         }
         return await self.send(url, body=body, is_add_amap_headers=False)
 
-    async def handle_resp_code(self, response, auth_token: str, is_updated_encrypt_key: bool) -> bool:
+    async def handle_resp_code(self, response: Response, auth_token: str, is_updated_encrypt_key: bool) -> bool:
         try:
             resp_dict = response.json()
         except Exception as e:
-            self.log.exception(f'json序列化失败：{response.text}')
-            raise e
+            self.log.exception(f'json序列化失败：{response.request}\n{response.text}')
+            await a_pushme(f'samsclub API请求失败！', f'json序列化失败：{response.request}\n{response.text}')
+            await asyncio.sleep(1800)
+            return False
         is_succ = resp_dict.get('success')
         resp_code = resp_dict.get('code')
         resp_msg = resp_dict.get('msg')
@@ -194,6 +202,7 @@ class SamsClubApi:
         return bool(is_succ)
 
     async def __init_address(self):
+        self.isInited = False
         if self.app_storage.storeList and self.app_storage.storeInfoVOList: return
         store_info_resp = await self.get_recommend_store_list_by_location()
         store_info_resp_dict = store_info_resp.json()
@@ -210,10 +219,11 @@ class SamsClubApi:
                         x.get('storeRecmdDeliveryTemplateData').get('storeDeliveryTemplateId'))
                 }
                 self.app_storage.storeInfoVOList.append(da)
+        self.isInited = True
 
     async def __init_user(self):
         if self.app_storage.uid and self.app_storage.mobile: return
-        resp: RespUserProfile = await self.user_profile()
+        resp: ApiResponse[UserProfile] = await self.user_profile()
         self.log.debug(f'用户信息：{resp}')
         self.app_storage.uid = resp.data.uid
         self.app_storage.mobile = resp.data.mobile
@@ -390,7 +400,7 @@ class SamsClubApi:
         }
         return await self.send(url, body, is_add_amap_headers=True)
 
-    async def user_profile(self) -> RespUserProfile:
+    async def user_profile(self) -> ApiResponse[UserProfile]:
         url = self._base_url + '/api/v1/sams/sams-user/user/profile'
         params = {
             'auth-token': self.headers_gen.auth_token
@@ -401,7 +411,8 @@ class SamsClubApi:
             method='GET',
             is_add_amap_headers=True
         )
-        return RespUserProfile.validate_python(resp.json())
+        resp_user_profile = RespUserProfile.model_validate_json(resp.text)
+        return resp_user_profile
 
     # region 日志操作相关api
     async def sams_user_user_member_card_info(self):
@@ -835,13 +846,8 @@ class SamsClubApi:
 sams_club_api = SamsClubApi()
 if __name__ == '__main__':
     async def _test():
-        await sams_club_api.init_api_info()
-        resp = await sams_club_api.grouping_list(
-            156048,
-            157067,
-            [157067, 333151, 335141, 336148, 334132],
-            1,
-
+        # await sams_club_api.init_api_info()
+        resp = await sams_club_api.user_profile(
         )
         print(resp)
 

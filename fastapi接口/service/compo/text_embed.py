@@ -87,4 +87,4 @@ async def search_lottery_text(query_text: str, limit: int = 10) -> List[models.L
 
 
 if __name__ == '__main__':
-    print(asyncio.run(_create_embedding('池乐亲绘头像')))
+    print(asyncio.run(_create_embedding('站周边蓝牙耳机')))

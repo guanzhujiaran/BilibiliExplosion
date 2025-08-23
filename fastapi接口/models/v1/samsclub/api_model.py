@@ -37,8 +37,11 @@ class UserProfile(CustomBaseModel):
     uid: str
     userName: str
 
+
 RespUserProfile = TypeAdapter(ApiResponse[UserProfile])
 
 __slot__ = [
-    'RespUserProfile'
+    'RespUserProfile',
+    'ApiResponse',
+    'UserProfile'
 ]

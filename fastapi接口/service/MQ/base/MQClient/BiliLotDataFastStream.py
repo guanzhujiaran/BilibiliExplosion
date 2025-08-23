@@ -21,7 +21,7 @@ from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer 
 from fastapi接口.service.grpc_module.src.SQLObject.models import Lotdata
 from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
 from fastapi接口.service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
-from utl.pushme.pushme import pushme
+from utl.pushme.pushme import a_pushme
 
 
 def func_wrapper(func: Callable):
@@ -99,7 +99,7 @@ class OfficialReserveChargeLot(BaseFastStreamMQ):
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{self.mq_props.queue_name} consume error: {e}')
-            pushme(f'{self.mq_props.queue_name} consume error: {e}', e.__str__())
+            await a_pushme(f'{self.mq_props.queue_name} consume error: {e}', e.__str__())
             await msg.nack()
 
 
@@ -129,7 +129,7 @@ class UpsertOfficialReserveChargeLot(BaseFastStreamMQ):
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'【{self.mq_props.queue_name}】 consume error: {e}')
-            pushme(f'【{self.mq_props.queue_name}】 consume error: {e}', e.__str__())
+            await a_pushme(f'【{self.mq_props.queue_name}】 consume error: {e}', e.__str__())
             await msg.nack()
 
 
@@ -171,7 +171,7 @@ class UpsertLotDataByDynamicId(BaseFastStreamMQ):
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'【{module_name}】 consume error: {e}')
-            pushme(f'【{module_name}】 consume error: {e}', e.__str__())
+            await a_pushme(f'【{module_name}】 consume error: {e}', e.__str__())
             await msg.nack()
 
 
@@ -196,7 +196,7 @@ class UpsertTopicLot(BaseFastStreamMQ):
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{module_name} consume error: {e}')
-            pushme(f'{module_name} consume error: {e}', e.__str__())
+            await a_pushme(f'{module_name} consume error: {e}', e.__str__())
             await msg.nack()
 
 
@@ -222,8 +222,8 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
             await save_bili_lot_data_embeddings(da)
             return await msg.ack()
         except Exception as e:
-            MQ_logger.exception(f'{module_name} consume error: {e}')
-            pushme(f'{module_name} consume error: {e}', e.__str__())
+            MQ_logger.exception(f'{module_name} params: {_body} consume error: {e}')
+            await a_pushme(f'{module_name} consume error: {e}', f'params:{_body} \n consume error: {e}')
             await msg.nack()
 
 
@@ -245,23 +245,21 @@ class BiliVoucher(BaseFastStreamMQ):
                 f"【{module_name}】收到消息：{voucher_info}")
             if int(time.time()) - voucher_info.generate_ts > 10:
                 return await msg.ack()
-            await asyncio.wait_for(
-                geetest_v3_breaker.a_validate_form_voucher_ua(
-                    voucher_info.voucher,
-                    voucher_info.ua,
-                    voucher_info.ck,
-                    voucher_info.origin,
-                    voucher_info.referer,
-                    voucher_info.ticket,
-                    voucher_info.version,
-                    voucher_info.session_id,
-                    True,
-                ), 10
+            await geetest_v3_breaker.a_validate_form_voucher_ua(
+                voucher_info.voucher,
+                voucher_info.ua,
+                voucher_info.ck,
+                voucher_info.origin,
+                voucher_info.referer,
+                voucher_info.ticket,
+                voucher_info.version,
+                voucher_info.session_id,
+                True,
             )
             return await msg.ack()
         except Exception as e:
             MQ_logger.exception(f'{module_name} consume error: {e}')
-            pushme(f'{module_name} consume error: {e}', e.__str__())
+            await a_pushme(f'{module_name} consume error: {e}', e.__str__())
             await msg.nack()
 
 

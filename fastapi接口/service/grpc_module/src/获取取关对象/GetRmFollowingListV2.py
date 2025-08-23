@@ -142,7 +142,7 @@ class GetRmFollowingListV2(UnlimitedCrawler[BiliSpaceUserParamsType]):
         while following_set & running_uids:
             await asyncio.sleep(10)
         result = await self.check_lot_up_from_database_bulk(following_list)
-        self.log.critical(f'需要取关up主:{result}')
+        self.log.info(f'需要取关up主:{result}')
         res = [x.uid for x in result if not x.isLotUp]
         return list(set(res))
 
