@@ -7,7 +7,7 @@ import sys
 import time
 from typing import Literal
 from fastapi接口.log.base_log import ipv6_monitor_logger
-from fastapi接口.service.ipinfo.get_ipv6 import set_ipv6_to_redis, get_ipv6_from_redis
+from fastapi接口.Service.ipinfo.get_ipv6 import set_ipv6_to_redis, get_ipv6_from_redis
 from utl.pushme.pushme import pushme, pushme_try_catch_decorator, async_pushme_try_catch_decorator
 from fastapi接口.scripts.光猫ip.获取本机ipv6 import ipv6Obj
 import subprocess

@@ -2,9 +2,9 @@ import asyncio
 
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.bili.zhuanlan import LotteryArticleResp, lotteryArticleReq, ArticleInfo
-from fastapi接口.service.opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import GenerateTopicLotCv
-from fastapi接口.service.opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
-from fastapi接口.service.opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import GenerateReserveLotCv
+from fastapi接口.Service.opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import GenerateTopicLotCv
+from fastapi接口.Service.opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
+from fastapi接口.Service.opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import GenerateReserveLotCv
 from .base import new_router
 
 router = new_router()
@@ -13,7 +13,9 @@ router = new_router()
 @router.post(
     '/lotteryArticle',
     summary="获取专栏文章",
-    response_model=CommonResponseModel[LotteryArticleResp]
+    response_model=CommonResponseModel[LotteryArticleResp],
+    response_model_exclude_none=True,
+    response_model_exclude_defaults=True,
 )
 async def get_lottery_article(body: lotteryArticleReq):
     gc_topic = GenerateTopicLotCv(cookie="", ua="", csrf='', buvid="", abstract=body.abstract_msg)

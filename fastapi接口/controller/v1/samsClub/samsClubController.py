@@ -2,8 +2,8 @@ from typing import Literal
 
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.background_service.background_service_model import ProgressStatusResp
-from fastapi接口.service.samsclub.Sql.SdlHelper import graphql_app
-from fastapi接口.service.samsclub.main import sams_club_crawler
+from fastapi接口.Service.samsclub.Sql.SdlHelper import graphql_app
+from fastapi接口.Service.samsclub.main import sams_club_crawler
 from .base import new_router
 
 router = new_router()

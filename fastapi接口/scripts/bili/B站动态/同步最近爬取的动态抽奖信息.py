@@ -3,7 +3,7 @@
 """
 import asyncio
 
-from fastapi接口.service.grpc_module.src.getDynDetail import dyn_detail_scrapy
+from fastapi接口.Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy
 
 
 async def main():

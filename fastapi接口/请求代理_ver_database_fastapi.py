@@ -17,10 +17,10 @@ from starlette.responses import Response
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../'))  # 将CONFIG导入
 current_dir = os.path.dirname(__file__)
-grpc_dir = os.path.join(current_dir, 'service/grpc_module/grpc/grpc_proto')
+grpc_dir = os.path.join(current_dir, 'Service/GrpcModule/Grpc/GrpcProto')
 sys.path.append(grpc_dir)
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-from fastapi接口.utils.argParse import parse
+from fastapi接口.Utils.argParse import parse
 
 args = parse()
 print(f'运行 args:{args}')
@@ -32,7 +32,7 @@ if sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
 from fastapi接口.log.base_log import myfastapi_logger
 from utl.pushme.pushme import pushme
-from fastapi接口.utils.Common import GLOBAL_SCHEDULER, asyncio_gather
+from fastapi接口.Utils.Common import GLOBAL_SCHEDULER, asyncio_gather
 from fastapi接口.controller.damo import DamoML
 from fastapi接口.controller.v1.ChatGpt3_5 import ReplySingle
 from fastapi接口.controller.v1.lotttery_database.bili import LotteryData

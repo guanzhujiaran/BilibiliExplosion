@@ -1,0 +1,120 @@
+services:
+
+  goaccess:
+    container_name: goaccess
+    environment:
+      - LANG=zh_CN.UTF-8
+    image: allinurl/goaccess
+    ports:
+      - "7890:7890"
+    volumes:
+      - C:/nginx/logs/goaccess.conf:/srv/config/goaccess.conf
+      - C:/nginx/logs:/srv/logs
+      - C:/nginx/html/dist:/srv/report
+      - C:/nginx/cert:/srv/certs
+    command: [ "--no-global-config", "--config-file=/srv/config/goaccess.conf" ]
+    restart: unless-stopped
+
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.18
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: [ "CMD", "etcdctl", "endpoint", "health" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: always
+
+  minio:
+    container_name: milvus-minio
+    image: docker.1ms.run/minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: always
+
+  standalone:
+    container_name: milvus-standalone
+    image: docker.1ms.run/milvusdb/milvus:v2.6.0
+    command: [ "milvus", "run", "standalone" ]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+    volumes:
+      - ./docker_vol/milvus/milvus.yaml:/milvus/configs/milvus.yaml
+      - ./docker_vol/milvus:/var/lib/milvus
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9091/healthz" ]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+    restart: always
+
+  mysql:
+    container_name: fastapi_mysql
+    image: mysql:latest
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - ./docker_vol/mysql_data/data:/var/lib/mysql
+      - ./docker_vol/mysql_data/databasegen/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d              # 可选：自定义配置
+    ports:
+      - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
+    restart: always
+
+  redis:
+    container_name: fastapi_redis
+    image: redis:latest
+    volumes:
+      - ./docker_vol/redis/data:/data
+    ports:
+      - "${REDIS_PORT}:6379"
+    restart: always
+
+  rabbitmq:
+    container_name: fastapi_rabbitmq
+    image: rabbitmq:latest
+    ports:
+      -  "${RABBITMQ_PORT}:5672"
+      -  "${RABBITMQ_WEBUI_PORT}:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    volumes:
+      - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
+      - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
+
+
+networks:
+  default:
+    enable_ipv6: true
+    name: fastapi

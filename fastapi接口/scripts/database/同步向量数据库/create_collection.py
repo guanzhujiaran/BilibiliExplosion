@@ -4,7 +4,7 @@ from pymilvus import AsyncMilvusClient, DataType
 from pymilvus.milvus_client import IndexParams
 from timm.utils import is_primary
 
-from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
+from fastapi接口.Service.LangChainCompo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
 
 
 async def create_collection():

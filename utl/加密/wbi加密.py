@@ -168,7 +168,7 @@ def getMixinKey(orig: str):
     return reduce(lambda s, i: s + orig[i], mixinKeyEncTab, "")[:32]
 
 
-def encWbi(params: dict, img_key: str, sub_key: str) -> dict:
+def encWbi(params: Dict[str,str|int], img_key: str, sub_key: str) -> dict:
     "为请求参数进行 wbi 签名"
     mixin_key = getMixinKey(img_key + sub_key)
     curr_time = round(time.time())

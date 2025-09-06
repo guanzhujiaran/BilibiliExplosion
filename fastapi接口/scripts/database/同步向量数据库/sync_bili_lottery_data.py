@@ -1,10 +1,10 @@
 import asyncio
 
 from fastapi接口.log.base_log import milvus_db_logger
-from fastapi接口.service.compo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
-from fastapi接口.service.compo.text_embed import save_bili_lot_data_embeddings, lot_data_2_bili_lot_data_ls
-from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from fastapi接口.utils.Common import log_max_count_retry_wrapper
+from fastapi接口.Service.LangChainCompo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
+from fastapi接口.Service.LangChainCompo.text_embed import save_bili_lot_data_embeddings, lot_data_2_bili_lot_data_ls
+from fastapi接口.Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.Utils.Common import log_max_count_retry_wrapper
 
 
 @log_max_count_retry_wrapper()

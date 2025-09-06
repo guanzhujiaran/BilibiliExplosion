@@ -11,7 +11,7 @@ from redis.exceptions import ConnectionError, BusyLoadingError
 from redis.typing import KeyT
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import redis_logger
-from fastapi接口.utils.Common import asyncio_gather, sem_gen
+from fastapi接口.Utils.Common import asyncio_gather, sem_gen
 
 _MAX_SEM_NUM = 4096
 _sem = sem_gen(_MAX_SEM_NUM)

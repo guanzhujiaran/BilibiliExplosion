@@ -6,7 +6,7 @@ from typing import List
 from pydantic import Field, PrivateAttr, computed_field
 
 from fastapi接口.models.base.custom_pydantic import CustomBaseModelHashable
-from fastapi接口.service.get_others_lot_dyn.Sql.models import TLotdyninfo
+from fastapi接口.Service.GetOthersLotDyn.Sql.models import TLotdyninfo
 
 
 @dataclass

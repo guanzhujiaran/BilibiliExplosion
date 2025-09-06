@@ -1,6 +1,6 @@
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.ip_info.ip_model import IpInfoResp
-from fastapi接口.service.ipinfo.get_ipv6 import get_ipv6_from_redis
+from fastapi接口.Service.ipinfo.get_ipv6 import get_ipv6_from_redis
 from .base import new_router
 
 router = new_router()

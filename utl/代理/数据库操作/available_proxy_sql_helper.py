@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from CONFIG import CONFIG
 from fastapi接口.log.base_log import sql_log
-from fastapi接口.utils.Common import sql_retry_wrapper
+from fastapi接口.Utils.Common import sql_retry_wrapper
 from utl.代理.数据库操作.SqlAlcheyObj.ProxyModel import AvailableProxy, ProxyTab
 
 

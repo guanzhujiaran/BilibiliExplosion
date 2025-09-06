@@ -12,7 +12,7 @@ from typing import Optional, Literal, Any
 from pydantic import Field
 
 from fastapi接口.models.base.custom_pydantic import CustomBaseModel
-from fastapi接口.utils.Constants import GPU_DATABASE
+from fastapi接口.Utils.Constants import GPU_DATABASE
 
 config = {
     'bilibili': {
@@ -201,7 +201,7 @@ class GenWebCookieParams(CustomBaseModel):
         angle_core_info = f"ANGLE ({manufacturer}, {gpu_name} ({gpu_id}) Direct3D11 vs_5_0 ps_5_0, D3D11)"
 
         # 4. 生成 webgl_renderer (格式: ... Google Inc. (厂商))
-        self.webgl_renderer = f"{angle_core_info} Google Inc. ({manufacturer})"
+        self.webgl_renderer = f"{angle_core_info}Google Inc. ({manufacturer}"
         # 5. 生成 renderer (格式: ... #X...ID...)
         self.renderer = f"{angle_core_info} {self.renderer_id}"
 

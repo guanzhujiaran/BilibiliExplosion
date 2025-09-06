@@ -4,10 +4,10 @@ from faststream.rabbit.fastapi import RabbitMessage
 
 from fastapi接口.log.base_log import MQ_logger
 from fastapi接口.models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
-from fastapi接口.service.MQ.base.MQClient.BiliLotDataFastStream import official_reserve_charge_lot, \
+from fastapi接口.Service.MQ.base.MQClient.BiliLotDataFastStream import official_reserve_charge_lot, \
     upsert_official_reserve_charge_lot, upsert_lot_data_by_dynamic_id, upsert_topic_lot, router, \
     upsert_milvus_bili_lot_data, bili_voucher
-from fastapi接口.service.grpc_module.Models.RabbitmqModel import VoucherInfo
+from fastapi接口.Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
 
 
 @router.subscriber(

@@ -7,7 +7,7 @@ from typing import List
 from CONFIG import CONFIG
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, BiliLotStatisticRankDateTypeEnum
-from fastapi接口.utils.Common import asyncio_gather
+from fastapi接口.Utils.Common import asyncio_gather
 from utl.redisTool.RedisManager import RedisManagerBase
 
 

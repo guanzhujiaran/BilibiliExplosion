@@ -8,13 +8,13 @@ from fastapi接口.controller.common.base import new_router
 from fastapi接口.dao.redisConn import r
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.lottery_database.bili.LotteryDataModels import reserveInfo
-from fastapi接口.service.bili_live_monitor.src.monitor import BiliLiveLotRedisManager
-from fastapi接口.service.get_others_lot_dyn.get_other_lot_main import get_others_lot_dyn
-from fastapi接口.service.grpc_module.src.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from fastapi接口.service.grpc_module.src.获取取关对象.GetRmFollowingListV2 import gmflv2
-from fastapi接口.service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import \
+from fastapi接口.Service.BiliLiveMonitor.src.monitor import BiliLiveLotRedisManager
+from fastapi接口.Service.GetOthersLotDyn.get_other_lot_main import get_others_lot_dyn
+from fastapi接口.Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
+from fastapi接口.Service.GrpcModule.GrpcSrc.获取取关对象.GetRmFollowingListV2 import gmflv2
+from fastapi接口.Service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import \
     toutiaoSpaceFeedLotService
-from fastapi接口.service.zhihu.获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import zhihu_lotScrapy
+from fastapi接口.Service.zhihu.获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import zhihu_lotScrapy
 from utl.pushme.pushme import pushme
 
 router = new_router()
@@ -79,26 +79,26 @@ async def upsert_lot_detail(request_body: dict):
 
 @router.get('/get_others_lot_dyn')
 async def api_get_others_lot_dyn():
-    myfastapi_logger.error('get_others_lot_dyn 开始获取B站其他用户的动态抽奖！')
+    myfastapi_logger.error('GetOthersLotDyn 开始获取B站其他用户的动态抽奖！')
     result = await get_others_lot_dyn.get_new_dyn()
     return result
 
 
 @router.get('/get_others_official_lot_dyn')
 async def api_get_others_official_lot_dyn():
-    myfastapi_logger.error('get_others_lot_dyn 开始获取别人的官方动态抽奖！')
+    myfastapi_logger.error('GetOthersLotDyn 开始获取别人的官方动态抽奖！')
     return await get_others_lot_dyn.get_official_lot_dyn()
 
 
 @router.get('/get_others_big_lot')
 async def api_get_others_big_lot():
-    myfastapi_logger.error('get_others_lot_dyn 开始获取别人的大奖！')
+    myfastapi_logger.error('GetOthersLotDyn 开始获取别人的大奖！')
     return await get_others_lot_dyn.get_unignore_Big_lot_dyn()
 
 
 @router.get('/get_others_big_reserve')
 async def api_get_others_big_reserve() -> list[reserveInfo]:
-    myfastapi_logger.error('get_others_lot_dyn 开始获取重要的预约抽奖！')
+    myfastapi_logger.error('GetOthersLotDyn 开始获取重要的预约抽奖！')
     result = await get_others_lot_dyn.get_unignore_reserve_lot_space()
     reserveInfos = []
     for i in result:  # 对df的每一行数据访问

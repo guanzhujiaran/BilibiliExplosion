@@ -10,10 +10,9 @@ from fastapi import Query, Body
 from fastapi接口.log.base_log import myfastapi_logger
 from fastapi接口.models.common import CommonResponseModel
 from fastapi接口.models.v1.ChatGpt3_5.ReplySingleModel import ReplyReq, ReplyRes, LLMShowInfo
-from fastapi接口.service.LLM.handleLLMReplySingle import ChatGpt3_5
+from fastapi接口.Service.LLM.handleLLMReplySingle import chatgpt
 from .base import new_router
 
-chatgpt = ChatGpt3_5()
 router = new_router()
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 
