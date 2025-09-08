@@ -4,7 +4,7 @@
 [__fastapi服务__](请求代理_ver_database_fastapi.py)\
 [__哔哩哔哩粉丝勋章助手__](github/哔哩哔哩粉丝勋章助手/main.py)\
 [__监控up主空间动态__](FastapiApp/service/grpc_module/src/监控up动态/bili_dynamic_monitor.py)\
-[__监控ipv6变化__](FastapiApp/scripts/光猫ip/监控本地ip地址变化.py)\
+[__监控ipv6变化__](scripts/光猫ip/监控本地ip地址变化.py)\
 > \
 [__天选抽奖监控__](FastapiApp/service/BiliLiveMonitor/src/monitor.py) （需要安装redis，抽奖数据上传至redis中）\
 [__手动推送抽奖__](FastapiApp/service/BiliLiveMonitor/src/手动推送抽奖.py)\

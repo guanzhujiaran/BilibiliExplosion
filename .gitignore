@@ -6,7 +6,7 @@
 .vscode
 *.log
 *.zip
-!requirements.txt
+!FastapiApp/requirements.txt
 *.pt
 *.jpg
 *.png
@@ -26,4 +26,7 @@ FastapiApp/Service/GrpcModule/Utils/极验/Geetest_html
 FastapiApp/Service/GrpcModule/Grpc/GrpcProto
 FastapiApp/Service/samsclub/api/app_storage.jsondoc
 docker_vol
-!docker_vol/mysql_data/databasegen/init.sql
+!docker_vol/mysql_data/init/init.sql
+!docker_vol/postgres/init/init1.sql
+!docker_vol/postgres/init/init2.sql
+.env.fastapi.dev

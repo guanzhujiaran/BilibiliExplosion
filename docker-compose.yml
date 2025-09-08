@@ -1,7 +1,7 @@
 services:
 
   goaccess:
-    container_name: goaccess
+    container_name: fastapi-biliExplosion-goaccess
     environment:
       - LANG=zh_CN.UTF-8
     image: allinurl/goaccess
@@ -79,20 +79,20 @@ services:
     restart: always
 
   mysql:
-    container_name: fastapi_mysql
+    container_name: fastapi-mysql
     image: mysql:latest
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
       - ./docker_vol/mysql_data/data:/var/lib/mysql
-      - ./docker_vol/mysql_data/databasegen/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docker_vol/mysql_data/init/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d              # 可选：自定义配置
     ports:
       - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
     restart: always
 
   redis:
-    container_name: fastapi_redis
+    container_name: fastapi-redis
     image: redis:latest
     volumes:
       - ./docker_vol/redis/data:/data
@@ -101,17 +101,112 @@ services:
     restart: always
 
   rabbitmq:
-    container_name: fastapi_rabbitmq
+    container_name: fastapi-rabbitmq
     image: rabbitmq:latest
     ports:
-      -  "${RABBITMQ_PORT}:5672"
-      -  "${RABBITMQ_WEBUI_PORT}:15672"
+      - "${RABBITMQ_PORT}:5672"
+      - "${RABBITMQ_WEBUI_PORT}:15672"
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
     volumes:
       - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
       - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
+
+  unidbg:
+    container_name: unidbg
+    image: unidbg-springboot-samsclub
+    ports:
+      - "${UNIDBG_PORT}:23335"
+    restart: always
+
+  fastapi:
+    container_name: fastapi_biliExplosion
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+      - unidbg
+    env_file:
+      - .env.fastapi.prod
+    environment:
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - REDIS_PORT=${REDIS_PORT}
+      - RABBITMQ_PORT=${RABBITMQ_PORT}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - PUSHME_TOKEN=${PUSHME_TOKEN}
+      - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
+    build:
+      context: ./FastapiApp
+      dockerfile: Dockerfile
+      tags:
+        - fastapi_biliExplosion
+        - latest
+    volumes:
+      - ./docker_vol/fastapi/log:app/scripts/logs
+    ports:
+      - "${FASTAPI_PORT}:23333"
+
+  postgres:
+    container_name: postgres
+    image: postgres:latest
+    volumes:
+      - ./docker_vol/postgres/data:/var/lib/postgresql/data
+      - ./docker_vol/postgres/init:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    restart: always
+
+  nodejs-pptr: # 生产版本不挂载代码文件，生产环境需要修改代码必须重新build，需要存储的东西都在中间件里面
+    container_name: nodejs-pptr
+    depends_on:
+      - postgres
+      - redis
+      - fastapi
+    build:
+      context: ./puppeteer_Bili
+      dockerfile: Dockerfile
+      target: prod
+    volumes:
+      - ./docker_vol/nodejs_pptr/BrowserData:/app/BrowserData
+    ports:
+      - "${NODEJS_PPTR_PORT}:9923"
+    restart: unless-stopped
+    environment:
+      - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/PPTR_Bili_Lot
+      - DEV_DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/DEV_PPTR_Bili_Lot
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PWD=
+      - FASTAPI_URI=http://fastapi:23333
+      - FASTAPI_DEV_URI=http://fastapi_dev:23333
+
+  nodejs-pptr-dev:
+    container_name: nodejs-pptr-dev
+    depends_on:
+      - postgres
+      - redis
+    build:
+      context: ./puppeteer_Bili
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "${NODEJS_PPTR_PORT}:9926"
+    volumes:
+      - ./puppeteer_Bili:/app
+    environment:
+      - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/PPTR_Bili_Lot
+      - DEV_DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/DEV_PPTR_Bili_Lot
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PWD=
+      - FASTAPI_URI=http://fastapi:23333
+      - FASTAPI_DEV_URI=http://fastapi_dev:23333
 
 
 networks:

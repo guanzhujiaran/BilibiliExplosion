@@ -8,16 +8,32 @@ from sqlalchemy import AsyncAdaptedQueuePool
 
 
 class Settings(BaseSettings):
-    MYSQL_PORT: str = "3306"
-    MYSQL_ROOT_PASSWORD: str = "114514"
-    REDIS_PORT: str = "11451"
-    RABBITMQ_PORT: str = "5672"
-    RABBITMQ_WEBUI_PORT: str = "15672"
-    RABBITMQ_USER: str = "Xingtong"
-    RABBITMQ_PASSWORD: str = "114514"
-    model_config = SettingsConfigDict(env_file=".env")
+    MYSQL_HOST: str
+    MYSQL_PORT: str
+    MYSQL_USER: str
+    MYSQL_PASSWORD: str
+    REDIS_HOST: str
+    REDIS_PORT: str
+    REDIS_PWD: str
+    RABBITMQ_HOST: str
+    RABBITMQ_PORT: str
+    RABBITMQ_USER: str
+    RABBITMQ_PASSWORD: str
+    PUSHME_TOKEN: str
+    PUSHPLUS_TOKEN: str
+    UNIDBG_HOST:str
+    UNIDBG_PORT:str
+    IPV6_SERVER_HOST:str
+    IPV6_SERVER_PORT:str
+    V2RAY_HOST:str
+    V2RAY_PORT:str
+    LMSTUDIO_HOST:str # lm studio 开个网络服务
+    LMSTUDIO_PORT:str
+    model_config = SettingsConfigDict(env_file=(".env.fastapi.prod", ".env.fastapi.dev"))
+
 
 settings = Settings()
+
 
 class PlaywrightUserDir(StrEnum):
     """
@@ -36,7 +52,7 @@ class ChatGptSettings:
 # region 基本配置
 class pushme:
     _url = "https://push.i-i.me"
-    _token = "JxxpCXIZZZFThYcUmRce"
+    _token = settings.PUSHME_TOKEN
 
     @property
     def url(self):
@@ -57,7 +73,7 @@ class pushme:
 
 class pushnotify:
     def __init__(self):
-        push_template = pushme().set_url('http://www.pushplus.plus/send').set_token('044b3325295b47228409452e0e7aeef7')
+        push_template = pushme().set_url('http://www.pushplus.plus/send').set_token(settings.PUSHPLUS_TOKEN)
         self._pushme = copy.deepcopy(push_template)
         self._pushplus = copy.deepcopy(push_template)
 
@@ -73,22 +89,23 @@ class pushnotify:
 class database:
     @dataclass
     class _MYSQL:
-        _base_url: str = '192.168.1.200:3306'
-        _pwd: str = settings.MYSQL_ROOT_PASSWORD
-        proxy_db_URI: str = f'mysql+aiomysql://root:{_pwd}@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true'
-        bili_db_URI: str = f'mysql+aiomysql://root:{_pwd}@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
-        bili_reserve_URI: str = f'mysql+aiomysql://root:{_pwd}@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
-        get_other_lot_URI: str = f'mysql+aiomysql://root:{_pwd}@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
-        dyn_detail: str = f'mysql+aiomysql://root:{_pwd}@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
-        sams_club_URI: str = f'mysql+aiomysql://root:{_pwd}@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
+        _base_url: str = f'{settings.MYSQL_HOST}:{settings.MYSQL_PORT}'
+        _pwd: str = settings.MYSQL_PASSWORD
+        _user: str = settings.MYSQL_USER
+        proxy_db_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true'
+        bili_db_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
+        bili_reserve_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
+        get_other_lot_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
+        dyn_detail: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
+        sams_club_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
 
     @dataclass
     class _REDISINFO:
         def __init__(self, db: int = 15):
-            self.host: str = '192.168.1.200'
-            self.port: int = 11451
+            self.host: str = settings.REDIS_HOST
+            self.port: str = settings.REDIS_PORT
             self.db: int = db
-            self.pwd: str = '114514'
+            self.pwd: str = settings.REDIS_PWD
 
         def toUrl(self):
             return f'redis://:{self.pwd}@{self.host}:{self.port}/{self.db}'
@@ -121,10 +138,10 @@ class RabbitMQConfig:
     class QueueName(Enum):
         ipv6_change = 'ipv6_change'
 
-    host = '192.168.1.200'
-    port = 5672
-    user = 'Xingtong'
-    pwd = '114514'
+    host = settings.RABBITMQ_HOST
+    port = settings.RABBITMQ_PORT
+    user = settings.RABBITMQ_USER
+    pwd = settings.RABBITMQ_PASSWORD
     protocol = 'amqp'
     queue_name_list = [x.value for x in QueueName]
     broker_url = f"{protocol}://{user}:{pwd}@{host}:{port}/"
@@ -135,24 +152,13 @@ class _SeleniumConfig:
     linux_edge_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webDriver/linux/msedgedriver')
 
 
-@dataclass
-class _UrlConfig:
-    host: str = 'http://localhost'
-    port: int = 23333
-    protocol: str = 'http://'
-
-    @property
-    def url(self):
-        return f'{self.protocol}://{self.host}:{self.port}'
-
-
 # endregion
 
 
 class _CONFIG:
     root_dir = os.path.dirname(os.path.abspath(__file__))  # 代码的根目录
-    V2ray_proxy = 'http://192.168.1.200:10809'  # socks端口+1
-    lm_studio_url = 'http://192.168.1.200:1234'
+    V2ray_proxy = f'http://{settings.V2RAY_HOST}:{settings.V2RAY_PORT}'
+    lm_studio_url = f'http://{settings.LMSTUDIO_HOST}:{settings.LMSTUDIO_PORT}'
     pushnotify = pushnotify()  # 推送设置
     database = database()
     local_llm_setting = ChatGptSettings(
@@ -187,9 +193,8 @@ class _CONFIG:
         ),
         local_llm_setting
     ]
-    my_ipv6_addr = 'http://192.168.1.201:3128'
-    unidbg_addr = "http://192.168.1.200:23335"
-    aiomonitor_webui = _UrlConfig(port=23336)
+    my_ipv6_addr = f'http://{settings.IPV6_SERVER_HOST}:{settings.IPV6_SERVER_PORT}'
+    unidbg_addr = f"http://{settings.UNIDBG_HOST}:{settings.UNIDBG_PORT}"
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()
     sql_alchemy_config = SqlAlchemyConfig()
