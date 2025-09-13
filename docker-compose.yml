@@ -10,8 +10,8 @@ services:
       - ./docker_vol/nginx/conf/nginx.conf:/etc/nginx/nginx.conf
       - ./docker_vol/nginx/html:/usr/share/nginx/html
       - ./docker_vol/nginx/logs:/var/log/nginx
-      - ./docker_vol/nginx/certs:/etc/nginx/certs
-
+      - ./docker_vol/nginx/cert:/etc/nginx/cert
+    restart: unless-stopped
   goaccess:
     container_name: fastapi-biliExplosion-goaccess
     environment:
@@ -43,7 +43,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-    restart: always
+    restart: unless-stopped
 
   minio:
     container_name: milvus-minio
@@ -62,7 +62,7 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-    restart: always
+    restart: unless-stopped
 
   standalone:
     container_name: milvus-standalone
@@ -88,7 +88,7 @@ services:
     depends_on:
       - "etcd"
       - "minio"
-    restart: always
+    restart: unless-stopped
 
   mysql:
     container_name: fastapi-mysql
@@ -101,7 +101,7 @@ services:
       - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d              # 可选：自定义配置
     ports:
       - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
-    restart: always
+    restart: unless-stopped
 
   redis:
     container_name: fastapi-redis
@@ -110,7 +110,7 @@ services:
       - ./docker_vol/redis/data:/data
     ports:
       - "${REDIS_PORT}:6379"
-    restart: always
+    restart: unless-stopped
 
   rabbitmq:
     container_name: fastapi-rabbitmq
@@ -124,16 +124,17 @@ services:
     volumes:
       - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
       - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
+    restart: unless-stopped
 
   unidbg:
     container_name: unidbg
     image: unidbg-springboot-samsclub
     ports:
       - "${UNIDBG_PORT}:23335"
-    restart: always
+    restart: unless-stopped
 
   fastapi:
-    container_name: fastapi_biliExplosion
+    container_name: fastapi_bili_explosion
     depends_on:
       - mysql
       - redis
@@ -155,12 +156,13 @@ services:
       context: ./FastapiApp
       dockerfile: Dockerfile
       tags:
-        - fastapi_biliExplosion
+        - fastapi-bili-explosion
         - latest
     volumes:
       - ./docker_vol/fastapi/log:app/scripts/logs
     ports:
       - "${FASTAPI_PORT}:23333"
+    restart: unless-stopped
 
   postgres:
     container_name: postgres
@@ -173,7 +175,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
     ports:
       - "${POSTGRES_PORT}:5432"
-    restart: always
+    restart: unless-stopped
 
   nodejs-pptr: # 生产版本不挂载代码文件，生产环境需要修改代码必须重新build，需要存储的东西都在中间件里面
     container_name: nodejs-pptr
@@ -220,7 +222,7 @@ services:
       - REDIS_PWD=
       - FASTAPI_URI=http://fastapi:23333
       - FASTAPI_DEV_URI=http://fastapi_dev:23333
-
+    restart: unless-stopped
 
 networks:
   default:

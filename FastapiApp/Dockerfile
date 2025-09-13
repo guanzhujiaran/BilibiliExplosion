@@ -17,11 +17,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . /app
 
 # 启动FastAPI应用
-CMD [
- "uvicorn",
- "app.main:app",
- "--host",
- "0.0.0.0",
- "--port",
- "23333"
- ]
+CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","23333"]

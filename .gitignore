@@ -19,7 +19,7 @@ venv
 node_modules
 .virtual_documents
 .ipynb_checkpoints
-FastapiApp/__test
+FastapiApp/__test/
 FastapiApp/Service/toutiao/src/Tools/Enc/node_modules
 FastapiApp/Service/GrpcModule/Utils/极验/Geetest_html
 FastapiApp/Service/GrpcModule/Grpc/GrpcProto
