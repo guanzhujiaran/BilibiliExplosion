@@ -29,4 +29,8 @@ docker_vol
 !docker_vol/mysql_data/init/init.sql
 !docker_vol/postgres/init/init1.sql
 !docker_vol/postgres/init/init2.sql
+!docker_vol/nginx/
+!docker_vol/goaccess/
 .env.fastapi.dev
+/go-proxy-ipv6-pool-auto/
+/unidbgSpringBoot/
