@@ -5,9 +5,7 @@ import threading
 import time
 from copy import deepcopy
 from typing import List
-
 import pandas as pd
-
 from log.base_log import official_lot_logger
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GrpcModule.Grpc.Bapi.BiliApi import get_lot_notice
@@ -30,10 +28,10 @@ class ExtractOfficialLottery:
         self.__dir = os.path.dirname(os.path.abspath(__file__))
         self.log_path = os.path.join(self.__dir, 'log')
         self.result_path = os.path.join(self.__dir, 'result')
-        self.oringinal_official_lots: [dict] = []
+        self.oringinal_official_lots: list[dict] = []
 
-        self.all_offcial_lots: [dict] = []  # 所有的抽奖
-        self.last_update_offcial_lots: [dict] = []  # 最后一次更新的抽奖
+        self.all_offcial_lots: list[dict] = []  # 所有的抽奖
+        self.last_update_offcial_lots: list[dict] = []  # 最后一次更新的抽奖
         self.list_append_lock = threading.Lock()
         self.csv_sep_letter = '\t\t\t\t\t'
 

@@ -1,5 +1,17 @@
 services:
 
+  nginx:
+    container_name: fastapi-biliExplosion-nginx
+    image: nginx:latest
+    ports:
+      - "${NGINX_PORT}:80"
+      - "${NGINX_SSL_PORT}:443"
+    volumes:
+      - ./docker_vol/nginx/conf/nginx.conf:/etc/nginx/nginx.conf
+      - ./docker_vol/nginx/html:/usr/share/nginx/html
+      - ./docker_vol/nginx/logs:/var/log/nginx
+      - ./docker_vol/nginx/certs:/etc/nginx/certs
+
   goaccess:
     container_name: fastapi-biliExplosion-goaccess
     environment:
@@ -8,10 +20,10 @@ services:
     ports:
       - "7890:7890"
     volumes:
-      - C:/nginx/logs/goaccess.conf:/srv/config/goaccess.conf
-      - C:/nginx/logs:/srv/logs
-      - C:/nginx/html/dist:/srv/report
-      - C:/nginx/cert:/srv/certs
+      - ./docker_vol/goaccess/goaccess.conf:/srv/config/goaccess.conf
+      - ./docker_vol/nginx/logs:/srv/logs
+      - ./docker_vol/nginx/html/dist:/srv/report
+      - ./docker_vol/nginx/certs:/srv/certs
     command: [ "--no-global-config", "--config-file=/srv/config/goaccess.conf" ]
     restart: unless-stopped
 
@@ -128,7 +140,7 @@ services:
       - rabbitmq
       - unidbg
     env_file:
-      - .env.fastapi.prod
+      - ./FastapiApp/.env.fastapi.prod
     environment:
       - MYSQL_PORT=${MYSQL_PORT}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
@@ -138,6 +150,7 @@ services:
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - PUSHME_TOKEN=${PUSHME_TOKEN}
       - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
+      - PROXY_SERVER=${PROXY_SERVER}
     build:
       context: ./FastapiApp
       dockerfile: Dockerfile

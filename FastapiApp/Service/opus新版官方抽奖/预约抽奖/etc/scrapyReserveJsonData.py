@@ -375,7 +375,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
                     self.ids = self.ids_list[0]
             reserve_lot_logger.info('获取rid开始文件成功\nids开始值：{}'.format(self.ids))
             if self.ids <= 0:
-                self.ids_list = [1750991, 4698648]
+                self.ids_list = [1871812, 4996187]
                 reserve_lot_logger.info(f'获取rid开始文件失败，使用默认值：{self.ids}')
         except Exception as e:
             reserve_lot_logger.exception('获取rid开始文件失败')

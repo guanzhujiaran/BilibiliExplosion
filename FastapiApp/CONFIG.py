@@ -21,14 +21,13 @@ class Settings(BaseSettings):
     RABBITMQ_PASSWORD: str
     PUSHME_TOKEN: str
     PUSHPLUS_TOKEN: str
-    UNIDBG_HOST:str
-    UNIDBG_PORT:str
-    IPV6_SERVER_HOST:str
-    IPV6_SERVER_PORT:str
-    V2RAY_HOST:str
-    V2RAY_PORT:str
-    LMSTUDIO_HOST:str # lm studio 开个网络服务
-    LMSTUDIO_PORT:str
+    UNIDBG_HOST: str
+    UNIDBG_PORT: str
+    V2RAY_HOST: str
+    V2RAY_PORT: str
+    LMSTUDIO_HOST: str  # lm studio 开个网络服务
+    LMSTUDIO_PORT: str
+    PROXY_SERVER: str
     model_config = SettingsConfigDict(env_file=(".env.fastapi.prod", ".env.fastapi.dev"))
 
 
@@ -193,7 +192,7 @@ class _CONFIG:
         ),
         local_llm_setting
     ]
-    my_ipv6_addr = f'http://{settings.IPV6_SERVER_HOST}:{settings.IPV6_SERVER_PORT}'
+    my_ipv6_addr = settings.PROXY_SERVER
     unidbg_addr = f"http://{settings.UNIDBG_HOST}:{settings.UNIDBG_PORT}"
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()

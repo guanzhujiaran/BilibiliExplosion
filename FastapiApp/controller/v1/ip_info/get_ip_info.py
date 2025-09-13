@@ -7,7 +7,7 @@ router = new_router()
 
 
 @router.get('/get', summary='获取ipv6地址信息',
-            response_model=CommonResponseModel[IpInfoResp])
+            response_model=CommonResponseModel[IpInfoResp], response_model_exclude_none=True)
 async def get_ip_info():
     ipv6_redis = await get_ipv6_from_redis()
     return CommonResponseModel(

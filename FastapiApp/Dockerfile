@@ -15,7 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制应用代码
 COPY . /app
-COPY ../.env.fastapi.prod /app/.env.fastapi.prod
 
 # 启动FastAPI应用
 CMD [
