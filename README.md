@@ -5,8 +5,6 @@
 ## 功能
 
 - B站，山姆会员店爬取数据（待增加更多感兴趣的api
-- 管理下载的视频文件
-- 支持多线程下载
 
 ## 安装
 
@@ -38,6 +36,10 @@
     git clone https://github.com/guanzhujiaran/unidbgSpringBoot
     mvn clean spring-boot:build
     ```
+5. 安装nodejs后端
+    ```bash
+    git clone https://github.com/guanzhujiaran/puppeteer_Bili.git
+   ```
 ## 使用方法
 
 1. 启动ipv6代理池：
