@@ -6,7 +6,6 @@
 .vscode
 *.log
 *.zip
-!FastapiApp/requirements.txt
 *.pt
 *.jpg
 *.png
@@ -14,7 +13,6 @@
 */siamese.onnx
 */yolov11n_captcha.onnx
 FastapiApp/Service/PlayWright/user_data
-!FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
 jupyter
 venv
 node_modules
@@ -25,12 +23,14 @@ FastapiApp/Service/toutiao/src/Tools/Enc/node_modules
 FastapiApp/Service/GrpcModule/Utils/极验/Geetest_html
 FastapiApp/Service/GrpcModule/Grpc/GrpcProto
 FastapiApp/Service/samsclub/api/app_storage.jsondoc
-docker_vol
+/docker_vol/*
+.env.fastapi.dev
+/go-proxy-ipv6-pool-auto/
+/unidbgSpringBoot/
 !docker_vol/mysql_data/init/init.sql
 !docker_vol/postgres/init/init1.sql
 !docker_vol/postgres/init/init2.sql
 !docker_vol/nginx/
 !docker_vol/goaccess/
-.env.fastapi.dev
-/go-proxy-ipv6-pool-auto/
-/unidbgSpringBoot/
+!FastapiApp/requirements.txt
+!FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
