@@ -2,11 +2,12 @@ import asyncio
 import inspect
 from typing import Literal, Union, Any
 
-from models.common import CommonResponseModel
-from models.v1.background_service.background_service_model import AllLotScrapyStatusResp, \
+from Models.common import CommonResponseModel
+from Models.v1.background_service.background_service_model import AllLotScrapyStatusResp, \
     ProgressStatusResp, ProxyStatusResp
+from scripts.database.clean_backup_outdated_dynamic import cleaner
 from scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
-from Service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
+from Service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler, BaseScheduler
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GetOthersLotDyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
 from Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy
@@ -28,6 +29,11 @@ router = new_router()
 
 
 class BackgroundService:
+    dyn_detail_database_cleaner = BaseScheduler(
+        func=cleaner.do_clean,
+        cron_expr="0 0 * * *",
+        default_interval_seconds=2 * 3600,
+    )
     get_proxy_methods_scheduler = GenericCrawlerScheduler(
         crawler=get_proxy_methods,
         cron_expr="0 */2 * * *",

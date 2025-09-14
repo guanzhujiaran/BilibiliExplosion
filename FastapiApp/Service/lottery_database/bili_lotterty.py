@@ -4,10 +4,10 @@ from datetime import datetime
 from typing import List
 from urllib.parse import quote
 from dao.lotDataRedisObj import lot_data_redis
-from models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, \
+from Models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, \
     OfficialLotteryResp, AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp, \
     TUpReserveRelationInfoResp, LotdataResp
-from models.lottery_database.redisModel.biliRedisModel import bili_live_lottery_redis
+from Models.lottery_database.redisModel.biliRedisModel import bili_live_lottery_redis
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper as bili_dynamic_sqlhelper
 from Service.GetOthersLotDyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict

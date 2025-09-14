@@ -9,6 +9,7 @@
 *.zip
 *.pt
 *.jpg
+*.csv.gz
 *.png
 .git/
 */siamese.onnx

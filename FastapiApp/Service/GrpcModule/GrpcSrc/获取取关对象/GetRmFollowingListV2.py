@@ -3,8 +3,8 @@ import time
 from datetime import datetime
 from typing import Any, AsyncGenerator
 from log.base_log import get_rm_following_list_logger
-from models.base.custom_pydantic import CustomBaseModel
-from models.get_other_lot_dyn.dyn_robot_model import BiliSpaceUserParamsType
+from Models.base.custom_pydantic import CustomBaseModel
+from Models.get_other_lot_dyn.dyn_robot_model import BiliSpaceUserParamsType
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerStatus, WorkerModel
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin

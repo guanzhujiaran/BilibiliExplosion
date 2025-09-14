@@ -1,5 +1,5 @@
-from models.MQ.BaseMQModel import MQPropBase
-from models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
+from Models.MQ.BaseMQModel import MQPropBase
+from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.BasicAsyncClient import _mq_retry_wrapper
 from Service.MQ.base.MQClient.base import official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \

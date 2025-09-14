@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from CONFIG import CONFIG, database
 from log.base_log import sql_log
-from models.v1.background_service.background_service_model import ProxyStatusResp
+from Models.v1.background_service.background_service_model import ProxyStatusResp
 from Utils.Common import GLOBAL_SCHEDULER, sql_retry_wrapper, asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from Utils.redisTool.RedisManager import RedisManagerBase

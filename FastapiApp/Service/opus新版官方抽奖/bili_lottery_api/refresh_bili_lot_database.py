@@ -2,8 +2,8 @@ import time
 from typing import AsyncGenerator, Any
 from dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
 from log.base_log import background_task_logger
-from models.base.custom_pydantic import CustomBaseModelHashable
-from models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
+from Models.base.custom_pydantic import CustomBaseModelHashable
+from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticRankDateTypeEnum
 from scripts.database.同步向量数据库.sync_bili_lottery_data import sync_bili_lottery_data, \
     del_outdated_bili_lottery_data

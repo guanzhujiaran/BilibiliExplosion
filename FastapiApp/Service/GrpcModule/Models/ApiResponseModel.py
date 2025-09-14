@@ -1,6 +1,6 @@
 from typing import TypeVar, Generic
 
-from models.base.custom_pydantic import CustomBaseModel
+from Models.base.custom_pydantic import CustomBaseModel
 
 T = TypeVar('T')
 

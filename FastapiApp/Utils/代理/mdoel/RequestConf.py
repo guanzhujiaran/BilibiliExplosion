@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from models.base.custom_pydantic import CustomBaseModel
+from Models.base.custom_pydantic import CustomBaseModel
 
 
 class RequestConf(CustomBaseModel):

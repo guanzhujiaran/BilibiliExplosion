@@ -9,8 +9,8 @@ from typing import Any, AsyncGenerator
 import aiofiles
 
 from log.base_log import sams_club_logger
-from models.base.custom_pydantic import CustomBaseModelHashable
-from models.v1.background_service.background_service_model import ProgressStatusResp
+from Models.base.custom_pydantic import CustomBaseModelHashable
+from Models.v1.background_service.background_service_model import ProgressStatusResp
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerStatus
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin

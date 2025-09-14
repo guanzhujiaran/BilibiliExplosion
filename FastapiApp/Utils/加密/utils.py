@@ -11,7 +11,7 @@ from typing import Optional, Literal, Any
 
 from pydantic import Field
 
-from models.base.custom_pydantic import CustomBaseModel
+from Models.base.custom_pydantic import CustomBaseModel
 from Utils.Constants import GPU_DATABASE
 
 config = {

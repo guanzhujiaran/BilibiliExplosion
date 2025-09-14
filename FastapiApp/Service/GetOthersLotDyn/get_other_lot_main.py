@@ -11,7 +11,7 @@ from typing import Union, List, Set, Sequence
 from py_mini_racer import MiniRacer
 from Utils.CommMethods import methods
 from log.base_log import get_others_lot_logger as get_others_lot_log
-from models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo, BiliSpaceUserParamsType
+from Models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo, BiliSpaceUserParamsType
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GetOthersLotDyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotuserspaceresp, TLotdyninfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
@@ -27,7 +27,7 @@ from Service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserv
 from Utils.Common import asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from Utils.dynamic_id_caculate import dynamic_id_2_ts
-from Utils.PushMe import pushme
+from Utils.PushMe import pushme, a_pushme
 from Utils.代理.mdoel.RequestConf import RequestConf
 
 BAPI = methods()
@@ -1118,6 +1118,7 @@ class BiliDynamicItem:
                 )
         except Exception as e:
             get_others_lot_log.exception(f'解析动态失败！！！{e}\n{dynamic_detail}')
+            await a_pushme(f'【fastapi】解析动态失败！！！', f"{e}\n{dynamic_detail}")
             await asyncio.sleep(30)
             return await self.judge_lottery(highlight_word_list, lotRound_id)
         judge_result = BiliDynamicItemJudgeLotteryResult(
@@ -1143,7 +1144,7 @@ class BiliSpaceUserItem:
         default_factory=set)  # 存放用户发布抽奖的用户详情，调用solve_space_dynamic的时候需要将isPubLotUser设置为True
     updateNum: int = field(default=0)
     is_use_available_proxy: bool = field(default=_is_use_available_proxy)
-    params: BiliSpaceUserParamsType|None = field(default=None)
+    params: BiliSpaceUserParamsType | None = field(default=None)
 
     def __post_init__(self):
         if self.params is None:
@@ -1918,6 +1919,7 @@ get_others_lot_dyn = GetOthersLotDyn()
 if __name__ == '__main__':
     async def main():
         await get_others_lot_dyn.get_new_dyn()
+
 
     a = BiliSpaceUserItem(
         lot_round_id=0,

@@ -1,5 +1,5 @@
 from typing import Optional, List
-from models.base.custom_pydantic import CustomBaseModel
+from Models.base.custom_pydantic import CustomBaseModel
 
 
 class EraTaskIndicator(CustomBaseModel):

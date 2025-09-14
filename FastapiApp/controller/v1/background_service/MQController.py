@@ -3,7 +3,7 @@ from typing import Dict
 from faststream.rabbit.fastapi import RabbitMessage
 
 from log.base_log import MQ_logger
-from models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
+from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.MQClient.BiliLotDataFastStream import official_reserve_charge_lot, \
     upsert_official_reserve_charge_lot, upsert_lot_data_by_dynamic_id, upsert_topic_lot, router, \
     upsert_milvus_bili_lot_data, bili_voucher

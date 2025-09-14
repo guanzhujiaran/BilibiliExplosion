@@ -2,7 +2,7 @@ import time
 
 import curl_cffi
 
-from models.AntiRisk.Bili.WebCookie import BiliWebCookie
+from Models.AntiRisk.Bili.WebCookie import BiliWebCookie
 from Service.GrpcModule.Models.ApiResponseModel import FrontendFingerSpiResp, BiliBaseResp
 from Service.GrpcModule.Utils.UserAgentParser import UserAgentParser
 from Service.GrpcModule.Grpc.Bapi.Constants import URL_FRONTEND_FINGER_SPI, URL_BILI_MAIN_PAGE, \

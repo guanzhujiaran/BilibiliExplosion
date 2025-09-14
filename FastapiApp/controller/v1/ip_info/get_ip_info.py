@@ -1,5 +1,5 @@
-from models.common import CommonResponseModel
-from models.v1.ip_info.ip_model import IpInfoResp
+from Models.common import CommonResponseModel
+from Models.v1.ip_info.ip_model import IpInfoResp
 from Service.ipinfo.get_ipv6 import get_ipv6_from_redis
 from .base import new_router
 

@@ -3,7 +3,7 @@ from typing import List
 
 from openai import AsyncOpenAI
 
-import models.lottery_database.milvusModel.biliMilvusModel as biliMilvusModel
+import Models.lottery_database.milvusModel.biliMilvusModel as biliMilvusModel
 import Service.LangChainCompo.lottery_data_vec_sql.sql_helper as sql_helper
 import Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
 import Service.GrpcModule.GrpcSrc.SQLObject.models as models

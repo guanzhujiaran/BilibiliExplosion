@@ -10,7 +10,7 @@ import pandas
 
 from Utils.CommMethods import methods
 from log.base_log import reserve_lot_logger
-from models.base.custom_pydantic import CustomBaseModelHashable
+from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerStatus
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin

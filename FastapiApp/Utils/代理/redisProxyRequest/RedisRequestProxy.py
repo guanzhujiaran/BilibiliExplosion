@@ -21,7 +21,7 @@ from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from log.base_log import request_with_proxy_logger, Voucher352_logger
-from models.AntiRisk.Bili.WebCookie import CookieWrapper
+from Models.AntiRisk.Bili.WebCookie import CookieWrapper
 from Utils.代理.SealedRequests import my_async_httpx
 from Utils.代理.mdoel.RequestConf import RequestConf
 from Utils.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods

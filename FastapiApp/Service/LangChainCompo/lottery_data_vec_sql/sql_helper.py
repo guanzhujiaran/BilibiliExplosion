@@ -2,7 +2,7 @@ import time
 from enum import StrEnum
 from typing import List
 from log.base_log import milvus_db_logger
-from models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
+from Models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
 from Utils.Common import lock_retry_wrapper
 
 

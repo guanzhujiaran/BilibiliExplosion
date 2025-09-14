@@ -3,7 +3,7 @@ from typing import TypeVar
 
 from pydantic import Field
 
-from models.base.custom_pydantic import CustomBaseModel, CustomBaseModelHashable
+from Models.base.custom_pydantic import CustomBaseModel, CustomBaseModelHashable
 
 ParamsType = TypeVar("ParamsType", bound=CustomBaseModelHashable)
 

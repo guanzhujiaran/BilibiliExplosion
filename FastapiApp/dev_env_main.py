@@ -18,7 +18,7 @@ from starlette.responses import JSONResponse
 from controller.v1.samsClub import samsClubController
 # from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 # from controller.damo import DamoML
-from models.common import CommonResponseModel
+from Models.common import CommonResponseModel
 
 log = logger.bind(name='fastapi')
 

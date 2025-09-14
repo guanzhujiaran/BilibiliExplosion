@@ -4,7 +4,7 @@ import time
 import uuid
 
 from log.base_log import sams_club_logger
-from models.v1.samsclub.samsclub_model import SamsClubHeadersModel, SamsClubEncryptModel, \
+from Models.v1.samsclub.samsclub_model import SamsClubHeadersModel, SamsClubEncryptModel, \
     SamsClubGetDoEncryptReqModel
 from Service.samsclub.tools.do_samsclub_encryptor import get_st, get_do_encrypt_result_str, \
     update_do_encrypt_key

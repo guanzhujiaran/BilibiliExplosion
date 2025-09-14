@@ -9,7 +9,7 @@ from typing import Any, AsyncGenerator
 
 from CONFIG import CONFIG
 from log.base_log import official_lot_logger
-from models.base.custom_pydantic import CustomBaseModelHashable
+from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GrpcModule.Grpc.Bapi.BiliApi import get_lot_notice, reserve_relation_info
@@ -446,13 +446,14 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
             task_list.append(task3)
             await asyncio_gather(*task_list, log=self.log)
             self.log.error('爬取动态任务全部完成！')
+            lot_dyn_sort_by_date = LotDynSortByDate()
+            await lot_dyn_sort_by_date.main()
         except Exception as e:
             self.log.error(f'爬取动态任务出错：{e}')
             pushme(title='爬取动态任务出错', content=f'爬取动态任务出错：{e}')
         finally:
             self.succ_counter.is_running = False
-        lot_dyn_sort_by_date = LotDynSortByDate()
-        await lot_dyn_sort_by_date.main()
+
 
     # region 测试用
     async def _testget_dynamics_by_spec_rids(self, all_rids: list[int]):

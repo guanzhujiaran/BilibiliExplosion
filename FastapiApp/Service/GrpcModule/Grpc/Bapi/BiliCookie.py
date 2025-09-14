@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 from CONFIG import CONFIG
 from log.base_log import bapi_log
-from models.AntiRisk.Bili.WebCookie import BiliWebCookie, CookieWrapper
+from Models.AntiRisk.Bili.WebCookie import BiliWebCookie, CookieWrapper
 from Service.GrpcModule.Grpc.Bapi.BiliApiBase import get_frontend_finger_spi, gen_web_ticket, \
     get_bili_main_page_raw_resp, gaia_gateway_ExClimbWuzhi, gaia_gateway_ExClimbCongling
 from Service.GrpcModule.Grpc.Bapi.Constants import BASE_COOKIE_KEYS, EXCLIMB_WUZHI_COOKIE_KEYS

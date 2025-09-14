@@ -2,7 +2,7 @@ from faststream.rabbit import RabbitExchange, ExchangeType
 from faststream.rabbit.fastapi import RabbitRouter
 from CONFIG import CONFIG
 
-from models.MQ.BaseMQModel import ExchangeName, MQPropBase, QueueName, RoutingKey
+from Models.MQ.BaseMQModel import ExchangeName, MQPropBase, QueueName, RoutingKey
 
 
 class BaseFastStreamMQ:

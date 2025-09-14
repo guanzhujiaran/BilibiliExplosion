@@ -7,11 +7,14 @@ import aiofiles
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger as default_logger
 
+from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import ParamsType, WorkerStatus
 from Utils.Common import GLOBAL_SCHEDULER
 from Utils.PushMe import async_pushme_try_catch_decorator
 import asyncio
+from typing import Callable
+
 
 class CrawlerExecutionInfo:
     def __init__(
@@ -71,21 +74,25 @@ class CrawlerExecutionInfo:
             return False
 
 
-class GenericCrawlerScheduler:
+class BaseScheduler:
+    """
+    定时任务调度器
+    """
     def __init__(
             self,
-            crawler: UnlimitedCrawler,
+            func: Callable,
             cron_expr: str,
             default_interval_seconds: int = 2 * 3600,
-            crawler_name: Optional[str] = None
+            crawler_name: str = "",
+            logger=default_logger
     ):
-        self.crawler = crawler
+        self.func = func
         self.crawler_asyncio_task = None
-        self.crawler_name = crawler_name if crawler_name else crawler.__class__.__name__
+        self.crawler_name = crawler_name if crawler_name else func.__name__
         self.cron_expr = cron_expr
         self.default_interval_seconds = default_interval_seconds
         self.job_id = f"crawler_job_{self.crawler_name}"
-        self.logger = self.crawler.log
+        self.logger = logger
         # 初始化执行信息管理器
         self.exec_info = CrawlerExecutionInfo(
             crawler_name=self.crawler_name,
@@ -102,7 +109,6 @@ class GenericCrawlerScheduler:
             month=month,
             day_of_week=day_of_week
         )
-        self._task_asyncio_instance: asyncio.Task | None = None
         # 添加或更新任务
         self._add_or_update_job()
 
@@ -136,7 +142,7 @@ class GenericCrawlerScheduler:
                 self.logger.info(f"[{self.crawler_name}] 开始执行爬虫任务...")
                 # 调用异步 main 函数
                 self.crawler_asyncio_task = asyncio.create_task(
-                    self.crawler.main()
+                    self.func()
                 )  # 获取异步包装的Task实例
                 await self.crawler_asyncio_task  # 等待异步任务完成
                 await self.exec_info.save_last_exec_time()
@@ -174,23 +180,50 @@ class GenericCrawlerScheduler:
         GLOBAL_SCHEDULER.remove_job(self.job_id)
 
 
+class GenericCrawlerScheduler(BaseScheduler):
+    """
+    通用爬虫调度器，用于调度任意爬虫类
+    """
+    def __init__(
+            self,
+            crawler: UnlimitedCrawler,
+            cron_expr: str,
+            default_interval_seconds: int = 2 * 3600,
+            crawler_name: Optional[str] = None
+    ):
+        self.crawler = crawler
+        super().__init__(
+            func=self.crawler.main,
+            cron_expr=cron_expr,
+            default_interval_seconds=default_interval_seconds,
+            crawler_name=crawler_name or self.crawler.__class__.__name__,
+            logger=self.crawler.log
+        )
+
+
 if __name__ == '__main__':
+    class MockParams(CustomBaseModelHashable):
+        a: int
+
+        def __hash__(self):
+            return hash(self.a)
 
 
-    class MockCrawler(UnlimitedCrawler):
+    class MockCrawler(UnlimitedCrawler[MockParams]):
         """模拟的爬虫类，仅用于测试"""
-
         async def handle_fetch(self, params: ParamsType) -> WorkerStatus | Any:
-            pass
-
-        async def key_params_gen(self, params: ParamsType) -> AsyncGenerator[ParamsType, None]:
-            pass
+            self.log.info(f"[MockCrawler] 模拟爬虫正在执行 handle_fetch...{params}")
+            await asyncio.sleep(1)
+        async def key_params_gen(self, params: ParamsType) -> AsyncGenerator[MockParams, None]:
+            for i in range(10):
+                yield MockParams(a=i)
 
         async def is_stop(self) -> bool:
-            pass
+            ...
 
         async def main(self):
             self.log.info("[MockCrawler] 开始执行 main 方法...")
+            await self.run()
             self.log.info("[MockCrawler] main 方法执行完成")
 
 
@@ -199,7 +232,7 @@ if __name__ == '__main__':
         if not GLOBAL_SCHEDULER.running:
             GLOBAL_SCHEDULER.start()
         # 创建爬虫和调度器
-        crawler = MockCrawler()
+        crawler = MockCrawler(max_sem=1)
         scheduler = GenericCrawlerScheduler(
             crawler=crawler,
             cron_expr="*/1 * * * *",  # 每分钟执行一次

@@ -5,8 +5,8 @@ from typing import List
 
 from fastapi import Query, Body
 from fastapi_cache.decorator import cache
-from models.common import CommonResponseModel, ResponsePaginationItems
-from models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, OfficialLotteryResp, \
+from Models.common import CommonResponseModel, ResponsePaginationItems
+from Models.lottery_database.bili.LotteryDataModels import CommonLotteryResp, OfficialLotteryResp, \
     AllLotteryResp, ChargeLotteryResp, ReserveInfoResp, TopicLotteryResp, LiveLotteryResp, AddDynamicLotteryReq, \
     AddTopicLotteryReq, BulkAddDynamicLotteryReq, BulkAddDynamicLotteryRespItem, LotdataResp
 from Service.LangChainCompo.text_embed import search_lottery_text

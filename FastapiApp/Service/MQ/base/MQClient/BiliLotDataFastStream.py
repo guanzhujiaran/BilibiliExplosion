@@ -9,7 +9,7 @@ from faststream.rabbit.fastapi import RabbitMessage, RabbitBroker
 
 from log.base_log import MQ_logger
 
-from models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
+from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \

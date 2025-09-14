@@ -6,8 +6,8 @@ from typing import Literal, Optional
 from fastapi import Query
 
 from controller.v1.lotttery_database.bili.base import new_router
-from models.common import CommonResponseModel
-from models.lottery_database.bili.LotteryDataModels import BiliLotStatisticInfoResp, \
+from Models.common import CommonResponseModel
+from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticInfoResp, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticLotTypeEnum, BiliLotStatisticLotteryResultResp, \
     BiliLotStatisticRankDateTypeEnum
 from Service.lottery_database.lottery_statistic import GetLotStatisticInfo, GetLotteryResult

@@ -4,7 +4,7 @@ from hashlib import md5
 import httpx
 
 from log.base_log import sams_club_logger
-from models.v1.samsclub.samsclub_model import SamsClubEncryptModel, SamsClubGetDoEncryptReqModel
+from Models.v1.samsclub.samsclub_model import SamsClubEncryptModel, SamsClubGetDoEncryptReqModel
 from CONFIG import CONFIG
 
 

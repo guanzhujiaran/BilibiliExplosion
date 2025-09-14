@@ -5,7 +5,7 @@ from typing import AsyncGenerator, Literal, Annotated
 from pydantic import Field
 
 from log.base_log import official_lot_logger, reserve_lot_logger
-from models.base.custom_pydantic import CustomBaseModelHashable
+from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerStatus
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin

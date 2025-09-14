@@ -8,14 +8,14 @@ from copy import deepcopy
 from typing import Literal, List, Sequence, Union, Optional
 
 import numpy as np
-from sqlalchemy import select, and_, exists, func, String, text, or_, JSON
+from sqlalchemy import select, and_, exists, func, String, text, or_, JSON, delete
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
 
 from CONFIG import CONFIG
 from log.base_log import myfastapi_logger
-from models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
+from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
 from Utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Bilidyndetail, Lotdata, ArticlePubRecord
 
@@ -220,6 +220,51 @@ class SQLHelper:
             return result.scalars().all()
 
     @lock_wrapper
+    async def get_rid_bili_dyn_detail(self,is_asc:bool=False) -> Bilidyndetail | None:
+        async with self._session() as session:
+            if is_asc:
+                result = await session.execute(
+                    select(Bilidyndetail)
+                    .where(func.length(Bilidyndetail.rid_int) < 18)
+                    .order_by(Bilidyndetail.rid_int.asc())
+                    .limit(1)
+                )
+                return result.scalars().first()
+            batch_size = 1000
+            # 查询指定数量的rid，按降序排列
+            result = await session.execute(
+                select(Bilidyndetail.rid_int)
+                .where(func.length(Bilidyndetail.rid_int) < 18)
+                .order_by(Bilidyndetail.rid_int.desc())
+                .limit(batch_size)
+            )
+
+            rids = np.array([int(row[0]) for row in result], dtype=np.int64)  # 将rid转换为NumPy数组
+
+            if len(rids) == 0:
+                return None
+
+            # 计算相邻rid之间的差异
+            differences = rids[:-1] - rids[1:]
+
+            # 找到第一个不连续的位置
+            first_non_consecutive_idx = np.where(differences != 1)[0]
+
+            if len(first_non_consecutive_idx) > 0:
+                max_consecutive_id = rids[first_non_consecutive_idx[0]]
+            else:
+                max_consecutive_id = rids[-1]
+
+            # 查询并返回完整的Bilidyndetail记录
+            detail_result = await session.execute(
+                select(Bilidyndetail)
+                .where(Bilidyndetail.rid_int == max_consecutive_id)
+                .limit(1)
+            )
+            return detail_result.scalars().first()
+
+
+    @lock_wrapper
     async def get_latest_rid(self) -> int | None:
         batch_size = 1000
         async with self._session() as session:
@@ -287,23 +332,19 @@ class SQLHelper:
         """
         async with self._session() as session:
             if between_ts is None:
-                today = datetime.datetime.now().date()
-                tomorrow = today + datetime.timedelta(days=1)
-                yesterday_end_time = int(time.mktime(today.timetuple())) - 1
-                today_start_time = yesterday_end_time + 1
-                today_end_time = int(time.mktime(tomorrow.timetuple())) - 1
-                between_ts = [today_start_time, today_end_time]
-
+                today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                today_end = today_start + datetime.timedelta(days=1) - datetime.timedelta(seconds=1)
+                between_ts = [int(today_start.timestamp()), int(today_end.timestamp())]
             if len(between_ts) != 2:
                 raise ValueError('错误的日期间隔')
 
                 # 使用 FROM_UNIXTIME 将 Unix 时间戳转换为 MySQL 的日期时间格式
+            between_fake_dyn_id = [ts_2_fake_dynamic_id(between_ts[0]),ts_2_fake_dynamic_id(between_ts[1])]
+
             stmt = select(Bilidyndetail).where(
                 and_(
-                    func.STR_TO_DATE(Bilidyndetail.dynamic_created_time, '%Y-%m-%d %H:%i:%s') >= func.FROM_UNIXTIME(
-                        between_ts[0]),
-                    func.STR_TO_DATE(Bilidyndetail.dynamic_created_time, '%Y-%m-%d %H:%i:%s') <= func.FROM_UNIXTIME(
-                        between_ts[1])
+                    Bilidyndetail.dynamic_id_int>= between_fake_dyn_id[0],
+                    Bilidyndetail.dynamic_id_int <= between_fake_dyn_id[1]
                 )
             ).order_by(func.STR_TO_DATE(Bilidyndetail.dynamic_created_time, '%Y-%m-%d %H:%i:%s').desc())
 
@@ -432,18 +473,18 @@ class SQLHelper:
     async def upsert_DynDetail(self, doc_id: str | int, dynamic_id: str | int, dynData: dict | None,
                                lot_id: str | int | None,
                                dynamic_created_time: str | None):
-        if dynData:
-            parsed_dyn_data = json.dumps(dynData, ensure_ascii=False)
-        else:
-            parsed_dyn_data = None
-        if lot_id:
-            async with self._session() as session:
-                sql = """
-INSERT IGNORE INTO lotdata (lottery_id)
-VALUES (:lottery_id);
-"""
-                await session.execute(text(sql), {"lottery_id": lot_id})
         async with self._session() as session:
+            if dynData:
+                parsed_dyn_data = json.dumps(dynData, ensure_ascii=False)
+            else:
+                parsed_dyn_data = None
+            if lot_id:
+                sql = """
+                      INSERT
+                      IGNORE INTO lotdata (lottery_id)
+    VALUES (:lottery_id); \
+                      """
+                await session.execute(text(sql), {"lottery_id": lot_id})
             stmt = insert(Bilidyndetail).values(
                 rid=doc_id,
                 dynamic_id=dynamic_id,
@@ -730,102 +771,82 @@ ORDER BY
         BiliUserInfoSimple]:
         async with self._session() as session:
             query = text("""
-WITH
-	all_results AS (
-		SELECT
-			jt.uid,
-			jt.name,
-			jt.face,
-			lotdata.lottery_id,
-			ROW_NUMBER() OVER (
+                         WITH all_results AS (SELECT jt.uid,
+                                                     jt.name,
+                                                     jt.face,
+                                                     lotdata.lottery_id,
+                                                     ROW_NUMBER() OVER (
 				PARTITION BY
 					jt.uid
 				ORDER BY
 					lotdata.lottery_id DESC
 			) AS rn
-		FROM
-			lotData,
-			JSON_TABLE(
-				lotData.lottery_result,
-				'$.first_prize_result[*]' COLUMNS (
+                                              FROM lotData,
+                                                   JSON_TABLE(
+                                                           lotData.lottery_result,
+                                                           '$.first_prize_result[*]' COLUMNS (
 					uid BIGINT PATH '$.uid', `name` TEXT PATH '$.name',
 					face TEXT PATH '$.face'
 				)
-			) AS jt
-		WHERE
-			JSON_VALID(lotData.lottery_result)
-		UNION ALL
-		SELECT
-			jt.uid,
-			jt.name,
-			jt.face,
-			lotdata.lottery_id,
-			ROW_NUMBER() OVER (
+                                                   ) AS jt
+                                              WHERE JSON_VALID(lotData.lottery_result)
+                                              UNION ALL
+                                              SELECT jt.uid,
+                                                     jt.name,
+                                                     jt.face,
+                                                     lotdata.lottery_id,
+                                                     ROW_NUMBER() OVER (
 				PARTITION BY
 					jt.uid
 				ORDER BY
 					lotdata.lottery_id DESC
 			) AS rn
-		FROM
-			lotData,
-			JSON_TABLE(
-				lotData.lottery_result,
-				'$.second_prize_result[*]' COLUMNS (
+                                              FROM lotData,
+                                                   JSON_TABLE(
+                                                           lotData.lottery_result,
+                                                           '$.second_prize_result[*]' COLUMNS (
 					uid BIGINT PATH '$.uid', `name` TEXT PATH '$.name',
 					face TEXT PATH '$.face'
 				)
-			) AS jt
-		WHERE
-			JSON_VALID(lotData.lottery_result)
-		UNION ALL
-		SELECT
-			jt.uid,
-			jt.name,
-			jt.face,
-			lotdata.lottery_id,
-			ROW_NUMBER() OVER (
+                                                   ) AS jt
+                                              WHERE JSON_VALID(lotData.lottery_result)
+                                              UNION ALL
+                                              SELECT jt.uid,
+                                                     jt.name,
+                                                     jt.face,
+                                                     lotdata.lottery_id,
+                                                     ROW_NUMBER() OVER (
 				PARTITION BY
 					jt.uid
 				ORDER BY
 					lotdata.lottery_id DESC
 			) AS rn
-		FROM
-			lotData,
-			JSON_TABLE(
-				lotData.lottery_result,
-				'$.third_prize_result[*]' COLUMNS (
+                                              FROM lotData,
+                                                   JSON_TABLE(
+                                                           lotData.lottery_result,
+                                                           '$.third_prize_result[*]' COLUMNS (
 					uid BIGINT PATH '$.uid', `name` TEXT PATH '$.name',
 					face TEXT PATH '$.face'
 				)
-			) AS jt
-		WHERE
-			JSON_VALID(lottery_result)
-	),
-	ranked_results AS (
-		SELECT
-			uid,
-			name,
-			face,
-			ROW_NUMBER() OVER (
+                                                   ) AS jt
+                                              WHERE JSON_VALID(lottery_result)),
+                              ranked_results AS (SELECT uid,
+                                                        name,
+                                                        face,
+                                                        ROW_NUMBER() OVER (
 				PARTITION BY
 					uid
 				ORDER BY
 					lottery_id DESC
 			) AS rn
-		FROM
-			all_results
-	)
-SELECT
-	uid,
-	name,
-	face
-FROM
-	ranked_results
-WHERE
-	rn = 1
-ORDER BY
-	uid
-    """)
+                                                 FROM all_results)
+                         SELECT uid,
+                                name,
+                                face
+                         FROM ranked_results
+                         WHERE rn = 1
+                         ORDER BY uid
+                         """)
             # 执行查询
             result = await session.execute(query)
 
@@ -877,14 +898,23 @@ ORDER BY
             await session.execute(stmt)
             await session.commit()
 
+    @lock_wrapper
+    async def delete_dyn_detail_by_dyn_ids(self,id_list:list[int]):
+        async with self._session() as session:
+            result = await session.execute(
+                delete(Bilidyndetail)
+                .where(Bilidyndetail.dynamic_id_int.in_(id_list))
+            )
+            return result
+
 
 grpc_sql_helper = SQLHelper()
 
 if __name__ == "__main__":
     async def _test():
         sql_log.debug(1)
-        result = await grpc_sql_helper.get_article_pub_record_round_id()
-        sql_log.debug(len(result))
+        result = await grpc_sql_helper.delete_dyn_detail_by_dyn_ids([1])
+        sql_log.debug(result)
 
 
     asyncio.run(_test())

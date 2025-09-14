@@ -8,7 +8,7 @@ import pika
 from pika.exchange_type import ExchangeType
 from CONFIG import CONFIG
 from log.base_log import MQ_logger
-from models.MQ.BaseMQModel import QueueName, ExchangeName, RoutingKey
+from Models.MQ.BaseMQModel import QueueName, ExchangeName, RoutingKey
 from Utils.PushMe import pushme
 
 

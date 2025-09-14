@@ -8,8 +8,8 @@ from typing import Union, Literal
 import aiofiles
 from fastapi import Query, Body
 from log.base_log import myfastapi_logger
-from models.common import CommonResponseModel
-from models.v1.ChatGpt3_5.ReplySingleModel import ReplyReq, ReplyRes, LLMShowInfo
+from Models.common import CommonResponseModel
+from Models.v1.ChatGpt3_5.ReplySingleModel import ReplyReq, ReplyRes, LLMShowInfo
 from Service.LLM.handleLLMReplySingle import chatgpt
 from .base import new_router
 

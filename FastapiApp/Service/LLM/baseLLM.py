@@ -3,7 +3,7 @@ import os.path
 from datetime import datetime
 from CONFIG import CONFIG
 from langchain_openai import ChatOpenAI
-from models.v1.ChatGpt3_5.ReplySingleModel import OpenAiClientModel, LLMShowInfo
+from Models.v1.ChatGpt3_5.ReplySingleModel import OpenAiClientModel, LLMShowInfo
 
 
 class BaseLLM:

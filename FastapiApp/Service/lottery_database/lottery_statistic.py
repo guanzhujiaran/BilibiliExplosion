@@ -1,6 +1,6 @@
 from dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
 from log.base_log import myfastapi_logger
-from models.lottery_database.bili.LotteryDataModels import BiliLotStatisticInfoResp, WinnerInfo, \
+from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticInfoResp, WinnerInfo, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticLotTypeEnum, BiliLotStatisticLotteryResultResp, \
     BiliLotStatisticRankDateTypeEnum
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper

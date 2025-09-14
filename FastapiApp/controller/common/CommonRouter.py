@@ -3,7 +3,7 @@ import gc
 from fastapi import Body
 from controller.common.base import new_router
 from log.base_log import myfastapi_logger
-from models.lottery_database.bili.LotteryDataModels import reserveInfo
+from Models.lottery_database.bili.LotteryDataModels import reserveInfo
 from Service.GetOthersLotDyn.get_other_lot_main import get_others_lot_dyn
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from Service.GrpcModule.GrpcSrc.获取取关对象.GetRmFollowingListV2 import gmflv2

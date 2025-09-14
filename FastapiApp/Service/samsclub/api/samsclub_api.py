@@ -10,8 +10,8 @@ from curl_cffi.requests.exceptions import RequestException
 from httpx import HTTPError
 
 from log.base_log import sams_club_logger
-from models.v1.samsclub.api_model import RespUserProfile, ApiResponse, UserProfile
-from models.v1.samsclub.samsclub_model import SamsClubAppStorage, SamsClubGrayConfigStrategy
+from Models.v1.samsclub.api_model import RespUserProfile, ApiResponse, UserProfile
+from Models.v1.samsclub.samsclub_model import SamsClubAppStorage, SamsClubGrayConfigStrategy
 from Service.samsclub.exceptions.error import UnknownError
 from Service.samsclub.tools.headers_gen import SamsClubHeadersGen, sort_headers_with_missing_last
 from Utils.PushMe import pushme, a_pushme

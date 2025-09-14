@@ -45,7 +45,7 @@ from controller.v1.background_service import BackgroundService
 from controller.common import CommonRouter
 from controller.v1.background_service import MQController
 from controller.v1.samsClub import samsClubController
-from models.common import CommonResponseModel
+from Models.common import CommonResponseModel
 from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
 

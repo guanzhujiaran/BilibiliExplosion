@@ -1,7 +1,7 @@
 from typing import Literal
 
-from models.common import CommonResponseModel
-from models.v1.background_service.background_service_model import ProgressStatusResp
+from Models.common import CommonResponseModel
+from Models.v1.background_service.background_service_model import ProgressStatusResp
 from Service.samsclub.Sql.SdlHelper import graphql_app
 from Service.samsclub.main import sams_club_crawler
 from .base import new_router

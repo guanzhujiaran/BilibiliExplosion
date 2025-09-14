@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from pydantic import Field
 
-from models.base.custom_pydantic import CustomBaseModel
+from Models.base.custom_pydantic import CustomBaseModel
 
 os.environ['EXECJS_RUNTIME'] = 'Node'
 import subprocess
