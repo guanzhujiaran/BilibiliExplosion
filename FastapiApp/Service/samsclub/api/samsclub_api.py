@@ -348,15 +348,15 @@ class SamsClubApi:
         )
 
     async def spu_query_detail(self, spuId: int):
-
         url = self._base_url + '/api/v1/sams/goods-portal/spu/queryDetail'
         body = {
             "source": "ANDROID",
             "channel": 1,
             "spuId": int(spuId),
-            "uid": self.app_storage.uid,
+            "uid": str(self.app_storage.uid),
             "addressVO": self.addressVO,
             "isTagEntryAbtTest": True,
+            "locationSwitch":True,
             "storeInfoVOList": self.app_storage.storeInfoVOList,
         }
         return await self.send(url, body, is_add_amap_headers=True)
