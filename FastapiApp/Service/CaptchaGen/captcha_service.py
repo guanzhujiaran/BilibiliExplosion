@@ -7,6 +7,7 @@ import random
 import string
 import uuid
 
+from Models.v1.CaptchaGen.model import CaptchaVerifyStatus, CaptchaVerifyStatusEnum
 from Service.CaptchaGen.captcha_redis_store import RedisHelper
 
 
@@ -22,7 +23,7 @@ class CaptchaService:
     async def generate_captcha(self, validate_timeout: int | None = None) -> tuple[str, str]:
         if validate_timeout is None:
             validate_timeout = self.captcha_timeout
-        if validate_timeout<=0:
+        if validate_timeout <= 0:
             raise ValueError('validate_timeout must be greater than 0')
         # 生成随机验证码文本（4位数字组合）
         captcha_text = ''.join(random.choices(string.digits + string.ascii_letters, k=4))
@@ -37,15 +38,17 @@ class CaptchaService:
         await self.store.set_id(captcha_id, captcha_text, validate_timeout)
         return captcha_id, captcha_image_base64
 
-    async def validate_captcha(self, captcha_id, input_text) -> bool:
+    async def validate_captcha(self, captcha_id, input_text) -> CaptchaVerifyStatus:
         """
         只要内容一致就行了，空格什么的无所谓
         """
         captcha_text = await self.store.get_captcha(captcha_id)
         trim_input_text = input_text.replace(' ', '')
         if not captcha_text:
-            return False
-        return trim_input_text.lower() == captcha_text.lower()
+            return CaptchaVerifyStatus(value=CaptchaVerifyStatusEnum.EXPIRED)
+        if trim_input_text.lower() == captcha_text.lower():
+            return CaptchaVerifyStatus(value=CaptchaVerifyStatusEnum.VALID)
+        return CaptchaVerifyStatus(value=CaptchaVerifyStatusEnum.INVALID)
 
 
 if __name__ == '__main__':

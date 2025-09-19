@@ -35,6 +35,7 @@ class SamsClubApi:
             await f.write(self.app_storage.model_dump_json(exclude_none=True, exclude={'extra_fields'}))
 
     def __init__(self):
+        self.req_lock = asyncio.Lock()
         auth_token = ''
         try:
             if os.path.exists(self.FilePath.auth_token):
@@ -55,7 +56,7 @@ class SamsClubApi:
             auth_token=auth_token,
             version_str=self.app_storage.version_str
         )
-        self._lock = asyncio.Lock()
+        self.secret_param_lock = asyncio.Lock()
 
     isInited = False
     log = sams_club_logger
@@ -90,7 +91,7 @@ class SamsClubApi:
         srd = resp_headers.get('srd')
         if siv and ssk:
             if siv != self.cur_siv or ssk != self.cur_ssk:
-                async with self._lock:
+                async with self.secret_param_lock:
                     if siv != self.cur_siv or ssk != self.cur_ssk:
                         self.log.debug("更新加密密钥")
                         await self.headers_gen.update_do_encrypt_key(siv, ssk, srd)
@@ -124,39 +125,40 @@ class SamsClubApi:
             is_add_amap_headers: bool = True
     ):
         while 1:
-            if self.isInited:
-                for i in range(random.choice(range(10))):
-                    await self.__empty_request()
-            cur_auth_token = self.headers_gen.auth_token
-            body_str = self.body_to_json(body) if body else ''
-            headers_model = await self.headers_gen.gen_headers(body_str)
-            headers = headers_model.model_dump()
-            if is_add_amap_headers:
-                headers.update(self.amapHeaders)
-            headers.update({'Content-Length': str(len(body_str.encode('utf-8')))})
-            try:
-                self.log.debug(f'请求：{url} {method} {body_str}')
-                resp: Response = await my_async_httpx.request(
-                    url,
-                    method=method,
-                    params=params,
-                    headers=sort_headers_with_missing_last(headers),
-                    data=body_str,
-                    # proxies=CONFIG.custom_proxy
-                )
-            except (RequestException, HTTPError) as e:
-                await asyncio.sleep(10)
-                continue
-            except Exception as e:
-                self.log.exception(f'curl_cffi网络请求未知异常：{e}')
-                raise e
-            is_updated = await self.update_encrypt_key(resp.headers)
-            is_succ = await self.handle_resp_code(resp, auth_token=cur_auth_token, is_updated_encrypt_key=is_updated)
-            if not is_succ:
-                await asyncio.sleep(10)
-                continue
-            self.log.info(f'请求成功：{resp.text}')
-            return resp
+            async with self.req_lock:
+                if self.isInited:
+                    for i in range(random.choice(range(10))):
+                        await self.__empty_request()
+                cur_auth_token = self.headers_gen.auth_token
+                body_str = self.body_to_json(body) if body else ''
+                headers_model = await self.headers_gen.gen_headers(body_str)
+                headers = headers_model.model_dump()
+                if is_add_amap_headers:
+                    headers.update(self.amapHeaders)
+                headers.update({'Content-Length': str(len(body_str.encode('utf-8')))})
+                try:
+                    self.log.debug(f'请求：{url} {method} {body_str}')
+                    resp: Response = await my_async_httpx.request(
+                        url,
+                        method=method,
+                        params=params,
+                        headers=sort_headers_with_missing_last(headers),
+                        data=body_str,
+                        # proxies=CONFIG.custom_proxy
+                    )
+                except (RequestException, HTTPError) as e:
+                    await asyncio.sleep(10)
+                    continue
+                except Exception as e:
+                    self.log.exception(f'curl_cffi网络请求未知异常：{e}')
+                    raise e
+                is_updated = await self.update_encrypt_key(resp.headers)
+                is_succ = await self.handle_resp_code(resp, auth_token=cur_auth_token, is_updated_encrypt_key=is_updated)
+                if not is_succ:
+                    await asyncio.sleep(10)
+                    continue
+                self.log.info(f'请求成功：{resp.text}')
+                return resp
 
     async def get_recommend_store_list_by_location(self):
 
@@ -348,6 +350,44 @@ class SamsClubApi:
         )
 
     async def spu_query_detail(self, spuId: int):
+        """
+    查询商品详细信息
+
+    Args:
+        spuId (int): 商品SPU ID
+
+    Returns:
+        dict: 包含商品详细信息的字典，结构如下:
+            - code (str): 请求状态码
+            - data (dict): 商品详情数据，包含以下字段:
+                - arrivalEndTimeDesc (str): 到货时间描述
+                - attrGroupInfo (list): 属性分组信息
+                - attrInfo (list): 商品属性列表
+                - brandId (str): 品牌ID
+                - categoryIdList (list): 分类ID列表
+                - desc (str): 商品描述(HTML格式)
+                - images (list): 商品图片URL列表
+                - intro (str): 商品简介
+                - priceInfo (list): 价格信息
+                - spuId (str): 商品SPU ID
+                - title (str): 商品标题
+                - 其他字段详见返回示例
+                {'code': 'Success', 'data': {'arrivalEndTimeDesc': '有货，可当日或次日发货，依照您在结算页面选择的配送时间窗而定。', 'attrGroupInfo': [], 'attrInfo': [{'attrId': '155408', 'attrValueList': [{}, {'value': '1.5kg'}], 'isImportant': False, 'title': '净含量'}, {'attrId': '155409', 'attrValueList': [{'attrValueId': '1136346', 'value': '国产'}], 'isImportant': False, 'title': '进口/国产'}], 'beltInfo': [], 'brandId': '10196732', 'categoryIdList': ['10003023', '10003239', '10011865', '10011889'], 'complianceInfo': {'id': '261038638727561494', 'value': '山姆品质、馈赠精选，如您有大宗采买需求，我们将为您提供全程专业的采买咨询服务。
+        联系我们：山姆app - 我的 - 我的服务 - 福利采购，在线提交采买需求，资深采买顾问为您提供一对一专属服务，让福利采购更省心。'}, 'couponContentList': [], 'couponList': [], 'customTabList': [], 'deliveryAttr': 3, 'deliveryCapacityCountList': [{'list': [{'closeDate': '2025-09-19', 'closeTime': '20:00', 'disabled': False, 'endTime': '21:00', 'startTime': '09:00', 'timeISFull': False}], 'strDate': '2025/09/20 周六'}], 'desc': '<p><img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567487338160129.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567488055382016.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567487807930369.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567488701321216.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567489682771968.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567490328690688.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567491620544512.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567491972870144.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567492681695233.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567493373759488.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/42/bktsitem-ops-prod-8556881118377107457.jpg?imageMogr2/thumbnail/!80p/ignore-error/1">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/42/bktsitem-ops-prod-8567017512294510592.png">
+        <img src="https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/42/bktsitem-ops-prod-8587247830783827969.jpg?imageMogr2/thumbnail/!80p/ignore-error/1"></p>', 'descVideo': [], 'detailVideos': [], 'extendedWarrantyList': [], 'favorite': False, 'giveaway': False, 'hostItem': '867980', 'imageSizeThreeFour': [], 'images': ['https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567274468843521.jpg?imageMogr2/thumbnail/!80p/ignore-error/1', 'https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567279191625729.jpg?imageMogr2/thumbnail/!80p/ignore-error/1', 'https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567275232206849.jpg?imageMogr2/thumbnail/!80p/ignore-error/1', 'https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567274435301377.jpg?imageMogr2/thumbnail/!80p/ignore-error/1', 'https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567275668418561.jpg?imageMogr2/thumbnail/!80p/ignore-error/1', 'https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567274124906497.jpg?imageMogr2/thumbnail/!80p/ignore-error/1', 'https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567275953618945.jpg?imageMogr2/thumbnail/!80p/ignore-error/1'], 'intro': '脆宝香瓜 1.5kg', 'isAllowDelivery': True, 'isAvailable': False, 'isCollectOrder': 0, 'isCompare': False, 'isCrabCard': False, 'isGlobalDirectPurchase': False, 'isGlobalOwnPickUp': False, 'isGovSpu': False, 'isImport': False, 'isPutOnSale': False, 'isSerial': False, 'isShowXPlusTag': False, 'isStoreAvailable': False, 'isStoreExtent': False, 'isTicket': False, 'limitInfo': [], 'masterBizType': 1, 'netWeight': 1.58, 'newTagInfo': [], 'onlyBarSale': False, 'onlyStoreSale': False, 'preSellList': [], 'priceInfo': [], 'promotionDetailList': [], 'promotionList': [], 'serviceInfo': [], 'sevenDaysReturn': False, 'specInfo': [], 'specList': {}, 'spuExtDTO': {'deliveryAttr': 3, 'departmentId': '56', 'detailVideos': [], 'giveaway': False, 'hostUpc': ['2160844000005', '6925945901028', '2160844000005', '2160844000005'], 'intro': '脆宝香瓜 1.5kg', 'isAccessory': False, 'isImport': False, 'isRoutine': True, 'netWeight': 1.58, 'sevenDaysReturn': False, 'smallPackageNum': 1, 'smallPackageUnit': 'kg', 'status': 5, 'subETitle': 'Fruit; Fresh Melons', 'subTitle': '果肉细腻， 香甜多汁，因为成熟度和光照原因，部分果面会有发黄现象', 'temperature': 1.0, 'thumbnailImage': 'https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/190776/bktpromotion-e2e-prod-8602567274468843521.jpg', 'valuable': True, 'weight': 1.58}, 'spuId': '1333962', 'spuSpecInfo': [], 'standardForIntactGoodsUrl': 'https://m-sams.walmartmobile.cn/common/help-center/217', 'stockInfo': {'safeStockQuantity': 0, 'soldQuantity': 0, 'stockQuantity': 0}, 'storeId': '6558', 'subTitle': '果肉细腻， 香甜多汁，因为成熟度和光照原因，部分果面会有发黄现象', 'tagInfo': [{'id': '1', 'tagMark': 'aboveTheLimitTag', 'tagPlace': 10, 'title': '6.1万人回购'}], 'temperature': 1.0, 'title': '脆宝香瓜 1.5kg', 'valuable': True, 'viceBizType': 1, 'videos': [], 'weight': 1.58, 'zoneTypeList': []}, 'errorMsg': '', 'msg': '', 'requestId': 'as|c6b03323e7ce44a19d9a5c6b9a10389d.101.17582432110405739', 'rt': 0, 'success': True, 'traceId': '72fa312a68001fb5'}
+
+    """
         url = self._base_url + '/api/v1/sams/goods-portal/spu/queryDetail'
         body = {
             "source": "ANDROID",
@@ -356,7 +396,7 @@ class SamsClubApi:
             "uid": str(self.app_storage.uid),
             "addressVO": self.addressVO,
             "isTagEntryAbtTest": True,
-            "locationSwitch":True,
+            "locationSwitch": True,
             "storeInfoVOList": self.app_storage.storeInfoVOList,
         }
         return await self.send(url, body, is_add_amap_headers=True)
@@ -417,7 +457,7 @@ class SamsClubApi:
             "isFastDelivery": False,
             "recommendFirstCategoryId": firstCategoryId,
             "recommendSecondCategoryId": SecondCategoryId,
-            "showSeriesIcon":False,
+            "showSeriesIcon": False,
             "frontCategoryIds": frontCategoryIds,
             "secondCategoryId": SecondCategoryId,
             "isShowCustomTag": True
@@ -939,7 +979,8 @@ sams_club_api = SamsClubApi()
 if __name__ == '__main__':
     async def _test():
         # await sams_club_api.init_api_info()
-        resp = await sams_club_api.user_profile(
+        resp = await sams_club_api.spu_query_detail(
+            spuId=1333962
         )
         print(resp)
 

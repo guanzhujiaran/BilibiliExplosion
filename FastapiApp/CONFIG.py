@@ -72,9 +72,8 @@ class pushme:
 
 class pushnotify:
     def __init__(self):
-        push_template = pushme().set_url('http://www.pushplus.plus/send').set_token(settings.PUSHPLUS_TOKEN)
-        self._pushme = copy.deepcopy(push_template)
-        self._pushplus = copy.deepcopy(push_template)
+        self._pushme = pushme()
+        self._pushplus = pushme().set_url('http://www.pushplus.plus/send').set_token(settings.PUSHPLUS_TOKEN)
 
     @property
     def pushme(self):

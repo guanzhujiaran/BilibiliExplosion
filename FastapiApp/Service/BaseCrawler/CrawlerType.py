@@ -1,7 +1,7 @@
 import asyncio
 from abc import abstractmethod
+from types import EllipsisType
 from typing import Any, AsyncGenerator, Optional, List
-
 from Service.BaseCrawler.base.core import BaseCrawler
 from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus, ParamsType
 from Service.BaseCrawler.plugin.base import CrawlerPlugin
@@ -39,7 +39,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         ...
 
     @abstractmethod
-    async def key_params_gen(self, params: ParamsType | Any | None) -> AsyncGenerator[ParamsType, None]:
+    async def key_params_gen(self, params: ParamsType | Any | None) -> AsyncGenerator[EllipsisType, None]:
         yield ...
 
     @abstractmethod
@@ -73,6 +73,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
                 await asyncio.sleep(100)
                 if self.requeue_on_fetch_fail:
                     await self.task_queue.put(worker_model)
+
             if not isinstance(fetch_result, WorkerStatus):
                 worker_model.fetchStatus = WorkerStatus.complete
             else:

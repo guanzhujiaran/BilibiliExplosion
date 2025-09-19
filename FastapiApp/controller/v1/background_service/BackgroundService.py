@@ -19,7 +19,7 @@ from Service.opus新版官方抽奖.bili_lottery_api.scrapyLotteryDataFromBapi i
     lottery_api_robot_reserve
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
 from Service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import reserve_robot
-from Service.samsclub.main import sams_club_crawler
+from Service.samsclub.main import sams_club_crawler, sams_club_SPU_detail_crawler
 from Utils.Common import GLOBAL_SCHEDULER
 from Utils.代理.redisProxyRequest.GetProxyFromNet import get_proxy_methods
 from Utils.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
@@ -42,6 +42,11 @@ class BackgroundService:
     samsclub_scheduler = GenericCrawlerScheduler(
         crawler=sams_club_crawler,
         cron_expr="0 0 * * *",
+        default_interval_seconds=15 * 3600,
+    )
+    samsclub_spu_detail_scheduler = GenericCrawlerScheduler(
+        crawler=sams_club_SPU_detail_crawler,
+        cron_expr="0 4 * * *",
         default_interval_seconds=15 * 3600,
     )
     get_reserve_lot = GenericCrawlerScheduler(

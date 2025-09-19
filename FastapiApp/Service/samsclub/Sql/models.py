@@ -125,6 +125,10 @@ class SpuInfo(Base):
     temperature = mapped_column(Integer)
     valuable = mapped_column(TINYINT(1))
     weight = mapped_column(Double(asdecimal=True))
+    purchaseLimitText = mapped_column(Text)
+    purchaseLimitMinNum = mapped_column(Integer)
+    globalShoppingTaxRateExplain = mapped_column(Text)
+    hostItem = mapped_column(Text)
 
     spu_category: Mapped[List['SpuCategory']] = relationship('SpuCategory', uselist=True, back_populates='spu')
     spu_new_tag_info: Mapped[List['SpuNewTagInfo']] = relationship('SpuNewTagInfo', uselist=True, back_populates='spu')

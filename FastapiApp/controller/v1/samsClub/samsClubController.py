@@ -42,4 +42,6 @@ async def crawler_status():
     return CommonResponseModel(data=await sams_club_crawler.get_status())
 
 
+
+
 router.include_router(graphql_app, prefix='/graphql')

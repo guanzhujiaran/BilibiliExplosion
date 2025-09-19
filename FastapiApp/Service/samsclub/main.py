@@ -5,9 +5,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any, AsyncGenerator
-
 import aiofiles
-
 from log.base_log import sams_club_logger
 from Models.base.custom_pydantic import CustomBaseModelHashable
 from Models.v1.background_service.background_service_model import ProgressStatusResp
@@ -27,47 +25,6 @@ class SamsClubCrawlerParams(CustomBaseModelHashable):
     def __hash__(self):
         return hash((self.first_category, self.second_category))
 
-class SamsClubSPUDetailCrawlerParams(CustomBaseModelHashable):
-    spu_id: str
-
-    def __hash__(self):
-        return hash(self.spu_id)
-
-class SamsClubSPUDetailCrawler(UnlimitedCrawler[SamsClubCrawlerParams]):
-    def __init__(self):
-        self.api = sams_club_api
-        # 设置配置
-        self.concurrent_num = 1
-        self.sleep_time_gen = SleepTimeGenerator(
-            short_wait_range=(5, 10),
-            medium_wait_range=(30, 60),
-            long_wait_range=(60, 120),
-        )
-        self.delay_gen = self.sleep_time_gen.continuous_generator()
-        self.sql_helper = sql_helper
-        self.fetch_grouping_id_ts = 0
-        self.api.headers_gen.version_str = "5.0.125"
-        self.stats_plugin = StatsPlugin(self)
-        super().__init__(
-            [self.stats_plugin],
-            max_sem=self.concurrent_num,
-            requeue_on_fetch_fail=False,
-            _logger=sams_club_logger
-        )
-        self.task_params_list = []
-        self.unfinished_tasks = []
-        self.main_lock = asyncio.Lock()
-
-    async def is_stop(self) -> bool:
-        return False
-    async def key_params_gen(self, params=None) -> AsyncGenerator[SamsClubSPUDetailCrawlerParams, None]:
-        is_put_on_sale_spu_ids = self.sql_helper.get_spu_ids_by_is_put_on_sale(is_put_on_sale=True)
-        for spu_id in is_put_on_sale_spu_ids:
-            yield SamsClubSPUDetailCrawlerParams(
-                spu_id=spu_id
-            )
-            await asyncio.sleep(next(self.delay_gen))
-# TODO  implement the rest of the crawler
 
 class SamsClubCrawler(UnlimitedCrawler[SamsClubCrawlerParams]):
     async def is_stop(self) -> bool:
@@ -239,7 +196,70 @@ class SamsClubCrawler(UnlimitedCrawler[SamsClubCrawlerParams]):
         )
 
 
+class SamsClubSPUDetailCrawlerParams(CustomBaseModelHashable):
+    spu_id: str
+
+    def __hash__(self):
+        return hash(self.spu_id)
+
+
+class SamsClubSPUDetailCrawler(UnlimitedCrawler[SamsClubSPUDetailCrawlerParams]):
+    def __init__(self):
+        self.api = sams_club_api
+        # 设置配置
+        self.concurrent_num = 1
+        self.sleep_time_gen = SleepTimeGenerator(
+            short_wait_range=(5, 10),
+            medium_wait_range=(30, 60),
+            long_wait_range=(60, 120),
+        )
+        self.delay_gen = self.sleep_time_gen.continuous_generator()
+        self.sql_helper = sql_helper
+        self.fetch_grouping_id_ts = 0
+        self.api.headers_gen.version_str = "5.0.125"
+        self.stats_plugin = StatsPlugin(self)
+        super().__init__(
+            [self.stats_plugin],
+            max_sem=self.concurrent_num,
+            requeue_on_fetch_fail=False,
+            _logger=sams_club_logger
+        )
+        self.main_lock = asyncio.Lock()
+
+    async def is_stop(self) -> bool:
+        return False
+
+    async def key_params_gen(self, params=None) -> AsyncGenerator[SamsClubSPUDetailCrawlerParams, None]:
+        is_put_on_sale_spu_ids = await self.sql_helper.get_spu_ids_by_is_put_on_sale(is_put_on_sale=True)
+        for spu_id in is_put_on_sale_spu_ids:
+            yield SamsClubSPUDetailCrawlerParams(
+                spu_id=spu_id
+            )
+            await asyncio.sleep(next(self.delay_gen))
+
+    async def handle_fetch(self, params: SamsClubSPUDetailCrawlerParams) -> WorkerStatus | Any:
+        spu_data_resp = await self.api.spu_query_detail(params.spu_id)
+        spu_data_json = spu_data_resp.json()
+        spu_detail_data = spu_data_json.get('data')
+        await self.sql_helper.bulk_upsert_spu_info([spu_detail_data])
+        return WorkerStatus.complete
+
+    async def main(self):
+        if self.stats_plugin.is_running:
+            async with self.main_lock:
+                if self.stats_plugin.is_running:
+                    return
+        async with self.main_lock:
+            try:
+                await self.api.init_api_info()  # 先更新一下版本信息之类的
+                await self.run()
+            except Exception as e:
+                self.log.exception(f"发生异常：{e}")
+                await a_pushme(f'[SamsClubSPUDetailCrawler] 发生异常：{e}', str(e))
+
+
 sams_club_crawler = SamsClubCrawler()  # 直接单例模式运行
+sams_club_SPU_detail_crawler = SamsClubSPUDetailCrawler()
 
 if __name__ == "__main__":
-    asyncio.run(sams_club_crawler.main())
+    asyncio.run(sams_club_SPU_detail_crawler.main())
