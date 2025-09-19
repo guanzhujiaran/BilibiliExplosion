@@ -45,6 +45,7 @@ from controller.v1.background_service import BackgroundService
 from controller.common import CommonRouter
 from controller.v1.background_service import MQController
 from controller.v1.samsClub import samsClubController
+from controller.v1.captcha import captchaController
 from Models.common import CommonResponseModel
 from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
@@ -74,6 +75,7 @@ app.include_router(get_ip_info.router)
 app.include_router(BackgroundService.router)
 app.include_router(CommonRouter.router)
 app.include_router(MQController.router)
+app.include_router(captchaController.router)
 app.include_router(samsClubController.router)
 app.include_router(zhuanlanController.router)
 FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
