@@ -25,14 +25,13 @@ FastapiApp/Service/toutiao/src/Tools/Enc/node_modules
 FastapiApp/Service/GrpcModule/Utils/极验/Geetest_html
 FastapiApp/Service/GrpcModule/Grpc/GrpcProto
 FastapiApp/Service/samsclub/api/app_storage.jsondoc
-/docker_vol/*
 .env.fastapi.dev
 /go-proxy-ipv6-pool-auto/
 /unidbgSpringBoot/
-!docker_vol/mysql_data/init/init.sql
-!docker_vol/postgres/init/init1.sql
-!docker_vol/postgres/init/init2.sql
+!docker_vol/mysql_data/init/
+!docker_vol/postgres/init/
 !docker_vol/nginx/
 !docker_vol/goaccess/
 !FastapiApp/requirements.txt
 !FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
+/docker_vol
