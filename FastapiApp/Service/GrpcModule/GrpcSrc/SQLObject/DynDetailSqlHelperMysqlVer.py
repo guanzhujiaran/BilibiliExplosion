@@ -6,53 +6,24 @@ import json
 import time
 from copy import deepcopy
 from typing import Literal, List, Sequence, Union, Optional
-
 import numpy as np
-from sqlalchemy import select, and_, exists, func, String, text, or_, JSON, delete
+from sqlalchemy import select, and_, exists, func, String, text, or_, JSON, delete, update
 from sqlalchemy.dialects.mysql import insert
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
-
 from CONFIG import CONFIG
-from log.base_log import myfastapi_logger
-from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
+from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, \
+    AtariLotRankEnum
+from Utils.Common import log_sql_retry_wrapper
 from Utils.dynamic_id_caculate import ts_2_fake_dynamic_id
-from Service.GrpcModule.GrpcSrc.SQLObject.models import Bilidyndetail, Lotdata, ArticlePubRecord
-
-sql_log = myfastapi_logger
-
-
-@sql_log.catch
-def lock_wrapper(_func: callable) -> callable:
-    # 定义一个异步函数wrapper，接收任意数量和类型的参数
-    async def wrapper(*args, **kwargs):
-        # 无限循环
-        while 1:
-            try:
-                # 调用传入的函数，并返回结果
-                res = await _func(*args, **kwargs)
-                return res
-            except Exception as e:
-                # 捕获异常，并记录日志
-                sql_log.exception(e)
-                # 等待10秒
-                await asyncio.sleep(10)
-
-    # 返回wrapper函数
-    return wrapper
+from Service.GrpcModule.GrpcSrc.SQLObject.models import Bilidyndetail, Lotdata, ArticlePubRecord, BiliUserInfo, \
+    BiliAtariInfo
+from dao.base.sqlHelperBase import SqlHelperBase
+from dao.biliLotteryStatisticSqlHelper import lottery_data_statistic_sql_helper
 
 
-class SQLHelper:
+class SQLHelper(SqlHelperBase):
     def __init__(self):
-        _SQLURI = CONFIG.database.MYSQL.dyn_detail
-        self._engine = create_async_engine(
-            _SQLURI,
-            **CONFIG.sql_alchemy_config.engine_config
-        )
-        self._session = async_sessionmaker(
-            self._engine,
-            **CONFIG.sql_alchemy_config.session_config
-        )
+        super().__init__(MysqlDbUrl=CONFIG.database.MYSQL.dyn_detail)
 
     # region 返回和提交内容预处理
 
@@ -113,7 +84,6 @@ class SQLHelper:
     # endregion
 
     # region 查询相关信息
-    @lock_wrapper
     async def get_lost_lots(self, limit_ts: int = 7 * 3600 * 24) -> Sequence[
         Union[Bilidyndetail, Lotdata]]:
         """
@@ -139,17 +109,17 @@ class SQLHelper:
             .order_by(Bilidyndetail.dynamic_id_int.desc())
         )
 
-        async with self._session() as session:
+        async with self.async_session() as session:
             result = await session.execute(query)
             return result.scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_discountious_rids(self) -> Sequence[int]:
         """
         获取最大值和最小值之间不连续的rid，也就是那些可能获取失败了rid（rid最近的30万条数据）
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             # 子查询：获取最近的30万条记录
             subquery = (
                 select(Bilidyndetail.rid_int)
@@ -170,58 +140,58 @@ class SQLHelper:
                 .order_by('x')
             )
 
-            async with self._session() as session:
+            async with self.async_session() as session:
                 result = await session.execute(query)
                 ret_row = [int(row.x) for row in result]
 
             return ret_row
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_all_dynamic_detail_by_dynamic_id(self, dynamic_id: str) -> Bilidyndetail | None:
         '''
         根据动态id获取特定动态详情
         :param dynamic_id: 动态id
         :return:[{...}, {...}] dynAllDetail dict
         '''
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(Bilidyndetail).where(Bilidyndetail.dynamic_id_int == int(dynamic_id)).limit(1)
             result = await session.execute(sql)
             return result.scalars().first()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_all_dynamic_detail_by_rid(self, rid: str) -> Bilidyndetail | None:
         '''
         根据动态id获取特定动态详情
         :param rid: 动态rid
         :return: Bilidyndetail
         '''
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(Bilidyndetail).where(Bilidyndetail.rid_int == int(rid)).limit(1)
             result = await session.execute(sql)
             return result.scalars().first()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_lotDetail_by_lot_id(self, lot_id: int) -> Lotdata | None:
         '''
         根据动态id获取所有详情
         :param lot_id: 动态id
         :return:[{...}, {...}] dynAllDetail dict
         '''
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(Lotdata).where(Lotdata.lottery_id == lot_id).limit(1)
             result = await session.execute(sql)
             return result.scalars().first()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_lotDetail_ls_by_lot_ids(self, lot_id_ls: List[int]) -> Sequence[Lotdata]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(Lotdata).where(Lotdata.lottery_id.in_(lot_id_ls))
             result = await session.execute(sql)
             return result.scalars().all()
 
-    @lock_wrapper
-    async def get_rid_bili_dyn_detail(self,is_asc:bool=False) -> Bilidyndetail | None:
-        async with self._session() as session:
+    @log_sql_retry_wrapper()
+    async def get_rid_bili_dyn_detail(self, is_asc: bool = False) -> Bilidyndetail | None:
+        async with self.async_session() as session:
             if is_asc:
                 result = await session.execute(
                     select(Bilidyndetail)
@@ -263,11 +233,10 @@ class SQLHelper:
             )
             return detail_result.scalars().first()
 
-
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_latest_rid(self) -> int | None:
         batch_size = 1000
-        async with self._session() as session:
+        async with self.async_session() as session:
             # 查询指定数量的rid，按降序排列
             result = await session.execute(
                 select(Bilidyndetail.rid)
@@ -294,7 +263,7 @@ class SQLHelper:
 
             return max_consecutive_id + 1  # +1 是最大的一个，不加一是第二大的
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def query_dynData_by_key_word(self, key_word_list: [str], between_ts: List[int] | None = None) -> Sequence[
         Bilidyndetail]:
         """
@@ -303,7 +272,7 @@ class SQLHelper:
         :param between_ts:
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             stmt = select(Bilidyndetail)
             # 动态生成like条件
             conditions = [Bilidyndetail.dynData.like(f"%{keyword}%") for keyword in key_word_list]
@@ -322,7 +291,7 @@ class SQLHelper:
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def query_dynData_by_date(self, between_ts: list[int] = None) -> Sequence[Bilidyndetail]:
         """
         通过日期查询需要的动态，默认查询当天
@@ -330,7 +299,7 @@ class SQLHelper:
         :param RegExp:
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             if between_ts is None:
                 today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 today_end = today_start + datetime.timedelta(days=1) - datetime.timedelta(seconds=1)
@@ -339,11 +308,11 @@ class SQLHelper:
                 raise ValueError('错误的日期间隔')
 
                 # 使用 FROM_UNIXTIME 将 Unix 时间戳转换为 MySQL 的日期时间格式
-            between_fake_dyn_id = [ts_2_fake_dynamic_id(between_ts[0]),ts_2_fake_dynamic_id(between_ts[1])]
+            between_fake_dyn_id = [ts_2_fake_dynamic_id(between_ts[0]), ts_2_fake_dynamic_id(between_ts[1])]
 
             stmt = select(Bilidyndetail).where(
                 and_(
-                    Bilidyndetail.dynamic_id_int>= between_fake_dyn_id[0],
+                    Bilidyndetail.dynamic_id_int >= between_fake_dyn_id[0],
                     Bilidyndetail.dynamic_id_int <= between_fake_dyn_id[1]
                 )
             ).order_by(func.STR_TO_DATE(Bilidyndetail.dynamic_created_time, '%Y-%m-%d %H:%i:%s').desc())
@@ -351,23 +320,23 @@ class SQLHelper:
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def query_lot_data_by_business_id(self, business_id: int | str) -> Lotdata | None:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(Lotdata).where(
                 Lotdata.business_id == business_id
             ).order_by(Lotdata.business_id.desc()).limit(1)
             result = await session.execute(sql)
             return result.scalars().first()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def query_official_lottery_by_timelimit(self, time_limit: int = 24 * 3600, order_by_ts_desc=True) -> Sequence[
         Lotdata]:
         """
         通过日期查询需要的动态，默认查询当天
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             now_ts = int(time.time())
             target_ts = now_ts + time_limit
 
@@ -387,7 +356,7 @@ class SQLHelper:
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def query_official_lottery_by_timelimit_page_offset(
             self,
             time_limit: int = 24 * 3600,
@@ -416,7 +385,7 @@ class SQLHelper:
         # 如果提供了分页参数，则应用分页
         if page_number and page_size:
             stmt = stmt.limit(page_size).offset((page_number - 1) * page_size)
-        async with self._session() as session:
+        async with self.async_session() as session:
             result = await session.execute(stmt)
             records = result.scalars().all()
             # 计算总数
@@ -426,7 +395,7 @@ class SQLHelper:
 
             return records, total_count
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def query_charge_lottery_by_timelimit_page_offset(
             self,
             time_limit: int = 24 * 3600,
@@ -455,7 +424,7 @@ class SQLHelper:
         # 如果提供了分页参数，则应用分页
         if page_number > 0 and page_size > 0:
             stmt = stmt.limit(page_size).offset((page_number - 1) * page_size)
-        async with self._session() as session:
+        async with self.async_session() as session:
             result = await session.execute(stmt)
             records = result.scalars().all()
 
@@ -469,11 +438,11 @@ class SQLHelper:
     # endregion
 
     # region 更新和新增内容
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def upsert_DynDetail(self, doc_id: str | int, dynamic_id: str | int, dynData: dict | None,
                                lot_id: str | int | None,
                                dynamic_created_time: str | None):
-        async with self._session() as session:
+        async with self.async_session() as session:
             if dynData:
                 parsed_dyn_data = json.dumps(dynData, ensure_ascii=False)
             else:
@@ -521,7 +490,7 @@ class SQLHelper:
         )
         return Lotdata(**lot_data_dict)
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def upsert_lot_detail(self, lot_data_dict: dict):
         '''
 
@@ -530,7 +499,7 @@ class SQLHelper:
                 插入 返回{'mode':'insert'}
                 失败 返回{'mode': 'error'}
         '''
-        async with self._session() as session:
+        async with self.async_session() as session:
             lottery_id = lot_data_dict.get('lottery_id')
             if lottery_id is None:
                 return {'mode': 'error'}
@@ -547,13 +516,13 @@ class SQLHelper:
             return {'mode': mode}
 
     # endregion
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_all_lot_not_drawn(self) -> Sequence[Lotdata]:
         """
         查询所有未开奖的 Lotdata 数据，并加载关联的 Bilidyndetail 数据。
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             stmt = select(Lotdata).options(
                 joinedload(Lotdata.bilidyndetail),
                 joinedload(Lotdata.article_pub_record)
@@ -561,36 +530,45 @@ class SQLHelper:
                 and_(
                     Lotdata.lottery_result.is_(None),
                     Lotdata.status != -1,
-                    Lotdata.business_type != 10
+                    Lotdata.lottery_time <= func.unix_timestamp()
                 )
             ).order_by(Lotdata.lottery_id)
             result = await session.execute(stmt)
-            return result.scalars().all()
+            return result.unique().scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
+    async def update_lot_detail(self, *, lottery_id: str | int, **kwargs):
+        async with self.async_session() as session:
+            stmt = update(Lotdata).where(Lotdata.lottery_id == lottery_id).values(**kwargs)
+            await session.execute(stmt)
+            await session.commit()
+            return True
+
+    @log_sql_retry_wrapper()
     async def get_all_lot_with_no_business_id(self) -> Sequence[Lotdata]:
         """
         查询所有没有加载好数据的 Lotdata ，并加载关联的 Bilidyndetail 数据。
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(
                 and_(
                     Lotdata.business_id.is_(None),
-                    Lotdata.bilidyndetail.has(Bilidyndetail.rid.is_not(None))
+                    Lotdata.bilidyndetail.any(Bilidyndetail.rid.is_not(None))
                 )
             ).order_by(Lotdata.lottery_id)
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_all_lottery_result_rank(self,
-                                          start_ts: int,
-                                          end_ts: int,
-                                          business_type: Literal[1, 10, 12, 0],
-                                          rank_type: BiliLotStatisticRankTypeEnum) -> list[
-        tuple[int, int]]:
-        async with self._session() as session:
+                                          start_ts: int | None = None,
+                                          end_ts: int | None = None,
+                                          business_type: Literal[1, 10, 12, 0] | None = None,
+                                          rank_type: BiliLotStatisticRankTypeEnum | None = BiliLotStatisticRankTypeEnum.total) -> \
+            list[
+                tuple[int, int]]:
+        async with self.async_session() as session:
             if rank_type == BiliLotStatisticRankTypeEnum.total:
                 query = text(f"""SELECT uid, 
 COUNT(*) AS atari_count
@@ -676,7 +654,7 @@ ORDER BY
 
                 return [(row.uid, row.atari_count) for row in result]
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_lottery_result(
             self,
             uid: int | str,
@@ -689,7 +667,7 @@ ORDER BY
     ) -> tuple[Sequence[Lotdata], int]:
 
         # 使用async with语句创建一个异步的session
-        async with self._session() as session:
+        async with self.async_session() as session:
             # 将uid转换为整数
             uid_int = int(uid)
 
@@ -766,10 +744,10 @@ ORDER BY
             # 返回查询结果和记录总数
             return results.scalars().all(), total
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_all_bili_user_info(self) -> list[
         BiliUserInfoSimple]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             query = text("""
                          WITH all_results AS (SELECT jt.uid,
                                                      jt.name,
@@ -858,16 +836,16 @@ ORDER BY
             # 返回当前批次的数据以及下一个批次的起点
             return rows  # 返回当前批次的数据和最后一个uid作为下次查询的起点
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def query_all_lottery_data(self) -> Sequence[Lotdata]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             stmt = select(Lotdata)
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_all_lot_before_lottery_time(self) -> Sequence[Lotdata]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             stmt = select(Lotdata).filter(and_(
                 Lotdata.lottery_time > int(time.time()),
                 Lotdata.status == 0
@@ -875,9 +853,9 @@ ORDER BY
             result = await session.execute(stmt)
             return result.scalars().all()
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def get_article_pub_record_round_id(self) -> int | None:
-        async with self._session() as session:
+        async with self.async_session() as session:
             stmt = select(ArticlePubRecord.round_id).order_by(
                 ArticlePubRecord.round_id.desc()
             ).limit(1)
@@ -886,9 +864,9 @@ ORDER BY
                 return row.round_id
             return None
 
-    @lock_wrapper
+    @log_sql_retry_wrapper()
     async def upsert_article_pub_record(self, round_id: int, *business_ids):
-        async with self._session() as session:
+        async with self.async_session() as session:
             stmt = insert(ArticlePubRecord).values(
                 [{'round_id': round_id, "lot_data_business_id": x} for x in business_ids]
             )
@@ -898,23 +876,81 @@ ORDER BY
             await session.execute(stmt)
             await session.commit()
 
-    @lock_wrapper
-    async def delete_dyn_detail_by_dyn_ids(self,id_list:list[int]):
-        async with self._session() as session:
+    @log_sql_retry_wrapper()
+    async def delete_dyn_detail_by_dyn_ids(self, id_list: list[int]):
+        async with self.async_session() as session:
             result = await session.execute(
                 delete(Bilidyndetail)
                 .where(Bilidyndetail.dynamic_id_int.in_(id_list))
             )
             return result
 
+    def gen_bai(self,
+                lottery_result,
+                single_lottery_result_data,
+                lot_rank: int
+                ):
+        bili_atari_info = BiliAtariInfo(
+            mid=single_lottery_result_data.get('uid'),
+            hongbao_money=single_lottery_result_data.get('hongbao_money'),
+            atari_lot_id=lottery_result.lottery_id,
+            atari_lot_rank=lot_rank,
+            atari_lot_type=lottery_result.business_type,
+            atari_timestamp=datetime.datetime.fromtimestamp(lottery_result.lottery_time)
+        )
+        bili_atari_info.bili_user_info = BiliUserInfo(
+            uid=single_lottery_result_data.get('uid'),
+            name=single_lottery_result_data.get('name'),
+            face=single_lottery_result_data.get('face'),
+        )
+        return bili_atari_info
+
+    @log_sql_retry_wrapper()
+    async def sync_all_lottery_result_2_bili_user_info(self,*, lottery_id: int = None):
+        """
+        同步所有抽奖结果到用户信息表
+        :param lottery_id: 抽奖id  如果为None则同步所有抽奖结果
+        :return:
+        """
+        where_clause = []
+        if lottery_id:
+            where_clause.append(Lotdata.lottery_id == lottery_id)
+        else:
+            where_clause.append(Lotdata.lottery_result.isnot(None))
+        async with self.async_session() as session:
+            stmt = select(
+                func.JSON_EXTRACT(Lotdata.lottery_result, '$').label('lottery_result'),
+                Lotdata.lottery_id,
+                Lotdata.business_type,
+                Lotdata.lottery_time
+            ).where(*where_clause)
+            result = await session.execute(stmt)
+            all_lottery_result = result.all()
+            bili_atari_info_list = []
+
+            for x in all_lottery_result:
+                lottery_result = json.loads(x.lottery_result)
+                for y in lottery_result.get('first_prize_result', []):
+                    bai = self.gen_bai(x, y, AtariLotRankEnum.first_prize.value)
+                    bili_atari_info_list.append(bai)
+                for y in lottery_result.get('second_prize_result', []):
+                    bai = self.gen_bai(x, y, AtariLotRankEnum.second_prize.value)
+                    bili_atari_info_list.append(bai)
+                for y in lottery_result.get('third_prize_result', []):
+                    bai = self.gen_bai(x, y, AtariLotRankEnum.third_prize.value)
+                    bili_atari_info_list.append(bai)
+        self.log.debug(f'sync_all_lottery_result_2_bili_user_info: {len(bili_atari_info_list)}')
+        await lottery_data_statistic_sql_helper.insert_lot_prize_count_bulk(
+            bili_atari_info_list=bili_atari_info_list
+        )
+
 
 grpc_sql_helper = SQLHelper()
 
-if __name__ == "__main__":
-    async def _test():
-        sql_log.debug(1)
-        result = await grpc_sql_helper.delete_dyn_detail_by_dyn_ids([1])
-        sql_log.debug(result)
+if __name__ == '__main__':
+    async def _test_get_all_lot_not_drawn():
+        res = await grpc_sql_helper.get_all_lot_not_drawn()
+        print(res)
 
 
-    asyncio.run(_test())
+    asyncio.run(_test_get_all_lot_not_drawn())

@@ -26,7 +26,7 @@ def get_broker():
     return router.broker
 
 
-exch = RabbitExchange(ExchangeName.bili_data.value, auto_delete=False, type=ExchangeType.TOPIC, durable=True)
+exch = RabbitExchange(ExchangeName.bili_data, auto_delete=False, type=ExchangeType.TOPIC, durable=True)
 official_reserve_charge_lot_mq_prop = MQPropBase(
     queue_name=QueueName.OfficialReserveChargeLotMQ,
     routing_key_name=RoutingKey.OfficialReserveChargeLotMQ,
@@ -50,6 +50,11 @@ upsert_topic_lot_prop = MQPropBase(
 upsert_milvus_bili_lot_data_prop = MQPropBase(
     queue_name=QueueName.UpsertMilvusBiliLotDataMQ,
     routing_key_name=RoutingKey.UpsertMilvusBiliLotDataMQ,
+    exchange=exch
+)
+upsert_bili_atari_prop = MQPropBase(
+    queue_name=QueueName.UpsertBiliAtariMQ,
+    routing_key_name=RoutingKey.UpsertBiliAtariMQ,
     exchange=exch
 )
 bili_voucher_prop = MQPropBase(

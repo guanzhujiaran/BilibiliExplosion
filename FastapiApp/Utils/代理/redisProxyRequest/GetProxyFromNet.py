@@ -3191,7 +3191,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
             if name.startswith('get_proxy_from'):
                 task = asyncio.create_task(retry_wrapper(fn)())
                 tasks.add(task)
-        results = await asyncio_gather(*tasks, log=self.log)
+        results = await asyncio_gather(*tasks, log=None)
         for result in results:
             if isinstance(result, Exception) is True:
                 continue

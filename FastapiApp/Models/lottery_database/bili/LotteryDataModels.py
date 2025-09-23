@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from enum import StrEnum
+from enum import StrEnum, Enum, IntEnum
 from typing import Optional, Dict
 from pydantic import Field
 from pydantic import computed_field
@@ -250,10 +250,28 @@ class BiliLotStatisticInfoResp(CustomBaseModel):
     total: int
 
 
+class AtariLotRankEnum(Enum):
+    first_prize = 1
+    second_prize = 2
+    third_prize = 3
+
+
 class BiliLotStatisticLotteryResultResp(CustomBaseModel):
     user: BiliUserInfoSimple
     prize_result: list[dict]
     total: int
+
+
+class BiliLotteryStatusEnum(IntEnum):
+    not_drawn = 0
+    end = 2
+    canceled = -1
+
+
+class BiliBusinessTypeEnum(IntEnum):
+    official = 1
+    reserve = 10
+    charge = 12
 
 
 class BiliLotStatisticLotTypeEnum(StrEnum):
@@ -265,9 +283,9 @@ class BiliLotStatisticLotTypeEnum(StrEnum):
     @classmethod
     def lot_type_2_business_type(cls, lot_type: 'BiliLotStatisticLotTypeEnum') -> int:
         mapping = {
-            cls.official: 1,
-            cls.reserve: 10,
-            cls.charge: 12,
+            cls.official: BiliBusinessTypeEnum.official,
+            cls.reserve: BiliBusinessTypeEnum.reserve,
+            cls.charge: BiliBusinessTypeEnum.charge,
         }
         return mapping.get(lot_type, 0)
 
@@ -277,6 +295,14 @@ class BiliLotStatisticRankTypeEnum(StrEnum):
     second = "second"
     third = "third"
     total = "total"
+
+    def to_rank_enum(self) -> AtariLotRankEnum:
+        mapping = {
+            self.first: AtariLotRankEnum.first_prize,
+            self.second: AtariLotRankEnum.second_prize,
+            self.third: AtariLotRankEnum.third_prize,
+        }
+        return mapping.get(self, AtariLotRankEnum.first_prize)
 
 
 class BiliLotStatisticRankDateTypeEnum(StrEnum):
@@ -311,4 +337,4 @@ class BiliLotStatisticRankDateTypeEnum(StrEnum):
 
 
 if __name__ == '__main__':
-    print(BiliLotStatisticRankDateTypeEnum.pre_month.get_start_end_ts())
+    print(BiliLotStatisticLotTypeEnum.lot_type_2_business_type(BiliLotStatisticLotTypeEnum.charge))

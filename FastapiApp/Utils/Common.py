@@ -108,19 +108,49 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
     return wrapper
 
 
-async def asyncio_gather(*coros_or_futures, log: _logger = myfastapi_logger):
+def log_sql_retry_wrapper(log: _logger = myfastapi_logger):
+    def _wrapper(_func: FuncT) -> FuncT:
+        @wraps(_func)
+        async def wrapper(*args: Any, **kwargs: Any) -> TResult:
+            while True:
+                try:
+                    res = await _func(*args, **kwargs)
+                    return res
+                except InternalError as internal_error:
+                    log.error(internal_error)
+                    await asyncio.sleep(60)
+                    continue
+                except OperationalError as operational_error:
+                    if 1129 == operational_error.code:
+                        log.error(operational_error)
+                        await asyncio.sleep(120)
+                        continue
+                    log.error(f'{_func} \t{operational_error}')
+                    await asyncio.sleep(60)
+                    continue
+                except Exception as e:
+                    log.exception(f'{args}\n{kwargs}\n{e}')
+                    await asyncio.sleep(60)
+                    continue
+
+        return wrapper
+
+    return _wrapper
+
+
+async def asyncio_gather(*coros_or_futures, log: _logger.Logger | None = myfastapi_logger):
     async def _handle_coroutine(coro):
         try:
             return await coro
         except Exception as e:
-            log.exception(f"协程 [{coro._coro.cr_code}] 执行失败.")
+            log and log.exception(f"协程 [{coro._coro.cr_code}] 执行失败.")
 
     coros_or_futures_wrapped = map(_handle_coroutine, coros_or_futures)
     results = await asyncio.gather(*coros_or_futures_wrapped, return_exceptions=True)
     return results
 
 
-def log_max_count_retry_wrapper(*, log: _logger = myfastapi_logger, max_count: int = 3,sleep_time:int=10):
+def log_max_count_retry_wrapper(*, log: _logger = myfastapi_logger, max_count: int = 3, sleep_time: int = 10):
     """
     Decorator factory that creates a retry decorator with logging.
 
@@ -154,5 +184,7 @@ def log_max_count_retry_wrapper(*, log: _logger = myfastapi_logger, max_count: i
                     await asyncio.sleep(sleep_time)  # Exponential backoff
                     attempt += 1
             raise last_exception
+
         return wrapper
+
     return decorator

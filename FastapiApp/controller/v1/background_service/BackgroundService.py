@@ -36,8 +36,8 @@ class BackgroundService:
     )
     get_proxy_methods_scheduler = GenericCrawlerScheduler(
         crawler=get_proxy_methods,
-        cron_expr="0 */2 * * *",
-        default_interval_seconds=2 * 3600,
+        cron_expr="0 */5 * * *",
+        default_interval_seconds=12 * 3600,
     )
     samsclub_scheduler = GenericCrawlerScheduler(
         crawler=sams_club_crawler,

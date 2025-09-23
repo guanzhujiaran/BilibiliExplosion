@@ -6,6 +6,8 @@ import time
 from copy import deepcopy
 from typing import List
 import pandas as pd
+
+from Models.lottery_database.bili.LotteryDataModels import BiliBusinessTypeEnum
 from log.base_log import official_lot_logger
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GrpcModule.Grpc.Bapi.BiliApi import get_lot_notice
@@ -204,7 +206,7 @@ class ExtractOfficialLottery:
         return ret_list
 
     async def get_all_lots(self, is_api_update: bool = True) -> tuple[
-        List[LotDetail], List[LotDetail]]:
+        List[LotDetail], List[LotDetail], List[LotDetail]]:
         """
         已经排除了开奖了的和失效了的抽奖了
         :return: 所有官方抽奖，最后更新的官方抽奖 , 所有充电抽奖,最后更新的充电抽奖
@@ -221,23 +223,29 @@ class ExtractOfficialLottery:
         all_official_lots_undrawn = await self.sql.get_all_lot_not_drawn()
         if is_api_update:
             async def __(lotdata: Lotdata):
-                if not lotdata.bilidyndetail:
-                    lot_data_resp = await get_lot_notice(
-                        business_type=lotdata.business_type,
-                        business_id=lotdata.business_id
+                lot_data_resp = await get_lot_notice(
+                    business_type=lotdata.business_type,
+                    business_id=lotdata.business_id
+                )
+                if da := lot_data_resp.get('data'):
+                    await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
+                        da,
+                        extra_routing_key="ExtractOfficialLottery.get_all_lots.__"
                     )
-                    if da := lot_data_resp.get('data'):
-                        await self.sql.upsert_lot_detail(da)
-                    else:
-                        self.log.error(
-                            f'{sqlalchemy_model_2_dict(lotdata)}lot_data_resp:{lot_data_resp} is not complete!')
                 else:
-                    await dyn_detail_scrapy.resolve_dynamic_details_card(
-                        json.loads(lotdata.bilidyndetail.dynData, strict=False), is_running_scrapy=False)
+                    if lot_data_resp.get('code') == 9999:
+                        self.log.error(f'获取抽奖信息失败，动态可能已经被删除！{lotdata}')
+                        await self.sql.update_lot_detail(
+                            lottery_id=lotdata.lottery_id,
+                            status=-1
+                        )
+                    self.log.error(
+                        f'{sqlalchemy_model_2_dict(lotdata)}lot_data_resp:{lot_data_resp} is not complete!')
                 self.refresh_official_lot_progress.succ_count += 1
 
             self.refresh_official_lot_progress = ProgressCounter()
             self.refresh_official_lot_progress.total_num = len(all_official_lots_undrawn)
+            self.log.info(f'开始更新抽奖数据，共计{len(all_official_lots_undrawn)}条抽奖需要更新，开始重新通过b站api获取抽奖数据！')
             await asyncio_gather(
                 *[
                     __(x) for x in all_official_lots_undrawn
@@ -246,16 +254,21 @@ class ExtractOfficialLottery:
             )
             self.refresh_official_lot_progress.is_running = False
         all_lot_official_data: List[Lotdata] = [x for x in all_official_lots_undrawn if
-                                                x.status != 2 and x.status != -1 and x.business_type == 1]
+                                                x.status != 2 and x.status != -1 and x.business_type == BiliBusinessTypeEnum.official]
         all_lot_charge_data: List[Lotdata] = [x for x in all_official_lots_undrawn if
-                                              x.status != 2 and x.status != -1 and x.business_type == 12]
+                                              x.status != 2 and x.status != -1 and x.business_type == BiliBusinessTypeEnum.charge]
+        all_lot_reserve_data: List[Lotdata] = [x for x in all_official_lots_undrawn if
+                                               x.status != 2 and x.status != -1 and x.business_type == BiliBusinessTypeEnum.reserve]
+
         all_official_lot_detail_result: list[LotDetail] = await self.construct_lot_detail(
             [x.__dict__ for x in all_lot_official_data], get_repost_count_flag=is_api_update)
         all_official_lot_detail: list[LotDetail] = deepcopy(all_official_lot_detail_result)
         all_charge_lot_detail: list[LotDetail] = await self.construct_lot_detail(
             [x.__dict__ for x in all_lot_charge_data], False)
-
-        return all_official_lot_detail, all_charge_lot_detail
+        all_reserve_lot_detail: list[LotDetail] = await self.construct_lot_detail(
+            [x.__dict__ for x in all_lot_reserve_data], False
+        )
+        return all_official_lot_detail, all_charge_lot_detail, all_reserve_lot_detail
 
     async def save_article(self,
                            abstract: str = '',
@@ -275,7 +288,7 @@ class ExtractOfficialLottery:
             round_id = round_id + 1
         else:
             round_id = 1
-        all_official_lot_detail, all_charge_lot_detail = await self.get_all_lots(
+        all_official_lot_detail, all_charge_lot_detail, all_reserve_lot_detail = await self.get_all_lots(
             is_api_update=is_api_update
         )  # 获取并更新抽奖信息！
         gc = GenerateOfficialLotCv('', '', '', '', abstract=abstract)
@@ -307,5 +320,9 @@ class ExtractOfficialLottery:
 
 
 if __name__ == '__main__':
-    __e = ExtractOfficialLottery()
-    asyncio.run(__e.get_all_lots(is_api_update=True))
+    async def _test_get_all_lots():
+        __e = ExtractOfficialLottery()  #
+        res = await __e.get_all_lots(is_api_update=True)
+        print(res)
+
+    asyncio.run(_test_get_all_lots())

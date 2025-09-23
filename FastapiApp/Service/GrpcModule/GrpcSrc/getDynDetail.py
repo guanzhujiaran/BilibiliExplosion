@@ -6,7 +6,6 @@ import datetime
 import json
 import time
 from typing import Any, AsyncGenerator
-
 from CONFIG import CONFIG
 from log.base_log import official_lot_logger
 from Models.base.custom_pydantic import CustomBaseModelHashable
@@ -416,13 +415,6 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
             task_list.append(task)
         await asyncio_gather(*task_list, log=self.log)
 
-    async def handle_single_dynDetail_by_dynamic_id(self, dynamic_id):
-        detail = (await self.get_grpc_single_dynDetail_by_dynamic_id(dynamic_id))[0]
-        await self.Sqlhelper.upsert_DynDetail(
-            doc_id=detail.get('rid'), dynamic_id=detail.get('dynamic_id'),
-            dynData=detail.get('dynData'), lot_id=detail.get('lot_id'),
-            dynamic_created_time=detail.get('dynamic_created_time')
-        )
 
     async def main(self):
         try:

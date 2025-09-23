@@ -1,5 +1,4 @@
 import ast
-import asyncio
 import json
 from enum import StrEnum
 from typing import List
@@ -163,7 +162,7 @@ class LotteryDataStatisticRedis(RedisManagerBase):
             return BiliUserInfoSimple(uid=str(uid), **ast.literal_eval(res))
         return BiliUserInfoSimple(uid=str(uid), face='', name='')
 
-    async def get_bili_user_info_bulk(self, uid_arr: [int | str]) -> List[BiliUserInfoSimple]:
+    async def get_bili_user_info_bulk(self, uid_arr: list[int | str]) -> List[BiliUserInfoSimple]:
         if res := await self._hmget_bulk(self.RedisMap.bili_user_uid_face_name, uid_arr):
             return [
                 BiliUserInfoSimple(uid=uid_arr[idx], **ast.literal_eval(res[idx])) if res[idx] else BiliUserInfoSimple(
@@ -175,13 +174,3 @@ class LotteryDataStatisticRedis(RedisManagerBase):
 
 
 lottery_data_statistic_redis = LotteryDataStatisticRedis()
-
-if __name__ == '__main__':
-    async def _test():
-        res = await lottery_data_statistic_redis.get_bili_user_info(
-            '4127378'
-        )
-        print(res)
-
-
-    asyncio.run(_test())

@@ -1,19 +1,18 @@
 import asyncio
 import random
 import time
-from typing import Callable, Dict, Annotated
-
+from typing import Callable, Dict, Annotated, Any
 from fast_depends import Depends
 from faststream.rabbit import RabbitQueue
-from faststream.rabbit.fastapi import RabbitMessage, RabbitBroker
+from faststream.rabbit.fastapi import RabbitBroker, RabbitMessage
 
+from Models.lottery_database.bili.LotteryDataModels import BiliLotteryStatusEnum
 from log.base_log import MQ_logger
-
 from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
-    upsert_milvus_bili_lot_data_prop, router, get_broker, bili_voucher_prop
+    upsert_milvus_bili_lot_data_prop, router, get_broker, bili_voucher_prop, upsert_bili_atari_prop
 from Service.LangChainCompo.text_embed import lot_data_2_bili_lot_data_ls, save_bili_lot_data_embeddings
 from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
 from Service.GrpcModule.Utils.极验.极验点击验证码 import geetest_v3_breaker
@@ -28,7 +27,7 @@ from Utils.PushMe import a_pushme
 async def handle_exception(
         module_name: str,
         e: Exception,
-        params: Dict,
+        params: Dict | Any,
         msg: RabbitMessage
 ):
     error_msg = f"[ERROR]队列:{module_name}\n异常类型:{type(e)}\n异常:{e}\n时间:{time.strftime('%Y-%m-%d %H:%M:%S')}\n参数:{params}"
@@ -55,7 +54,7 @@ __test_queue = RabbitQueue(
 
 
 @router.after_startup
-async def _test(app):
+async def _test(app_instance):
     await router.broker.publish("Hello!", __test_queue)
 
 
@@ -129,14 +128,31 @@ class UpsertOfficialReserveChargeLot(BaseFastStreamMQ):
             newly_lot_data: Dict,
             msg: RabbitMessage,
     ):
-
+        """
+        需要的数据是类似
+        ```json
+             {
+                "lottery_id": 311007,
+                "sender_uid": 401742377,
+                "business_type": 1,
+                "business_id": 962043520082772000,
+                "status": 2,
+                "lottery_time": 1723442400
+            }
+        ```
+        这种响应的data字段
+        """
         try:
             if newly_lot_data:
                 lot_data = grpc_sql_helper.process_resp_data_dict_2_lotdata(newly_lot_data)
                 await BiliLotDataPublisher.pub_upsert_milvus_bili_lot_data(lot_data)
                 result = await grpc_sql_helper.upsert_lot_detail(newly_lot_data)
-
                 MQ_logger.info(f"【{self.mq_props.queue_name}】upsert_lot_detail {newly_lot_data} result: {result}")
+                if lot_data.status == BiliLotteryStatusEnum.end:
+                    await BiliLotDataPublisher.pub_upsert_bili_atari(
+                        lottery_id=lot_data.lottery_id,
+                        extra_routing_key='UpsertOfficialReserveChargeLotMQ'
+                    )
                 return await msg.ack()
             MQ_logger.debug(
                 f"【{self.mq_props.queue_name}】未获取到抽奖提示数据！参数：{newly_lot_data}")
@@ -233,6 +249,27 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
             await handle_exception(module_name, e, _body, msg)
 
 
+class UpsertBiliAtari(BaseFastStreamMQ):
+    def __init__(self):
+        super().__init__(
+            mq_props=upsert_bili_atari_prop
+        )
+
+    async def consume(
+            self,
+            lottery_id: int,
+            msg: RabbitMessage,
+    ):
+        module_name = self.mq_props.queue_name
+        try:
+            MQ_logger.debug(
+                f"【{module_name}】收到消息：{lottery_id}")
+            await grpc_sql_helper.sync_all_lottery_result_2_bili_user_info(lottery_id=lottery_id)
+            return await msg.ack()
+        except Exception as e:
+            await handle_exception(module_name, e, lottery_id, msg)
+
+
 class BiliVoucher(BaseFastStreamMQ):
     def __init__(self):
         super().__init__(
@@ -272,7 +309,9 @@ upsert_official_reserve_charge_lot = UpsertOfficialReserveChargeLot()
 upsert_lot_data_by_dynamic_id = UpsertLotDataByDynamicId()
 upsert_topic_lot = UpsertTopicLot()
 upsert_milvus_bili_lot_data = UpsertMilvusBiliLotData()
+upsert_bili_atari = UpsertBiliAtari()
 bili_voucher = BiliVoucher()
+
 if __name__ == '__main__':
     from fastapi import FastAPI
     import uvicorn

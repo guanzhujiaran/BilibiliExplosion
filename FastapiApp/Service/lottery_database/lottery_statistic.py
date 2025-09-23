@@ -1,8 +1,9 @@
 from dao.biliLotteryStatisticRedisObj import lottery_data_statistic_redis
+from dao.biliLotteryStatisticSqlHelper import lottery_data_statistic_sql_helper
 from log.base_log import myfastapi_logger
 from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticInfoResp, WinnerInfo, \
     BiliLotStatisticRankTypeEnum, BiliLotStatisticLotTypeEnum, BiliLotStatisticLotteryResultResp, \
-    BiliLotStatisticRankDateTypeEnum
+    BiliLotStatisticRankDateTypeEnum, BiliUserInfoSimple
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from Utils.Common import asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
@@ -10,7 +11,8 @@ from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 
 async def GetLotStatisticInfo(
         date: BiliLotStatisticRankDateTypeEnum,
-        lot_type: BiliLotStatisticLotTypeEnum, rank_type: BiliLotStatisticRankTypeEnum,
+        lot_type: BiliLotStatisticLotTypeEnum,
+        rank_type: BiliLotStatisticRankTypeEnum,
         offset: int,
         limit: int = 10) -> BiliLotStatisticInfoResp:
     """
@@ -22,29 +24,44 @@ async def GetLotStatisticInfo(
     :param limit:
     :return:
     """
-    uid_count_list = await lottery_data_statistic_redis.get_lot_prize_count(
+    # uid_count_list = await lottery_data_statistic_redis.get_lot_prize_count(
+    #     date=date,
+    #     lot_type=lot_type,
+    #     rank_type=rank_type,
+    #     offset=offset,
+    #     limit=limit
+    # )
+    # uid_count_dict = dict(uid_count_list)
+    # uid_list = list(uid_count_dict.keys())
+    # users, dyn_lot_sync_ts, rank_dict, total = await asyncio_gather(
+    #     lottery_data_statistic_redis.get_bili_user_info_bulk(uid_list),
+    #     lottery_data_statistic_redis.get_sync_ts(lot_type),
+    #     lottery_data_statistic_redis.get_lot_prize_rank_bulk(date=date, lot_type=lot_type, rank_type=rank_type,
+    #                                                          uid_arr=uid_list),
+    #     lottery_data_statistic_redis.get_lot_prize_total(date=date, lot_type=lot_type, rank_type=rank_type),
+    #     log=myfastapi_logger
+    # )
+    # users_dict = {user.uid: user for user in users}
+    dyn_lot_sync_ts = await lottery_data_statistic_redis.get_sync_ts(lot_type)
+    bili_user_info_list, total = await lottery_data_statistic_sql_helper.get_lot_prize_count(
+        offset=offset,
+        limit=limit,
         date=date,
         lot_type=lot_type,
-        rank_type=rank_type,
-        offset=offset,
-        limit=limit
+        rank_type=rank_type.to_rank_enum()
     )
-    uid_count_dict = dict(uid_count_list)
-    uid_list = list(uid_count_dict.keys())
-    users, dyn_lot_sync_ts, rank_dict, total = await asyncio_gather(
-        lottery_data_statistic_redis.get_bili_user_info_bulk(uid_list),
-        lottery_data_statistic_redis.get_sync_ts(lot_type),
-        lottery_data_statistic_redis.get_lot_prize_rank_bulk(date=date, lot_type=lot_type, rank_type=rank_type,
-                                                             uid_arr=uid_list),
-        lottery_data_statistic_redis.get_lot_prize_total(date=date, lot_type=lot_type, rank_type=rank_type),
-        log=myfastapi_logger
-    )
-    users_dict = {user.uid: user for user in users}
-
     return BiliLotStatisticInfoResp(
-        winners=[WinnerInfo(user=users_dict.get(uid), count=count, rank=rank_dict.get(uid) + 1) for uid, count in
-                 uid_count_list
-                 ],
+        winners=[
+            WinnerInfo(
+                user=BiliUserInfoSimple(
+                    uid=x.BiliUserInfo.uid,
+                    name=x.BiliUserInfo.name,
+                    face=x.BiliUserInfo.face
+                ), count=x.BiliUserInfo.prize_count,
+                rank=x.rank
+            )
+            for x in bili_user_info_list
+        ],
         sync_ts=dyn_lot_sync_ts,
         total=total
     )

@@ -1,18 +1,31 @@
 from typing import List, Optional
 
 from sqlalchemy import BigInteger, Column, Computed, ForeignKeyConstraint, Index, Integer, TIMESTAMP, Text, text
-from sqlalchemy.dialects.mysql import LONGTEXT, VARCHAR
+from sqlalchemy.dialects.mysql import LONGTEXT, TEXT, TINYINT, VARCHAR
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.orm.base import Mapped
 
 Base = declarative_base()
 
 
+class BiliUserInfo(Base):
+    __tablename__ = 'bili_user_info'
+    __table_args__ = (
+        Index('name', 'name', 'uid'),
+    )
+
+    uid = mapped_column(BigInteger, primary_key=True)
+    name = mapped_column(VARCHAR(50))
+    face = mapped_column(TEXT)
+
+    bili_atari_info: Mapped[List['BiliAtariInfo']] = relationship('BiliAtariInfo', uselist=True, back_populates='bili_user_info')
+
+
 class Lotdata(Base):
     __tablename__ = 'lotdata'
     __table_args__ = (
         Index('business_id', 'business_id'),
-        Index('idx_lottery_id', 'lottery_id'),
+        Index('idx_lottery_id', 'lottery_id', 'business_id', 'lottery_time', 'sender_uid', 'business_type'),
         Index('lottery_time', 'lottery_time'),
         Index('sender_uid', 'sender_uid')
     )
@@ -54,8 +67,9 @@ class Lotdata(Base):
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
-    article_pub_record: Mapped['ArticlePubRecord'] = relationship('ArticlePubRecord', uselist=False, back_populates='lot_data_business')
-    bilidyndetail: Mapped['Bilidyndetail'] = relationship('Bilidyndetail', uselist=False, back_populates='lot')
+    article_pub_record: Mapped[List['ArticlePubRecord']] = relationship('ArticlePubRecord', uselist=True, back_populates='lot_data_business')
+    bili_atari_info: Mapped[List['BiliAtariInfo']] = relationship('BiliAtariInfo', uselist=True, back_populates='atari_lot')
+    bilidyndetail: Mapped[List['Bilidyndetail']] = relationship('Bilidyndetail', uselist=True, back_populates='lot')
 
 
 class ArticlePubRecord(Base):
@@ -71,6 +85,30 @@ class ArticlePubRecord(Base):
     round_id = mapped_column(Integer, comment='每一轮的号码')
 
     lot_data_business: Mapped['Lotdata'] = relationship('Lotdata', back_populates='article_pub_record')
+
+
+class BiliAtariInfo(Base):
+    __tablename__ = 'bili_atari_info'
+    __table_args__ = (
+        ForeignKeyConstraint(['atari_lot_id'], ['lotdata.lottery_id'], name='FK__lotdata_1'),
+        ForeignKeyConstraint(['mid'], ['bili_user_info.uid'], name='FK_bili_atari_info_bili_user_info'),
+        Index('FK__lotdata_1', 'atari_lot_id'),
+        Index('atari_lot_rank', 'atari_lot_rank'),
+        Index('atari_lot_type', 'atari_lot_type'),
+        Index('atari_timestamp', 'atari_timestamp'),
+        Index('mid', 'mid', 'atari_lot_id', unique=True)
+    )
+
+    pk = mapped_column(BigInteger, primary_key=True)
+    mid = mapped_column(BigInteger)
+    hongbao_money = mapped_column(Integer)
+    atari_lot_id = mapped_column(BigInteger)
+    atari_lot_rank = mapped_column(TINYINT, comment='1：一等奖\r\n2：二等奖\r\n3：三等奖')
+    atari_lot_type = mapped_column(TINYINT, comment='中奖类型，对应B站business_id')
+    atari_timestamp = mapped_column(TIMESTAMP)
+
+    atari_lot: Mapped[Optional['Lotdata']] = relationship('Lotdata', back_populates='bili_atari_info')
+    bili_user_info: Mapped[Optional['BiliUserInfo']] = relationship('BiliUserInfo', back_populates='bili_atari_info')
 
 
 class Bilidyndetail(Base):

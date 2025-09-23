@@ -25,6 +25,7 @@ class RBDParamsType(CustomBaseModelHashable):
     def __hash__(self):
         return hash((self.BiliLotStatisticRankDateType, self.BiliLotStatisticLotType, self.BiliLotStatisticRankType))
 
+
 class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[RBDParamsType]):
     def __init__(self):
         max_sem = 100
@@ -50,47 +51,46 @@ class RefreshBiliLotDatabaseCrawler(UnlimitedCrawler[RBDParamsType]):
                         BiliLotStatisticRankType=j
                     )
 
-    async def handle_fetch(self, params: RBDParamsType) -> WorkerStatus|Any:
-        k = params.BiliLotStatisticRankDateType
-        _lot_type = params.BiliLotStatisticLotType
-        j = params.BiliLotStatisticRankType
-        start_ts, end_ts = k.get_start_end_ts()
-        await lottery_data_statistic_redis.set_lot_prize_count(
-            date=k,
-            lot_type=_lot_type,
-            rank_type=j,
-            uid_atari_count_dict=dict(
-                await grpc_sql_helper.get_all_lottery_result_rank(
-                    start_ts=start_ts,
-                    end_ts=end_ts,
-                    business_type=BiliLotStatisticLotTypeEnum.lot_type_2_business_type(_lot_type),
-                    rank_type=j
-                )
-            )
-        )
+    async def handle_fetch(self, params: RBDParamsType) -> WorkerStatus | Any:
+        # k = params.BiliLotStatisticRankDateType
+        # _lot_type = params.BiliLotStatisticLotType
+        # j = params.BiliLotStatisticRankType
+        # start_ts, end_ts = k.get_start_end_ts()
+        # await lottery_data_statistic_redis.set_lot_prize_count(
+        #     date=k,
+        #     lot_type=_lot_type,
+        #     rank_type=j,
+        #     uid_atari_count_dict=dict(
+        #         await grpc_sql_helper.get_all_lottery_result_rank(
+        #             start_ts=start_ts,
+        #             end_ts=end_ts,
+        #             business_type=BiliLotStatisticLotTypeEnum.lot_type_2_business_type(_lot_type),
+        #             rank_type=j
+        #         )
+        #     )
+        # )
         return WorkerStatus.complete
-
-    async def sync_bili_user_info_simple(self):
-        res = await grpc_sql_helper.get_all_bili_user_info()
-        await lottery_data_statistic_redis.set_bili_user_info_bulk(res)
 
     async def main(self, is_api_update=True, *args, **kwargs):
         """
         运行的主函数
         """
-        await self.run()
-        await self.sync_bili_user_info_simple()
         if is_api_update:
             await asyncio_gather(self.reserve_robot.refresh_not_drawn_lottery(),
                                  self.extract_official_lottery.get_all_lots(is_api_update=True), log=self.log)
             await self.run()  # 第二遍同步
             await asyncio_gather(
-                *[lottery_data_statistic_redis.set_sync_ts(lot_type=_lot_type, ts=int(time.time())) for _lot_type in
-                  BiliLotStatisticLotTypeEnum], log=self.log
+                *[
+                    lottery_data_statistic_redis.set_sync_ts(
+                        lot_type=_lot_type,
+                        ts=int(time.time())
+                    ) for _lot_type in
+                    BiliLotStatisticLotTypeEnum],
+
+                log=self.log
             )
-            await self.sync_bili_user_info_simple()
-        await sync_bili_lottery_data()
-        await del_outdated_bili_lottery_data()
+        await sync_bili_lottery_data()  # 同步数据到向量数据库
+        await del_outdated_bili_lottery_data()  # 删除向量数据库里面过期的数据
 
 
 refresh_bili_lot_database_crawler = RefreshBiliLotDatabaseCrawler()
