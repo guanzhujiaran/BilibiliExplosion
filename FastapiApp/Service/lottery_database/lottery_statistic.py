@@ -87,7 +87,7 @@ async def GetLotteryResult(
             start_ts=start_ts,
             end_ts=end_ts
         ),
-        lottery_data_statistic_redis.get_bili_user_info(uid),
+        lottery_data_statistic_sql_helper.get_bili_user_info(uid),
         log=myfastapi_logger
     )
     return BiliLotStatisticLotteryResultResp(

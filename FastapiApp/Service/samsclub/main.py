@@ -171,18 +171,15 @@ class SamsClubCrawler(UnlimitedCrawler[SamsClubCrawlerParams]):
                 if self.stats_plugin.is_running:
                     return
         async with self.main_lock:
-            try:
-                await self.api.init_api_info()  # 先更新一下版本信息之类的
-                await self.grouping_id_downloader()
-                self.unfinished_tasks = await sql_helper.get_unfinished_tasks()
-                for task in self.unfinished_tasks:
-                    await self.grouping_list_downloader(**task)  # 继续抓取逻辑
-                self.task_params_list = await self.sql_helper.get_grouping_infos_by_level(
-                    2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
-                await self.run()
-            except Exception as e:
-                self.log.exception(f"发生异常：{e}")
-                await a_pushme(f'[SamsClubCrawler] 发生异常：{e}', str(e))
+            await self.api.init_api_info()  # 先更新一下版本信息之类的
+            await self.grouping_id_downloader()
+            self.unfinished_tasks = await sql_helper.get_unfinished_tasks()
+            for task in self.unfinished_tasks:
+                await self.grouping_list_downloader(**task)  # 继续抓取逻辑
+            self.task_params_list = await self.sql_helper.get_grouping_infos_by_level(
+                2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
+            await self.run()
+
 
     async def get_status(self) -> ProgressStatusResp:
         return ProgressStatusResp(
@@ -262,4 +259,4 @@ sams_club_crawler = SamsClubCrawler()  # 直接单例模式运行
 sams_club_SPU_detail_crawler = SamsClubSPUDetailCrawler()
 
 if __name__ == "__main__":
-    asyncio.run(sams_club_SPU_detail_crawler.main())
+    asyncio.run(sams_club_crawler.main())

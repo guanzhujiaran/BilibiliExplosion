@@ -9,7 +9,7 @@ from typing import Literal, List, Sequence, Union, Optional
 import numpy as np
 from sqlalchemy import select, and_, exists, func, String, text, or_, JSON, delete, update
 from sqlalchemy.dialects.mysql import insert
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import selectinload
 from CONFIG import CONFIG
 from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, \
     AtariLotRankEnum
@@ -380,7 +380,7 @@ class SQLHelper(SqlHelperBase):
         if time_limit and time_limit > 0:
             target_ts = now_ts + time_limit
             base_conditions.append(Lotdata.lottery_time <= target_ts)
-        stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(and_(*base_conditions)).order_by(
+        stmt = select(Lotdata).options(selectinload(Lotdata.bilidyndetail)).where(and_(*base_conditions)).order_by(
             Lotdata.lottery_time.asc())
         # 如果提供了分页参数，则应用分页
         if page_number and page_size:
@@ -419,7 +419,7 @@ class SQLHelper(SqlHelperBase):
         if time_limit:
             target_ts = now_ts + time_limit
             base_conditions.append(Lotdata.lottery_time <= target_ts)
-        stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(and_(*base_conditions)).order_by(
+        stmt = select(Lotdata).options(selectinload(Lotdata.bilidyndetail)).where(and_(*base_conditions)).order_by(
             Lotdata.lottery_time.asc())
         # 如果提供了分页参数，则应用分页
         if page_number > 0 and page_size > 0:
@@ -524,8 +524,8 @@ class SQLHelper(SqlHelperBase):
         """
         async with self.async_session() as session:
             stmt = select(Lotdata).options(
-                joinedload(Lotdata.bilidyndetail),
-                joinedload(Lotdata.article_pub_record)
+                selectinload(Lotdata.bilidyndetail),
+                selectinload(Lotdata.article_pub_record)
             ).where(
                 and_(
                     Lotdata.lottery_result.is_(None),
@@ -551,7 +551,7 @@ class SQLHelper(SqlHelperBase):
         :return:
         """
         async with self.async_session() as session:
-            stmt = select(Lotdata).options(joinedload(Lotdata.bilidyndetail)).where(
+            stmt = select(Lotdata).options(selectinload(Lotdata.bilidyndetail)).where(
                 and_(
                     Lotdata.business_id.is_(None),
                     Lotdata.bilidyndetail.any(Bilidyndetail.rid.is_not(None))
@@ -952,5 +952,8 @@ if __name__ == '__main__':
         res = await grpc_sql_helper.get_all_lot_not_drawn()
         print(res)
 
+    async def _test_query_official_lottery_by_timelimit_page_offset():
+        res = await  grpc_sql_helper.query_official_lottery_by_timelimit_page_offset(page_number=1,page_size=10)
+        print(res)
 
-    asyncio.run(_test_get_all_lot_not_drawn())
+    asyncio.run(_test_query_official_lottery_by_timelimit_page_offset())

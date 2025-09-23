@@ -4,16 +4,18 @@ from sqlalchemy.dialects.mysql import insert
 from sqlalchemy import select, func, distinct, Row
 from CONFIG import CONFIG
 from Models.lottery_database.bili.LotteryDataModels import AtariLotRankEnum, BiliLotStatisticLotTypeEnum, \
-    BiliLotStatisticRankDateTypeEnum, BiliLotStatisticRankTypeEnum
+    BiliLotStatisticRankDateTypeEnum, BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
 from Service.GrpcModule.GrpcSrc.SQLObject.models import BiliUserInfo, BiliAtariInfo
 from Utils.Common import asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from dao.base.sqlHelperBase import SqlHelperBase
+from log.base_log import official_lot_logger
 
 
 class LotteryDataStatisticSqlHelper(SqlHelperBase):
     def __init__(self):
         super().__init__(MysqlDbUrl=CONFIG.database.MYSQL.dyn_detail)
+        self.log = official_lot_logger
 
     async def insert_lot_prize_count(
             self,
@@ -146,20 +148,31 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
 
         async with self.async_session() as session:
             total_result = await session.execute(total_stmt)
-            total = total_result.scalar() or 0
-
             result = await session.execute(query)
+            total = total_result.scalar() or 0
             # 返回用户对象列表（封装成带 count 和 rank 的 DTO）
             users_with_stats = result.fetchall()
 
             return users_with_stats, total
 
+    async def get_bili_user_info(self,uid:int|str)->BiliUserInfoSimple:
+        async  with self.async_session() as session:
+            stmt = select(BiliUserInfo).where(BiliUserInfo.uid == uid)
+            result = await session.execute(stmt)
+            res = result.scalar_one_or_none()
+            if res:
+                return BiliUserInfoSimple(
+                    uid=str(res.uid),
+                    name=res.name,
+                    face=res.face
+                )
+            return BiliUserInfoSimple(uid=str(uid), face='', name='')
+
 
 lottery_data_statistic_sql_helper = LotteryDataStatisticSqlHelper()
 
-# TODO 替换redis
 if __name__ == '__main__':
-    async def _test():
+    async def _test_get_lot_prize_count():
         res = await lottery_data_statistic_sql_helper.get_lot_prize_count(
             offset=0,
             limit=10,
@@ -169,5 +182,8 @@ if __name__ == '__main__':
         )
         print(res)
 
+    async def _test_get_bili_user_info():
+        res = await lottery_data_statistic_sql_helper.get_bili_user_info(uid='4237378')
+        print(res)
 
-    asyncio.run(_test())
+    asyncio.run(_test_get_bili_user_info())

@@ -11,7 +11,7 @@ from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import ParamsType, WorkerStatus
 from Utils.Common import GLOBAL_SCHEDULER
-from Utils.PushMe import async_pushme_try_catch_decorator
+from Utils.PushMe import async_pushme_try_catch_decorator, a_pushme
 import asyncio
 from typing import Callable
 
@@ -78,6 +78,7 @@ class BaseScheduler:
     """
     定时任务调度器
     """
+
     def __init__(
             self,
             func: Callable,
@@ -150,6 +151,7 @@ class BaseScheduler:
                 self.logger.error(f"[{self.crawler_name}] 爬虫主动终止：{e}")
             except Exception as e:
                 self.logger.exception(f"[{self.crawler_name}] 爬虫执行出错：{e}")
+                await a_pushme(title=f"{self.crawler_name} 执行异常", content=f"错误详情：{str(e)}")
         else:
             self.logger.info(f"[{self.crawler_name}] 当前不满足执行条件，跳过本次任务。")
 
@@ -184,6 +186,7 @@ class GenericCrawlerScheduler(BaseScheduler):
     """
     通用爬虫调度器，用于调度任意爬虫类
     """
+
     def __init__(
             self,
             crawler: UnlimitedCrawler,
@@ -211,9 +214,11 @@ if __name__ == '__main__':
 
     class MockCrawler(UnlimitedCrawler[MockParams]):
         """模拟的爬虫类，仅用于测试"""
+
         async def handle_fetch(self, params: ParamsType) -> WorkerStatus | Any:
             self.log.info(f"[MockCrawler] 模拟爬虫正在执行 handle_fetch...{params}")
             await asyncio.sleep(1)
+
         async def key_params_gen(self, params: ParamsType) -> AsyncGenerator[MockParams, None]:
             for i in range(10):
                 yield MockParams(a=i)

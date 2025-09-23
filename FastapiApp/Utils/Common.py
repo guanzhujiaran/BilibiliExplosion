@@ -143,7 +143,7 @@ async def asyncio_gather(*coros_or_futures, log: _logger.Logger | None = myfasta
         try:
             return await coro
         except Exception as e:
-            log and log.exception(f"协程 [{coro._coro.cr_code}] 执行失败.")
+            log and log.exception(f"协程 [{coro.cr_code}] 执行失败.")
 
     coros_or_futures_wrapped = map(_handle_coroutine, coros_or_futures)
     results = await asyncio.gather(*coros_or_futures_wrapped, return_exceptions=True)

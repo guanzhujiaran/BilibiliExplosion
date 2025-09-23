@@ -479,7 +479,7 @@ class SamsClubApi:
             method='GET',
             is_add_amap_headers=True
         )
-        resp_user_profile = RespUserProfile.model_validate_json(resp.text)
+        resp_user_profile = RespUserProfile.validate_json(resp.text)
         return resp_user_profile
 
     # region 日志操作相关api

@@ -303,10 +303,9 @@ class SqlHelper:
 topic_sqlhelper = SqlHelper()
 
 
-async def _test():
-    b = await topic_sqlhelper.get_recent_failed_topic_id()
-    print(b)
-
 
 if __name__ == '__main__':
-    asyncio.run(_test())
+    async def _test_get_all_available_traffic_info():
+        b = await topic_sqlhelper.get_all_available_traffic_info()
+        print(b)
+    asyncio.run(_test_get_all_available_traffic_info())
