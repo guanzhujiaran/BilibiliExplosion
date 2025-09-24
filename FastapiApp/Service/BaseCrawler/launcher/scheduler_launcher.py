@@ -7,7 +7,7 @@ import aiofiles
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger as default_logger
 
-from Models.base.custom_pydantic import CustomBaseModelHashable
+from Models.base.custom_pydantic import CustomBaseModelHashable, CustomBaseModel
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import ParamsType, WorkerStatus
 from Utils.Common import GLOBAL_SCHEDULER
@@ -16,23 +16,32 @@ import asyncio
 from typing import Callable
 
 
+class CrawlerExecutionInfoModel(CustomBaseModel):
+    crawler_name: str
+    default_interval_seconds: int
+    last_exec_time: datetime | None = None
+
+
 class CrawlerExecutionInfo:
+    info: CrawlerExecutionInfoModel
+
     def __init__(
             self,
             crawler_name: str,
             default_interval_seconds: int = 2 * 3600,
             logger=default_logger
     ):
-        self.crawler_name = crawler_name
-        self.default_interval_seconds = default_interval_seconds
         self.logger = logger
-        self.last_exec_time: Optional[datetime] = None
+        self.info = CrawlerExecutionInfoModel(
+            crawler_name=crawler_name,
+            default_interval_seconds=default_interval_seconds,
+        )
         self._load_last_exec_time()
 
     def _get_last_exec_file_path(self) -> str:
         cur_file_dir = os.path.dirname(__file__)
         RUNTIME_DIR = os.path.join(cur_file_dir, "runtime_data")
-        filename = f'{self.crawler_name}_last_exec_time.txt'
+        filename = f'{self.info.crawler_name}_last_exec_time.txt'
         if not os.path.exists(RUNTIME_DIR):
             os.makedirs(RUNTIME_DIR)
         return os.path.join(RUNTIME_DIR, filename)
@@ -43,34 +52,34 @@ class CrawlerExecutionInfo:
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     ts_str = f.read().strip()
-                    self.last_exec_time = datetime.fromtimestamp(int(ts_str))
-                    self.logger.info(f"[{self.crawler_name}] 上次执行时间为：{self.last_exec_time}")
+                    self.info.last_exec_time = datetime.fromtimestamp(int(ts_str))
+                    self.logger.info(f"[{self.info.crawler_name}] 上次执行时间为：{self.info.last_exec_time}")
         except Exception as e:
-            self.logger.exception(f"[{self.crawler_name}] 加载上次执行时间失败，使用默认值。")
-            self.last_exec_time = datetime.fromtimestamp(86400)  # 默认时间点：1970-01-02 00:00:00
+            self.logger.exception(f"[{self.info.crawler_name}] 加载上次执行时间失败，使用默认值。")
+            self.info.last_exec_time = datetime.fromtimestamp(86400)  # 默认时间点：1970-01-02 00:00:00
 
     async def save_last_exec_time(self):
         now = datetime.now()
-        self.last_exec_time = now
+        self.info.last_exec_time = now
         file_path = self._get_last_exec_file_path()
         try:
             async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
                 await f.write(str(int(now.timestamp())))
         except Exception as e:
-            self.logger.exception(f"[{self.crawler_name}] 写入上次执行时间失败：{e}")
+            self.logger.exception(f"[{self.info.crawler_name}] 写入上次执行时间失败：{e}")
 
     def is_need_to_execute(self) -> bool:
         """判断是否需要执行爬虫"""
-        if self.last_exec_time is None:
-            self.logger.critical(f"[{self.crawler_name}] 上次执行时间为空，将执行一次。")
+        if self.info.last_exec_time is None:
+            self.logger.critical(f"[{self.info.crawler_name}] 上次执行时间为空，将执行一次。")
             return True
         now = datetime.now()
-        delta = (now - self.last_exec_time).total_seconds()
-        if delta >= self.default_interval_seconds:
-            self.logger.critical(f"[{self.crawler_name}] 满足执行条件，delta={delta}s")
+        delta = (now - self.info.last_exec_time).total_seconds()
+        if delta >= self.info.default_interval_seconds:
+            self.logger.critical(f"[{self.info.crawler_name}] 满足执行条件，delta={delta}s")
             return True
         else:
-            self.logger.critical(f"[{self.crawler_name}] 不满足执行条件，delta={delta}s")
+            self.logger.critical(f"[{self.info.crawler_name}] 不满足执行条件，delta={delta}s")
             return False
 
 
@@ -89,14 +98,12 @@ class BaseScheduler:
     ):
         self.func = func
         self.crawler_asyncio_task = None
-        self.crawler_name = crawler_name if crawler_name else func.__name__
         self.cron_expr = cron_expr
-        self.default_interval_seconds = default_interval_seconds
-        self.job_id = f"crawler_job_{self.crawler_name}"
+        self.job_id = f"crawler_job_{crawler_name}"
         self.logger = logger
         # 初始化执行信息管理器
         self.exec_info = CrawlerExecutionInfo(
-            crawler_name=self.crawler_name,
+            crawler_name=crawler_name,
             default_interval_seconds=default_interval_seconds,
             logger=self.logger
         )
@@ -132,15 +139,15 @@ class BaseScheduler:
                 max_instances=1,  # 同时只运行一个实例
                 misfire_grace_time=3600  # 允许延迟最多 3600 秒
             )
-            self.logger.info(f"[{self.crawler_name}] 已添加新任务，首次运行时间已设为现在，将立即尝试执行")
+            self.logger.info(f"[{self.exec_info.info.crawler_name}] 已添加新任务，首次运行时间已设为现在，将立即尝试执行")
 
     @async_pushme_try_catch_decorator
     async def run(self):
-        self.logger.info(f"[{self.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
+        self.logger.info(f"[{self.exec_info.info.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
 
         if self.exec_info.is_need_to_execute():
             try:
-                self.logger.info(f"[{self.crawler_name}] 开始执行爬虫任务...")
+                self.logger.info(f"[{self.exec_info.info.crawler_name}] 开始执行爬虫任务...")
                 # 调用异步 main 函数
                 self.crawler_asyncio_task = asyncio.create_task(
                     self.func()
@@ -148,12 +155,12 @@ class BaseScheduler:
                 await self.crawler_asyncio_task  # 等待异步任务完成
                 await self.exec_info.save_last_exec_time()
             except asyncio.CancelledError as e:
-                self.logger.error(f"[{self.crawler_name}] 爬虫主动终止：{e}")
+                self.logger.error(f"[{self.exec_info.info.crawler_name}] 爬虫主动终止：{e}")
             except Exception as e:
-                self.logger.exception(f"[{self.crawler_name}] 爬虫执行出错：{e}")
-                await a_pushme(title=f"{self.crawler_name} 执行异常", content=f"错误详情：{str(e)}")
+                self.logger.exception(f"[{self.exec_info.info.crawler_name}] 爬虫执行出错：{e}")
+                await a_pushme(title=f"{self.exec_info.info.crawler_name} 执行异常", content=f"错误详情：{str(e)}")
         else:
-            self.logger.info(f"[{self.crawler_name}] 当前不满足执行条件，跳过本次任务。")
+            self.logger.info(f"[{self.exec_info.info.crawler_name}] 当前不满足执行条件，跳过本次任务。")
 
     def terminate(self):
         """

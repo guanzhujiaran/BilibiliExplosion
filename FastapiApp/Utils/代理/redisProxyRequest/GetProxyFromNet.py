@@ -34,7 +34,7 @@ class ProxyParams(CustomBaseModelHashable):
     proxy:dict = Field(..., description='代理字典')
 
     def __hash__(self):
-        return hash(self.proxy)
+        return str(self.proxy)
 
 
 class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
