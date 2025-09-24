@@ -190,12 +190,18 @@ class SQLHelper(SqlHelperBase):
             return result.scalars().all()
 
     @log_sql_retry_wrapper()
-    async def get_rid_bili_dyn_detail(self, is_asc: bool = False) -> Bilidyndetail | None:
+    async def get_rid_bili_dyn_detail(self, is_asc: bool = False,
+                                      is_available_data: bool = False) -> Bilidyndetail | None:
+        where_clause = [
+            func.length(Bilidyndetail.rid_int) < 18
+        ]
+        if is_available_data:
+            where_clause.append(Bilidyndetail.dynamic_id_int > 0)
         async with self.async_session() as session:
             if is_asc:
                 result = await session.execute(
                     select(Bilidyndetail)
-                    .where(func.length(Bilidyndetail.rid_int) < 18)
+                    .where(*where_clause)
                     .order_by(Bilidyndetail.rid_int.asc())
                     .limit(1)
                 )
@@ -204,7 +210,7 @@ class SQLHelper(SqlHelperBase):
             # 查询指定数量的rid，按降序排列
             result = await session.execute(
                 select(Bilidyndetail.rid_int)
-                .where(func.length(Bilidyndetail.rid_int) < 18)
+                .where(*where_clause)
                 .order_by(Bilidyndetail.rid_int.desc())
                 .limit(batch_size)
             )
@@ -879,11 +885,11 @@ ORDER BY
     @log_sql_retry_wrapper()
     async def delete_dyn_detail_by_dyn_ids(self, id_list: list[int]):
         async with self.async_session() as session:
-            result = await session.execute(
+            await session.execute(
                 delete(Bilidyndetail)
                 .where(Bilidyndetail.dynamic_id_int.in_(id_list))
             )
-            return result
+            await session.commit()
 
     def gen_bai(self,
                 lottery_result,
@@ -906,7 +912,7 @@ ORDER BY
         return bili_atari_info
 
     @log_sql_retry_wrapper()
-    async def sync_all_lottery_result_2_bili_user_info(self,*, lottery_id: int = None):
+    async def sync_all_lottery_result_2_bili_user_info(self, *, lottery_id: int = None):
         """
         同步所有抽奖结果到用户信息表
         :param lottery_id: 抽奖id  如果为None则同步所有抽奖结果
@@ -952,8 +958,15 @@ if __name__ == '__main__':
         res = await grpc_sql_helper.get_all_lot_not_drawn()
         print(res)
 
+
     async def _test_query_official_lottery_by_timelimit_page_offset():
-        res = await  grpc_sql_helper.query_official_lottery_by_timelimit_page_offset(page_number=1,page_size=10)
+        res = await  grpc_sql_helper.query_official_lottery_by_timelimit_page_offset(page_number=1, page_size=10)
         print(res)
 
-    asyncio.run(_test_query_official_lottery_by_timelimit_page_offset())
+
+    async def _test_query_dynData_by_date():
+        res = await  grpc_sql_helper.query_dynData_by_date([1736309461, 1736409461])
+        print(res)
+
+
+    asyncio.run(_test_query_dynData_by_date())

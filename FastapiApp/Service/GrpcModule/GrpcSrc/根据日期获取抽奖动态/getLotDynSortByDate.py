@@ -152,15 +152,20 @@ class LotDynSortByDate:
     async def main(self, conf: MainConf = MainConf()):
         if conf.between_ts is None:
             conf.between_ts = [int(time.time()) - 7 * 24 * 3600, int(time.time())]
-        myfastapi_logger.info('开始获取所有动态的抽奖信息')
         if conf.between_ts[1] > int(time.time()):  # 确保最大时间到当前时间截止
             conf.between_ts[1] = int(time.time())
+        if conf.between_ts[0] >= conf.between_ts[1]:
+            myfastapi_logger.error('开始时间必须小于结束时间')
+            return
+        myfastapi_logger.info('开始获取所有动态的抽奖信息')
         ts_list = self.get_split_ts(conf.between_ts)
         if conf.is_gen_zip:
             os.makedirs(conf.gen_zip_path, exist_ok=True)
         for ts in ts_list:
+            date_start = datetime.date.fromtimestamp(ts[0])
+
             myfastapi_logger.info(
-                f'当前进度【{ts_list.index(ts) + 1}/{len(ts_list)}】:{datetime.date.fromtimestamp(ts[0])}')
+                f'当前进度【{ts_list.index(ts) + 1}/{len(ts_list)}】:{date_start}')
             dyn_gen: Sequence[Bilidyndetail] = await self.sql.query_dynData_by_date(ts)
             lot_data: list[lotDynData] = self.solve_dyn_gen(dyn_gen)
             df = pd.DataFrame(
@@ -178,7 +183,6 @@ class LotDynSortByDate:
                               '转发数',
                               '点赞数',
                               '是否需要人工判断', '高亮关键词', '抽奖类型', '抽奖id', '需要携带的词']
-                date_start = datetime.date.fromtimestamp(ts[0])
                 if not os.path.exists(os.path.join(self.path, f'result/{date_start.year}/{date_start.month}')):
                     os.makedirs(os.path.join(self.path, f'result/{date_start.year}/{date_start.month}'))
                 df.to_csv(
@@ -186,23 +190,26 @@ class LotDynSortByDate:
                                  f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv'),
                     index=False, sep='\t', encoding='utf-8')
             myfastapi_logger.info(f'{datetime.date.fromtimestamp(ts[0])}的动态处理完成，总计{len(df)}条属于抽奖动态！')
-            if conf.is_gen_zip:
-                myfastapi_logger.info('正在压缩文件')
-                all_df = pd.DataFrame.from_records([sqlalchemy_model_2_dict(x) for x in dyn_gen])
-                all_df.to_csv(
-                    os.path.join(
-                        conf.gen_zip_path,
-                        f'{datetime.date.fromtimestamp(ts[0])}_bili_dyn_data.csv.gz'
-                        .replace('/', '_')
-                        .replace('-',
-                                 '_')
-                    ),
-                    index=False,
-                    compression='gzip'
-                )
-            if conf.is_delete_generated_data:
-                myfastapi_logger.info('正在删除已生成的数据')
-                await self.sql.delete_dyn_detail_by_dyn_ids([x.dynamic_id_int for x in dyn_gen])
+            if dyn_gen:
+                if conf.is_gen_zip:
+                    all_df = pd.DataFrame.from_records([sqlalchemy_model_2_dict(x) for x in dyn_gen])
+                    myfastapi_logger.info(f'正在压缩{date_start}的文件，共{len(all_df)}条动态数据')
+                    all_df.to_csv(
+                        os.path.join(
+                            conf.gen_zip_path,
+                            f'{datetime.date.fromtimestamp(ts[0])}_bili_dyn_data.csv.gz'
+                            .replace('/', '_')
+                            .replace('-',
+                                     '_')
+                        ),
+                        index=False,
+                        compression='gzip'
+                    )
+                if conf.is_delete_generated_data:
+                    myfastapi_logger.info('正在删除已生成的数据')
+                    await self.sql.delete_dyn_detail_by_dyn_ids([x.dynamic_id_int for x in dyn_gen])
+            else:
+                myfastapi_logger.error(f'{date_start}没有动态数据')
 
 
 if __name__ == '__main__':
