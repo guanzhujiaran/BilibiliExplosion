@@ -18,19 +18,19 @@
    pip install -r requirements.txt
    npm install
    ```
-3. 安装ipv6代理池
-    ```bash
-    git clone https://github.com/guanzhujiaran/go-proxy-ipv6-pool-auto.git
-    cd go-proxy-ipv6-pool-auto
-    cd go-proxy-ipv6-pool
-    go mod install
-    go build -o
-    ```
-   - 安装代理所需库
-   - ```bash
-   - apt install ndppd -y
-   - sysctl net.ipv6.ip_nonlocal_bind=1
-   - ```
+   3. 安装ipv6代理池
+       ```bash
+       git clone https://github.com/guanzhujiaran/go-proxy-ipv6-pool-auto.git
+       cd go-proxy-ipv6-pool-auto
+       cd go-proxy-ipv6-pool
+       go mod install
+       go build -o
+       ```
+      - 安装代理所需库
+      - ```bash
+        apt install ndppd -y
+        sysctl net.ipv6.ip_nonlocal_bind=1
+         ```
 4. 安装unidbg-springboot后端
     ```bash
     git clone https://github.com/guanzhujiaran/unidbgSpringBoot
