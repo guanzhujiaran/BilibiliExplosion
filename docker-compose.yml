@@ -228,3 +228,4 @@ networks:
   default:
     enable_ipv6: true
     name: fastapi
+    driver: bridge
