@@ -47,6 +47,7 @@ class GetOtherLotRedisManager(RedisManagerBase):
 
 class __SqlHelper:
     def __init__(self):
+        self.add_dyn_info_lock = asyncio.Lock()
         SQLITE_URI = CONFIG.database.MYSQL.get_other_lot_URI
         self._engine = create_async_engine(
             SQLITE_URI,
@@ -206,9 +207,10 @@ class __SqlHelper:
         :param DynInfo:
         :return:
         """
-        async with self._session() as session:
-            await session.merge(DynInfo)
-            await session.commit()
+        async with self.add_dyn_info_lock:
+            async with self._session() as session:
+                await session.merge(DynInfo)
+                await session.commit()
 
     @sql_retry_wrapper
     async def getDynInfoByDynamicId(self, dynamic_id: int | str) -> TLotdyninfo | None:

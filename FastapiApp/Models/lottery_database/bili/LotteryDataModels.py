@@ -280,14 +280,14 @@ class BiliLotStatisticLotTypeEnum(StrEnum):
     charge = "charge"
     total = "total"
 
-    @classmethod
-    def lot_type_2_business_type(cls, lot_type: 'BiliLotStatisticLotTypeEnum') -> int:
+    @property
+    def business_type(self) -> AtariLotRankEnum | None:
         mapping = {
-            cls.official: BiliBusinessTypeEnum.official,
-            cls.reserve: BiliBusinessTypeEnum.reserve,
-            cls.charge: BiliBusinessTypeEnum.charge,
+            self.official: BiliBusinessTypeEnum.official,
+            self.reserve: BiliBusinessTypeEnum.reserve,
+            self.charge:  BiliBusinessTypeEnum.charge,
         }
-        return mapping.get(lot_type, 0)
+        return mapping.get(self)
 
 
 class BiliLotStatisticRankTypeEnum(StrEnum):
@@ -296,13 +296,15 @@ class BiliLotStatisticRankTypeEnum(StrEnum):
     third = "third"
     total = "total"
 
-    def to_rank_enum(self) -> AtariLotRankEnum:
+    @property
+    def rank_enum(self) -> AtariLotRankEnum | None:
         mapping = {
             self.first: AtariLotRankEnum.first_prize,
             self.second: AtariLotRankEnum.second_prize,
             self.third: AtariLotRankEnum.third_prize,
         }
-        return mapping.get(self, AtariLotRankEnum.first_prize)
+        return mapping.get(self)
+
 
 
 class BiliLotStatisticRankDateTypeEnum(StrEnum):
@@ -337,4 +339,4 @@ class BiliLotStatisticRankDateTypeEnum(StrEnum):
 
 
 if __name__ == '__main__':
-    print(BiliLotStatisticLotTypeEnum.lot_type_2_business_type(BiliLotStatisticLotTypeEnum.charge))
+    print(BiliLotStatisticLotTypeEnum.charge.business_type)

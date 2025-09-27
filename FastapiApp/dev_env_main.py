@@ -14,8 +14,8 @@ from loguru import logger
 from pydantic import BaseModel as PydanticBaseModel
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-
-from controller.v1.samsClub import samsClubController
+from controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
+# from controller.v1.samsClub import samsClubController
 # from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 # from controller.damo import DamoML
 from Models.common import CommonResponseModel
@@ -48,8 +48,8 @@ app = FastAPI(
 fastapi_cdn_host.patch_docs(app)
 # app.include_router(zhuanlanController.router)
 # app.include_router(DamoML.router)
-app.include_router(samsClubController.router)
-
+# app.include_router(samsClubController.router)
+app.include_router(LotteryStatistic.router)
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, e: Exception):

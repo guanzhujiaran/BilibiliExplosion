@@ -68,7 +68,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
             limit: int = 10,
             date: BiliLotStatisticRankDateTypeEnum | None = None,
             lot_type: BiliLotStatisticLotTypeEnum | None = None,
-            rank_type: AtariLotRankEnum | None = None,
+            rank_type: BiliLotStatisticRankTypeEnum | None = None,
     ) -> tuple[Sequence[Row[tuple[BiliUserInfo, int, int]]], int]:
         """
         获取抽奖奖品统计信息
@@ -100,15 +100,14 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
             ```
         """
         where_clause = []
-        if lot_type:
+
+        if atari_rank_enum:=rank_type.rank_enum:
             where_clause.append(
-                BiliAtariInfo.atari_lot_type == BiliLotStatisticLotTypeEnum.lot_type_2_business_type(
-                    lot_type
-                )
+                BiliAtariInfo.atari_lot_rank == atari_rank_enum,
             )
-        if rank_type:
+        if business_type:=lot_type.business_type:
             where_clause.append(
-                BiliAtariInfo.atari_lot_rank == rank_type.value,
+                BiliAtariInfo.atari_lot_type == business_type
             )
         if date and date != BiliLotStatisticRankDateTypeEnum.total:
             start, end = date.get_start_end_ts()
@@ -155,7 +154,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
 
             return users_with_stats, total
 
-    async def get_bili_user_info(self,uid:int|str)->BiliUserInfoSimple:
+    async def get_bili_user_info(self, uid: int | str) -> BiliUserInfoSimple:
         async  with self.async_session() as session:
             stmt = select(BiliUserInfo).where(BiliUserInfo.uid == uid)
             result = await session.execute(stmt)
@@ -178,12 +177,14 @@ if __name__ == '__main__':
             limit=10,
             date=BiliLotStatisticRankDateTypeEnum.total,
             lot_type=BiliLotStatisticLotTypeEnum.official,
-            rank_type=AtariLotRankEnum.first_prize
+            rank_type=BiliLotStatisticRankTypeEnum.total
         )
         print(res)
+
 
     async def _test_get_bili_user_info():
         res = await lottery_data_statistic_sql_helper.get_bili_user_info(uid='4237378')
         print(res)
+
 
     asyncio.run(_test_get_bili_user_info())

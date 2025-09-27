@@ -48,16 +48,16 @@ async def GetLotStatisticInfo(
         limit=limit,
         date=date,
         lot_type=lot_type,
-        rank_type=rank_type.to_rank_enum()
+        rank_type=rank_type
     )
     return BiliLotStatisticInfoResp(
         winners=[
             WinnerInfo(
                 user=BiliUserInfoSimple(
-                    uid=x.BiliUserInfo.uid,
+                    uid=str(x.BiliUserInfo.uid),
                     name=x.BiliUserInfo.name,
                     face=x.BiliUserInfo.face
-                ), count=x.BiliUserInfo.prize_count,
+                ), count=x.prize_count,
                 rank=x.rank
             )
             for x in bili_user_info_list
@@ -80,7 +80,7 @@ async def GetLotteryResult(
     (prize_result, total), user = await asyncio_gather(
         grpc_sql_helper.get_lottery_result(
             uid=uid,
-            business_type=BiliLotStatisticLotTypeEnum.lot_type_2_business_type(lot_type),
+            business_type=lot_type.business_type,
             rank_type=rank_type,
             offset=offset,
             limit=limit,
