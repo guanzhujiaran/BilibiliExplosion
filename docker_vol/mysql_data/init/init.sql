@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `t_reserve_round_info` (
   `round_lot_num` int NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `round_id` (`round_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=431 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=432 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -288,7 +288,7 @@ CREATE TABLE IF NOT EXISTS `t_topic_item` (
   `view` bigint DEFAULT NULL,
   `show_interact_data` tinyint(1) DEFAULT NULL,
   PRIMARY KEY (`pkid`)
-) ENGINE=InnoDB AUTO_INCREMENT=1104745 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1104855 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS `t_top_details` (
   KEY `topic_creator_id` (`topic_creator_id`),
   CONSTRAINT `t_top_details_ibfk_1` FOREIGN KEY (`topic_item_id`) REFERENCES `t_topic_item` (`pkid`),
   CONSTRAINT `t_top_details_ibfk_2` FOREIGN KEY (`topic_creator_id`) REFERENCES `t_topic_creator` (`uid`)
-) ENGINE=InnoDB AUTO_INCREMENT=1104744 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1104854 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -427,7 +427,7 @@ CREATE TABLE IF NOT EXISTS `article_pub_record` (
   `pk` bigint NOT NULL AUTO_INCREMENT,
   PRIMARY KEY (`pk`) USING BTREE,
   UNIQUE KEY `lot_data_business_id` (`lot_data_business_id`),
-  CONSTRAINT `FK__lotdata` FOREIGN KEY (`lot_data_business_id`) REFERENCES `lotdata` (`business_id`)
+  CONSTRAINT `FK_article_pub_record_lotdata` FOREIGN KEY (`lot_data_business_id`) REFERENCES `lotdata` (`business_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=1665 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='发布专栏记录';
 
 -- 数据导出被取消选择。
@@ -470,7 +470,7 @@ CREATE TABLE IF NOT EXISTS `bili_atari_info` (
   KEY `atari_timestamp` (`atari_timestamp`) USING BTREE,
   CONSTRAINT `FK__lotdata_1` FOREIGN KEY (`atari_lot_id`) REFERENCES `lotdata` (`lottery_id`),
   CONSTRAINT `FK_bili_atari_info_bili_user_info` FOREIGN KEY (`mid`) REFERENCES `bili_user_info` (`uid`)
-) ENGINE=InnoDB AUTO_INCREMENT=14239550 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=14241749 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -524,6 +524,7 @@ CREATE TABLE IF NOT EXISTS `lotdata` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`lottery_id`),
+  UNIQUE KEY `UQ_business_id` (`business_id`),
   KEY `business_id` (`business_id`),
   KEY `lottery_time` (`lottery_time`),
   KEY `sender_uid` (`sender_uid`),
@@ -552,7 +553,7 @@ CREATE TABLE IF NOT EXISTS `available_proxy` (
   UNIQUE KEY `proxy_tab_id` (`proxy_tab_id`),
   KEY `idx_proxy_tab_id` (`proxy_tab_id`),
   CONSTRAINT `FK_available_proxy_proxy_tab` FOREIGN KEY (`proxy_tab_id`) REFERENCES `proxy_tab` (`proxy_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9037794 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=9042350 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -573,7 +574,7 @@ CREATE TABLE IF NOT EXISTS `proxy_tab` (
   KEY `刷新代理索引` (`status`,`score`,`success_times`,`update_ts`) USING BTREE,
   KEY `获取可用代理索引` (`status`,`score`,`update_ts`) USING BTREE,
   KEY `computed_proxy_str` (`computed_proxy_str`)
-) ENGINE=InnoDB AUTO_INCREMENT=3693708 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3703126 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -593,7 +594,7 @@ CREATE TABLE IF NOT EXISTS `crawl_task_progress` (
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `udx_task_key` (`first_category_id`,`second_category_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=219 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=221 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -613,7 +614,7 @@ CREATE TABLE IF NOT EXISTS `grouping_info` (
   `children` json DEFAULT NULL,
   PRIMARY KEY (`pk`),
   UNIQUE KEY `groupingId` (`groupingId`)
-) ENGINE=InnoDB AUTO_INCREMENT=24811 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=25691 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -628,7 +629,7 @@ CREATE TABLE IF NOT EXISTS `spu_category` (
   UNIQUE KEY `uq_spuId_categoryId` (`spu_id`,`categoryId`) USING BTREE,
   KEY `create_time` (`create_time`,`update_time`,`categoryId`,`spu_id`,`pk`),
   CONSTRAINT `spu_category_ibfk_1` FOREIGN KEY (`spu_id`) REFERENCES `spu_info` (`spuId`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2452176 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2495083 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -754,7 +755,7 @@ CREATE TABLE IF NOT EXISTS `spu_new_tag_info` (
   UNIQUE KEY `uq_spuId_tagManageId` (`spu_id`,`tagManageId`) USING BTREE,
   KEY `title` (`title`,`spu_id`) USING BTREE,
   CONSTRAINT `spu_new_tag_info_ibfk_1` FOREIGN KEY (`spu_id`) REFERENCES `spu_info` (`spuId`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1364170 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1389635 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -771,7 +772,7 @@ CREATE TABLE IF NOT EXISTS `spu_price_info` (
   PRIMARY KEY (`pk`),
   KEY `spu_id` (`spu_id`,`price`,`priceType`,`update_time`,`create_time`) USING BTREE,
   CONSTRAINT `FK_spu_price_info_spu_info` FOREIGN KEY (`spu_id`) REFERENCES `spu_info` (`spuId`)
-) ENGINE=InnoDB AUTO_INCREMENT=15905 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=15975 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -788,7 +789,7 @@ CREATE TABLE IF NOT EXISTS `spu_stock_info` (
   PRIMARY KEY (`pk`),
   UNIQUE KEY `spu_id` (`spu_id`),
   CONSTRAINT `spu_stock_info_ibfk_1` FOREIGN KEY (`spu_id`) REFERENCES `spu_info` (`spuId`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=741025 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=753959 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
@@ -811,7 +812,7 @@ CREATE TABLE IF NOT EXISTS `spu_tag_info` (
   UNIQUE KEY `spu_id_tag_mark` (`spu_id`,`tagMark`) USING BTREE,
   UNIQUE KEY `spu_id_tag_Id` (`spu_id`,`id`),
   CONSTRAINT `spu_tag_info_ibfk_1` FOREIGN KEY (`spu_id`) REFERENCES `spu_info` (`spuId`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1378593 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1404981 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 
