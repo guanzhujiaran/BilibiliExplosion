@@ -114,6 +114,7 @@ class database:
     lotDataRedisObj = _REDISINFO(2)
     ipInfoRedisObj = _REDISINFO(2)
     getOtherLotRedis = _REDISINFO(15)
+    commStorageRedis = _REDISINFO(0)
 
 
 class SqlAlchemyConfig:

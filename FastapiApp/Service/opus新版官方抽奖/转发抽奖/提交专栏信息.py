@@ -73,22 +73,6 @@ class ExtractOfficialLottery:
         realtime = time.strftime('%Y-%m-%d %H:%M:%S', local_time)
         return realtime
 
-    def write_in_file(self):
-        if self.all_offcial_lots:
-            df1 = pd.DataFrame(self.all_offcial_lots)
-            if os.path.isfile(os.path.join(self.__dir, 'result/全部转发抽奖.csv')):
-                df1.to_csv(os.path.join(self.__dir, 'result/全部转发抽奖.csv'), index=False, sep=self.csv_sep_letter)
-            else:
-                df1.to_csv(os.path.join(self.__dir, 'result/全部转发抽奖.csv'), index=False, mode='a+', header=False,
-                           sep=self.csv_sep_letter)
-
-        if self.last_update_offcial_lots:
-            df2 = pd.DataFrame(self.last_update_offcial_lots)
-            df2.to_csv(os.path.join(self.__dir, 'result/更新的转发抽奖.csv'), index=False, sep=self.csv_sep_letter)
-
-        with open(os.path.join(self.__dir, 'idsstart'), 'w', encoding='utf-8') as f:
-            f.write(str(self.latest_rid))
-
     async def update_lot_notice(self, original_lot_notice: List[Lotdata]) -> List[Lotdata]:
         """
         更新抽奖

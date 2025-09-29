@@ -9,6 +9,7 @@ import aiofiles
 import pandas
 
 from Utils.CommMethods import methods
+from dao.commStorageRedisObj import comm_storage_redis_obj
 from log.base_log import reserve_lot_logger
 from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
@@ -49,6 +50,7 @@ class ReserveParams(CustomBaseModelHashable):
 
     def __hash__(self):
         return hash(self.reserve_id)
+
 
 class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
     async def on_run_end(self, end_param):
@@ -289,10 +291,12 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             f'当前rid记录分别回滚{self.rollback_num + none_num1}和{self.rollback_num + none_num2}条'
             f'最终写入文件rid记录：{finnal_rid_list}')
 
-        async with aiofiles.open(os.path.join(self.current_dir, 'idsstart'), 'w', encoding='utf-8') as ridstartfile:
-            await ridstartfile.write("\n".join(
-                finnal_rid_list))
-        self.write_in_file()
+        await comm_storage_redis_obj.set_val(
+            comm_storage_redis_obj.RedisMap.reserve_scrapy_bot_rid_ls,
+            "\n".join(
+                finnal_rid_list)
+        )
+        await asyncio.to_thread(self.write_in_file)
         latest_reserve_lots = await self.generate_update_reserve_lotterys_by_round_id(self.now_round_id)
         new_round_info = TReserveRoundInfo(
             round_id=self.now_round_id,
@@ -369,17 +373,20 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         self.getfail = os.path.join(self.current_dir, 'log/获取失败.csv')
 
         try:
-            async with aiofiles.open(os.path.join(self.current_dir, 'idsstart'), 'r', encoding='utf-8') as ridstartfile:
-                async with self.ids_change_lock:
-                    self.ids_list.extend([int(x) for x in await ridstartfile.readlines()])
-                    self.ids = self.ids_list[0]
-            reserve_lot_logger.info('获取rid开始文件成功\nids开始值：{}'.format(self.ids))
-            if self.ids <= 0:
+            if file_contents := await comm_storage_redis_obj.get_val(
+                    comm_storage_redis_obj.RedisMap.reserve_scrapy_bot_rid_ls):
+                self.ids_list = [int(x) for x in file_contents.split('\n')]
+                self.ids = self.ids_list[0]
+            else:
                 self.ids_list = [1871812, 4996187]
                 reserve_lot_logger.info(f'获取rid开始文件失败，使用默认值：{self.ids}')
+            reserve_lot_logger.info('获取rid开始文件成功\nids开始值：{}'.format(self.ids))
+            if self.ids <= 0:
+                reserve_lot_logger.exception(f'rid开始文件内容不正确：{self.ids_list}，使用默认值：{self.ids}')
+                self.ids_list = [1871812, 4996187]
         except Exception as e:
-            reserve_lot_logger.exception('获取rid开始文件失败')
-            raise e
+            reserve_lot_logger.exception(f'获取rid开始文件失败，使用默认值：{self.ids}')
+            self.ids_list = [1871812, 4996187]
 
 
 reserve_robot = ReserveScrapyRobot()

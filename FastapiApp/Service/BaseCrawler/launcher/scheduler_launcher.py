@@ -15,6 +15,8 @@ from Utils.PushMe import async_pushme_try_catch_decorator, a_pushme
 import asyncio
 from typing import Callable
 
+from dao.commStorageRedisObj import comm_storage_redis_obj
+
 
 class CrawlerExecutionInfoModel(CustomBaseModel):
     crawler_name: str
@@ -36,40 +38,26 @@ class CrawlerExecutionInfo:
             crawler_name=crawler_name,
             default_interval_seconds=default_interval_seconds,
         )
-        self._load_last_exec_time()
+        self._exec_info_redis_key = f'{self.info.crawler_name}_last_exec_time.txt'
 
-    def _get_last_exec_file_path(self) -> str:
-        cur_file_dir = os.path.dirname(__file__)
-        RUNTIME_DIR = os.path.join(cur_file_dir, "runtime_data")
-        filename = f'{self.info.crawler_name}_last_exec_time.txt'
-        if not os.path.exists(RUNTIME_DIR):
-            os.makedirs(RUNTIME_DIR)
-        return os.path.join(RUNTIME_DIR, filename)
-
-    def _load_last_exec_time(self):
-        file_path = self._get_last_exec_file_path()
-        try:
-            if os.path.exists(file_path):
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    ts_str = f.read().strip()
-                    self.info.last_exec_time = datetime.fromtimestamp(int(ts_str))
-                    self.logger.info(f"[{self.info.crawler_name}] 上次执行时间为：{self.info.last_exec_time}")
-        except Exception as e:
-            self.logger.exception(f"[{self.info.crawler_name}] 加载上次执行时间失败，使用默认值。")
-            self.info.last_exec_time = datetime.fromtimestamp(86400)  # 默认时间点：1970-01-02 00:00:00
+    async def load_last_exec_time(self):
+        if self.info.last_exec_time is None:
+            ts_str = await comm_storage_redis_obj.get_val(self._exec_info_redis_key)
+            if ts_str:
+                self.info.last_exec_time = datetime.fromtimestamp(int(ts_str))
+                self.logger.info(f"[{self.info.crawler_name}] 加载上次执行时间：{self.info.last_exec_time}")
+            else:
+                self.logger.critical(f"[{self.info.crawler_name}] 未找到上次执行时间，使用默认值。")
+                self.info.last_exec_time = datetime.fromtimestamp(86400)  # 默认时间点：1970-01-02 00:00:00
 
     async def save_last_exec_time(self):
         now = datetime.now()
         self.info.last_exec_time = now
-        file_path = self._get_last_exec_file_path()
-        try:
-            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
-                await f.write(str(int(now.timestamp())))
-        except Exception as e:
-            self.logger.exception(f"[{self.info.crawler_name}] 写入上次执行时间失败：{e}")
+        await comm_storage_redis_obj.set_val(self._exec_info_redis_key, str(now.timestamp()))
 
-    def is_need_to_execute(self) -> bool:
+    async def is_need_to_execute(self) -> bool:
         """判断是否需要执行爬虫"""
+        await self.load_last_exec_time()
         if self.info.last_exec_time is None:
             self.logger.critical(f"[{self.info.crawler_name}] 上次执行时间为空，将执行一次。")
             return True
@@ -145,7 +133,7 @@ class BaseScheduler:
     async def run(self):
         self.logger.info(f"[{self.exec_info.info.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
 
-        if self.exec_info.is_need_to_execute():
+        if await self.exec_info.is_need_to_execute():
             try:
                 self.logger.info(f"[{self.exec_info.info.crawler_name}] 开始执行爬虫任务...")
                 # 调用异步 main 函数
