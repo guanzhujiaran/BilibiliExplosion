@@ -24,6 +24,7 @@ class BiliUserInfo(Base):
 class Lotdata(Base):
     __tablename__ = 'lotdata'
     __table_args__ = (
+        Index('UQ_business_id', 'business_id', unique=True),
         Index('business_id', 'business_id'),
         Index('idx_lottery_id', 'lottery_id', 'business_id', 'lottery_time', 'sender_uid', 'business_type'),
         Index('lottery_time', 'lottery_time'),
@@ -75,7 +76,7 @@ class Lotdata(Base):
 class ArticlePubRecord(Base):
     __tablename__ = 'article_pub_record'
     __table_args__ = (
-        ForeignKeyConstraint(['lot_data_business_id'], ['lotdata.business_id'], name='FK__lotdata'),
+        ForeignKeyConstraint(['lot_data_business_id'], ['lotdata.business_id'], name='FK_article_pub_record_lotdata'),
         Index('lot_data_business_id', 'lot_data_business_id', unique=True),
         {'comment': '发布专栏记录'}
     )
@@ -114,20 +115,15 @@ class BiliAtariInfo(Base):
 class Bilidyndetail(Base):
     __tablename__ = 'bilidyndetail'
     __table_args__ = (
-        ForeignKeyConstraint(['lot_id'], ['lotdata.lottery_id'], onupdate='CASCADE', name='biliDynDetail_FK_0_0'),
-        Index('dynamic_id_int', 'dynamic_id_int'),
-        Index('idx_dynamic_created_time', 'dynamic_created_time'),
-        Index('idx_dynamic_id', 'dynamic_id'),
-        Index('idx_lot_id', 'lot_id'),
-        Index('idx_rid_int', 'rid_int'),
-        Index('rid', 'rid')
+        ForeignKeyConstraint(['lot_id'], ['lotdata.lottery_id'], name='biliDynDetail_FK_0_0'),
+        Index('biliDynDetail_FK_0_0', 'lot_id')
     )
 
     rid = mapped_column(VARCHAR(255), primary_key=True, server_default=text("''"))
-    dynamic_id = mapped_column(Text(collation='utf8mb4_general_ci'))
+    dynamic_id = mapped_column(VARCHAR(255))
     dynData = mapped_column(LONGTEXT)
     lot_id = mapped_column(BigInteger)
-    dynamic_created_time = mapped_column(Text(collation='utf8mb4_general_ci'))
+    dynamic_created_time = mapped_column(VARCHAR(255))
     rid_int = mapped_column(BigInteger, Computed('(cast(`rid` as signed))', persisted=True))
     dynamic_id_int = mapped_column(BigInteger, Computed('(cast(`dynamic_id` as signed))', persisted=True))
 

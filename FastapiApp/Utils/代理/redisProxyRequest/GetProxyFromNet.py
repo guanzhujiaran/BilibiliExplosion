@@ -33,8 +33,8 @@ _github_proxy = {
 class ProxyParams(CustomBaseModelHashable):
     proxy:dict = Field(..., description='代理字典')
 
-    def __hash__(self):
-        return str(self.proxy)
+    def __hash__(self)->int:
+        return hash(str(self.proxy))
 
 
 class GetProxyMethods(UnlimitedCrawler[ProxyParams]):

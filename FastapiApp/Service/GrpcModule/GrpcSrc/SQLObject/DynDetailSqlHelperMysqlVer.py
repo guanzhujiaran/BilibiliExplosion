@@ -314,7 +314,8 @@ class SQLHelper(SqlHelperBase):
                 raise ValueError('错误的日期间隔')
 
                 # 使用 FROM_UNIXTIME 将 Unix 时间戳转换为 MySQL 的日期时间格式
-            between_fake_dyn_id = [ts_2_fake_dynamic_id(between_ts[0]), ts_2_fake_dynamic_id(between_ts[1])]
+            between_fake_dyn_id = [ts_2_fake_dynamic_id(between_ts[0]) - 10000000000,
+                                   ts_2_fake_dynamic_id(between_ts[1]) + 10000000000]
 
             stmt = select(Bilidyndetail).where(
                 and_(
@@ -888,6 +889,15 @@ ORDER BY
             await session.execute(
                 delete(Bilidyndetail)
                 .where(Bilidyndetail.dynamic_id_int.in_(id_list))
+            )
+            await session.commit()
+
+    @log_sql_retry_wrapper()
+    async def delete_dyn_detail_by_dyn_rids(self, rid_list: list[str | int]):
+        async with self.async_session() as session:
+            await session.execute(
+                delete(Bilidyndetail)
+                .where(Bilidyndetail.rid.in_(rid_list))
             )
             await session.commit()
 

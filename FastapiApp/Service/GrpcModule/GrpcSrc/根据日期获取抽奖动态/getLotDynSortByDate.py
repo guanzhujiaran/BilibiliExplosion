@@ -47,11 +47,11 @@ class LotDynSortByDate:
 
     def solve_dyn_gen(self, dyn_gen: Sequence[Bilidyndetail]) -> list[lotDynData]:
         lot_data: list[lotDynData] = []
-        for dyn in dyn_gen:
+        myfastapi_logger.debug(f"共需要判断{len(dyn_gen)}条动态")
+        for idx,dyn in enumerate(dyn_gen):
+            # myfastapi_logger.debug(f"正在判断第{idx + 1}条动态")
             try:
                 dynData = json.loads(dyn.dynData if dyn.dynData else 'null', strict=False)
-                if not dynData or dynData.get('extend').get('origDesc'):
-                    continue
                 # dynamic_content = ''.join([x.get('text') for x in dynData.get('extend').get('origDesc')])
                 dynamic_content = ''
                 if dynData.get('extend').get('onlyFansProperty').get('isOnlyFans'):
@@ -67,6 +67,7 @@ class LotDynSortByDate:
                 author_name = dynData.get('extend').get('origName')
                 author_space = f"https://space.bilibili.com/{dynData.get('extend').get('uid')}/dynamic"
                 if self.BAPI.daily_choujiangxinxipanduan(dynamic_content):
+                    # myfastapi_logger.debug(f"忽略日常抽奖信息{dynamic_content}")
                     continue
                 dyn_url = f"https://t.bilibili.com/{dynData.get('extend').get('dynIdStr')}"
                 if self.BAPI.zhuanfapanduan(dynamic_content):
@@ -126,32 +127,35 @@ class LotDynSortByDate:
                     if i in dynamic_content:
                         high_lights_list.append(i)
 
-                LotDynData = lotDynData()
-                LotDynData.dyn_url = dyn_url
-                LotDynData.lot_rid = str(lot_rid)
-                LotDynData.dynamic_content = repr(dynamic_content)
-                LotDynData.lot_type = str(lot_type)
-                LotDynData.premsg = premsg
-                LotDynData.forward_count = str(forward_count)
-                LotDynData.comment_count = str(comment_count)
-                LotDynData.like_count = str(like_count)
-                LotDynData.high_lights_list = high_lights_list
+                lot_dyn_data = lotDynData()
+                lot_dyn_data.dyn_url = dyn_url
+                lot_dyn_data.lot_rid = str(lot_rid)
+                lot_dyn_data.dynamic_content = repr(dynamic_content)
+                lot_dyn_data.lot_type = str(lot_type)
+                lot_dyn_data.premsg = premsg
+                lot_dyn_data.forward_count = str(forward_count)
+                lot_dyn_data.comment_count = str(comment_count)
+                lot_dyn_data.like_count = str(like_count)
+                lot_dyn_data.high_lights_list = high_lights_list
                 if self.manual_reply_judge(dynamic_content):
-                    LotDynData.Manual_judge = '人工判断'
+                    lot_dyn_data.Manual_judge = True
                 else:
-                    LotDynData.Manual_judge = ''
-                LotDynData.pub_time = str(pub_time)
-                LotDynData.official_verify_type = str(official_verify_type)
-                LotDynData.author_name = author_name
-                LotDynData.author_space = author_space
-                lot_data.append(LotDynData)
+                    lot_dyn_data.Manual_judge = False
+                lot_dyn_data.pub_time = str(pub_time)
+                lot_dyn_data.official_verify_type = str(official_verify_type)
+                lot_dyn_data.author_name = author_name
+                lot_dyn_data.author_space = author_space
+                lot_data.append(lot_dyn_data)
             except Exception as e:
-                myfastapi_logger.exception(e)
+                myfastapi_logger.exception(f'解析数据出错：{e}\n原始数据：\n{dyn.dynData}')
         return lot_data
 
     async def main(self, conf: MainConf = MainConf()):
+        """
+        默认保留最近一个月的数据
+        """
         if conf.between_ts is None:
-            conf.between_ts = [int(time.time()) - 7 * 24 * 3600, int(time.time())]
+            conf.between_ts = [int(time.time()) - 30 * 24 * 3600, int(time.time())]
         if conf.between_ts[1] > int(time.time()):  # 确保最大时间到当前时间截止
             conf.between_ts[1] = int(time.time())
         if conf.between_ts[0] >= conf.between_ts[1]:
@@ -189,7 +193,7 @@ class LotDynSortByDate:
                     os.path.join(self.path,
                                  f'result/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_抽奖信息.csv'),
                     index=False, sep='\t', encoding='utf-8')
-            myfastapi_logger.info(f'{datetime.date.fromtimestamp(ts[0])}的动态处理完成，总计{len(df)}条属于抽奖动态！')
+            myfastapi_logger.info(f'{datetime.date.fromtimestamp(ts[0])}的动态处理完成，总计{df.columns}条属于抽奖动态！')
             if dyn_gen:
                 if conf.is_gen_zip:
                     all_df = pd.DataFrame.from_records([sqlalchemy_model_2_dict(x) for x in dyn_gen])
@@ -207,9 +211,9 @@ class LotDynSortByDate:
                     )
                 if conf.is_delete_generated_data:
                     myfastapi_logger.info('正在删除已生成的数据')
-                    await self.sql.delete_dyn_detail_by_dyn_ids([x.dynamic_id_int for x in dyn_gen])
+                    await self.sql.delete_dyn_detail_by_dyn_rids([x.rid for x in dyn_gen])
             else:
-                myfastapi_logger.error(f'{date_start}没有动态数据')
+                myfastapi_logger.error(f'{date_start}没有动态数据，不进行数据库的切割备份操作！')
 
 
 if __name__ == '__main__':

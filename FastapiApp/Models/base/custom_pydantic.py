@@ -34,7 +34,10 @@ class CustomBaseModel(BaseModel):
 
 class CustomBaseModelHashable(ABC, CustomBaseModel):
     @abstractmethod
-    def __hash__(self):
+    def __hash__(self) -> int:
+        """
+        hash方法必须返回int类型
+        """
         ...
 
 

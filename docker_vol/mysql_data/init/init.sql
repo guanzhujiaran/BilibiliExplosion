@@ -1,6 +1,6 @@
 -- --------------------------------------------------------
 -- 主机:                           127.0.0.1
--- 服务器版本:                        8.0.43 - MySQL Community Server - GPL
+-- 服务器版本:                        8.4.6 - MySQL Community Server - GPL
 -- 服务器操作系统:                      Win64
 -- HeidiSQL 版本:                  12.11.0.7085
 -- --------------------------------------------------------
@@ -435,20 +435,20 @@ CREATE TABLE IF NOT EXISTS `article_pub_record` (
 -- 导出  表 dyndetail.bilidyndetail 结构
 CREATE TABLE IF NOT EXISTS `bilidyndetail` (
   `rid` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT '',
-  `dynamic_id` text COLLATE utf8mb4_general_ci,
+  `dynamic_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `dynData` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `lot_id` bigint DEFAULT NULL,
-  `dynamic_created_time` text COLLATE utf8mb4_general_ci,
+  `dynamic_created_time` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
   `rid_int` bigint GENERATED ALWAYS AS (cast(`rid` as signed)) STORED,
   `dynamic_id_int` bigint GENERATED ALWAYS AS (cast(`dynamic_id` as signed)) STORED,
   PRIMARY KEY (`rid`),
-  KEY `idx_dynamic_id` (`dynamic_id`(255)),
-  KEY `idx_lot_id` (`lot_id`),
-  KEY `idx_dynamic_created_time` (`dynamic_created_time`(255)),
+  KEY `biliDynDetail_FK_0_0` (`lot_id`,`rid`,`dynamic_id`,`dynamic_created_time`,`rid_int`,`dynamic_id_int`) USING BTREE,
   KEY `rid` (`rid`),
-  KEY `idx_rid_int` (`rid_int`),
+  KEY `dynamic_id` (`dynamic_id`),
+  KEY `lot_id` (`lot_id`),
+  KEY `rid_int` (`rid_int`),
   KEY `dynamic_id_int` (`dynamic_id_int`),
-  CONSTRAINT `biliDynDetail_FK_0_0` FOREIGN KEY (`lot_id`) REFERENCES `lotdata` (`lottery_id`) ON UPDATE CASCADE
+  CONSTRAINT `biliDynDetail_FK_0_0` FOREIGN KEY (`lot_id`) REFERENCES `lotdata` (`lottery_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- 数据导出被取消选择。
@@ -629,7 +629,7 @@ CREATE TABLE IF NOT EXISTS `spu_category` (
   UNIQUE KEY `uq_spuId_categoryId` (`spu_id`,`categoryId`) USING BTREE,
   KEY `create_time` (`create_time`,`update_time`,`categoryId`,`spu_id`,`pk`),
   CONSTRAINT `spu_category_ibfk_1` FOREIGN KEY (`spu_id`) REFERENCES `spu_info` (`spuId`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2495083 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2495081 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- 数据导出被取消选择。
 

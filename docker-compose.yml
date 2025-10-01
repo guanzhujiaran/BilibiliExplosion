@@ -57,7 +57,7 @@ services:
 
   mysql:
     container_name: fastapi-mysql
-    image: mysql:latest
+    image: mysql:8
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
@@ -104,6 +104,7 @@ services:
       - redis
       - rabbitmq
       - unidbg
+      - lm-studio
     env_file:
       - ./FastapiApp/.env.fastapi.prod
     environment:
@@ -149,10 +150,10 @@ services:
       - fastapi
     build:
       context: ./puppeteer_Bili
-      dockerfile: Dockerfile
       target: prod
     volumes:
-      - ./docker_vol/nodejs_pptr/BrowserData:/app/BrowserData
+      - ./docker_vol/pptr/prod/app:/app
+      - /app/node_modules  # 保护容器内node_modules
     ports:
       - "${NODEJS_PPTR_PORT}:9923"
     restart: unless-stopped
@@ -172,12 +173,13 @@ services:
       - redis
     build:
       context: ./puppeteer_Bili
-      dockerfile: Dockerfile
       target: dev
     ports:
       - "${NODEJS_PPTR_PORT}:9926"
     volumes:
       - ./puppeteer_Bili:/app
+      - ./docker_vol/pptr/dev/npm_logs:/root/.npm/_logs
+      - /app/node_modules  # 保护容器内node_modules
     environment:
       - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/PPTR_Bili_Lot
       - DEV_DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/DEV_PPTR_Bili_Lot
@@ -186,6 +188,13 @@ services:
       - REDIS_PWD=
       - FASTAPI_URI=http://fastapi:23333
       - FASTAPI_DEV_URI=http://fastapi_dev:23333
+    restart: unless-stopped
+
+  lm-studio:
+    container_name: fastapi-lm-studio
+    image: lmstudio/llmster-preview:cpu
+    ports:
+      - ${LMSTUDIO_PORT}:1234
     restart: unless-stopped
 
 networks:
