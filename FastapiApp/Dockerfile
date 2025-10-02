@@ -1,4 +1,4 @@
-FROM cimg/python:3.12.11-slim-bookworm
+FROM python:3.12.11-slim-bookworm
 # 1. 更新系统并安装必要工具
 RUN apt-get update -y && apt-get install -y curl
 
