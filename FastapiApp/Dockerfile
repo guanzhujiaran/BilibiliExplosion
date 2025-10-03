@@ -1,4 +1,4 @@
-FROM python:3.14.0rc3
+FROM python:3.12.11
 
 # 1. 更新系统并安装必要工具
 RUN apt-get update -y && apt-get install -y curl
