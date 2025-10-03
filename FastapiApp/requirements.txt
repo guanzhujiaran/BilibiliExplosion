@@ -51,3 +51,4 @@ uvicorn==0.37.0
 uvloop==0.21.0
 wasmtime==35.0.0
 wordcloud==1.9.4
+playwright
