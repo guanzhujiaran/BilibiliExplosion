@@ -117,7 +117,7 @@ services:
       - PUSHME_TOKEN=${PUSHME_TOKEN}
       - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
       - PROXY_SERVER=${PROXY_SERVER}
-    image: fastapi-bili-explosion
+    image: BilibiliExplosion
     volumes:
       - ./docker_vol/fastapi/log:app/scripts/logs
       - ./FastapiApp:/app
