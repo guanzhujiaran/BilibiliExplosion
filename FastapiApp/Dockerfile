@@ -5,7 +5,7 @@ RUN apt-get update -y && apt-get install -y curl
 
 # 2. 安装Node.js
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs
+    apt-get install -y nodejs rustc
 
 # 3. 验证安装
 RUN node -v && npm -v
@@ -19,10 +19,13 @@ WORKDIR /app
 COPY package.json .
 RUN npm install
 
+RUN mkdir -p /pip_cache
+ENV PIP_CACHE_DIR=/pip_cache
+
 # 安装Python依赖
 COPY requirements.txt .
 RUN python -m pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install -i https://mirrors.cloud.tencent.com/pypi/simple/ -r requirements.txt
 
 RUN playwright install
 

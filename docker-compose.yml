@@ -117,12 +117,7 @@ services:
       - PUSHME_TOKEN=${PUSHME_TOKEN}
       - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
       - PROXY_SERVER=${PROXY_SERVER}
-    build:
-      context: ./FastapiApp
-      dockerfile: Dockerfile
-      tags:
-        - fastapi-bili-explosion
-        - latest
+    image: fastapi-bili-explosion
     volumes:
       - ./docker_vol/fastapi/log:app/scripts/logs
       - ./FastapiApp:/app
