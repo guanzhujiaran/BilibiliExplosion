@@ -1,4 +1,5 @@
-FROM python:3.12.11-slim-bookworm
+FROM python:3.14.0rc3
+
 # 1. 更新系统并安装必要工具
 RUN apt-get update -y && apt-get install -y curl
 
@@ -20,7 +21,8 @@ RUN npm install
 
 # 安装Python依赖
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --upgrade pip
+RUN pip install -r requirements.txt
 
 RUN playwright install
 
