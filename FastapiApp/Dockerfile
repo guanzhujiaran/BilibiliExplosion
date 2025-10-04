@@ -1,4 +1,4 @@
-FROM nikolaik/python-nodejs:latest
+FROM nikolaik/python-nodejs:python3.13-nodejs24-alpine
 
 LABEL authors="1944637830@qq.com"
 

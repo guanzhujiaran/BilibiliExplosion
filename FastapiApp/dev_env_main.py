@@ -56,11 +56,11 @@ async def lifespan(_app: FastAPI):
     # back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
     GLOBAL_SCHEDULER.start()
     yield
-    myfastapi_logger.critical("正在取消其他服务")
-    [
-        x.cancel() for x in back_ground_tasks
-    ]
-    await asyncio_gather(*back_ground_tasks, log=myfastapi_logger)
+    # myfastapi_logger.critical("正在取消其他服务")
+    # [
+    #     x.cancel() for x in back_ground_tasks
+    # ]
+    # await asyncio_gather(*back_ground_tasks, log=myfastapi_logger)
     myfastapi_logger.critical("其他服务已取消")
 
 
@@ -139,5 +139,4 @@ if __name__ == '__main__':
         # If host is an empty string or None, all interfaces are assumed and a list of multiple sockets will be returned (most likely one for IPv4 and another one for IPv6).
         host="0.0.0.0",
         port=3090,
-        loop="auto" if sys.platform.startswith('windows') else 'uvloop',
     )

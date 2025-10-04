@@ -11,8 +11,6 @@ httpx
 aio-pika
 asyncer
 playwright
-browser-use
-browserforge
 curl-cffi
 cloudscraper
 fake-useragent
