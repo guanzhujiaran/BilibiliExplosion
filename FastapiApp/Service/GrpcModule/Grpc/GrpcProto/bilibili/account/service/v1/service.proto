@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package bilibili.account.service.v1;
+
+
+//
+message NameRender {
+    int64 render_scheme = 1;
+    //
+    ColorsInfo colors_info = 2;
+}
+
+//
+message ColorsInfo {
+    //
+    repeated int64 color_ids = 1;
+    //
+    repeated Color color = 2;
+}
+//
+message Color {
+    //
+    string color_night = 1;
+    //
+    string color_day = 2;
+}
