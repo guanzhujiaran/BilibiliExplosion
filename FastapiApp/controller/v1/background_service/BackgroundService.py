@@ -5,7 +5,6 @@ from Models.common import CommonResponseModel
 from Models.v1.background_service.background_service_model import AllLotScrapyStatusResp, \
     ProgressStatusResp, ProxyStatusResp
 from Service.BackgroundService.CrawlerScheduler import BackgroundService
-from scripts.光猫ip.监控本地ip地址变化 import async_monitor_ipv6_address_changes
 from Service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GetOthersLotDyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
@@ -22,9 +21,7 @@ from .base import new_router
 router = new_router()
 
 def start_background_service(show_log: bool):
-    back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log)),
-                         asyncio.create_task(async_monitor_ipv6_address_changes()),
-                         ]
+    back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log))]
     # back_ground_tasks.append(
     # asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
 
