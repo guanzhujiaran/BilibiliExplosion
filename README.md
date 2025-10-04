@@ -4,54 +4,66 @@
 
 ## 功能
 
-- B站，山姆会员店爬取数据（待增加更多感兴趣的api
-- 推送消息里面附带`[deploy]`就可以出发github的workflow，构建对应的docker镜像到
+- B站，山姆会员店爬取数据（待增加更多感兴趣的api）
+- 推送消息里面附带`[deploy]`就可以触发github的workflow，构建对应的docker镜像
 
 ## 安装
 
 1. 克隆仓库：
    ```bash
-   git https://github.com/guanzhujiaran/BilibiliExplosion.git
+   git clone https://github.com/guanzhujiaran/BilibiliExplosion.git
    ```
+
 2. 安装依赖：
    ```bash
    cd ./FastapiApp
    pip install -r requirements.txt
    npm install
    ```
-   3. 安装ipv6代理池
-       ```bash
-       git clone https://github.com/guanzhujiaran/go-proxy-ipv6-pool-auto.git
-       cd go-proxy-ipv6-pool-auto
-       cd go-proxy-ipv6-pool
-       go mod install
-       go build -o
-       ```
-      - 安装代理所需库
-      - ```bash
-        apt install ndppd -y
-        sysctl net.ipv6.ip_nonlocal_bind=1
-         ```
-4. 安装unidbg-springboot后端
-    ```bash
-    git clone https://github.com/guanzhujiaran/unidbgSpringBoot
-    mvn clean spring-boot:build
-    ```
-5. 安装nodejs后端
-    ```bash
-    git clone https://github.com/guanzhujiaran/puppeteer_Bili.git
+
+3. 安装ipv6代理池
+   ```bash
+   git clone https://github.com/guanzhujiaran/go-proxy-ipv6-pool-auto.git
+   cd go-proxy-ipv6-pool-auto
+   cd go-proxy-ipv6-pool
+   go mod download
+   go build -o proxy-pool
    ```
+   
+   安装代理所需库：
+   ```bash
+   apt install ndppd -y
+   sysctl net.ipv6.ip_nonlocal_bind=1
+   ```
+
+4. 安装unidbg-springboot后端
+   ```bash
+   git clone https://github.com/guanzhujiaran/unidbgSpringBoot
+   cd unidbgSpringBoot
+   mvn clean spring-boot:build
+   ```
+
+5. 安装nodejs后端
+   ```bash
+   git clone https://github.com/guanzhujiaran/puppeteer_Bili.git
+   cd puppeteer_Bili
+   npm install
+   ```
+
 ## 使用方法
 
-1. 启动ipv6代理池：
-    ```bash
-    npm i pm2 -g
-    pm2 start pm2.app.js
-    ```
-2. docker：
+1. 启动ipv6代理池（或者使用supervisor之类的）：
    ```bash
-   docker-compuse up -d
+   npm i pm2 -g
+   pm2 start pm2.app.js
    ```
+
+~~2. Docker部署（已弃用）：~~
+   ```bash
+   docker-compose up -d
+   ```
+   
+   > docker拉镜像太慢了，不用了
 
 ## 许可证
 
