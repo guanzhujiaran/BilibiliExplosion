@@ -116,14 +116,19 @@ class Bilidyndetail(Base):
     __tablename__ = 'bilidyndetail'
     __table_args__ = (
         ForeignKeyConstraint(['lot_id'], ['lotdata.lottery_id'], name='biliDynDetail_FK_0_0'),
-        Index('biliDynDetail_FK_0_0', 'lot_id')
+        Index('biliDynDetail_FK_0_0', 'lot_id', 'rid', 'dynamic_id', 'dynamic_created_time', 'rid_int', 'dynamic_id_int'),
+        Index('dynamic_id', 'dynamic_id'),
+        Index('dynamic_id_int', 'dynamic_id_int'),
+        Index('lot_id', 'lot_id'),
+        Index('rid', 'rid'),
+        Index('rid_int', 'rid_int')
     )
 
     rid = mapped_column(VARCHAR(255), primary_key=True, server_default=text("''"))
-    dynamic_id = mapped_column(VARCHAR(255))
+    dynamic_id = mapped_column(VARCHAR(50))
     dynData = mapped_column(LONGTEXT)
     lot_id = mapped_column(BigInteger)
-    dynamic_created_time = mapped_column(VARCHAR(255))
+    dynamic_created_time = mapped_column(VARCHAR(50))
     rid_int = mapped_column(BigInteger, Computed('(cast(`rid` as signed))', persisted=True))
     dynamic_id_int = mapped_column(BigInteger, Computed('(cast(`dynamic_id` as signed))', persisted=True))
 

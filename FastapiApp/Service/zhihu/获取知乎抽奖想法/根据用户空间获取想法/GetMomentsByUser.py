@@ -9,7 +9,6 @@ from enum import StrEnum
 
 import aiofiles
 import bs4
-import pandas
 import pandas as pd
 
 from Utils.CommMethods import methods
@@ -306,13 +305,13 @@ class LotScrapy:
 
         self.lot_pin_details.sort(key=lambda x: x.id, reverse=True)
 
-        DF = pandas.DataFrame(map(vars_, self.lot_pin_details))
+        DF = pd.DataFrame(map(vars_, self.lot_pin_details))
         DF.to_csv(get_file_p('zhuhu_result/更新的抽奖内容.csv'), index=False, sep='\t', header=True)
         DF.to_csv(get_file_p('zhuhu_result/log/所有的抽奖内容.csv')
                   , mode='a+', index=False, sep='\t',
                   header=False)
 
-        DF2 = pandas.DataFrame(map(vars_, self.non_lot_pin_details))
+        DF2 = pd.DataFrame(map(vars_, self.non_lot_pin_details))
         DF2.to_csv(get_file_p('zhuhu_result/非抽奖内容.csv'), mode='a+', index=False, sep='\t',
                    header=False)
 
