@@ -43,3 +43,4 @@ bili_ticket_gt_python
 strawberry-graphql[fastapi]
 strawberry-sqlalchemy-mapper
 captcha
+aiofiles

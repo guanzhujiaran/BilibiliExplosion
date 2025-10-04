@@ -25,4 +25,4 @@ RUN playwright install chromium
 COPY . /app
 
 # 启动 FastAPI 应用
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "23333"]
+CMD ["python","main.py","-l=0"]
