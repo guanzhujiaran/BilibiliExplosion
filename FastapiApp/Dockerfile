@@ -1,18 +1,4 @@
-FROM python:3.13-trixie
-
-# 安装系统依赖（仅必要项）
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl \
-    && rm -rf /var/lib/apt/lists/* \
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-RUN apt-get install -y nodejs npm
-RUN node -v && npm -v
-
-## 安装 Rust（使用 rustup，官方推荐）
-#RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
-#ENV PATH="/root/.cargo/bin:${PATH}"
-
+FROM nikolaik/python-nodejs:latest
 
 LABEL authors="1944637830@qq.com"
 
