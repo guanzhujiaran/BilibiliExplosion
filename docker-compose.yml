@@ -117,7 +117,8 @@ services:
       - PUSHME_TOKEN=${PUSHME_TOKEN}
       - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
       - PROXY_SERVER=${PROXY_SERVER}
-    image: ghcr.io/guanzhujiaran/bilibiliexplosion:main
+    build:
+      context: ./FastapiApp
     volumes:
       - ./docker_vol/fastapi/log:app/scripts/logs
       - ./FastapiApp:/app
