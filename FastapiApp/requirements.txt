@@ -44,3 +44,4 @@ strawberry-graphql[fastapi]
 strawberry-sqlalchemy-mapper
 captcha
 aiofiles
+cryptography
