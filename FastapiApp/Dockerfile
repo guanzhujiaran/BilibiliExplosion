@@ -1,37 +1,40 @@
-FROM python:3.12.11
+FROM python:3.13-trixie
 
-# 1. 更新系统并安装必要工具
-RUN apt-get update -y && apt-get install -y curl
-
-# 2. 安装Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs rustc
-
-# 3. 验证安装
+# 安装系统依赖（仅必要项）
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+    && rm -rf /var/lib/apt/lists/* \
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+RUN apt-get install -y nodejs npm
 RUN node -v && npm -v
+
+## 安装 Rust（使用 rustup，官方推荐）
+#RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+#ENV PATH="/root/.cargo/bin:${PATH}"
+
 
 LABEL authors="1944637830@qq.com"
 
-
 WORKDIR /app
 
-# 安装Node.js依赖
+# 安装 Node.js 依赖
 COPY package.json .
 RUN npm install
 
-RUN mkdir -p /pip_cache
-ENV PIP_CACHE_DIR=/pip_cache
-
-# 安装Python依赖
 COPY requirements.txt .
-RUN python -m pip install --upgrade pip
-RUN python3 -m pip install --upgrade setuptools
-RUN pip install --no-cache-dir  -r requirements.txt
+RUN python -m pip install --upgrade pip && \
+    python3 -m pip install --upgrade setuptools && \
+    pip install --no-cache-dir -r requirements.txt
 
+# 切回主目录
+WORKDIR /app
+
+# 安装 Playwright 浏览器（放在代码复制前更合理）
 RUN playwright install
 
-# 复制应用代码
+# 复制应用代码（注意：.dockerignore 应排除 GrpcProto/*.py！）
 COPY . /app
 
-# 启动FastAPI应用
-CMD ["uvicorn","app.main:app","--host","0.0.0.0","--port","23333"]
+# 启动 FastAPI 应用
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "23333"]

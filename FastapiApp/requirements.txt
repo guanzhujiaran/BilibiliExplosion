@@ -11,8 +11,8 @@ fastapi==0.118.0
 fastapi_cache==0.1.0
 fastapi_cdn_host==0.9.2
 faststream==0.5.48
-grpcio==1.74.0
-grpcio_tools==1.74.0
+grpcio
+grpcio_tools
 httpx==0.28.1
 jieba==0.42.1
 langchain_core==0.3.77
