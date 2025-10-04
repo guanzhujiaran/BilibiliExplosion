@@ -108,10 +108,7 @@ services:
     env_file:
       - ./FastapiApp/.env.fastapi.prod
     environment:
-      - MYSQL_PORT=${MYSQL_PORT}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - REDIS_PORT=${REDIS_PORT}
-      - RABBITMQ_PORT=${RABBITMQ_PORT}
       - RABBITMQ_USER=${RABBITMQ_USER}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - PUSHME_TOKEN=${PUSHME_TOKEN}
