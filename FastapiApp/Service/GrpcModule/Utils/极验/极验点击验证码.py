@@ -1,19 +1,9 @@
 import asyncio
-import json
 import os
-import time
-from typing import Union
-import requests
-import httpx
 import bili_ticket_gt_python
-
-from CONFIG import CONFIG
 from log.base_log import Voucher352_logger
 from Service.GrpcModule.Utils.UserAgentParser import UserAgentParser
-from Service.GrpcModule.Utils.极验.models.captcha_models import GeetestRegInfo, \
-    GeetestSuccessTimeCalc
-from Service.GrpcModule.Grpc.Bapi.BiliApi import appsign
-from Service.GrpcModule.Utils.metadata.makeMetaData import gen_trace_id
+from Service.GrpcModule.Utils.极验.models.captcha_models import GeetestSuccessTimeCalc
 from Service.GrpcModule.Grpc.Bapi.GeetestHandler import get_geetest_reg_info, validate_geetest
 
 
@@ -24,141 +14,6 @@ class GeetestV3Breaker:
         # 本地极验校验工具的路径
         self.succ_stats = GeetestSuccessTimeCalc()
         self.click = bili_ticket_gt_python.ClickPy()
-
-    # region 静态方法，获取极验信息和验证用
-    @staticmethod
-    def get_geetest_reg_info(v_voucher: str,
-                             ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
-                                       "Safari/537.36 Edg/125.0.0.0",
-                             ck: str = "",
-                             ori: str = "",
-                             ref: str = "",
-                             ticket: str = "",
-                             version: str = "8.9.0"
-                             ) -> Union[GeetestRegInfo, bool]:
-        data = {
-            "disable_rcmd": 0,
-            "mobi_app": "android",
-            "platform": "android",
-            "statistics": json.dumps({"appId": 1, "platform": 3, "version": version, "abtest": ""},
-                                     separators=(',', ':')),
-            "ts": int(time.time()),
-            "v_voucher": v_voucher,
-        }
-        data = appsign(data)
-        headers_raw = [
-            ('native_api_from', 'h5'),
-            ("cookie", f'Buvid={ck}' if ck else ''),
-            ('buvid', ck if ck else ''),
-            ('accept', 'application/json, text/plain, */*'),
-            ("referer", "https://www.bilibili.com/h5/risk-captcha"),
-            ('env', 'prod'),
-            ('app-key', 'android'),
-            ('env', 'prod'),
-            ('app-key', 'android'),
-            ("user-agent", ua),
-            ('x-bili-trace-id', gen_trace_id()),
-            ("x-bili-aurora-eid", ''),
-            ('x-bili-mid', ''),
-            ('x-bili-aurora-zone', ''),
-            ('x-bili-gaia-vtoken', ''),
-            ('x-bili-ticket', ticket),
-            ('content-type', 'application/x-www-form-urlencoded; charset=utf-8'),
-            ('accept-encoding', 'gzip')
-        ]
-        # data = urllib.parse.urlencode(data)
-        response: requests.Response = httpx.request(
-            method='POST',
-            url='https://api.bilibili.com/x/gaia-vgate/v1/register',
-            data=data,
-            headers=headers_raw,
-            proxy=CONFIG.my_ipv6_addr,
-        )
-        resp_json = response.json()
-        if resp_json.get('code') == 0:
-            if resp_json.get('data').get('geetest') is None:
-                Voucher352_logger.warning(
-                    f"\n获取极验信息失败: {resp_json}\n请求头：{headers_raw}\n响应头：{response.headers}")
-                return False
-            Voucher352_logger.debug(f"\n成功获取极验challenge：{resp_json}")
-            return GeetestRegInfo(
-                type=resp_json.get('data').get('type'),
-                token=resp_json.get('data').get('token'),
-                geetest_challenge=resp_json.get('data').get('geetest').get('challenge'),
-                geetest_gt=resp_json.get('data').get('geetest').get('gt')
-            )
-        else:
-            Voucher352_logger.error(f"\n获取极验信息失败: {resp_json}")
-            return False
-
-    @staticmethod
-    def validate_geetest(challenge, token, validate,
-                         ua: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 "
-                                   "Safari/537.36 Edg/125.0.0.0",
-                         ck: str = "",
-                         ori: str = "",
-                         ref: str = "",
-                         ticket: str = "",
-                         version: str = "8.9.0"
-                         ) -> str:
-        """
-        :param challenge:
-        :param token:
-        :param validate:
-        :param ua:
-        :return:
-        """
-        url = 'https://api.bilibili.com/x/gaia-vgate/v1/validate'
-        data = {
-            "challenge": challenge,
-            "disable_rcmd": 0,
-            "mobi_app": "android",
-            "platform": "android",
-            "seccode": validate + "|jordan",
-            "statistics": json.dumps({"appId": 1, "platform": 3, "version": version, "abtest": ""},
-                                     separators=(',', ':')),
-            "token": token,
-            "ts": int(time.time()),
-            "validate": validate
-        }
-        data = appsign(data)
-        headers_raw = [
-            ('native_api_from', 'h5'),
-            ("cookie", f'Buvid={ck}' if ck else ''),
-            ('buvid', ck if ck else ''),
-            ('accept', 'application/json, text/plain, */*'),
-            ("referer", "https://www.bilibili.com/h5/risk-captcha"),
-            ('env', 'prod'),
-            ('app-key', 'android'),
-            ('env', 'prod'),
-            ('app-key', 'android'),
-            ("user-agent", ua),
-            ('x-bili-trace-id', gen_trace_id()),
-            ("x-bili-aurora-eid", ''),
-            ('x-bili-mid', ''),
-            ('x-bili-aurora-zone', ''),
-            ('x-bili-gaia-vtoken', ''),
-            ('x-bili-ticket', ticket),
-            ('content-type', 'application/x-www-form-urlencoded; charset=utf-8'),
-            ('accept-encoding', 'gzip')
-        ]
-        # data = urllib.parse.urlencode(data)
-        req = httpx.request(
-            method='POST',
-            url=url,
-            data=data,
-            headers=headers_raw,
-            # proxy=CONFIG.my_ipv6_addr,
-        )
-        resp_json = req.json()
-        if resp_json.get('code') != 0:
-            Voucher352_logger.error(
-                f"\n发请求 {url} 验证validate极验失败:{challenge, token, validate}\n {resp_json}\n{data}\n{headers_raw}")
-            return ''
-        Voucher352_logger.debug(f'\n发请求验证成功：{resp_json}')
-        return token
-
-    # endregion
 
     async def a_validate_form_voucher_ua(self, v_voucher: str,
                                          ua: str = "Dalvik/2.1.0 (Linux; U; Android 9; PCRT00 Build/PQ3A.190605.05081124) 8.13.0 os/android model/PCRT00 mobi_app/android build/8130300 channel/master innerVer/8130300 osVer/9 network/2",
@@ -215,6 +70,7 @@ class GeetestV3Breaker:
             self.succ_stats.total_time -= 1
         finally:
             ...
+
 
 geetest_v3_breaker = GeetestV3Breaker()
 if __name__ == '__main__':

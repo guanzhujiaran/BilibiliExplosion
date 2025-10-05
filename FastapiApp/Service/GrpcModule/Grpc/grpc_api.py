@@ -11,7 +11,6 @@ import uuid
 from ssl import SSLError
 from typing import Union
 from urllib.parse import urlparse
-
 import curl_cffi
 import grpc
 from exceptiongroup import ExceptionGroup
@@ -21,8 +20,9 @@ from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout,
     Response, WriteError, NetworkError, HTTPStatusError, HTTPError
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
-
 from CONFIG import CONFIG
+from Service.GrpcModule.Utils.GrpcMsgTools import raw_resp_content_2_dict
+from Utils.PushMe import a_pushme
 from log.base_log import BiliGrpcApi_logger, Voucher352_logger
 from Service.GrpcModule.Models.CustomRequestErrorModel import Request352Error
 from Service.GrpcModule.Models.GrpcApiBaseModel import MetaDataWrapper
@@ -401,13 +401,11 @@ class BiliGrpc:
                             f'{func_name}\t{url} metadata已经发起了{md.used_times}次有效请求，携带validate_token{validate_token}请求依旧 -352报错-{proxy}\n{str(resp.headers)}\n{str(new_headers)}\n{str(data)}',
                             -352
                         )
-
-                gresp = grpc_resp_msg
-                if 'gzip' in headers.get('grpc-encoding'):
-                    gresp.ParseFromString(gzip.decompress(resp.content[5:]))
-                else:
-                    gresp.ParseFromString(resp.content[5:])
-                resp_dict = MessageToDict(gresp)
+                resp_dict = raw_resp_content_2_dict(
+                    raw_resp=resp,
+                    protobuf_msg=grpc_resp_msg,
+                    is_gzip='gzip' in headers.get('grpc-encoding')
+                )
                 if proxy:
                     await handle_proxy_succ(proxy_tab=proxy, )
                 # self.grpc_api_any_log.critical(
@@ -447,7 +445,15 @@ class BiliGrpc:
             except Exception as err:
                 if type(err) == DecodeError or type(err) == EncodeError:
                     self.grpc_api_any_log.error(
-                        f'{func_name}\t解析grpc消息失败！\n{url}\n{grpc_req_message}\n{resp.text}\n{resp.content.hex()}')
+                        f'{func_name}\t'
+                        f'解析grpc消息失败！\n'
+                        f'{url}\n'
+                        f'{resp.headers}'
+                        f'{grpc_req_message}\n'
+                        f'{resp.text}\n'
+                        f'{resp.content.hex()}')
+                    await a_pushme('[Bili]解析grpc消息失败，解析结果为空',
+                                   f'解析grpc消息失败！{url}{grpc_req_message}{resp.text}{resp.content.hex()}')
                     if proxy:
                         await handle_proxy_succ(proxy_tab=proxy, )
                     return {}

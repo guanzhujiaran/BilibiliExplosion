@@ -10,10 +10,8 @@ from enum import StrEnum
 from functools import reduce
 from hashlib import md5
 from typing import Literal, Dict
-
-import requests
-
 from Utils.redisTool.RedisManager import RedisManagerBase
+from Utils.代理.SealedRequests import my_async_httpx
 from Utils.加密.utils import GenWebCookieParams
 
 HEADERS = {
@@ -128,12 +126,12 @@ class My_dm_img_Redis(RedisManagerBase):
             if redis_raw:
                 redis_da = json.loads(redis_raw)
                 if (datetime.now() - datetime.fromtimestamp(redis_da.get('get_ts'))).days >= 1:
-                    img_key, sub_key = getWbiKeys()
+                    img_key, sub_key = await getWbiKeys()
                 else:
                     img_key = redis_da.get('img_key')
                     sub_key = redis_da.get('sub_key')
             else:
-                img_key, sub_key = getWbiKeys()
+                img_key, sub_key = await getWbiKeys()
             self.dm_dict["WbiKeys"] = WbiKeys(
                 img_key, sub_key
             )
@@ -168,7 +166,7 @@ def getMixinKey(orig: str):
     return reduce(lambda s, i: s + orig[i], mixinKeyEncTab, "")[:32]
 
 
-def encWbi(params: Dict[str,str|int], img_key: str, sub_key: str) -> dict:
+def encWbi(params: Dict[str, str | int], img_key: str, sub_key: str) -> dict:
     "为请求参数进行 wbi 签名"
     mixin_key = getMixinKey(img_key + sub_key)
     curr_time = round(time.time())
@@ -188,9 +186,9 @@ def encWbi(params: Dict[str,str|int], img_key: str, sub_key: str) -> dict:
     }
 
 
-def getWbiKeys() -> tuple[str, str]:
+async def getWbiKeys() -> tuple[str, str]:
     "获取最新的 img_key 和 sub_key"
-    resp = requests.get("https://api.bilibili.com/x/web-interface/nav", headers=HEADERS)
+    resp = await my_async_httpx.get("https://api.bilibili.com/x/web-interface/nav", headers=HEADERS)
     resp.raise_for_status()
     json_content = resp.json()
     img_url: str = json_content["data"]["wbi_img"]["img_url"]
@@ -213,7 +211,7 @@ def get_dm_cover_img_str(gen_bili_web_cookie_params: GenWebCookieParams):
     return dm_cover_img_str
 
 
-def gen_dm_args(params: dict,gen_bili_web_cookie_params:GenWebCookieParams):
+def gen_dm_args(params: dict, gen_bili_web_cookie_params: GenWebCookieParams):
     """reference: https://github.com/Nemo2011/bilibili-api/blob/49b47197adb29f5ae9a974f090165dfe69ed0bba/bilibili_api/utils/network.py#L1890"""
 
     # def gen_dm_img():
@@ -268,3 +266,14 @@ def gen_dm_args(params: dict,gen_bili_web_cookie_params:GenWebCookieParams):
     )
 
     return params
+
+
+if __name__ == "__main__":
+    import asyncio
+
+
+    async def _test():
+        print(await getWbiKeys())
+
+
+    asyncio.run(_test())

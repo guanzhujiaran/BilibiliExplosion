@@ -16,8 +16,8 @@ cloudscraper
 fake-useragent
 jieba
 scikit-learn
-grpcio
-grpcio-tools
+grpcio==1.75.1
+grpcio-tools==1.75.1
 sqlacodegen-v2  # 仅开发时用，生产可不装
 sqlmodel
 aiosqlite
@@ -47,3 +47,5 @@ aiofiles
 cryptography
 pymilvus
 aiodns
+protobuf==6.32.1
+google
