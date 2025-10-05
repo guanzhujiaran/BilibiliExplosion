@@ -93,9 +93,9 @@ class database:
         proxy_db_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true'
         bili_db_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
         bili_reserve_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
-        get_other_lot_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
-        dyn_detail_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
-        sams_club_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
+        get_other_lot_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/biliopusdb?charset=utf8mb4&autocommit=true'
+        dyn_detail_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/dyndetail?charset=utf8mb4&autocommit=true'
+        sams_club_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/samsclub?charset=utf8mb4&autocommit=true'
 
     @dataclass
     class _REDISINFO:
