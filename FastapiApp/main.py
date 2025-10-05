@@ -50,6 +50,7 @@ async def lifespan(_app: FastAPI):
     show_log = False
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
     GLOBAL_SCHEDULER.start()
+    myfastapi_logger.critical("其他服务已开启！可以开启服务了喵~")
     yield
     myfastapi_logger.critical("正在取消其他服务")
     [
