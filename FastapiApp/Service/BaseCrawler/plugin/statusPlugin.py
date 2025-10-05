@@ -31,7 +31,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         """
         在爬虫的 run 方法开始执行时触发，记录初始参数并重置统计数据。
         """
-        self.log.info(f"StatsPlugin: Crawler run started. Init params: {init_params}")
+        self.log.info(self.crawler.format_log(f"StatsPlugin: Crawler run started. Init params: {init_params}"))
         self._init_params = init_params
         self._is_running = True
         self._start_time = time.time()
@@ -59,8 +59,9 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         # Log current speed by calling the property, which calculates it on demand
         self._running_params_set.discard(worker_model.params)
         self.log.debug(
-            f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
-            f"Current Speed: {self.crawling_speed:.2f} items/s")
+            self.crawler.format_log(
+                f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
+                f"Current Speed: {self.crawling_speed:.2f} items/s"))
         await super().on_worker_end(worker_model)
 
     async def on_worker_start(self, worker_model: WorkerModel):
@@ -72,23 +73,21 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         在爬虫的 run 方法完全结束时触发，记录最终参数。
         总时长和速度的计算现在放在 property 中。
         """
-        self.log.info(f"StatsPlugin: Crawler run ended. End params: {end_param}")
+        self.log.info(self.crawler.format_log(f"StatsPlugin: Crawler run ended. End params: {end_param}"))
         self._end_params = end_param
         self._is_running = False
         # No need to calculate _total_run_duration or _current_speed here,
         # the properties will return the final values when accessed.
 
-        self.log.info(f"StatsPlugin Summary:")
-        self.log.info(f"  Initial Params: {self._init_params}")
-        self.log.info(f"  Final Params: {self._end_params}")
-        self.log.info(f"  Is Running: {self._is_running}")
-        self.log.info(f"  Processed Items: {self._processed_items_count}")
-        # Call properties to get the final calculated values
-        self.log.info(f"  Total Duration: {self.total_run_duration:.2f} seconds")
-        self.log.info(f"  Average Speed: {self.crawling_speed:.2f} items/second")
-        self.log.info(
-            f"  Last Update Time: {time.ctime(self.last_update_time)}")  # Convert timestamp to readable string
-        self.log.info(f"  Success Count: {self.succ_count}")
+        self.log.info(self.crawler.format_log(f"""StatsPlugin Summary:"
+  Initial Params: {self._init_params}")
+  Final Params: {self._end_params}")
+  Is Running: {self._is_running}")
+  Processed Items: {self._processed_items_count}")
+  Total Duration: {self.total_run_duration:.2f} seconds")
+  Average Speed: {self.crawling_speed:.2f} items/second")
+  Last Update Time: {time.ctime(self.last_update_time)}
+  Success Count: {self.succ_count}"""))
         await super().on_run_end(end_param)
 
     # --- Public properties to access statistics ---
@@ -210,7 +209,7 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
         """
                在爬虫运行开始时重置所有状态变量。
                """
-        self.log.info(f"插件启动，连续 {self._max_consecutive_nulls} 个 null 将触发停止。")
+        self.log.info(self.crawler.format_log(f"插件启动，连续 {self._max_consecutive_nulls} 个 null 将触发停止。"))
         self._status_vector = np.array([])
         self._sequential_null_count = 0
         await super().on_run_start(init_params)
@@ -270,11 +269,12 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
         # 步骤 1: 调用辅助函数，计算当前全局的最大连续 null 计数
         self._sequential_null_count = self._calculate_max_streak()
         # (可选) 日志记录，便于调试
-        self.log.debug(f"全局最长连续 null 计数已更新为: {self._sequential_null_count}")
+        self.log.debug(self.crawler.format_log(f"全局最长连续 null 计数已更新为: {self._sequential_null_count}"))
 
         # 步骤 3: 使用新赋值的变量来判断是否停止
         if self._sequential_null_count >= self._max_consecutive_nulls:
-            self.log.warning(f"连续 null 计数已达到最大值 {self._max_consecutive_nulls}，将停止运行。")
+            self.log.warning(
+                self.crawler.format_log(f"连续 null 计数已达到最大值 {self._max_consecutive_nulls}，将停止运行。"))
             return True
 
         return False
@@ -285,7 +285,7 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
         """
         self._sequential_null_count = self._calculate_max_streak()
         self.log.info(
-            f"插件结束。最终已处理的连续 null 计数: {self._sequential_null_count}。"
+            self.crawler.format_log(f"插件结束。最终已处理的连续 null 计数: {self._sequential_null_count}。")
         )
         await super().on_run_end(end_param)
 

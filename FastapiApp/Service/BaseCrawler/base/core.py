@@ -16,6 +16,9 @@ class BaseCrawler(ABC,Generic[ParamsType]):
         self.sem = sem_gen(max_sem)
         self._is_pause = False
 
+    def format_log(self, msg: str) -> str:
+        return f'[{self.__class__.__name__}] {msg}'
+
     @abstractmethod
     async def worker(self):
         """

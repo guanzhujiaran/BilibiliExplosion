@@ -32,7 +32,11 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
         if plugin not in self._plugins:
             self._plugins.append(plugin)
             plugin.on_plugin_register()
-            self.log.debug(f"Plugin {plugin.__class__.__name__} registered to {self.__class__.__name__}.")
+            self.log.debug(
+                self.format_log(
+                    f"Plugin {plugin.__class__.__name__} registered to {self.__class__.__name__}."
+                )
+            )
 
     @abstractmethod
     async def is_stop(self) -> bool:
@@ -68,7 +72,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
             try:
                 fetch_result = await self.handle_fetch(worker_model.params)
             except Exception as e:
-                self.log.exception(f'爬取异常：{e}')
+                self.log.exception(self.format_log(f'爬取异常：{e}'))
                 fetch_result = WorkerStatus.fail
                 await asyncio.sleep(100)
                 if self.requeue_on_fetch_fail:
@@ -81,7 +85,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
             await self.on_worker_end(worker_model)
 
     async def run(self, init_params: ParamsType | None = None):
-        self.log.info(f"Crawler {self.__class__.__name__} starting with init_params: {init_params}")
+        self.log.info(self.format_log(f"starting with init_params: {init_params}"))
         await asyncio_gather(*[x.on_run_start(init_params) for x in self._plugins], log=self.log)
         task_set = set()
         last_param_yielded: Optional[ParamsType] = None
@@ -96,11 +100,11 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
             last_param_yielded = param
 
             if await self.is_stop():
-                self.log.info('触发终止条件，停止生成新任务。')
+                self.log.info(self.format_log('触发终止条件，停止生成新任务。'))
                 break
 
             if True in await asyncio_gather(*[x.should_stop_check() for x in self._plugins], log=self.log):
-                self.log.info('触发终止条件，停止生成新任务。')
+                self.log.info(self.format_log('触发终止条件，停止生成新任务。'))
                 break
             if self._is_pause:
                 while self._is_pause:
@@ -109,13 +113,13 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
             task = asyncio.create_task(self.worker())
             task_set.add(task)
             task.add_done_callback(task_set.discard)
-            self.log.debug(f'当前线程存活数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}，添加任务：{param}')
+            self.log.debug(self.format_log(f'当前线程存活数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}，添加任务：{param}'))
 
-        self.log.critical(f'任务生成完成。正在等待剩余线程完成任务，当前存活线程数量：{len(task_set)}')
+        self.log.critical(self.format_log(f'任务生成完成。正在等待剩余线程完成任务，当前存活线程数量：{len(task_set)}'))
         await asyncio_gather(*task_set, log=self.log)
-        self.log.info(f'所有任务已完成。')
+        self.log.info(self.format_log(f'所有任务已完成。'))
         await self.on_run_end(last_param_yielded if last_param_yielded is not None else init_params)
 
-        self.log.info(f"Crawler {self.__class__.__name__} run finished.")
+        self.log.info(self.format_log(f"run finished."))
         while not self.task_queue.empty():
             await self.task_queue.get()
