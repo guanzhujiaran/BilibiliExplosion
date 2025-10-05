@@ -15,6 +15,7 @@ from Service.GetOthersLotDyn.Sql.models import TLotmaininfo, TLotuserinfo, TLotd
     TLotuserspaceresp, TRiddynid
 from Utils.Common import sql_retry_wrapper
 from Utils.redisTool.RedisManager import RedisManagerBase
+from dao.base.sqlHelperBase import SqlHelperBase
 
 
 class GetOtherLotRedisManager(RedisManagerBase):
@@ -45,21 +46,15 @@ class GetOtherLotRedisManager(RedisManagerBase):
         await self._set(self.RedisMap.get_dyn_ts.value, get_dyn_ts)
 
 
-class __SqlHelper:
+class __SqlHelper(SqlHelperBase):
     def __init__(self):
+        mysql_db_url = CONFIG.database.MYSQL.get_other_lot_URI
+        super().__init__(mysql_db_url=mysql_db_url)
         self.add_dyn_info_lock = asyncio.Lock()
-        SQLITE_URI = CONFIG.database.MYSQL.get_other_lot_URI
-        self._engine = create_async_engine(
-            SQLITE_URI,
-            **CONFIG.sql_alchemy_config.engine_config
-        )
-        self._session = async_sessionmaker(self._engine,
-                                           **CONFIG.sql_alchemy_config.session_config
-                                           )
 
     @sql_retry_wrapper
     async def getDynIdByRidType(self, rid: int, dynamic_type: int) -> Union[int, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TRiddynid.dynamic_id).filter(
                 and_(TRiddynid.rid == rid, TRiddynid.dynamic_type == dynamic_type)).limit(1)
             res = await session.execute(sql)
@@ -68,7 +63,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def setDynIdByRidType(self, dynamic_id: int, rid: int, dynamic_type: int):
-        async with self._session() as session:
+        async with self.async_session() as session:
             await session.merge(TRiddynid(
                 dynamic_id=int(dynamic_id),
                 rid=int(rid),
@@ -79,7 +74,7 @@ class __SqlHelper:
     # region 获取抽奖轮次信息相关
     @sql_retry_wrapper
     async def getLatestFinishedRound(self) -> Union[TLotmaininfo, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotmaininfo).where(TLotmaininfo.isRoundFinished == 1).order_by(
                 TLotmaininfo.lotRound_id.desc()).limit(1)
             res = await session.execute(sql)
@@ -88,7 +83,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getLatestRound(self) -> Union[TLotmaininfo, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotmaininfo).order_by(TLotmaininfo.lotRound_id.desc()).limit(1)
             res = await session.execute(sql)
             ret: TLotmaininfo = res.scalars().first()
@@ -96,7 +91,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def addLotMainInfo(self, LotMainInfo: TLotmaininfo):
-        async with self._session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 sql = select(TLotmaininfo).filter(TLotmaininfo.lotRound_id == LotMainInfo.lotRound_id).limit(1)
                 res = await session.execute(sql)
@@ -116,7 +111,7 @@ class __SqlHelper:
     # region 抽奖动态相关
     @sql_retry_wrapper
     async def getAllDynInfo(self) -> Sequence[TLotdyninfo]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo).order_by(TLotdyninfo.dynId.desc())
             res = await session.execute(sql)
             ret = res.scalars().all()
@@ -124,7 +119,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getAllDynByLotRound(self, LotRound_id: int) -> Sequence[TLotdyninfo]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo).filter(TLotdyninfo.dynLotRound_id == LotRound_id).order_by(
                 TLotdyninfo.dynId.desc())
             res = await session.execute(sql)
@@ -140,7 +135,7 @@ class __SqlHelper:
                 TLotdyninfo.dynId >= target_dyn_id
             )
         )
-        async with self._session() as session:
+        async with self.async_session() as session:
             res = await session.execute(stmt)
             ret = res.scalars().all()
             return ret
@@ -155,7 +150,7 @@ class __SqlHelper:
         :return:
         """
 
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo).filter(and_(TLotdyninfo.dynLotRound_id == LotRoundNum,
                                                   TLotdyninfo.isLot == 1)).order_by(
                 TLotdyninfo.dynId.desc())
@@ -167,7 +162,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getAllLotDynInfoByRoundNum(self, LotRoundNum: int) -> Sequence[TLotdyninfo]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo).filter(TLotdyninfo.dynLotRound_id == LotRoundNum).order_by(
                 TLotdyninfo.dynId.desc())
             res = await session.execute(sql)
@@ -176,7 +171,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def isExistDynInfoByDynId(self, DynId: str) -> Union[TLotdyninfo, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo).filter(TLotdyninfo.dynId == DynId).limit(1)
             res = await session.execute(sql)
             ret = res.scalars().first()
@@ -184,7 +179,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getAlldyid(self, ret_limit=10000) -> list[str]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo.dynId).order_by(TLotdyninfo.dynId.desc()).limit(ret_limit)
             res = await session.execute(sql)
             ret_list = res.scalars().all()
@@ -192,7 +187,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getAllLotdyid(self, ret_limit=10000) -> list[str]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo.dynId).filter(TLotdyninfo.isLot == True).order_by(
                 TLotdyninfo.dynId.desc()).limit(
                 ret_limit)
@@ -208,7 +203,7 @@ class __SqlHelper:
         :return:
         """
         async with self.add_dyn_info_lock:
-            async with self._session() as session:
+            async with self.async_session() as session:
                 await session.merge(DynInfo)
                 await session.commit()
 
@@ -219,7 +214,7 @@ class __SqlHelper:
         :param dynamic_id:
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo).filter(TLotdyninfo.dynId == dynamic_id).limit(1)
             res = await session.execute(sql)
             ret = res.scalars().first()
@@ -231,7 +226,7 @@ class __SqlHelper:
     # region LotUserInfo增删改查
     @sql_retry_wrapper
     async def getLotUserInfoByUid(self, uid: int) -> Union[TLotuserinfo, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserinfo).filter(TLotuserinfo.uid == uid).limit(1)
             res = await session.execute(sql)
             ret = res.scalars().first()
@@ -240,7 +235,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def addLotUserInfo(self, LotUserInfo: TLotuserinfo):
-        async with self._session() as session:
+        async with self.async_session() as session:
             await session.merge(LotUserInfo)
             await session.commit()
 
@@ -255,7 +250,7 @@ class __SqlHelper:
         :param offset:
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserspaceresp).filter(
                 TLotuserspaceresp.dynLotRound_id == round_id
             ).order_by(TLotuserspaceresp.spaceOffset.desc())
@@ -273,7 +268,7 @@ class __SqlHelper:
         """
         if offset is None:
             offset = ""
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserspaceresp).filter(and_(
                 TLotuserspaceresp.spaceUid == uid,
                 TLotuserspaceresp.spaceOffset >= offset
@@ -284,13 +279,13 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def addSpaceResp(self, LotUserSpaceResp: TLotuserspaceresp):
-        async with self._session() as session:
+        async with self.async_session() as session:
             await session.merge(LotUserSpaceResp)
             await session.commit()
 
     @sql_retry_wrapper
     async def getOldestSpaceDynInfoByUid(self, uid: int) -> int:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserspaceresp).filter(TLotuserspaceresp.spaceUid == uid).order_by(
                 TLotuserspaceresp.spaceOffset.asc()).limit(1)
             res = await session.execute(sql)
@@ -302,7 +297,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getNewestSpaceDynInfoByUid(self, uid: int) -> int:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserspaceresp).filter(TLotuserspaceresp.spaceUid == uid).order_by(
                 TLotuserspaceresp.spaceOffset.desc()).limit(1)
             res = await session.execute(sql)
@@ -314,7 +309,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getOldestSpaceOffsetByUidRoundId(self, uid: int, round_id: int) -> int:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserspaceresp).filter(
                 and_(
                     TLotuserspaceresp.spaceUid == uid,
@@ -329,7 +324,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def get_lot_user_info_updatetime_by_uid(self, uid: Union[int, str]) -> Union[datetime, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserinfo.updatetime).filter(TLotuserinfo.uid == uid).order_by(
                 TLotuserinfo.uid.desc()).limit(1)
             res = await session.execute(sql)
@@ -340,7 +335,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def isExistSpaceInfoByDynId(self, dynamic_id) -> Union[TLotuserspaceresp, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotuserspaceresp).filter(TLotuserspaceresp.spaceOffset == str(dynamic_id)).limit(1)
             res = await session.execute(sql)
             ret = res.scalars().first()
@@ -348,7 +343,7 @@ class __SqlHelper:
 
     @sql_retry_wrapper
     async def getLatestLotDynInfoByUid(self, uid: int | str) -> TLotdyninfo | None:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TLotdyninfo).filter(and_(TLotdyninfo.up_uid == uid, TLotdyninfo.isLot == True)).order_by(
                 TLotdyninfo.dynId.desc()).limit(1)
             res = await session.execute(sql)
@@ -356,8 +351,8 @@ class __SqlHelper:
             return ret
 
     @sql_retry_wrapper
-    async def getLatestLotDynInfoByUidList(self,uid_list:list[int|str]) -> Sequence[TLotdyninfo]:
-        async with self._session() as session:
+    async def getLatestLotDynInfoByUidList(self, uid_list: list[int | str]) -> Sequence[TLotdyninfo]:
+        async with self.async_session() as session:
             subq = (
                 select(func.max(TLotdyninfo.dynId))
                 .where(
@@ -382,7 +377,7 @@ SqlHelper = __SqlHelper()
 
 if __name__ == '__main__':
     async def __test__():
-        result = await SqlHelper.getLatestLotDynInfoByUidList([3546740766541963,114514])
+        result = await SqlHelper.getLatestLotDynInfoByUidList([3546740766541963, 114514])
         print(result)
 
 

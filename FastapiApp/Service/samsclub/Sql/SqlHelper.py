@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import joinedload
 from CONFIG import CONFIG
 from Utils.PushMe import a_pushme
+from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sams_club_logger
 from Service.samsclub.Sql.models import (
     SpuInfo,
@@ -21,17 +22,11 @@ from Service.samsclub.Sql.models import (
 from Utils.Common import sql_retry_wrapper
 
 
-class SQLHelper:
+class SQLHelper(SqlHelperBase):
     def __init__(self):
+        mysql_db_url=CONFIG.database.MYSQL.sams_club_URI
+        super().__init__(mysql_db_url=mysql_db_url)
         self.is_update_price = False
-        self.engine = create_async_engine(
-            CONFIG.database.MYSQL.sams_club_URI,
-            **CONFIG.sql_alchemy_config.engine_config
-        )
-        self.async_session: async_sessionmaker = async_sessionmaker(
-            bind=self.engine,
-            **CONFIG.sql_alchemy_config.session_config
-        )
         self.relationships = {
             'categoryIdList': SpuCategory,
             'newTagInfo': SpuNewTagInfo,

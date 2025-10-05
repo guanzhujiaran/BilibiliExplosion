@@ -10,25 +10,20 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from CONFIG import CONFIG
+from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sql_log
 from Utils.Common import sql_retry_wrapper
 from Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel import AvailableProxy, ProxyTab
 
 
-class AvailableProxySqlHelper:
+class AvailableProxySqlHelper(SqlHelperBase):
     MIN_USABLE_PROXY_NUM = 50
     MAX_USABLE_PROXY_NUM = 150
     CLEAN_INTERVAL_HOURS = 2
 
     def __init__(self):
-        self.async_egn = create_async_engine(
-            CONFIG.database.MYSQL.proxy_db_URI,
-            **CONFIG.sql_alchemy_config.engine_config
-        )
-        self.session = async_sessionmaker(
-            self.async_egn,
-            **CONFIG.sql_alchemy_config.session_config
-        )
+        my_db_url = CONFIG.database.MYSQL.proxy_db_URI
+        super().__init__(mysql_db_url=my_db_url)
         self.log = sql_log
         self.use_good_proxy_flag: bool = False
 
@@ -36,7 +31,7 @@ class AvailableProxySqlHelper:
     async def get_num(self, is_available: bool = True) -> int:
         now = datetime.now()
         two_hours_ago = now - timedelta(hours=2)
-        async with self.session() as session:
+        async with self.async_session() as session:
             try:
                 sql = select(func.count(AvailableProxy.pk)).select_from(AvailableProxy).where(
                     AvailableProxy.available == is_available,
@@ -64,7 +59,7 @@ class AvailableProxySqlHelper:
     @sql_retry_wrapper
     async def del_by_ip(self, ip: str):
         # Be cautious with deleting by IP if IPs are not unique across different proxy_tab entries
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 try:
                     await session.execute(delete(AvailableProxy).where(AvailableProxy.ip == ip))
@@ -89,7 +84,7 @@ class AvailableProxySqlHelper:
             if available_num > self.MIN_USABLE_PROXY_NUM and self.use_good_proxy_flag:
                 now = datetime.now()
                 two_hours_ago = now - timedelta(hours=2)
-                async with self.session() as session:
+                async with self.async_session() as session:
                     async with session.begin():
                         stmt = (
                             select(AvailableProxy)
@@ -145,7 +140,7 @@ class AvailableProxySqlHelper:
     # --- Keep existing methods ---
     @sql_retry_wrapper
     async def get_available_proxy_by_proxy_id(self, proxy_tab_id: int) -> Optional[AvailableProxy]:
-        async with self.session() as session:
+        async with self.async_session() as session:
             try:
                 result = await session.execute(
                     select(AvailableProxy)
@@ -163,7 +158,7 @@ class AvailableProxySqlHelper:
     async def update_proxy_counter_and_time(self, proxy_pk: int):
         # This method seems redundant if get_rand_available_proxy_sql handles updates
         # But keeping it if used elsewhere
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 try:
                     proxy = await session.get(AvailableProxy, proxy_pk)
@@ -188,7 +183,7 @@ class AvailableProxySqlHelper:
 
     @sql_retry_wrapper
     async def delete_proxy_by_pk(self, proxy_pk: int):
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 try:
                     stmt = delete(AvailableProxy).where(AvailableProxy.pk == proxy_pk)
@@ -203,7 +198,7 @@ class AvailableProxySqlHelper:
 
     @sql_retry_wrapper
     async def update_proxy_resp_code(self, proxy_pk: int, resp_code: int):
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 try:
                     proxy = await session.get(AvailableProxy, proxy_pk)
@@ -233,7 +228,7 @@ class AvailableProxySqlHelper:
         try:
             proxy_id = proxy_tab.proxy_id
             # 检查 proxy_id 是否存在于 proxy_tab 表中
-            async with self.session() as session:
+            async with self.async_session() as session:
                 proxy_exists = await session.execute(
                     select(1).where(ProxyTab.proxy_id == proxy_id)
                 )
@@ -257,7 +252,7 @@ class AvailableProxySqlHelper:
                 "latest_352_ts": latest_352_ts
             }
 
-            async with self.session() as session:
+            async with self.async_session() as session:
                 stmt = mysql_insert(AvailableProxy).values(
                     proxy_tab_id=proxy_id,
                     **new_values

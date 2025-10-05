@@ -14,7 +14,7 @@ from log.base_log import official_lot_logger
 
 class LotteryDataStatisticSqlHelper(SqlHelperBase):
     def __init__(self):
-        super().__init__(MysqlDbUrl=CONFIG.database.MYSQL.dyn_detail)
+        super().__init__(mysql_db_url=CONFIG.database.MYSQL.dyn_detail_URI)
         self.log = official_lot_logger
 
     async def insert_lot_prize_count(

@@ -45,3 +45,4 @@ strawberry-sqlalchemy-mapper
 captcha
 aiofiles
 cryptography
+pymilvus

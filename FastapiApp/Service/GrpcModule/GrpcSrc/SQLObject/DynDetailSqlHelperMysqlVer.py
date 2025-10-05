@@ -23,7 +23,7 @@ from dao.biliLotteryStatisticSqlHelper import lottery_data_statistic_sql_helper
 
 class SQLHelper(SqlHelperBase):
     def __init__(self):
-        super().__init__(MysqlDbUrl=CONFIG.database.MYSQL.dyn_detail)
+        super().__init__(mysql_db_url=CONFIG.database.MYSQL.dyn_detail_URI)
 
     # region 返回和提交内容预处理
 

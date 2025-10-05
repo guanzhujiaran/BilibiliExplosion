@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import InstrumentedAttribute
 
 from CONFIG import CONFIG
+from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import reserve_lot_logger
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
@@ -30,16 +31,10 @@ def lock_wrapper(func: Callable) -> Callable:
     return wrapper
 
 
-class _SqlHelper:
+class _SqlHelper(SqlHelperBase):
     def __init__(self):
-        _SQL_URI = CONFIG.database.MYSQL.bili_reserve_URI
-        self._engine = create_async_engine(_SQL_URI,
-                                           **CONFIG.sql_alchemy_config.engine_config
-                                           )
-        self._session = async_sessionmaker(
-            self._engine,
-            **CONFIG.sql_alchemy_config.session_config
-        )
+        mysql_db_url = CONFIG.database.MYSQL.bili_reserve_URI
+        super().__init__(mysql_db_url=mysql_db_url)
         self.reserve_info_column_names = [
         ]
 
@@ -48,7 +43,7 @@ class _SqlHelper:
             inspector = inspect(conn)
             return inspector.get_columns(TUpReserveRelationInfo.__tablename__)
 
-        async with self._session().bind.connect() as connection:
+        async with self.async_session().bind.connect() as connection:
             column_name_dict = await connection.run_sync(get_column_name)
             self.reserve_info_column_names = list(map(lambda el: el.get('name'), column_name_dict))
 
@@ -71,7 +66,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def _add_reserve_info_by_resp_dict(self, reserve_info: TUpReserveRelationInfo):
-        async with self._session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 await session.merge(reserve_info)
 
@@ -110,7 +105,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def get_latest_reserve_round(self, readonly=False) -> TReserveRoundInfo:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TReserveRoundInfo).order_by(TReserveRoundInfo.id.desc()).limit(1)
             if readonly:
                 sql = sql.where(TReserveRoundInfo.is_finished == True)
@@ -142,7 +137,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def get_reserve_by_ids(self, ids) -> Union[TUpReserveRelationInfo, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TUpReserveRelationInfo).filter(TUpReserveRelationInfo.ids == ids).order_by(
                 TUpReserveRelationInfo.ids.desc()).limit(1)
             result = await session.execute(sql)
@@ -151,7 +146,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def get_reserve_by_dynamic_id(self, dynamic_id) -> Union[TUpReserveRelationInfo, None]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TUpReserveRelationInfo).filter(TUpReserveRelationInfo.dynamicId == int(dynamic_id)).limit(1)
             result = await session.execute(sql)
             result = result.scalars().first()
@@ -159,7 +154,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def add_reserve_round_info(self, tReserveRoundInfo: TReserveRoundInfo) -> TReserveRoundInfo:
-        async with self._session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 sql = select(TReserveRoundInfo).filter(
                     TReserveRoundInfo.round_id == tReserveRoundInfo.round_id).order_by(
@@ -181,7 +176,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def get_all_reserve_lottery(self) -> Sequence[TUpReserveRelationInfo]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TUpReserveRelationInfo).filter(TUpReserveRelationInfo.lotteryType == 1).order_by(
                 TUpReserveRelationInfo.dynamicId.desc())
             result = await session.execute(sql)
@@ -189,7 +184,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def get_reserve_lotterys_by_round_id(self, round_id: int) -> Sequence[TUpReserveRelationInfo]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TUpReserveRelationInfo).filter(
                 and_(
                     TUpReserveRelationInfo.lotteryType == 1,
@@ -217,7 +212,7 @@ class _SqlHelper:
 
     @lock_wrapper
     async def get_all_undrawn_reserve_lottery(self) -> Sequence[TUpReserveRelationInfo]:
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TUpReserveRelationInfo).filter(
                 and_(
                     TUpReserveRelationInfo.lotteryType == 1,
@@ -235,7 +230,7 @@ class _SqlHelper:
         只抽两天之内的
         :return:
         """
-        async with self._session() as session:
+        async with self.async_session() as session:
             sql = select(TUpReserveRelationInfo).filter(
                 and_(
                     TUpReserveRelationInfo.lotteryType == 1,
@@ -281,7 +276,7 @@ class _SqlHelper:
             offset_value = (page_number - 1) * page_size
             sql = sql.offset(offset_value).limit(page_size)
         count_sql = select(func.count(TUpReserveRelationInfo.ids)).filter(and_clause)
-        async with self._session() as session:
+        async with self.async_session() as session:
             result = await session.execute(sql)
             count_result = await session.execute(count_sql)
         return result.scalars().all(), count_result.scalars().first()
@@ -301,7 +296,7 @@ class _SqlHelper:
             TUpReserveRelationInfo.state != 150,  # 开了的预约抽奖
         )
         sql = select(func.count(TUpReserveRelationInfo.ids)).filter(and_clause)
-        async with self._session() as session:
+        async with self.async_session() as session:
             result = await session.execute(sql)
             return result.scalars().first()
 

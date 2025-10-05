@@ -4,6 +4,7 @@ from typing import List
 from log.base_log import milvus_db_logger
 from Models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
 from Utils.Common import lock_retry_wrapper
+from pymilvus import AsyncMilvusClient
 
 
 class Sqlhelper:
@@ -11,13 +12,10 @@ class Sqlhelper:
         bili_lot_data = 'bili_lot_data'
 
     def __init__(self):
-        self.__client = None
+        self.__client = AsyncMilvusClient(db_name='default')
 
     @property
     def _client(self):
-        if not self.__client:
-            from pymilvus import AsyncMilvusClient
-            self.__client = AsyncMilvusClient(db_name='default')
         return self.__client
 
     @lock_retry_wrapper

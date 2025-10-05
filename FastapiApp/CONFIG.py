@@ -94,7 +94,7 @@ class database:
         bili_db_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bilidb?charset=utf8mb4&autocommit=true'  # 话题抽奖
         bili_reserve_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true'
         get_other_lot_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/BiliOpusDb?charset=utf8mb4&autocommit=true'
-        dyn_detail: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
+        dyn_detail_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/dynDetail?charset=utf8mb4&autocommit=true'
         sams_club_URI: str = f'mysql+aiomysql://{_user}:{_pwd}@{_base_url}/samsClub?charset=utf8mb4&autocommit=true'
 
     @dataclass
@@ -121,8 +121,8 @@ class SqlAlchemyConfig:
     engine_config = dict(
         echo=False,
         poolclass=AsyncAdaptedQueuePool,
-        pool_size=5000,  # 默认是5
-        max_overflow=-1,
+        pool_size=10,  # 默认是5
+        max_overflow=20,
         pool_recycle=True,
         pool_timeout=30,
         future=True,

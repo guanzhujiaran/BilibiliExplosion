@@ -15,6 +15,7 @@ from sqlalchemy import select, func, update, and_, or_, delete
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from CONFIG import CONFIG, database
+from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sql_log
 from Models.v1.background_service.background_service_model import ProxyStatusResp
 from Utils.Common import GLOBAL_SCHEDULER, sql_retry_wrapper, asyncio_gather
@@ -122,7 +123,7 @@ class SubRedisStore(RedisManagerBase):
     async def redis_get_all_changed_proxy(self) -> List[ProxyTab]:
         all_changed_proxy_dict = await self._hgetall(self.RedisMap.bili_proxy_changed_hm.value)
         ret_list = []
-        for k,v in all_changed_proxy_dict.items():
+        for k, v in all_changed_proxy_dict.items():
             ret_list.append(ProxyTab(**json.loads(v)))
         del all_changed_proxy_dict
         return ret_list
@@ -243,25 +244,19 @@ class SubRedisStore(RedisManagerBase):
         return await self._delete(self.RedisMap.bili_proxy_changed_hm.value)
 
 
-class SQLHelperClass:
+class SQLHelperClass(SqlHelperBase):
     def __init__(self):
+        mysql_db_url = CONFIG.database.MYSQL.proxy_db_URI
+        super().__init__(mysql_db_url=mysql_db_url)
         self._lock = asyncio.Lock()
         self._underscore_spe_time = 24 * 3600  # 0分以下的无响应代理休眠时间
         self._412_sep_time = 2 * 3600  # 0分以上但是"-412"风控的代理休眠时间
-        self.async_egn = create_async_engine(
-            CONFIG.database.MYSQL.proxy_db_URI,
-            **CONFIG.sql_alchemy_config.engine_config
-        )
-        self.async_egn.dialect.supports_sane_rowcount = False  # 避免了批量update报错stableData
-        self.session = async_sessionmaker(
-            self.async_egn,
-            **CONFIG.sql_alchemy_config.session_config
-        )
+        self.engine.dialect.supports_sane_rowcount = False  # 避免了批量update报错stableData
         GLOBAL_SCHEDULER.add_job(self.refresh_proxy, 'interval', seconds=600, next_run_time=datetime.datetime.now(),
-                          misfire_grace_time=600)
+                                 misfire_grace_time=600)
         GLOBAL_SCHEDULER.add_job(self.sync_proxy_database_redis, 'interval', seconds=1 * 60 * 60,
-                          next_run_time=datetime.datetime.now(),
-                          misfire_grace_time=600)
+                                 next_run_time=datetime.datetime.now(),
+                                 misfire_grace_time=600)
         self.sub_redis_store = SubRedisStore()
         self.is_checking_redis_data = False
 
@@ -307,7 +302,7 @@ class SQLHelperClass:
                     return
                 while 1:
                     try:
-                        async with self.session() as session:
+                        async with self.async_session() as session:
                             # sql_log.critical(
                             #     f"Processing chunk {cur_chunk // chunk_size + 1}/{total_proxies_to_update // chunk_size}: {len(chunk)}")
                             # Use run_sync for the synchronous bulk operation
@@ -392,7 +387,7 @@ class SQLHelperClass:
         主要用于同步到redis之前，将不可用的清理掉
         :return:
         """
-        async with self.session() as session:
+        async with self.async_session() as session:
             # 查找所有将要被删除的 proxy_tab_id
             stmt = select(ProxyTab.proxy_id).where(
                 or_(ProxyTab.score <= MIN_REFRESH_SCORE, ProxyTab.success_times < MIN_REFRESH_SUCCESS_TIME)
@@ -422,7 +417,7 @@ class SQLHelperClass:
         if redis_data := await self.sub_redis_store.redis_select_score_top_proxy():
             return redis_data
         sql = select(ProxyTab).order_by(ProxyTab.score.desc()).limit(1)
-        async with self.session() as session:
+        async with self.async_session() as session:
             res = await session.execute(sql)
         ret_list_dict = res.scalars().first()
         return ret_list_dict
@@ -464,7 +459,7 @@ class SQLHelperClass:
             pass
         else:
             sql = sql.order_by(func.random()).limit(1)
-        async with self.session() as session:
+        async with self.async_session() as session:
             res = await session.execute(sql)
         if mode == 'all':
             ret_list_dict = res.scalars().all()
@@ -487,7 +482,7 @@ class SQLHelperClass:
         sql = select(func.count(ProxyTab.proxy_id)).where(
             ProxyTab.computed_proxy_str == proxy_str
         )
-        async with self.session() as session:
+        async with self.async_session() as session:
             res = await session.execute(sql)
             exist_num = res.scalars().first()
         return exist_num or 0
@@ -500,7 +495,7 @@ class SQLHelperClass:
         '''
         subquery = select(func.max(ProxyTab.proxy_id)).group_by(ProxyTab.proxy)
         sql = select(ProxyTab).where(ProxyTab.proxy_id.not_in(subquery))
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 res = await session.execute(sql)
                 original = res.scalars().all()
@@ -534,7 +529,7 @@ class SQLHelperClass:
             update_ts=proxy_tab.update_ts,
             add_ts=proxy_tab.add_ts
         )
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 # async with self.async_lock:
                 await session.execute(sql)
@@ -547,7 +542,7 @@ class SQLHelperClass:
         :param proxy_tab:
         :return:
         '''
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 session.add(proxy_tab)
                 # 刷新自带的主键
@@ -564,7 +559,7 @@ class SQLHelperClass:
         :param proxy_tab:
         :return:
         """
-        async with self.session() as session:
+        async with self.async_session() as session:
             sql = select(ProxyTab).where(ProxyTab.proxy_id == proxy_tab.proxy_id)  # 删除无效代理，暂时先不用
             async with session.begin():
                 res = await session.execute(sql)
@@ -577,7 +572,7 @@ class SQLHelperClass:
     @sql_retry_wrapper
     async def get_412_proxy_num(self) -> int:
         sql = select(func.count(ProxyTab.proxy_id)).where(ProxyTab.status == -412)
-        async with self.session() as session:
+        async with self.async_session() as session:
             result = await session.execute(sql)
         res = result.scalars().first()
         return res
@@ -585,7 +580,7 @@ class SQLHelperClass:
     async def get_latest_add_ts(self) -> int:
         try:
             sql = select(ProxyTab).order_by(ProxyTab.add_ts.desc()).limit(1)
-            async with self.session() as session:
+            async with self.async_session() as session:
                 result = await session.execute(sql)
             res = result.scalars().first()
             if res:
@@ -599,7 +594,7 @@ class SQLHelperClass:
     @sql_retry_wrapper
     async def get_all_proxy_nums(self) -> int:
         sql = select(func.count(ProxyTab.proxy_id))
-        async with self.session() as session:
+        async with self.async_session() as session:
             # async with self.async_lock:
             result = await session.execute(sql)
         res = result.scalars().first()
@@ -611,7 +606,7 @@ class SQLHelperClass:
     @sql_retry_wrapper
     async def get_available_proxy_nums(self):
         sql = select(func.count(ProxyTab.proxy_id)).where(and_(ProxyTab.score >= 0, ProxyTab.status != -412))
-        async with self.session() as session:
+        async with self.async_session() as session:
             # async with self.async_lock:
             result = await session.execute(sql)
         res = result.scalars().first()
@@ -657,14 +652,13 @@ class SQLHelperClass:
             update_ts=now,
             score=50
         )
-        async with self.session() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 await session.execute(___sql)  # 刷新超过两小时的412风控代理 不改变分数，只改变status
                 await session.execute(__sql)  # 刷新超过12小时的无效代理，改变status和score
                 await session.commit()
         sql_log.critical(f'刷新数据库中代理完成！耗时：{int(time.time() - start_ts)}秒')
         return
-
 
     async def sync_proxy_database_redis(self):
         sql_log.critical('开始同步redis和数据库中代理')
@@ -688,7 +682,7 @@ class SQLHelperClass:
         if redis_data:
             return redis_data
         sql = select(ProxyTab).where(ProxyTab.proxy.like(ip)).limit(1)
-        async with self.session() as session:
+        async with self.async_session() as session:
             # async with self.async_lock:
             res = await session.execute(sql)
             result: ProxyTab | None = res.scalars().first()

@@ -6,8 +6,10 @@ from log.base_log import myfastapi_logger
 
 
 class SqlHelperBase:
-    def __init__(self, MysqlDbUrl: str):
-        self.async_session: async_sessionmaker = sqlalchemy_session_factory(MysqlDbUrl)
+    def __init__(self, mysql_db_url: str):
+        async_session, engin = sqlalchemy_session_factory(mysql_db_url)
+        self.async_session: async_sessionmaker = async_session
+        self.engine = engin
         self.log = myfastapi_logger
 
     @log_sql_retry_wrapper()

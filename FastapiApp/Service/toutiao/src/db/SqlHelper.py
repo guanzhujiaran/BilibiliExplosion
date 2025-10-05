@@ -1,11 +1,12 @@
 from typing import Union
 
+from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import toutiao_api_logger
 from Service.toutiao.src.Tools.Common.ZlibToos import BlobToStr
 from Service.toutiao.src.ToutiaoSetting import CONFIG as toutiaoCONFIG
 from CONFIG import CONFIG
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import create_async_engine,  async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 import asyncio
 
 from Service.toutiao.src.db.models import TFEEDDATA
@@ -29,41 +30,35 @@ def retry_on_error(delay=10):
     return decorator
 
 
-class SqlHelperSpaceFeedDataDb:
+class SqlHelperSpaceFeedDataDb(SqlHelperBase):
     def __init__(self):
         SQLITE_URI = toutiaoCONFIG.DBSetting.AIO_SpaceFeedDataDb
-        engine = create_async_engine(
-            SQLITE_URI,
-            echo=False,  # 是否打印sql日志
-            future=True
-        )
-        self.AsyncSession = async_sessionmaker(engine,
-            **CONFIG.sql_alchemy_config.session_config)  # 每次操作的时候将session实例化一下
+        super().__init__(mysql_db_url=SQLITE_URI)
 
     @retry_on_error()
     async def add_feed_data(self, data: TFEEDDATA):
-        async with self.AsyncSession() as session:
+        async with self.async_session() as session:
             async with session.begin():
                 session.add(data)
                 await session.commit()
 
     @retry_on_error()
     async def get_feed_data_by_id(self, id_: int) -> Union[TFEEDDATA, None]:
-        async with self.AsyncSession() as session:
+        async with self.async_session() as session:
             stmt = select(TFEEDDATA).where(TFEEDDATA.id == id_)
             result = await session.execute(stmt)
             return result.scalars().first()
 
     @retry_on_error()
     async def update_feed_data(self, id_: int, new_data: TFEEDDATA) -> None:
-        async with self.AsyncSession() as session:
+        async with self.async_session() as session:
             stmt = update(TFEEDDATA).where(TFEEDDATA.id == id_).values(new_data)
             await session.execute(stmt)
             await session.commit()
 
     @retry_on_error()
     async def is_id_exists(self, id_: int) -> bool:
-        async with self.AsyncSession() as session:
+        async with self.async_session() as session:
             stmt = select(TFEEDDATA.id).where(TFEEDDATA.id == id_)
             result = await session.execute(stmt)
             return bool(result.scalar_one_or_none())

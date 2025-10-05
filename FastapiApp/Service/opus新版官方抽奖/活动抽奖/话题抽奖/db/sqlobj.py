@@ -15,7 +15,7 @@ db_session = DbSession()
 Base = declarative_base()
 
 
-# TODO: 牢记：一对多的情况下外键设置在一的那张表上，对上多的那张表的主键即可！
+# 一对多的情况下外键设置在一的那张表上，对上多的那张表的主键即可！
 
 class T_topic(Base):
     __tablename__ = 't_topic'
