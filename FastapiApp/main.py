@@ -20,9 +20,9 @@ grpc_dir = os.path.join(current_dir, 'Service/GrpcModule/Grpc/GrpcProto')
 sys.path.append(grpc_dir)
 from CONFIG import settings
 
-print(f'运行 settings:{settings}')
+logger.info(f'运行 settings:{settings}')
 if not settings.SHOW_LOG:
-    print('关闭日志输出')
+    logger.info('关闭日志输出')
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 if sys.platform.startswith('windows'):
