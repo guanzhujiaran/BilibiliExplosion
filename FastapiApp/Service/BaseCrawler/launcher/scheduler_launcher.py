@@ -39,7 +39,7 @@ class CrawlerExecutionInfo:
         if self.info.last_exec_time is None:
             ts_str = await comm_storage_redis_obj.get_val(self._exec_info_redis_key)
             if ts_str:
-                self.info.last_exec_time = datetime.fromtimestamp(int(ts_str))
+                self.info.last_exec_time = datetime.fromtimestamp(float(ts_str))
                 self.logger.info(f"[{self.info.crawler_name}] 加载上次执行时间：{self.info.last_exec_time}")
             else:
                 self.logger.critical(f"[{self.info.crawler_name}] 未找到上次执行时间，使用默认值。")
