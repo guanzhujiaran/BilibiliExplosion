@@ -2,6 +2,7 @@
 import asyncio
 import uvloop
 import sys
+import uvicorn
 
 if not sys.platform.startswith('win'):
     uvloop.install()
@@ -129,8 +130,6 @@ async def global_middleware(request: Request, call_next):
 
 
 if __name__ == '__main__':
-    import uvicorn
-
     uvicorn.run(
         app,
         # host="",
