@@ -19,14 +19,10 @@ current_dir = os.path.dirname(__file__)
 grpc_dir = os.path.join(current_dir, 'Service/GrpcModule/Grpc/GrpcProto')
 sys.path.append(grpc_dir)
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-from Utils.argParse import parse
 from CONFIG import settings
 
-args = parse()
-
-print(f'运行 args:{args}')
 print(f'运行 settings:{settings}')
-if not args.logger:
+if not settings.SHOW_LOG:
     print('关闭日志输出')
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     LMSTUDIO_PORT: str
     PROXY_SERVER: str
     model_config = SettingsConfigDict(env_file=(".env.fastapi.prod", ".env.fastapi.dev"))
-
+    SHOW_LOG:int= 0
 
 settings = Settings()
 

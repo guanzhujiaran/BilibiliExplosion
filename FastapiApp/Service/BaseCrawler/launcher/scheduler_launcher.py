@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
-import os
 from datetime import datetime
 from typing import Optional, AsyncGenerator, Any
-
-import aiofiles
 from apscheduler.triggers.cron import CronTrigger
 from loguru import logger as default_logger
-
 from Models.base.custom_pydantic import CustomBaseModelHashable, CustomBaseModel
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import ParamsType, WorkerStatus
@@ -14,7 +10,6 @@ from Utils.Common import GLOBAL_SCHEDULER
 from Utils.PushMe import async_pushme_try_catch_decorator, a_pushme
 import asyncio
 from typing import Callable
-
 from dao.commStorageRedisObj import comm_storage_redis_obj
 
 

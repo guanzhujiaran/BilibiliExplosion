@@ -125,6 +125,7 @@ services:
       - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
       - PROXY_SERVER=${PROXY_SERVER}
       - TZ=${ENV_TZ}
+      - SHOW_LOG=${FASTAPI_SHOW_LOG}
     build:
       context: ./FastapiApp
     volumes:
