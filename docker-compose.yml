@@ -136,7 +136,8 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1" # linux里面无法直接使用宿主机host，必须手动指定，windows则不需要，linux防火墙也需要开放端口
   nodejs-pptr: # 生产版本不挂载代码文件，生产环境需要修改代码必须重新build，需要存储的东西都在中间件里面
     container_name: nodejs-pptr
     depends_on:
