@@ -123,14 +123,3 @@ async def global_middleware(request: Request, call_next):
             status_code=400,
             detail=CommonResponseModel(code=400, msg=str(err)),
         )
-
-
-if __name__ == '__main__':
-    uvicorn.run(
-        app,
-        # host="",
-        # If host is an empty string or None, all interfaces are assumed and a list of multiple sockets will be returned (most likely one for IPv4 and another one for IPv6).
-        host="0.0.0.0",
-        port=23333,
-        loop="auto" if sys.platform.startswith('windows') else 'uvloop',
-    )

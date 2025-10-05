@@ -25,4 +25,4 @@ COPY . /app
 
 EXPOSE 23333
 # 启动 FastAPI 应用
-CMD ["uvicorn","main:app","--host","0.0.0.0","--port","23333","--loop","uvloop"]
+CMD ["uvicorn","main:app","--host","0.0.0.0","--port","23333"]
