@@ -21,8 +21,8 @@ WORKDIR /app
 ENV PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright
 RUN playwright install chromium
 
-
 COPY . /app
 
+EXPOSE 23333
 # 启动 FastAPI 应用
 CMD ["python","main.py","-l=0"]

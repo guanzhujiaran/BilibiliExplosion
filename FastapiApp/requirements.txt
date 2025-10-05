@@ -6,7 +6,7 @@ fastapi
 langchain_openai
 redis
 apscheduler
-uvicorn
+uvicorn[standard]
 httpx
 aio-pika
 asyncer
