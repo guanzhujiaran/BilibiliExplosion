@@ -124,6 +124,7 @@ services:
       - PUSHME_TOKEN=${PUSHME_TOKEN}
       - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
       - PROXY_SERVER=${PROXY_SERVER}
+      - V2RAY_HOST=${V2RAY_HOST}
       - TZ=${ENV_TZ}
       - SHOW_LOG=${FASTAPI_SHOW_LOG}
     build:
