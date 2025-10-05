@@ -14,6 +14,8 @@ services:
       - ./docker_vol/nginx/logs:/var/log/nginx
       - ./docker_vol/nginx/cert:/etc/nginx/cert
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   goaccess:
     container_name: fastapi-biliExplosion-goaccess
     environment:
@@ -29,7 +31,8 @@ services:
       - ./docker_vol/nginx/certs:/srv/certs
     command: [ "--no-global-config", "--config-file=/srv/config/goaccess.conf" ]
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   standalone:
     container_name: milvus-standalone
     image: docker.1ms.run/milvusdb/milvus:v2.6.2
@@ -58,7 +61,8 @@ services:
       - "2379:2379"
       - "19530:19530"
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   mysql:
     container_name: fastapi-mysql
     image: mysql:8
@@ -71,7 +75,8 @@ services:
     ports:
       - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   redis:
     container_name: fastapi-redis
     image: redis:latest
@@ -82,7 +87,8 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   rabbitmq:
     container_name: fastapi-rabbitmq
     image: rabbitmq:latest
@@ -97,7 +103,8 @@ services:
       - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
       - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   unidbg:
     container_name: unidbg
     image: unidbg-springboot-samsclub
@@ -106,7 +113,8 @@ services:
     ports:
       - "${UNIDBG_PORT}:23335"
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   fastapi:
     container_name: fastapi_bili_explosion
     depends_on:
@@ -136,7 +144,8 @@ services:
     ports:
       - "${FASTAPI_PORT}:23333"
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   postgres:
     container_name: postgres
     image: postgres:alpine3.22
@@ -151,7 +160,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     restart: unless-stopped
     extra_hosts:
-      - "host.docker.internal:172.17.0.1" # linux里面无法直接使用宿主机host，必须手动指定，windows则不需要，linux防火墙也需要开放端口
+      - "host.docker.internal:host-gateway"
   nodejs-pptr: # 生产版本不挂载代码文件，生产环境需要修改代码必须重新build，需要存储的东西都在中间件里面
     container_name: nodejs-pptr
     depends_on:
@@ -176,7 +185,8 @@ services:
       - FASTAPI_URI=http://fastapi:23333
       - FASTAPI_DEV_URI=http://fastapi_dev:23333
       - TZ=${ENV_TZ}
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   nodejs-pptr-dev:
     container_name: nodejs-pptr-dev
     depends_on:
@@ -201,14 +211,16 @@ services:
       - FASTAPI_DEV_URI=http://fastapi_dev:23333
       - TZ=${ENV_TZ}
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
   lm-studio:
     container_name: fastapi-lm-studio
     image: lmstudio/llmster-preview:cpu
     ports:
       - ${LMSTUDIO_PORT}:1234
     restart: unless-stopped
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 networks:
   default:
     enable_ipv6: true

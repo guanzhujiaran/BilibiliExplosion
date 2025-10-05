@@ -46,3 +46,4 @@ captcha
 aiofiles
 cryptography
 pymilvus
+aiodns

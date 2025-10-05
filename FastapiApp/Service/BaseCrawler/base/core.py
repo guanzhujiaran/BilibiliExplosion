@@ -9,7 +9,7 @@ from Utils.Common import sem_gen
 
 
 class BaseCrawler(ABC,Generic[ParamsType]):
-    def __init__(self, max_sem: int = 50, _logger: Logger = logger):
+    def __init__(self, max_sem: int = 10, _logger: Logger = logger):
         self.log = _logger
         self.max_sem = max_sem
         self.task_queue: asyncio.Queue[WorkerModel] = asyncio.Queue(1)  # 只要有一个就可以了

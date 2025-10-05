@@ -2,9 +2,10 @@
 import asyncio
 import uvloop
 import sys
-import uvicorn
 if not sys.platform.startswith('win'):
     uvloop.install()
+elif sys.platform.startswith('windows'):
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import os
 import traceback
 from contextlib import asynccontextmanager
@@ -25,8 +26,7 @@ if not settings.SHOW_LOG:
     logger.info('关闭日志输出')
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
-if sys.platform.startswith('windows'):
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
+
 from log.base_log import myfastapi_logger
 from Utils.PushMe import a_pushme
 from Utils.Common import GLOBAL_SCHEDULER, asyncio_gather
@@ -46,7 +46,8 @@ from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
+    await asyncio.sleep(3)  # 等 HTTP server ready
+    myfastapi_logger.critical("开启其他服务")
     show_log = False
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
     GLOBAL_SCHEDULER.start()
