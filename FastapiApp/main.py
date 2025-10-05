@@ -3,10 +3,8 @@ import asyncio
 import uvloop
 import sys
 import uvicorn
-
 if not sys.platform.startswith('win'):
     uvloop.install()
-import io
 import os
 import traceback
 from contextlib import asynccontextmanager
@@ -17,11 +15,9 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 from loguru import logger
 from starlette.requests import Request
 from starlette.responses import Response
-
 current_dir = os.path.dirname(__file__)
 grpc_dir = os.path.join(current_dir, 'Service/GrpcModule/Grpc/GrpcProto')
 sys.path.append(grpc_dir)
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 from CONFIG import settings
 
 print(f'运行 settings:{settings}')
@@ -32,7 +28,7 @@ if not settings.SHOW_LOG:
 if sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
 from log.base_log import myfastapi_logger
-from Utils.PushMe import pushme
+from Utils.PushMe import a_pushme
 from Utils.Common import GLOBAL_SCHEDULER, asyncio_gather
 from controller.damo import DamoML
 from controller.v1.ChatGpt3_5 import ReplySingle
@@ -116,8 +112,7 @@ async def global_middleware(request: Request, call_next):
         }
         myfastapi_logger.exception(f"FastAPI请求异常: {error_detail}")
         err_title = str(err).replace("\n", "")
-        await asyncio.to_thread(
-            pushme,
+        await a_pushme(
             f'FastAPI请求异常！URL: {request.url}\n错误详情: {err_title}',
             traceback.format_exc(),
             None

@@ -14,7 +14,7 @@ from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import reserve_lot_logger
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
-from Utils.PushMe import pushme
+from Utils.PushMe import a_pushme
 
 lock = asyncio.Lock()
 
@@ -95,7 +95,7 @@ class _SqlHelper(SqlHelperBase):
                     origin_dynamic_id=str(reserve_info.dynamicId),
                 )
             else:
-                await asyncio.to_thread(pushme, '预约信息抽奖jumpUrl有问题', f'{json.dumps(origin_resp_dict)}')
+                await a_pushme('预约信息抽奖jumpUrl有问题', f'{json.dumps(origin_resp_dict)}')
         reserve_info.raw_JSON = origin_resp_dict
         if round_id:
             reserve_info.reserve_round_id = round_id

@@ -14,7 +14,7 @@ from Models.v1.samsclub.api_model import RespUserProfile, ApiResponse, UserProfi
 from Models.v1.samsclub.samsclub_model import SamsClubAppStorage, SamsClubGrayConfigStrategy
 from Service.samsclub.exceptions.error import UnknownError
 from Service.samsclub.tools.headers_gen import SamsClubHeadersGen, sort_headers_with_missing_last
-from Utils.PushMe import pushme, a_pushme
+from Utils.PushMe import a_pushme
 from Utils.代理.SealedRequests import my_async_httpx
 
 StringNumber = NewType('StringNumber', str)
@@ -192,7 +192,7 @@ class SamsClubApi:
                     if is_updated_encrypt_key:
                         return False
                     self.log.critical(f"被强制登出！{resp_dict}")
-                    await asyncio.to_thread(pushme, f'山姆会员商店token失效', f'{resp_dict}')
+                    await a_pushme( f'山姆会员商店token失效', f'{resp_dict}')
                     self.log.debug(f'等待token更新')
                     while 1:
                         if auth_token != self.headers_gen.auth_token:

@@ -27,7 +27,7 @@ from Service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserv
 from Utils.Common import asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from Utils.dynamic_id_caculate import dynamic_id_2_ts
-from Utils.PushMe import pushme, a_pushme
+from Utils.PushMe import a_pushme
 from Utils.代理.mdoel.RequestConf import RequestConf
 
 BAPI = methods()
@@ -1272,8 +1272,7 @@ class BiliSpaceUserItem:
                 if code != 0:
                     get_others_lot_log.critical(
                         f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}')
-                    await asyncio.to_thread(
-                        pushme,
+                    await a_pushme(
                         'GetOthersLotDyn',
                         f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}',
                         'text'
@@ -1317,8 +1316,7 @@ class BiliSpaceUserItem:
                 cur_offset = int(offset_str if offset_str else "0")
             else:
                 get_others_lot_log.critical(f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}')
-                await asyncio.to_thread(
-                    pushme,
+                await a_pushme(
                     'GetOthersLotDyn',
                     f'获取用户【{self.uid}】offset:{cur_offset} 空间动态请求失败！\n{dyreq_dict}',
                     'text'
@@ -1770,8 +1768,7 @@ class GetOthersLotDyn:
                     continue
                 ret_list.append(f'https://t.bilibili.com/{recent_official_lot_data[i].business_id}?tab=1')
         if ret_list:
-            await asyncio.to_thread(
-                pushme,
+            await a_pushme(
                 f"必抽的官方抽奖【{len(ret_list)}】条", '\n'.join(ret_list),
                 'text'
             )
@@ -1791,8 +1788,7 @@ class GetOthersLotDyn:
             if is_lot_list[i] == 1:
                 ret_list.append(all_lot[i].dynamicUrl)
         if ret_list:
-            await asyncio.to_thread(
-                pushme,
+            await a_pushme(
                 f"必抽的大奖【{len(ret_list)}】条", '\n'.join(ret_list),
                 'text'
             )
@@ -1812,8 +1808,7 @@ class GetOthersLotDyn:
                     ' '.join([f'https://space.bilibili.com/{recent_lots[i].upmid}/dynamic', recent_lots[i].text]))
                 ret_list.append(recent_lots[i])
         if ret_info_list:
-            await asyncio.to_thread(
-                pushme,
+            await a_pushme(
                 f"必抽的预约抽奖【{len(ret_info_list)}】条", '\n'.join(ret_info_list),
                 'text'
             )
@@ -1822,7 +1817,7 @@ class GetOthersLotDyn:
     # endregion
 
     # region 推送抽奖用的函数
-    def push_lot_csv(self, title: str, content_list: list[TLotdyninfo]):
+    async def push_lot_csv(self, title: str, content_list: list[TLotdyninfo]):
         """
         推送抽奖信息到手机
         :param title:
@@ -1849,7 +1844,7 @@ class GetOthersLotDyn:
         # content += '</table>'
 
         try:
-            resp = pushme(title, content, 'markdata')
+            resp = await a_pushme(title, content, 'markdata')
             get_others_lot_log.debug(resp.text)
         except Exception as e:
             get_others_lot_log.error(f'推送至pushme失败！\n{e}')
@@ -1898,15 +1893,14 @@ class GetOthersLotDyn:
         all_lot_det = await SqlHelper.getAllLotDynByTimeLimit(time_limit)
         filtered_list: list[TLotdyninfo] = list(filter(self.__is_need_lot, all_lot_det))
         filtered_list.sort(key=lambda x: x.dynId, reverse=True)
-        self.push_lot_csv(
+        await self.push_lot_csv(
             f"一般动态抽奖信息【{len(filtered_list)}】条",
             filtered_list
         )
         get_others_lot_log.critical(f'一般动态抽奖信息【{len(filtered_list)}】条')
         ret_list = [str(x.dynId) for x in filtered_list]
         if ret_list:
-            await asyncio.to_thread(
-                pushme,
+            await a_pushme(
                 f"一般动态抽奖信息【{len(filtered_list)}】条", '\n'.join(ret_list),
                 'text'
             )

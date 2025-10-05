@@ -3,9 +3,12 @@ import asyncio
 import time
 import json
 import os
+
+import aiofiles
+
 from log.base_log import space_monitor_logger as log
 from Utils.Common import asyncio_gather
-from Utils.PushMe import pushme, async_pushme_try_catch_decorator
+from Utils.PushMe import async_pushme_try_catch_decorator, a_pushme
 from Service.GrpcModule.Grpc.grpc_api import bili_grpc
 
 class monitor:
@@ -40,11 +43,11 @@ class monitor:
         realtime = time.strftime('%Y-%m-%d %H:%M:%S', local_time)
         return realtime
 
-    def save_monitor_uid_list(self):
-        with open(os.path.join(self.dir_path, 'data/monitor_uid_list.json'), 'w', encoding='utf-8') as f:
+    async def save_monitor_uid_list(self):
+        with aiofiles.open(os.path.join(self.dir_path, 'data/monitor_uid_list.json'), 'w', encoding='utf-8') as f:
             f.write(json.dumps(self.monitor_uid_list, indent='\t'))
 
-    def push_dyn_notify(self, dynamic_item):
+    async def push_dyn_notify(self, dynamic_item):
         cardType = dynamic_item.get('cardType')
         author_name = dynamic_item.get('extend').get('origName')
         author_space = f"https://space.bilibili.com/{dynamic_item.get('extend').get('uid')}/dynamic"
@@ -68,7 +71,7 @@ class monitor:
                                         dynamic_item.get('extend').get('origDesc')])
         log.debug(f'【Bilibili】你关注的up主 {author_name}有新的动态！\nhttps://www.bilibili.com/opus/{dynIdStr}')
         try:
-            pushme(f'【Bilibili】你关注的up主 {author_name}有新的动态！',
+            await a_pushme(f'【Bilibili】你关注的up主 {author_name}有新的动态！',
                    f'|信息|内容|\n|---|---|\n|跳转APP|[__点击跳转app__](bilibili://opus/detail/{dynIdStr})|\n|动态类型|{cardType}|\n|up昵称|{author_name}|\n|空间主页|{author_space}|\n|发布时间|{pub_time}|\n|动态内容|{dynamic_content.replace("&#124;", "|")}|',
                    'markdown'
                    )
@@ -90,11 +93,11 @@ class monitor:
                     dynIdStr = i.get('extend').get('dynIdStr')
                     if dynIdStr not in latest_dynamic_id_list:
                         if not first_round:
-                            self.push_dyn_notify(i)
+                            await self.push_dyn_notify(i)
                         latest_dynamic_id_list.append(dynIdStr)
                         if len(latest_dynamic_id_list) > 30:
                             latest_dynamic_id_list.pop(0)
-                        self.save_monitor_uid_list()
+                        await self.save_monitor_uid_list()
             await asyncio.sleep(self.sep_time)
             first_round = False
 

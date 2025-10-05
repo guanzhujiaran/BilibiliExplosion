@@ -21,7 +21,7 @@ from Service.opus新版官方抽奖.Model.OfficialLotModel import LotDetail
 from Service.opus新版官方抽奖.转发抽奖.生成专栏信息 import GenerateOfficialLotCv
 from Utils.Common import asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from Utils.PushMe import pushme
+from Utils.PushMe import a_pushme
 
 
 class ExtractOfficialLottery:
@@ -295,7 +295,7 @@ class ExtractOfficialLottery:
             *[x.dynamic_id for x in all_official_lot_detail if not x.article_pub_record],
             *[x.dynamic_id for x in all_charge_lot_detail if not x.article_pub_record]
         )
-        pushme('官方抽奖和充电抽奖已更新',
+        await a_pushme('官方抽奖和充电抽奖已更新',
                f'{len(all_official_lot_detail)}个'
                f'\n充电抽奖：{len(all_charge_lot_detail)}个'
                f'\n更新内容：\n{[x.__dict__ for x in all_official_lot_detail if not x.article_pub_record]}\n{[x.__dict__ for x in all_charge_lot_detail if not x.article_pub_record]}')

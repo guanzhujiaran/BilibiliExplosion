@@ -1,16 +1,13 @@
-# -*- coding: utf-8 -*-
-import asyncio
 import datetime
 import json
 import traceback
 from collections import deque
 from functools import wraps
 from typing import Literal, Optional
-
 import requests
 from requests import Response
-
 from CONFIG import CONFIG
+from Utils.代理.SealedRequests import my_async_httpx
 from log.base_log import pushme_logger
 
 push_msg_d = deque(maxlen=50)
@@ -31,19 +28,19 @@ def __preprocess_content(content: str) -> str:
     return content
 
 
-def pushme(title: str, content: str, __type: Literal[
-                                                 "text",
-                                                 "data",
-                                                 "markdata",
-                                                 "html",
-                                                 "txt",
-                                                 "json",
-                                                 "markdown",
-                                                 "cloudMonitor",
-                                                 "jenkins",
-                                                 "route",
-                                                 "pay"
-                                             ] | None = 'text') -> Response:
+async def _pushme(title: str, content: str, push_type: Literal[
+                                                           "text",
+                                                           "data",
+                                                           "markdata",
+                                                           "html",
+                                                           "txt",
+                                                           "json",
+                                                           "markdown",
+                                                           "cloudMonitor",
+                                                           "jenkins",
+                                                           "route",
+                                                           "pay"
+                                                       ] | None = 'text') -> Response:
     resp = Response()
     if content in push_msg_d:
         return Response()
@@ -56,16 +53,16 @@ def pushme(title: str, content: str, __type: Literal[
             "push_key": token,
             "title": title[0:100],
             "content": push_content[0:500],
-            'type': __type
+            'type': push_type
         }
-        resp = requests.post(url=url, data=data, proxies={
+        resp = await my_async_httpx.post(url=url, data=data, proxies={
             "http": CONFIG.V2ray_proxy,
             "https": CONFIG.V2ray_proxy
         }, timeout=10)
         return resp
     except Exception as e:
         pushme_logger.info(f'推送pushme失败！{e}\n开始尝试微信pushpush推送！')
-        resp = _pushpush(title, content, __type)
+        resp = await _pushpush(title, content, push_type)
         return resp
     finally:
         try:
@@ -74,32 +71,32 @@ def pushme(title: str, content: str, __type: Literal[
             pushme_logger.exception(f'推送失败！{e}')
 
 
-def _pushpush(title: str, content: str, __type='txt') -> Response:
+async def _pushpush(title: str, content: str, push_type: str = 'txt') -> Response:
     resp = Response()
-    if __type == 'text':
-        __type = 'txt'
-    elif __type == 'data':
-        __type = 'json'
-    elif __type == 'markdata':
-        __type = 'markdown'
-    elif __type == 'html':
+    if push_type == 'text':
+        push_type = 'txt'
+    elif push_type == 'data':
+        push_type = 'json'
+    elif push_type == 'markdata':
+        push_type = 'markdown'
+    elif push_type == 'html':
         pass
-    elif __type == 'txt':
+    elif push_type == 'txt':
         pass
-    elif __type == 'json':
+    elif push_type == 'json':
         pass
-    elif __type == 'markdown':
+    elif push_type == 'markdown':
         pass
-    elif __type == 'cloudMonitor':
+    elif push_type == 'cloudMonitor':
         pass
-    elif __type == 'jenkins':
+    elif push_type == 'jenkins':
         pass
-    elif __type == 'route':
+    elif push_type == 'route':
         pass
-    elif __type == 'pay':
+    elif push_type == 'pay':
         pass
     else:
-        __type = 'txt'
+        push_type = 'txt'
     try:
         push_content = __preprocess_content(content)
         url = CONFIG.pushnotify.pushplus.url
@@ -107,9 +104,9 @@ def _pushpush(title: str, content: str, __type='txt') -> Response:
             "token": CONFIG.pushnotify.pushplus.token,
             "title": title[0:100],
             "content": push_content[0:500],
-            "template": __type
+            "template": push_type
         }
-        resp = requests.post(url=url, data=json.dumps(data), headers={
+        resp = await my_async_httpx.post(url=url, data=json.dumps(data), headers={
             "Content-Type": "application/json"
         })
 
@@ -121,39 +118,20 @@ def _pushpush(title: str, content: str, __type='txt') -> Response:
         return resp
 
 
-def pushme_try_catch_decorator(func: callable) -> callable:
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            func(*args, **kwargs)
-        except Exception as e:
-            pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
-            pushme_logger.exception(e)
-            raise e
-
-    return wrapper
-
-
 def async_pushme_try_catch_decorator(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
         try:
             await func(*args, **kwargs)
         except Exception as e:
-            pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！', f'错误堆栈：\n{traceback.format_exc()}')
+            await a_pushme(f'服务：【{func.__class__.__name__} {func.__name__}】报错！',
+                           f'错误堆栈：\n{traceback.format_exc()}')
             pushme_logger.exception(e)
             raise e
 
     return wrapper
 
 
-async def a_pushme(title: str, content: str, __type: Optional[Literal[
+async def a_pushme(title: str, content: str, push_type: Optional[Literal[
     'text', 'data', "markdata", "html", "txt", "json", "markdown", "cloudMonitor", "jenkins", "route", "pay"]] = 'text') -> Response:
-    return await asyncio.to_thread(
-        pushme,
-        title, content, __type
-    )
-
-
-if __name__ == '__main__':
-    pushme('测试3', 'test3')
+    return await _pushme(title, content, push_type)

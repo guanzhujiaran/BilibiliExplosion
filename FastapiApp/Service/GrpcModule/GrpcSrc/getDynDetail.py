@@ -20,7 +20,7 @@ from Service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, B
 from Service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from Utils.Common import sem_gen, asyncio_gather
 from Utils.dynamic_id_caculate import dynamic_id_2_ts
-from Utils.PushMe import pushme
+from Utils.PushMe import a_pushme
 
 
 class StopCounter(BaseStopCounter):
@@ -234,7 +234,7 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
             return temp_rid, lot_id, dynamic_id, dynamic_created_time
         except Exception as e:
             self.log.exception(f'{dynData}\n解析动态详情出错：{e}')
-            pushme(f'解析动态详情出错：{e}', f'{dynData}\n{e}')
+            await a_pushme(f'解析动态详情出错：{e}', f'{dynData}\n{e}')
             return 0, 0, 0, self._timeshift(0)
 
     async def get_grpc_dynDetails(self, rid_dyn_ids: list[dict]) -> list[dict]:
@@ -442,7 +442,7 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
             await lot_dyn_sort_by_date.main()
         except Exception as e:
             self.log.error(f'爬取动态任务出错：{e}')
-            pushme(title='爬取动态任务出错', content=f'爬取动态任务出错：{e}')
+            await a_pushme(title='爬取动态任务出错', content=f'爬取动态任务出错：{e}')
         finally:
             self.succ_counter.is_running = False
 

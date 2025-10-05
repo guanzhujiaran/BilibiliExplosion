@@ -10,7 +10,7 @@ from Service.GrpcModule.GrpcSrc.获取取关对象.GetRmFollowingListV2 import g
 from Service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import \
     toutiaoSpaceFeedLotService
 from Service.zhihu.获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import zhihu_lotScrapy
-from Utils.PushMe import pushme
+from Utils.PushMe import a_pushme
 
 router = new_router()
 
@@ -99,8 +99,8 @@ async def api_get_others_big_reserve() -> list[reserveInfo]:
 async def zhuhu_avaliable_api():
     myfastapi_logger.info('开始获取zhihu抽奖内容')
     resp = await zhihu_lotScrapy.api_get_all_pins()
-    await asyncio.to_thread(pushme, f'获取到知乎抽奖{len(resp)}条', '\n'.join(resp)
-                            )
+    await a_pushme(f'获取到知乎抽奖{len(resp)}条', '\n'.join(resp)
+                   )
     return resp
 
 
@@ -109,8 +109,8 @@ async def toutiao_get_others_lot_ids():
     myfastapi_logger.info('开始获取toutiao抽奖内容')
     result = await toutiaoSpaceFeedLotService.main()
     result = result if result else []
-    await asyncio.to_thread(pushme, f'获取到头条抽奖{len(result)}条', '\n'.join(result)
-                            )
+    await a_pushme(f'获取到头条抽奖{len(result)}条', '\n'.join(result)
+                   )
     return result
 
 # endregion
