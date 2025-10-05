@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import time
-import threading
 import json
 import os
 from log.base_log import space_monitor_logger as log
@@ -35,7 +34,6 @@ class monitor:
                         break
         self.grpc_api = bili_grpc
         self.sep_time = 3 * 60  # 间隔时间3分钟，一天总共获取20 * 24 = 480次，间隔比较适中
-        self.lock = threading.Lock()
 
     def timeshift(self, timestamp):
         local_time = time.localtime(timestamp)
@@ -93,11 +91,10 @@ class monitor:
                     if dynIdStr not in latest_dynamic_id_list:
                         if not first_round:
                             self.push_dyn_notify(i)
-                        with self.lock:
-                            latest_dynamic_id_list.append(dynIdStr)
-                            if len(latest_dynamic_id_list) > 30:
-                                latest_dynamic_id_list.pop(0)
-                            self.save_monitor_uid_list()
+                        latest_dynamic_id_list.append(dynIdStr)
+                        if len(latest_dynamic_id_list) > 30:
+                            latest_dynamic_id_list.pop(0)
+                        self.save_monitor_uid_list()
             await asyncio.sleep(self.sep_time)
             first_round = False
 
