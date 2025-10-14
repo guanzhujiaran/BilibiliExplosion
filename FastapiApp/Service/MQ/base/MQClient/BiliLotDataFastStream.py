@@ -3,6 +3,7 @@ import random
 import time
 from typing import Callable, Dict, Annotated, Any
 from fast_depends import Depends
+from faststream import AckPolicy
 from faststream.rabbit import RabbitQueue
 from faststream.rabbit.fastapi import RabbitBroker, RabbitMessage
 
@@ -58,7 +59,7 @@ async def _test(app_instance):
     await router.broker.publish("Hello!", __test_queue)
 
 
-@router.subscriber(__test_queue, retry=True)
+@router.subscriber(__test_queue, ack_policy=AckPolicy.MANUAL)
 async def hello(
         body: str,
         msg: RabbitMessage,
