@@ -1,4 +1,6 @@
 from typing import Dict
+
+from faststream import AckPolicy
 from faststream.rabbit.fastapi import RabbitMessage
 from Service.MQ.base.MQClient.base import BaseFastStreamMQ
 from log.base_log import MQ_logger
@@ -13,8 +15,7 @@ def gen_sub_params(mq_client: BaseFastStreamMQ):
     return {
         "queue": mq_client.mq_props.rabbit_queue,
         "exchange": mq_client.mq_props.exchange,
-        "retry": True,
-        "no_ack": True
+        "ack_policy": AckPolicy.MANUAL,
     }
 
 

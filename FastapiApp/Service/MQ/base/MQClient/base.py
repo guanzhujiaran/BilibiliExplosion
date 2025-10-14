@@ -17,8 +17,6 @@ router = RabbitRouter(
     CONFIG.RabbitMQConfig.broker_url,
     include_in_schema=True,
     logger=None,
-    max_consumers=500,  # 对于rabbitmq来说就是 prefetch_count
-    channel_number=10
 )
 
 

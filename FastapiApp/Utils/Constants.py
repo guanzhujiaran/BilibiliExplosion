@@ -151,3 +151,4 @@ GPU_DATABASE = [
     {'manufacturer': 'Intel', 'name': 'Intel(R) HD Graphics (Sandy Bridge)', 'id': '0x00000106'},
     {'manufacturer': 'Intel', 'name': 'Intel(R) HD Graphics (Ivy Bridge)', 'id': '0x00000156'},
 ]
+
