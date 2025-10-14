@@ -49,3 +49,4 @@ pymilvus
 aiodns
 protobuf==6.32.1
 google
+crawlee[all]

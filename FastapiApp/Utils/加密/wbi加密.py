@@ -206,7 +206,7 @@ async def get_wbi_params(params: dict) -> Dict[Literal["w_rid", "wts"], str]:
 
 
 def get_dm_cover_img_str(gen_bili_web_cookie_params: GenWebCookieParams):
-    sss = gen_bili_web_cookie_params.webgl_renderer
+    sss = gen_bili_web_cookie_params.renderer
     dm_cover_img_str = base64_encode(sss)
     return dm_cover_img_str
 

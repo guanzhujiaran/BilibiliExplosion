@@ -10,7 +10,9 @@ import time
 from typing import Optional, Literal, Any
 from pydantic import Field
 from Models.base.custom_pydantic import CustomBaseModel
-from Utils.Constants import GPU_DATABASE
+from crawlee.fingerprint_suite import DefaultFingerprintGenerator
+
+fingerprint_generator = DefaultFingerprintGenerator()
 
 config = {
     'bilibili': {
@@ -169,15 +171,14 @@ class GenWebCookieParams(CustomBaseModel):
 
     payload_str: str = Field('')
     buvid_fp: str = Field('')
-    deviceMemory: int = Field(default_factory=lambda: random.choice(range(4, 33, 4)))
-    CPUCoreNum: int = Field(default_factory=lambda: random.choice(range(4, 25, 4)))
-
+    deviceMemory: int = Field(8)
+    CPUCoreNum: int = Field(8)
     renderer_id: str = Field('')
-    renderer: str = Field('')
-    webgl_renderer: str = Field(
+    vendor: str = Field('', description='Apple Inc.')
+    renderer: str = Field(
         '',
         description='''类似
-`ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)Google Inc. (AMD`
+`ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER (0x000021C4) Direct3D11 vs_5_0 ps_5_0, D3D11)`
 ''')
 
     def model_post_init(self, context: Any):
@@ -186,23 +187,11 @@ class GenWebCookieParams(CustomBaseModel):
                 - webgl_renderer 格式为: ANGLE (...) Google Inc. (厂商)
                 - renderer 格式为: ANGLE (...) #X...随机ID...
                 """
-        # 1. 随机选择一个 GPU 配置
-        selected_gpu = random.choice(GPU_DATABASE)
-        manufacturer = selected_gpu['manufacturer']
-        gpu_name = selected_gpu['name']
-        gpu_id = selected_gpu['id']
-
-        # 2. 生成 renderer ID，它将被用在 renderer 字符串中
-        self.renderer_id = f"#X{''.join(random.choices(string.ascii_letters + string.digits, k=9))}"
-
-        # 3. 定义不变的 ANGLE 核心信息部分，方便复用
-        angle_core_info = f"ANGLE ({manufacturer}, {gpu_name} ({gpu_id}) Direct3D11 vs_5_0 ps_5_0, D3D11)"
-
-        # 4. 生成 webgl_renderer (格式: ... Google Inc. (厂商))
-        self.webgl_renderer = f"{angle_core_info}Google Inc. ({manufacturer}"
-        # 5. 生成 renderer (格式: ... #X...ID...)
-        self.renderer = f"{angle_core_info} {self.renderer_id}"
-
+        rand_finger = fingerprint_generator.generate()
+        self.CPUCoreNum = rand_finger.navigator.hardwareConcurrency
+        self.deviceMemory = rand_finger.navigator.deviceMemory
+        self.renderer = rand_finger.videoCard.renderer
+        self.vendor = rand_finger.videoCard.vendor
         self.payload_str = BuvidFp.gen_payload(buvid_payload_params=self)
         self.buvid_fp = BuvidFp.gen(self.payload_str, 31)
 
@@ -372,7 +361,7 @@ class BuvidFp:
                     "webgl stencil bits:0",
                     "webgl vendor:WebKit",
                     "webgl version:WebGL 1.0 (OpenGL ES 2.0 Chromium)",
-                    "webgl unmasked vendor:Google Inc. (NVIDIA) #X3fQVPgERx",
+                    f"webgl unmasked vendor:{buvid_payload_params.vendor}",
                     f"webgl unmasked renderer:{buvid_payload_params.renderer}",
                     "webgl vertex shader high float precision:23",
                     "webgl vertex shader high float precision rangeMin:127",
@@ -411,8 +400,9 @@ class BuvidFp:
                     "webgl fragment shader low int precision rangeMin:31",
                     "webgl fragment shader low int precision rangeMax:30"
                 ],  # webgl_params, cab be set to [] if webgl is not supported
-                "6bc5": f"Google Inc. (NVIDIA) {buvid_payload_params.renderer_id}~{buvid_payload_params.renderer}",
-                # webglVendorAndRenderer
+                "6bc5": f"{buvid_payload_params.vendor}~{buvid_payload_params.renderer}",
+                # webglVendorAndRenderer like "Google Inc. (NVIDIA)~ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER (0x000021C4) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+                # f"{vendor}~{renderer}"
                 "ed31": 0,  # hasLiedLanguages
                 "72bd": 0,  # hasLiedOs
                 "097b": 0,  # hasLiedBrowser
