@@ -31,8 +31,8 @@ async def reply_single(reply_req: ReplyReq):
             ts=int(time.time())
         )
         try:
-            log_path = os.path.join(_current_dir, '../../../log/chatgpt_single.log')
-            write_mode:Literal['a+','w'] = 'a+'
+            log_path = os.path.join(_current_dir, '../../../scripts/log/chatgpt_single.log')
+            write_mode: Literal['a+', 'w'] = 'a+'
             if not os.path.exists(log_path):
                 write_mode = 'w'
             async with aiofiles.open(file=log_path, mode=write_mode, encoding='utf-8') as f:

@@ -26,9 +26,9 @@ services:
       - "7890:7890"
     volumes:
       - ./docker_vol/goaccess/goaccess.conf:/srv/config/goaccess.conf
-      - ./docker_vol/nginx/logs:/srv/logs
-      - ./docker_vol/nginx/html/dist:/srv/report
-      - ./docker_vol/nginx/certs:/srv/certs
+      - /opt/1panel/apps/openresty/openresty/log/:/srv/logs
+      - /www/sites/serena.dynv6.net/index/:/srv/report
+      - /www/sites/serena.dynv6.net/ssl/:/srv/certs
     command: [ "--no-global-config", "--config-file=/srv/config/goaccess.conf" ]
     restart: unless-stopped
     extra_hosts:
@@ -116,6 +116,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
   fastapi:
+    deploy:
+      resources:
+        limits:
+          memory: 5G
     container_name: fastapi_bili_explosion
     depends_on:
       - mysql
@@ -138,7 +142,6 @@ services:
     build:
       context: ./FastapiApp
     volumes:
-      - ./docker_vol/fastapi/log:/app/scripts/logs
       - ./FastapiApp:/app
       - /app/node_modules  # 保护容器内node_modules
     ports:
@@ -171,7 +174,6 @@ services:
       context: ./puppeteer_Bili
       target: prod
     volumes:
-      - ./docker_vol/pptr/prod/app:/app
       - /app/node_modules  # 保护容器内node_modules
     ports:
       - "${NODEJS_PPTR_PORT}:9923"
