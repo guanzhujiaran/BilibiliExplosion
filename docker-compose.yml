@@ -144,6 +144,7 @@ services:
     volumes:
       - ./FastapiApp:/app
       - /app/node_modules  # 保护容器内node_modules
+      - ./docker_vol/fastapi/log:/app/scripts/log
     ports:
       - "${FASTAPI_PORT}:23333"
     restart: unless-stopped

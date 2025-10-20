@@ -24,7 +24,7 @@ from Utils.Common import sql_retry_wrapper
 
 class SQLHelper(SqlHelperBase):
     def __init__(self):
-        mysql_db_url=CONFIG.database.MYSQL.sams_club_URI
+        mysql_db_url = CONFIG.database.MYSQL.sams_club_URI
         super().__init__(mysql_db_url=mysql_db_url)
         self.is_update_price = False
         self.relationships = {
@@ -36,7 +36,6 @@ class SQLHelper(SqlHelperBase):
             'stockInfo': SpuStockInfo,
         }
 
-    @sql_retry_wrapper
     async def get_price_info_by_spu_id_type(self, spu_id: str, price_type: int, db: AsyncSession) -> int:
         """
         返回 现价,原价
@@ -1557,13 +1556,133 @@ if __name__ == '__main__':
         res = await sql_helper.bulk_upsert_spu_info(da_list)
         print(res)
 
+
     async def _test_upsert_spu_detial2():
         true = True
-        false=False
-        da = {"data":{"spuId":"100035921","hostItem":"888800005786","storeId":"9996","title":" a2 Platinum 婴儿配方奶粉（1段）900g （0-6个月）","masterBizType":1,"viceBizType":2,"categoryIdList":["10003018","10003044","10005070","10005563"],"images":["https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5673029/340920240131191030450.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061310/3c6d7e45-f692-40ec-ae12-271e1947dba0_219520220928130748101.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061311/f186000a-5248-403c-89b9-732fc937749c_993920220928130748197.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061314/4571eb14-da84-4a69-96bb-e43d8ddc64c1_748420220928130748454.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061312/6694ee02-866c-49a9-9548-7d3ebe8003b2_975920220928130748263.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061315/4ede448f-9cbd-43bd-9686-8389857c5a45_438720220928130748629.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061313/f6449a86-3719-4f41-bf3a-5113bfeae27c_119320220928130748344.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061316/7a2e67b9-a96d-4d48-ac7b-50a87f57de2a_678820220928130748820.jpg?imageMogr2/thumbnail/!80p/ignore-error/1","https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061317/2bff2b07-fefe-4223-acb1-4414fc4769fe_714120220928130748929.jpg?imageMogr2/thumbnail/!80p/ignore-error/1"],"imageSizeThreeFour":[],"videos":[],"descVideo":[],"isAvailable": True, "isStoreAvailable": True, "isPutOnSale": True, "sevenDaysReturn": False, "intro": "a2 Platinum 婴儿配方奶粉（1段）900g （0-6个月）", "subTitle": "建议纯母乳喂养至少六个月 2027/6/25 到期", "brandId": "10271298", "desc": "<p><img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061326/a8be6fe6-e1cb-4e88-8ab5-e07d9378649d_610020220928130900307.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061331/0a87c0a6-9ff1-4a28-8063-23886242c248_421920220928130900965.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/6059235/bkts-promotion-e2e-prod-8628656978268172288.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631502384500736.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631503445655553.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631503655378945.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504091582465.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504372592640.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504624263168.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504796233729.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631505219850240.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631505848983552.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631506008371200.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631506406834177.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5898451/bktpromotion-e2e-prod-8550003543344128000.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631605652467713.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631606113837057.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631606289993729.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\"></p>", "priceInfo":[{"priceType":2, "price": "0", "priceTypeName": "原始价"}, {"priceType":1, "price": "24890", "priceTypeName": "销售价"}], "stockInfo":{"stockQuantity":18127, "safeStockQuantity":0, "soldQuantity":0}, "limitInfo":[{"limitType":2, "limitNum":6, "text": "限购6件", "cycleDays":1}], "purchaseLimitText": "每天限购6件", "purchaseLimitMinNum":6, "tagInfo":[{"title": "进口", "tagPlace":7, "tagMark": "IMPORTED"}, {"title": "每天限购6件", "tagPlace":3, "tagMark": "PURCHASE_LIMIT"}, {"id": "2", "title": "403人认为\"商品品质好\"", "tagPlace":10, "tagMark": "aboveTheLimitTag"}], "newTagInfo":[{"tagManageId": "2", "title": "每天限购6件", "tagPlace":4, "tagMark": "PURCHASE_LIMIT", "placeType":0, "priorityValue":0, "tagStyleId": "58", "styleCode": "1", "styleType":2, "titleCn": "限购6件", "titleEn": "Limited to 6 pcs", "textColorCn": "#DE1C24", "borderColorCn": "#de1c24", "backColorCn": "", "textColorEn": "#DE1C24", "borderColorEn": "#de1c24", "backColorEn": ""}, {"tagManageId": "15", "title": "全球购", "tagPlace":2, "tagMark": "GLOBAL_SHOPPING", "placeType":0, "priorityValue":1, "tagStyleId": "38", "styleCode": "0", "styleType":1, "logoImageCn": "https://sam-material-online-1302115363.file.myqcloud.com/persist/3e89d264-b317-4241-a9df-4292c90871a7/1818/023433675/material/1/eb0bf805fe09400788553e573f76bf76-1730112973407.png", "logoImageEn": "https://sam-material-online-1302115363.file.myqcloud.com/persist/3e89d264-b317-4241-a9df-4292c90871a7/1818/023433675/material/1/3b0375d25b584dde924ce6367c6fda38-1730112973652.png", "logoImageZhCn": "https://sam-material-online-1302115363.file.myqcloud.com/persist/3e89d264-b317-4241-a9df-4292c90871a7/1818/023433675/material/1/8ec02f2ac1bb4ad193cc92ee14e11a78-1730112973779.png", "logoImageWide":114, "logoImageHigh":45, "logoImageEnWide":168, "logoImageEnHigh":45, "logoImageZhCnWide":114, "logoImageZhCnHigh":45}, {"tagManageId": "20", "title": "进口", "tagPlace":3, "tagMark": "IMPORTED", "placeType":0, "priorityValue":6, "tagStyleId": "59", "styleCode": "1", "styleType":2, "titleCn": "进口", "titleEn": "Imported", "textColorCn": "#0165b8", "backColorCn": "", "textColorEn": "#0165b8", "backColorEn": ""}], "deliveryAttr":1, "favorite": False, "giveaway":false, "spuExtDTO":{"subTitle": "建议纯母乳喂养至少六个月 2027/6/25 到期", "intro": "a2 Platinum 婴儿配方奶粉（1段）900g （0-6个月）", "hostUpc":["94219029605984"], "departmentId": "303", "valuable":false, "detailVideos":[], "weight":0.01, "isImport":true, "emg": "9421902960598", "isv": "9421902960598", "deliveryAttr":1, "sevenDaysReturn":false, "giveaway":false, "isAccessory":false, "isRoutine":true, "thumbnailImage": "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5673029/340920240131191030450.jpg", "status":1}, "beltInfo":[], "valuable":false, "detailVideos":[], "isImport":true, "emg": "9421902960598", "isv": "9421902960598", "isSerial":true, "spuSpecInfo":[{"spuId": "113260712", "hostItem": "888800005787", "specInfo":[{"specKey": "产品", "specValue": "婴儿配方奶粉（1段）400g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "112926668", "hostItem": "888800005789", "specInfo":[{"specKey": "产品", "specValue": "婴儿配方奶粉（2段）400g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "100035921", "hostItem": "888800005786", "specInfo":[{"specKey": "产品", "specValue": "婴儿配方奶粉（1段）900g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "100040422", "hostItem": "888800005788", "specInfo":[{"specKey": "产品", "specValue": "婴儿配方奶粉（2段）900g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "107769985", "hostItem": "888800005790", "specInfo":[{"specKey": "产品", "specValue": "幼儿配方奶粉（3段）900g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "275665449", "hostItem": "888810000115", "specInfo":[{"specKey": "产品", "specValue": "儿童配方奶粉（4段）900g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "171563663", "hostItem": "888800006177", "specInfo":[{"specKey": "产品", "specValue": "儿童营养奶粉 (4-12岁) 750g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "1913020", "hostItem": "888800003001", "specInfo":[{"specKey": "产品", "specValue": "孕妇奶粉 900g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "237920555", "hostItem": "888800006814", "specInfo":[{"specKey": "产品", "specValue": "全脂速溶奶粉900g"}], "isPutOnSale":true, "outOfStock":false}, {"spuId": "275114095", "hostItem": "888800007408", "specInfo":[{"specKey": "产品", "specValue": "紫吨吨营养奶粉礼盒(行动力+自护力)"}], "isPutOnSale":true, "outOfStock":false}], "specList":{"婴儿配方奶粉（1段）400g":{"spuId": "113260712"}, "幼儿配方奶粉（3段）900g":{"spuId": "107769985"}, "全脂速溶奶粉900g":{"spuId": "237920555"}, "婴儿配方奶粉（2段）900g":{"spuId": "100040422"}, "紫吨吨营养奶粉礼盒(行动力+自护力)":{"spuId": "275114095"}, "孕妇奶粉 900g":{"spuId": "1913020"}, "婴儿配方奶粉（1段）900g":{"spuId": "100035921"}, "婴儿配方奶粉（2段）400g":{"spuId": "112926668"}, "儿童营养奶粉 (4-12岁) 750g":{"spuId": "171563663"}, "儿童配方奶粉（4段）900g":{"spuId": "275665449"}}, "specInfo":[{"产品":["婴儿配方奶粉（1段）400g", "婴儿配方奶粉（2段）400g", "婴儿配方奶粉（1段）900g", "婴儿配方奶粉（2段）900g", "幼儿配方奶粉（3段）900g", "儿童配方奶粉（4段）900g", "儿童营养奶粉 (4-12岁) 750g", "孕妇奶粉 900g", "全脂速溶奶粉900g", "紫吨吨营养奶粉礼盒(行动力+自护力)"]}], "attrGroupInfo":[{"attrInfo":[{"attrId": "35205", "title": "年龄", "attrValueList":[{"attrValueId": "286654", "value": "0-6个月"}], "isImportant":false}], "attrGroupId": "2", "title": "基本信息"}, {"attrInfo":[{"attrId": "35299", "title": "总净重(g)", "attrValueList":[{}, {"value": "900"}], "isImportant":false}], "attrGroupId": "7", "title": "规格"}, {"attrInfo":[{"attrId": "35290", "title": "保质期", "attrValueList":[{}, {"value": "见包装"}], "isImportant":false}], "attrGroupId": "8", "title": "食品安全信息"}, {"attrInfo":[{"attrId": "35240", "title": "包装", "attrValueList":[{"attrValueId": "287554", "value": "罐装"}], "isImportant":false}], "attrGroupId": "10", "title": "包装"}], "attrInfo":[{"attrId": "35236", "title": "单件规格", "attrValueList":[{"attrValueId": "287277", "value": "900g"}], "isImportant":false}, {"attrId": "35233", "title": "是否进口", "attrValueList":[{"attrValueId": "287268", "value": "进口"}], "isImportant":false}], "extendedWarrantyList":[], "couponContentList":[], "couponList":[], "promotionList":[], "promotionDetailList":[], "deliveryCapacityCountList":[], "complianceInfo":{"id": "261038638727561494", "value": "山姆品质、馈赠精选，如您有大宗采买需求，我们将为您提供全程专业的采买咨询服务。\n联系我们：山姆app - 我的 - 我的服务 - 福利采购，在线提交采买需求，资深采买顾问为您提供一对一专属服务，让福利采购更省心。"}, "preSellList":[], "globalShoppingTaxRateExplain": "1.该商品价格已包含跨境电商综合税。\n2.跨境电商综合税需按一般贸易增值税及消费税额的70%征收，山姆全球购代征代缴，税费以提交订单时的金额为准。\n3.财政部，海关总署，国家税务总局发布跨境电子商务零售进口税收政策，自2019年1月1日起，跨境电商单次交易限值为人民币5000元，个人年度交易限值为人民币26000元。", "onlyStoreSale":False, "onlyBarSale":False, "serviceInfo":[], "arrivalEndTimeDesc": "有货，预计一周内送达。", "isStoreExtent":False, "isGlobalDirectPurchase":False, "isGlobalOwnPickUp":False, "siteInfoResponses":{}, "isAllowDelivery":True, "zoneTypeList":[], "isCrabCard":False, "isShowXPlusTag":False, "isCompare":False, "isGovSpu":False, "standardForIntactGoodsUrl": "https://m-sams.walmartmobile.cn/common/help-center/217", "serialId": "3562", "customTabList":[], "isTicket":false}, "code": "Success", "msg": "", "errorMsg": "", "traceId": "4e963727ee499b9e", "requestId": "as|84e880a6a7a948e1a25b56a92bbddf6d.166.17582507843231047", "rt":0, "success":True}
+        false = False
+        da = {"data": {"spuId": "100035921", "hostItem": "888800005786", "storeId": "9996",
+                       "title": " a2 Platinum 婴儿配方奶粉（1段）900g （0-6个月）", "masterBizType": 1, "viceBizType": 2,
+                       "categoryIdList": ["10003018", "10003044", "10005070", "10005563"], "images": [
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5673029/340920240131191030450.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061310/3c6d7e45-f692-40ec-ae12-271e1947dba0_219520220928130748101.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061311/f186000a-5248-403c-89b9-732fc937749c_993920220928130748197.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061314/4571eb14-da84-4a69-96bb-e43d8ddc64c1_748420220928130748454.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061312/6694ee02-866c-49a9-9548-7d3ebe8003b2_975920220928130748263.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061315/4ede448f-9cbd-43bd-9686-8389857c5a45_438720220928130748629.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061313/f6449a86-3719-4f41-bf3a-5113bfeae27c_119320220928130748344.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061316/7a2e67b9-a96d-4d48-ac7b-50a87f57de2a_678820220928130748820.jpg?imageMogr2/thumbnail/!80p/ignore-error/1",
+                "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061317/2bff2b07-fefe-4223-acb1-4414fc4769fe_714120220928130748929.jpg?imageMogr2/thumbnail/!80p/ignore-error/1"],
+                       "imageSizeThreeFour": [], "videos": [], "descVideo": [], "isAvailable": True,
+                       "isStoreAvailable": True, "isPutOnSale": True, "sevenDaysReturn": False,
+                       "intro": "a2 Platinum 婴儿配方奶粉（1段）900g （0-6个月）",
+                       "subTitle": "建议纯母乳喂养至少六个月 2027/6/25 到期", "brandId": "10271298",
+                       "desc": "<p><img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061326/a8be6fe6-e1cb-4e88-8ab5-e07d9378649d_610020220928130900307.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5061331/0a87c0a6-9ff1-4a28-8063-23886242c248_421920220928130900965.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/6059235/bkts-promotion-e2e-prod-8628656978268172288.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631502384500736.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631503445655553.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631503655378945.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504091582465.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504372592640.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504624263168.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631504796233729.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631505219850240.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631505848983552.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631506008371200.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631506406834177.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5898451/bktpromotion-e2e-prod-8550003543344128000.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631605652467713.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631606113837057.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\">\n<img src=\"https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/336462/bktpromotion-e2e-prod-8499631606289993729.jpg?imageMogr2/thumbnail/!80p/ignore-error/1\"></p>",
+                       "priceInfo": [{"priceType": 2, "price": "0", "priceTypeName": "原始价"},
+                                     {"priceType": 1, "price": "24890", "priceTypeName": "销售价"}],
+                       "stockInfo": {"stockQuantity": 18127, "safeStockQuantity": 0, "soldQuantity": 0},
+                       "limitInfo": [{"limitType": 2, "limitNum": 6, "text": "限购6件", "cycleDays": 1}],
+                       "purchaseLimitText": "每天限购6件", "purchaseLimitMinNum": 6,
+                       "tagInfo": [{"title": "进口", "tagPlace": 7, "tagMark": "IMPORTED"},
+                                   {"title": "每天限购6件", "tagPlace": 3, "tagMark": "PURCHASE_LIMIT"},
+                                   {"id": "2", "title": "403人认为\"商品品质好\"", "tagPlace": 10,
+                                    "tagMark": "aboveTheLimitTag"}], "newTagInfo": [
+                {"tagManageId": "2", "title": "每天限购6件", "tagPlace": 4, "tagMark": "PURCHASE_LIMIT", "placeType": 0,
+                 "priorityValue": 0, "tagStyleId": "58", "styleCode": "1", "styleType": 2, "titleCn": "限购6件",
+                 "titleEn": "Limited to 6 pcs", "textColorCn": "#DE1C24", "borderColorCn": "#de1c24", "backColorCn": "",
+                 "textColorEn": "#DE1C24", "borderColorEn": "#de1c24", "backColorEn": ""},
+                {"tagManageId": "15", "title": "全球购", "tagPlace": 2, "tagMark": "GLOBAL_SHOPPING", "placeType": 0,
+                 "priorityValue": 1, "tagStyleId": "38", "styleCode": "0", "styleType": 1,
+                 "logoImageCn": "https://sam-material-online-1302115363.file.myqcloud.com/persist/3e89d264-b317-4241-a9df-4292c90871a7/1818/023433675/material/1/eb0bf805fe09400788553e573f76bf76-1730112973407.png",
+                 "logoImageEn": "https://sam-material-online-1302115363.file.myqcloud.com/persist/3e89d264-b317-4241-a9df-4292c90871a7/1818/023433675/material/1/3b0375d25b584dde924ce6367c6fda38-1730112973652.png",
+                 "logoImageZhCn": "https://sam-material-online-1302115363.file.myqcloud.com/persist/3e89d264-b317-4241-a9df-4292c90871a7/1818/023433675/material/1/8ec02f2ac1bb4ad193cc92ee14e11a78-1730112973779.png",
+                 "logoImageWide": 114, "logoImageHigh": 45, "logoImageEnWide": 168, "logoImageEnHigh": 45,
+                 "logoImageZhCnWide": 114, "logoImageZhCnHigh": 45},
+                {"tagManageId": "20", "title": "进口", "tagPlace": 3, "tagMark": "IMPORTED", "placeType": 0,
+                 "priorityValue": 6, "tagStyleId": "59", "styleCode": "1", "styleType": 2, "titleCn": "进口",
+                 "titleEn": "Imported", "textColorCn": "#0165b8", "backColorCn": "", "textColorEn": "#0165b8",
+                 "backColorEn": ""}], "deliveryAttr": 1, "favorite": False, "giveaway": false,
+                       "spuExtDTO": {"subTitle": "建议纯母乳喂养至少六个月 2027/6/25 到期",
+                                     "intro": "a2 Platinum 婴儿配方奶粉（1段）900g （0-6个月）",
+                                     "hostUpc": ["94219029605984"], "departmentId": "303", "valuable": false,
+                                     "detailVideos": [], "weight": 0.01, "isImport": true, "emg": "9421902960598",
+                                     "isv": "9421902960598", "deliveryAttr": 1, "sevenDaysReturn": false,
+                                     "giveaway": false, "isAccessory": false, "isRoutine": true,
+                                     "thumbnailImage": "https://sam-material-online-1302115363.file.myqcloud.com//sams-static/goods/5673029/340920240131191030450.jpg",
+                                     "status": 1}, "beltInfo": [], "valuable": false, "detailVideos": [],
+                       "isImport": true, "emg": "9421902960598", "isv": "9421902960598", "isSerial": true,
+                       "spuSpecInfo": [{"spuId": "113260712", "hostItem": "888800005787",
+                                        "specInfo": [{"specKey": "产品", "specValue": "婴儿配方奶粉（1段）400g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "112926668", "hostItem": "888800005789",
+                                        "specInfo": [{"specKey": "产品", "specValue": "婴儿配方奶粉（2段）400g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "100035921", "hostItem": "888800005786",
+                                        "specInfo": [{"specKey": "产品", "specValue": "婴儿配方奶粉（1段）900g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "100040422", "hostItem": "888800005788",
+                                        "specInfo": [{"specKey": "产品", "specValue": "婴儿配方奶粉（2段）900g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "107769985", "hostItem": "888800005790",
+                                        "specInfo": [{"specKey": "产品", "specValue": "幼儿配方奶粉（3段）900g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "275665449", "hostItem": "888810000115",
+                                        "specInfo": [{"specKey": "产品", "specValue": "儿童配方奶粉（4段）900g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "171563663", "hostItem": "888800006177",
+                                        "specInfo": [{"specKey": "产品", "specValue": "儿童营养奶粉 (4-12岁) 750g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "1913020", "hostItem": "888800003001",
+                                        "specInfo": [{"specKey": "产品", "specValue": "孕妇奶粉 900g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "237920555", "hostItem": "888800006814",
+                                        "specInfo": [{"specKey": "产品", "specValue": "全脂速溶奶粉900g"}],
+                                        "isPutOnSale": true, "outOfStock": false},
+                                       {"spuId": "275114095", "hostItem": "888800007408", "specInfo": [
+                                           {"specKey": "产品", "specValue": "紫吨吨营养奶粉礼盒(行动力+自护力)"}],
+                                        "isPutOnSale": true, "outOfStock": false}],
+                       "specList": {"婴儿配方奶粉（1段）400g": {"spuId": "113260712"},
+                                    "幼儿配方奶粉（3段）900g": {"spuId": "107769985"},
+                                    "全脂速溶奶粉900g": {"spuId": "237920555"},
+                                    "婴儿配方奶粉（2段）900g": {"spuId": "100040422"},
+                                    "紫吨吨营养奶粉礼盒(行动力+自护力)": {"spuId": "275114095"},
+                                    "孕妇奶粉 900g": {"spuId": "1913020"},
+                                    "婴儿配方奶粉（1段）900g": {"spuId": "100035921"},
+                                    "婴儿配方奶粉（2段）400g": {"spuId": "112926668"},
+                                    "儿童营养奶粉 (4-12岁) 750g": {"spuId": "171563663"},
+                                    "儿童配方奶粉（4段）900g": {"spuId": "275665449"}}, "specInfo": [{"产品": [
+                "婴儿配方奶粉（1段）400g", "婴儿配方奶粉（2段）400g", "婴儿配方奶粉（1段）900g", "婴儿配方奶粉（2段）900g",
+                "幼儿配方奶粉（3段）900g", "儿童配方奶粉（4段）900g", "儿童营养奶粉 (4-12岁) 750g", "孕妇奶粉 900g",
+                "全脂速溶奶粉900g", "紫吨吨营养奶粉礼盒(行动力+自护力)"]}], "attrGroupInfo": [{"attrInfo": [
+                {"attrId": "35205", "title": "年龄", "attrValueList": [{"attrValueId": "286654", "value": "0-6个月"}],
+                 "isImportant": false}], "attrGroupId": "2", "title": "基本信息"}, {"attrInfo": [
+                {"attrId": "35299", "title": "总净重(g)", "attrValueList": [{}, {"value": "900"}],
+                 "isImportant": false}], "attrGroupId": "7", "title": "规格"}, {"attrInfo": [
+                {"attrId": "35290", "title": "保质期", "attrValueList": [{}, {"value": "见包装"}],
+                 "isImportant": false}], "attrGroupId": "8", "title": "食品安全信息"}, {"attrInfo": [
+                {"attrId": "35240", "title": "包装", "attrValueList": [{"attrValueId": "287554", "value": "罐装"}],
+                 "isImportant": false}], "attrGroupId": "10", "title": "包装"}], "attrInfo": [
+                {"attrId": "35236", "title": "单件规格", "attrValueList": [{"attrValueId": "287277", "value": "900g"}],
+                 "isImportant": false},
+                {"attrId": "35233", "title": "是否进口", "attrValueList": [{"attrValueId": "287268", "value": "进口"}],
+                 "isImportant": false}], "extendedWarrantyList": [], "couponContentList": [], "couponList": [],
+                       "promotionList": [], "promotionDetailList": [], "deliveryCapacityCountList": [],
+                       "complianceInfo": {"id": "261038638727561494",
+                                          "value": "山姆品质、馈赠精选，如您有大宗采买需求，我们将为您提供全程专业的采买咨询服务。\n联系我们：山姆app - 我的 - 我的服务 - 福利采购，在线提交采买需求，资深采买顾问为您提供一对一专属服务，让福利采购更省心。"},
+                       "preSellList": [],
+                       "globalShoppingTaxRateExplain": "1.该商品价格已包含跨境电商综合税。\n2.跨境电商综合税需按一般贸易增值税及消费税额的70%征收，山姆全球购代征代缴，税费以提交订单时的金额为准。\n3.财政部，海关总署，国家税务总局发布跨境电子商务零售进口税收政策，自2019年1月1日起，跨境电商单次交易限值为人民币5000元，个人年度交易限值为人民币26000元。",
+                       "onlyStoreSale": False, "onlyBarSale": False, "serviceInfo": [],
+                       "arrivalEndTimeDesc": "有货，预计一周内送达。", "isStoreExtent": False,
+                       "isGlobalDirectPurchase": False, "isGlobalOwnPickUp": False, "siteInfoResponses": {},
+                       "isAllowDelivery": True, "zoneTypeList": [], "isCrabCard": False, "isShowXPlusTag": False,
+                       "isCompare": False, "isGovSpu": False,
+                       "standardForIntactGoodsUrl": "https://m-sams.walmartmobile.cn/common/help-center/217",
+                       "serialId": "3562", "customTabList": [], "isTicket": false}, "code": "Success", "msg": "",
+              "errorMsg": "", "traceId": "4e963727ee499b9e",
+              "requestId": "as|84e880a6a7a948e1a25b56a92bbddf6d.166.17582507843231047", "rt": 0, "success": True}
         da_list = [da.get('data')]
         res = await sql_helper.bulk_upsert_spu_info(da_list)
         print(res)
+
 
     async def _test_get_spu_ids_by_is_put_on_sale():
         res = await sql_helper.get_spu_ids_by_is_put_on_sale(True)
