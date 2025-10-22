@@ -16,7 +16,6 @@
 */yolov11n_captcha.onnx
 FastapiApp/Service/PlayWright/user_data
 jupyter
-venv
 node_modules
 .virtual_documents
 .ipynb_checkpoints
@@ -37,3 +36,5 @@ docker_vol/*
 !FastapiApp/requirements.txt
 !FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
 .env
+venv/
+.venv/

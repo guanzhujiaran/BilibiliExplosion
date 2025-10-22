@@ -135,12 +135,8 @@ class SamsClubCrawler(UnlimitedCrawler[SamsClubCrawlerParams]):
             dataList = resp.json().get('data', {}).get('dataList', [])
             self.log.debug(f'插入数据：{dataList}')
             if not dataList:
-                self.log.critical(f'数据内容为空：{(
-                    firstCategoryId,
-                    secondCategoryId,
-                    frontCategoryIds,
-                    start_page_num,
-                    pageSize)}')
+                self.log.critical(
+                    f'数据内容为空：{firstCategoryId, secondCategoryId, frontCategoryIds, start_page_num, pageSize}')
             await self.sql_helper.bulk_upsert_spu_info(dataList)
             file_p = self.FilePath.grouping_data_list(firstCategoryId, secondCategoryId, start_page_num)
             await asyncio.to_thread(
@@ -179,7 +175,6 @@ class SamsClubCrawler(UnlimitedCrawler[SamsClubCrawlerParams]):
             self.task_params_list = await self.sql_helper.get_grouping_infos_by_level(
                 2)  # 只有2级分类的children可以对里面的内容访问，目前没有发现3级分类有children
             await self.run()
-
 
     async def get_status(self) -> ProgressStatusResp:
         return ProgressStatusResp(

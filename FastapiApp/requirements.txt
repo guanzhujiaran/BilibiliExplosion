@@ -1,6 +1,6 @@
 fastapi[all]
 fastapi-cdn-host
-fastapi-cache2[redis]
+fastapi-cache2
 faststream[rabbit]
 fastapi
 langchain_openai
@@ -50,3 +50,4 @@ aiodns
 protobuf==6.32.1
 google
 crawlee[all]
+redis
