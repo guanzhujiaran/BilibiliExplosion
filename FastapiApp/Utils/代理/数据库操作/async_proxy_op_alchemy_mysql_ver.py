@@ -12,6 +12,7 @@ from typing import List, Literal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, func, update, and_, or_, delete
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 from CONFIG import CONFIG, database
@@ -538,17 +539,25 @@ class SQLHelperClass(SqlHelperBase):
     @sql_retry_wrapper
     async def add_to_proxy_tab_database(self, proxy_tab: ProxyTab) -> bool:
         '''
-        添加数据
+        添加数据（带 MySQL ON DUPLICATE KEY UPDATE）
         :param proxy_tab:
         :return:
         '''
         async with self.async_session() as session:
             async with session.begin():
-                session.add(proxy_tab)
-                # 刷新自带的主键
-                # async with self.async_lock:
+                # 通过 MySQL 方言实现幂等 upsert
+                data_dict = sqlalchemy_model_2_dict(proxy_tab)
+                stmt = mysql_insert(ProxyTab.__table__).values(**data_dict)
+                # 非主键字段使用 INSERT 值更新
+                update_cols = {
+                    c.name: stmt.inserted[c.name]
+                    for c in ProxyTab.__table__.columns
+                    if not c.primary_key
+                }
+                await session.execute(stmt.on_duplicate_key_update(**update_cols))
+                # 刷新生成的主键或其它服务器端默认值
                 await session.flush()
-                # 释放这个data数据
+                # 释放这个data数据，避免持久化会话耦合
                 session.expunge(proxy_tab)
         return True
 
