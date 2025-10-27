@@ -560,7 +560,7 @@ class SQLHelperClass(SqlHelperBase):
                 # 刷新生成的主键或其它服务器端默认值
                 await session.flush()
                 # 释放这个data数据，避免持久化会话耦合
-                session.expunge(proxy_tab)
+
         return True
 
     @sql_retry_wrapper
