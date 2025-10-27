@@ -547,12 +547,14 @@ class SQLHelperClass(SqlHelperBase):
             async with session.begin():
                 # 通过 MySQL 方言实现幂等 upsert
                 data_dict = sqlalchemy_model_2_dict(proxy_tab)
+                # 过滤掉 MySQL 生成列，避免 (3105) 错误
+                data_dict.pop("computed_proxy_str", None)
                 stmt = mysql_insert(ProxyTab.__table__).values(**data_dict)
-                # 非主键字段使用 INSERT 值更新
+                # 非主键字段使用 INSERT 值更新，同时排除生成列
                 update_cols = {
                     c.name: stmt.inserted[c.name]
                     for c in ProxyTab.__table__.columns
-                    if not c.primary_key
+                    if not c.primary_key and c.name != "computed_proxy_str"
                 }
                 await session.execute(stmt.on_duplicate_key_update(**update_cols))
                 # 刷新生成的主键或其它服务器端默认值
