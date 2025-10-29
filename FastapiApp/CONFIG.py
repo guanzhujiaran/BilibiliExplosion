@@ -6,6 +6,8 @@ from fake_useragent import UserAgent
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import AsyncAdaptedQueuePool
 
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+
 
 class Settings(BaseSettings):
     MYSQL_HOST: str
@@ -28,8 +30,14 @@ class Settings(BaseSettings):
     LMSTUDIO_HOST: str  # lm studio 开个网络服务
     LMSTUDIO_PORT: str
     PROXY_SERVER: str
-    model_config = SettingsConfigDict(env_file=(".env.fastapi.prod", ".env.fastapi.dev"))
-    SHOW_LOG:int= 0
+    model_config = SettingsConfigDict(
+        env_file=(
+            os.path.join(_current_dir, ".env.fastapi.prod"),
+            os.path.join(_current_dir, ".env.fastapi.dev")
+        )
+    )
+    SHOW_LOG: int = 0
+
 
 settings = Settings()
 

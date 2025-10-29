@@ -250,7 +250,7 @@ class BiliLotStatisticInfoResp(CustomBaseModel):
     total: int
 
 
-class AtariLotRankEnum(Enum):
+class AtariLotRankEnum(IntEnum):
     first_prize = 1
     second_prize = 2
     third_prize = 3
@@ -285,7 +285,7 @@ class BiliLotStatisticLotTypeEnum(StrEnum):
         mapping = {
             self.official: BiliBusinessTypeEnum.official,
             self.reserve: BiliBusinessTypeEnum.reserve,
-            self.charge:  BiliBusinessTypeEnum.charge,
+            self.charge: BiliBusinessTypeEnum.charge,
         }
         return mapping.get(self)
 
@@ -304,7 +304,6 @@ class BiliLotStatisticRankTypeEnum(StrEnum):
             self.third: AtariLotRankEnum.third_prize,
         }
         return mapping.get(self)
-
 
 
 class BiliLotStatisticRankDateTypeEnum(StrEnum):
@@ -333,6 +332,26 @@ class BiliLotStatisticRankDateTypeEnum(StrEnum):
         else:
             raise ValueError(f"Invalid rank date type: {self.value}")
         return int(start_ts.timestamp()), int(end_ts.timestamp())
+
+    def get_start_end_datetime(self) -> tuple[datetime | None, datetime | None]:
+        now = datetime.now()
+        if self.value == 'total':
+            return None, None
+        elif self.value == 'month':
+            start_ts = datetime(now.year, now.month, 1)  # 本月1号
+            end_ts = now
+        elif self.value == 'pre_month':
+            start_ts = datetime(now.year, now.month - 1, 1)  # 上月1号
+            end_ts = datetime(now.year, now.month, 1) - timedelta(seconds=1)  # 上月最后一天
+        elif self.value == 'year':
+            start_ts = datetime(now.year, 1, 1)  # 本年1号
+            end_ts = now
+        elif self.value == 'pre_year':
+            start_ts = datetime(now.year - 1, 1, 1)  # 上年1号
+            end_ts = datetime(now.year, 1, 1) - timedelta(seconds=1)  # 上年最后一天
+        else:
+            raise ValueError(f"Invalid rank date type: {self.value}")
+        return start_ts, end_ts
 
 
 # endregion

@@ -97,6 +97,9 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
                     sql_log.error(operational_error)
                     await asyncio.sleep(120)
                     continue
+                if 2013 == operational_error.code:  # mysql并发太高了，等待一段时间再重试
+                    await asyncio.sleep(120)
+                    continue
                 sql_log.error(f'{_func} \t{operational_error}')
                 await asyncio.sleep(60)
                 continue

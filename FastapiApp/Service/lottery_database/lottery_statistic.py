@@ -24,24 +24,6 @@ async def GetLotStatisticInfo(
     :param limit:
     :return:
     """
-    # uid_count_list = await lottery_data_statistic_redis.get_lot_prize_count(
-    #     date=date,
-    #     lot_type=lot_type,
-    #     rank_type=rank_type,
-    #     offset=offset,
-    #     limit=limit
-    # )
-    # uid_count_dict = dict(uid_count_list)
-    # uid_list = list(uid_count_dict.keys())
-    # users, dyn_lot_sync_ts, rank_dict, total = await asyncio_gather(
-    #     lottery_data_statistic_redis.get_bili_user_info_bulk(uid_list),
-    #     lottery_data_statistic_redis.get_sync_ts(lot_type),
-    #     lottery_data_statistic_redis.get_lot_prize_rank_bulk(date=date, lot_type=lot_type, rank_type=rank_type,
-    #                                                          uid_arr=uid_list),
-    #     lottery_data_statistic_redis.get_lot_prize_total(date=date, lot_type=lot_type, rank_type=rank_type),
-    #     log=myfastapi_logger
-    # )
-    # users_dict = {user.uid: user for user in users}
     dyn_lot_sync_ts = await lottery_data_statistic_redis.get_sync_ts(lot_type)
     bili_user_info_list, total = await lottery_data_statistic_sql_helper.get_lot_prize_count(
         offset=offset,
@@ -58,7 +40,7 @@ async def GetLotStatisticInfo(
                     name=x.BiliUserInfo.name,
                     face=x.BiliUserInfo.face
                 ), count=x.prize_count,
-                rank=x.rank
+                rank=x.atari_rank
             )
             for x in bili_user_info_list
         ],
@@ -97,3 +79,28 @@ async def GetLotteryResult(
         ) for x in prize_result],
         total=total
     )
+
+
+if __name__ == '__main__':
+    import asyncio
+
+
+    async def _test_GetLotStatisticInfo():
+        lottery_data_statistic_sql_helper.engine.echo = True
+        for i in BiliLotStatisticRankDateTypeEnum:
+            for j in BiliLotStatisticLotTypeEnum:
+                for l in BiliLotStatisticRankTypeEnum:
+                    ret = await GetLotStatisticInfo(
+                        date=i,
+                        lot_type=j,
+                        rank_type=l,
+                        offset=0,
+                        limit=10
+                    )
+                    print(ret)
+                    assert len(
+                        ret.winners) == 10 or i in (BiliLotStatisticRankDateTypeEnum.month,
+                                                    BiliLotStatisticRankDateTypeEnum.pre_month)
+
+
+    asyncio.run(_test_GetLotStatisticInfo())

@@ -1,12 +1,11 @@
-from typing import Sequence, Any, Coroutine
+from typing import Sequence
 import asyncio
 from sqlalchemy.dialects.mysql import insert
-from sqlalchemy import select, func, distinct, Row
+from sqlalchemy import select, func, Row
 from CONFIG import CONFIG
-from Models.lottery_database.bili.LotteryDataModels import AtariLotRankEnum, BiliLotStatisticLotTypeEnum, \
+from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankDateTypeEnum, BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
 from Service.GrpcModule.GrpcSrc.SQLObject.models import BiliUserInfo, BiliAtariInfo
-from Utils.Common import asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import official_lot_logger
@@ -85,7 +84,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
                 - 第一个元素是用户信息列表，每个元素是一个Row对象，包含以下字段:
                     - BiliUserInfo: 用户信息对象
                     - prize_count: 奖品数量
-                    - rank: 排名
+                    - atari_rank: 排名
                 - 第二个元素是满足条件的总用户数
 
         示例:
@@ -101,16 +100,16 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
         """
         where_clause = []
 
-        if atari_rank_enum:=rank_type.rank_enum:
+        if atari_rank_enum := rank_type.rank_enum:
             where_clause.append(
                 BiliAtariInfo.atari_lot_rank == atari_rank_enum,
             )
-        if business_type:=lot_type.business_type:
+        if business_type := lot_type.business_type:
             where_clause.append(
                 BiliAtariInfo.atari_lot_type == business_type
             )
         if date and date != BiliLotStatisticRankDateTypeEnum.total:
-            start, end = date.get_start_end_ts()
+            start, end = date.get_start_end_datetime()
             where_clause.append(
                 BiliAtariInfo.atari_timestamp.between(
                     start, end
@@ -120,7 +119,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
             select(
                 BiliAtariInfo.mid.label('user_id'),
                 func.count(1).label('prize_count'),
-                func.row_number().over(order_by=func.count(1).desc()).label('rank')
+                func.row_number().over(order_by=func.count(1).desc()).label('atari_rank')
             )
             .where(*where_clause)
             .group_by(BiliAtariInfo.mid)  # 按用户ID分组
@@ -131,10 +130,10 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
             select(
                 BiliUserInfo,
                 subq.c.prize_count,
-                subq.c.rank
+                subq.c.atari_rank
             )
             .join(subq, BiliUserInfo.uid == subq.c.user_id)
-            .order_by(subq.c.rank)
+            .order_by(subq.c.atari_rank)
             .offset(offset)
             .limit(limit)
         )
@@ -149,7 +148,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
             total_result = await session.execute(total_stmt)
             result = await session.execute(query)
             total = total_result.scalar() or 0
-            # 返回用户对象列表（封装成带 count 和 rank 的 DTO）
+            # 返回用户对象列表（封装成带 count 和 atari_rank 的 DTO）
             users_with_stats = result.fetchall()
 
             return users_with_stats, total
@@ -172,12 +171,13 @@ lottery_data_statistic_sql_helper = LotteryDataStatisticSqlHelper()
 
 if __name__ == '__main__':
     async def _test_get_lot_prize_count():
+        lottery_data_statistic_sql_helper.engine.echo = True
         res = await lottery_data_statistic_sql_helper.get_lot_prize_count(
             offset=0,
             limit=10,
-            date=BiliLotStatisticRankDateTypeEnum.total,
+            date=BiliLotStatisticRankDateTypeEnum.year,
             lot_type=BiliLotStatisticLotTypeEnum.official,
-            rank_type=BiliLotStatisticRankTypeEnum.total
+            rank_type=BiliLotStatisticRankTypeEnum.first
         )
         print(res)
 
@@ -187,4 +187,4 @@ if __name__ == '__main__':
         print(res)
 
 
-    asyncio.run(_test_get_bili_user_info())
+    asyncio.run(_test_get_lot_prize_count())
