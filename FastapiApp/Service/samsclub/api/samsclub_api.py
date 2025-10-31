@@ -153,7 +153,8 @@ class SamsClubApi:
                     self.log.exception(f'curl_cffi网络请求未知异常：{e}')
                     raise e
                 is_updated = await self.update_encrypt_key(resp.headers)
-                is_succ = await self.handle_resp_code(resp, auth_token=cur_auth_token, is_updated_encrypt_key=is_updated)
+                is_succ = await self.handle_resp_code(resp, auth_token=cur_auth_token,
+                                                      is_updated_encrypt_key=is_updated)
                 if not is_succ:
                     await asyncio.sleep(10)
                     continue
@@ -186,13 +187,16 @@ class SamsClubApi:
                 case "SPU_NOT_EXIST":
                     self.log.debug(f'{resp_dict}')
                 case "INTERNAL_ERROR":
-                    self.log.critical(f'{resp_dict}')
-                    await asyncio.sleep(30)
+                    self.log.critical(f'{response.request.url}'
+                                      f'\n{response.request.headers}'
+                                      f'\n{response.request}'
+                                      f'\n{resp_dict}')
+                    await asyncio.sleep(120)
                 case "AUTH_FAIL":
                     if is_updated_encrypt_key:
                         return False
                     self.log.critical(f"被强制登出！{resp_dict}")
-                    await a_pushme( f'山姆会员商店token失效', f'{resp_dict}')
+                    await a_pushme(f'山姆会员商店token失效', f'{resp_dict}')
                     self.log.debug(f'等待token更新')
                     while 1:
                         if auth_token != self.headers_gen.auth_token:
