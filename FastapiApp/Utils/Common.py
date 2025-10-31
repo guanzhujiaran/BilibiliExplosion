@@ -5,8 +5,9 @@ from typing import Callable, TypeVar, Awaitable, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import _logger
-from sqlalchemy.exc import InternalError, OperationalError
-
+from sqlalchemy.exc import InternalError
+from pymysql.err import OperationalError
+from pymysql.constants import CR
 from log.base_log import myfastapi_logger, sql_log
 
 GLOBAL_SCHEDULER: AsyncIOScheduler = AsyncIOScheduler()
@@ -81,6 +82,21 @@ async def run_in_executor(func, *args):
         return await future
 
 
+async def handle_sql_operational_error(func, log, err: OperationalError):
+    match err.args[0]:
+        case 1129:
+            log.error(f'{func} \t{err}')
+            await asyncio.sleep(120)
+        case CR.CR_SERVER_LOST:  # mysql并发太高了，等待一段时间再重试
+            await asyncio.sleep(120)
+        case CR.CR_CONN_HOST_ERROR:  # mysql配置不正确或者mysql暂时挂了，在重启
+            log.error(f'{func} \t{err}')
+            await asyncio.sleep(120)
+        case _:  # 未知代码
+            log.error(f'未知mysql错误代码：{func} \t{err}')
+            await asyncio.sleep(120)
+
+
 def sql_retry_wrapper(_func: FuncT) -> FuncT:
     @wraps(_func)
     async def wrapper(*args: Any, **kwargs: Any) -> TResult:
@@ -93,15 +109,7 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
                 await asyncio.sleep(60)
                 continue
             except OperationalError as operational_error:
-                if 1129 == operational_error.code:
-                    sql_log.error(operational_error)
-                    await asyncio.sleep(120)
-                    continue
-                if 2013 == operational_error.code:  # mysql并发太高了，等待一段时间再重试
-                    await asyncio.sleep(120)
-                    continue
-                sql_log.error(f'{_func} \t{operational_error}')
-                await asyncio.sleep(60)
+                await handle_sql_operational_error(_func, sql_log, operational_error)
                 continue
             except Exception as e:
                 sql_log.exception(f'{args}\n{kwargs}\n{e}')
@@ -124,12 +132,7 @@ def log_sql_retry_wrapper(log: _logger = myfastapi_logger):
                     await asyncio.sleep(60)
                     continue
                 except OperationalError as operational_error:
-                    if 1129 == operational_error.code:
-                        log.error(operational_error)
-                        await asyncio.sleep(120)
-                        continue
-                    log.error(f'{_func} \t{operational_error}')
-                    await asyncio.sleep(60)
+                    await handle_sql_operational_error(_func, log, operational_error)
                     continue
                 except Exception as e:
                     log.exception(f'{args}\n{kwargs}\n{e}')

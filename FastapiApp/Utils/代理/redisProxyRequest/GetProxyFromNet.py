@@ -31,9 +31,9 @@ _github_proxy = {
 
 
 class ProxyParams(CustomBaseModelHashable):
-    proxy:dict = Field(..., description='代理字典')
+    proxy: dict = Field(..., description='代理字典')
 
-    def __hash__(self)->int:
+    def __hash__(self) -> int:
         return hash(str(self.proxy))
 
 
@@ -98,7 +98,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
     #                 if i:
     #                     append_dict = format_proxy(i)
     #                     if not append_dict:
-    #                         self.log.exception(f'代理格式错误！{i}\n{td}')
+    #                         self.log.debug(f'代理格式错误！{i}\n{td}')
     #                         continue
     #                     # if append_dict not in have_proxy:
     #                     proxy_queue.append(append_dict)
@@ -137,7 +137,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(f"{i.get('ip')}:{i.get('port')}", protocol='http')
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}')
+                            self.log.debug(f'代理格式错误！{i}')
                             continue
                         # if append_dict not in have_proxy:
                         proxy_queue.append(append_dict)
@@ -176,7 +176,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(f"{i.get('ip')}:{i.get('port')}", protocol='http')
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}')
+                            self.log.debug(f'代理格式错误！{i}')
                             continue
                         # if append_dict not in have_proxy:
                         proxy_queue.append(append_dict)
@@ -214,7 +214,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(i)
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
+                            self.log.debug(f'代理格式错误！{i}\n{td}')
                             continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
@@ -253,7 +253,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(i)
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
+                            self.log.debug(f'代理格式错误！{i}\n{td}')
                             continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 5:
@@ -335,7 +335,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(i)
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
+                            self.log.debug(f'代理格式错误！{i}\n{td}')
                             continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 5:
@@ -372,7 +372,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(i, protocol='http')
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
+                            self.log.debug(f'代理格式错误！{i}\n{td}')
                             continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
@@ -408,7 +408,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(i, protocol='https')
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
+                            self.log.debug(f'代理格式错误！{i}\n{td}')
                             continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
@@ -443,7 +443,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(i)
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
+                            self.log.debug(f'代理格式错误！{i}\n{td}')
                             continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
@@ -487,7 +487,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i:
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}\n{td}')
+                        self.log.debug(f'代理格式错误！{i}\n{td}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -519,7 +519,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if ip := i.get('ip'):
                     append_dict = format_proxy(ip)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -550,7 +550,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -590,7 +590,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     if i:
                         append_dict = format_proxy(i)
                         if not append_dict:
-                            self.log.exception(f'代理格式错误！{i}\n{td}')
+                            self.log.debug(f'代理格式错误！{i}\n{td}')
                             continue
                         proxy_queue.append(append_dict)
                 if len(proxy_queue) < 10:
@@ -622,7 +622,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -650,7 +650,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -678,7 +678,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -707,7 +707,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -736,7 +736,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -765,7 +765,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -793,7 +793,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -821,7 +821,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -850,7 +850,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -878,7 +878,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -906,7 +906,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -934,7 +934,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -962,7 +962,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -990,7 +990,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1018,7 +1018,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i:
                     append_dict = format_proxy(_.get('proxy'), protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1046,7 +1046,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1074,7 +1074,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1107,7 +1107,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1135,7 +1135,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1163,7 +1163,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1191,7 +1191,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1219,7 +1219,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1247,7 +1247,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1275,7 +1275,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1303,7 +1303,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1331,7 +1331,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1359,7 +1359,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1387,7 +1387,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1415,7 +1415,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1443,7 +1443,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1471,7 +1471,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1499,7 +1499,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1527,7 +1527,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := ':'.join(i.strip().split(':')[0:2]):
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1555,7 +1555,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := ':'.join(i.strip().split(':')[0:2]):
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1583,7 +1583,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := ':'.join(i.strip().split(':')[0:2]):
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1611,7 +1611,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := ':'.join(i.strip().split(':')[0:2]):
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1639,7 +1639,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1667,7 +1667,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := ':'.join(i.strip().split(':')[0:2]):
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1695,7 +1695,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := ':'.join(i.strip().split(':')[0:2]):
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1723,7 +1723,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := ':'.join(i.strip().split(':')[0:2]):
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1751,7 +1751,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1780,7 +1780,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1809,7 +1809,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1838,7 +1838,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1875,7 +1875,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                     protocol = i_dict.get('type')
                     append_dict = format_proxy(f'{protocol}://{host}:{port}', protocol=protocol)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1903,7 +1903,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1931,7 +1931,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1959,7 +1959,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -1988,7 +1988,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2016,35 +2016,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
-                        continue
-                    proxy_queue.append(append_dict)
-            if len(proxy_queue) < 10:
-                self.log.info(f'{req.text}, {url}')
-            self.log.info(f'总共有{len(proxy_queue)}个代理需要检查')
-        else:
-            self.log.info(f'{req.text}, {url}')
-
-            get_proxy_success = False
-        return proxy_queue, get_proxy_success
-
-    async def get_proxy_from_casa_ls_proxy_list_http(self) -> tuple[list, bool]:
-        headers = {
-            'user-agent': CONFIG.rand_ua
-        }
-        get_proxy_success = True
-        req = ''
-        proxy_queue = []
-        url = f'https://raw.githubusercontent.com/casa-ls/proxy-list/refs/heads/main/http'
-        req = await my_async_httpx.get(url=url, headers=headers, verify=False,
-                                       proxies=_github_proxy)
-        if req:
-            proxies = []
-            for i in req.text.split('\n'):
-                if _ := i.strip():
-                    append_dict = format_proxy(_, protocol='http')
-                    if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2073,7 +2045,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2102,7 +2074,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(i, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2131,7 +2103,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2159,7 +2131,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_.split(' ')[0], protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2187,7 +2159,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_.split(' ')[0], protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2215,7 +2187,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if _ := i.strip():
                     append_dict = format_proxy(_, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{_}')
+                        self.log.debug(f'代理格式错误！{_}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2243,7 +2215,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2276,7 +2248,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
     #             if _ := i.strip():
     #                 append_dict = format_proxy(_)
     #                 if not append_dict:
-    #                     self.log.exception(f'代理格式错误！{_}')
+    #                     self.log.debug(f'代理格式错误！{_}')
     #                     continue
     #                 proxy_queue.append(append_dict)
     #         if len(proxy_queue) < 10:
@@ -2303,7 +2275,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
     #             if _ := i.strip():
     #                 append_dict = format_proxy(_, protocol='socks5')
     #                 if not append_dict:
-    #                     self.log.exception(f'代理格式错误！{_}')
+    #                     self.log.debug(f'代理格式错误！{_}')
     #                     continue
     #                 proxy_queue.append(append_dict)
     #         if len(proxy_queue) < 10:
@@ -2360,7 +2332,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2390,7 +2362,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2422,7 +2394,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2455,7 +2427,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2488,7 +2460,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i, protocol='socks5')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2520,7 +2492,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i, protocol='http')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2552,7 +2524,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i, protocol='https')
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2584,7 +2556,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2617,7 +2589,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2649,7 +2621,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2682,7 +2654,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2716,7 +2688,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if addr:
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2749,7 +2721,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2782,7 +2754,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2815,7 +2787,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2846,7 +2818,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2876,7 +2848,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2906,7 +2878,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -2936,7 +2908,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 if i.strip():
                     append_dict = format_proxy(i)
                     if not append_dict:
-                        self.log.exception(f'代理格式错误！{i}')
+                        self.log.debug(f'代理格式错误！{i}')
                         continue
                     proxy_queue.append(append_dict)
             if len(proxy_queue) < 10:
@@ -3167,7 +3139,7 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 except curl_cffi.requests.exceptions.RequestException as e:
                     raise e
                 except Exception as e:
-                    self.log.exception(e)
+                    self.log.debug(e)
                     raise e
 
             return wrapper
