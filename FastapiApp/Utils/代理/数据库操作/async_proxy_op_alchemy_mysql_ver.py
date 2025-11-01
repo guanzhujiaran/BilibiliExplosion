@@ -171,7 +171,7 @@ class SubRedisStore(RedisManagerBase):
                 if proxy_tab_dict := await self._hmget(
                         *self._gen_proxy_key(proxy_info_dict=p)
                 ):
-                    return self.dict_2_model(ast.literal_eval(proxy_tab_dict))
+                    return self.dict_2_model(json.loads(proxy_tab_dict))
 
     async def redis_select_score_top_proxy(self) -> ProxyTab | None:
         if top_score_ip_dict := await self._zget_top_score(
@@ -734,10 +734,8 @@ class SQLHelperClass(SqlHelperBase):
 SQLHelper = SQLHelperClass()
 
 if __name__ == "__main__":
-    print(int(time.time()))
+    async def _test_redis_select_one_proxy():
+        print(await SQLHelper.sub_redis_store.redis_select_one_proxy())
 
-    print(asyncio.run(
-        SQLHelper.check_redis_data()
-    )
-    )
-    print(int(time.time()))
+
+    asyncio.run(_test_redis_select_one_proxy())
