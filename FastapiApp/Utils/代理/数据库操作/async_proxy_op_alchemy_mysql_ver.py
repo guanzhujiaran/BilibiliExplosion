@@ -144,7 +144,7 @@ class SubRedisStore(RedisManagerBase):
         )
         if redis_data:
             redis_dict = json.loads(redis_data)
-            return ProxyTab(redis_dict)
+            return ProxyTab(**redis_dict)
         return None
 
     async def redis_bili_proxy_zset_count(self) -> int:
@@ -739,10 +739,10 @@ if __name__ == "__main__":
 
     async def _test_redis_get_proxy_by_ip():
         print(await SQLHelper.sub_redis_store.redis_get_proxy_by_ip(
-            ip_dict= {
-        "http": "http://116.203.206.103:8080",
-        "https": "http://116.203.206.103:8080"
-    }
+            ip_dict={
+                "http": "http://116.203.206.103:8080",
+                "https": "http://116.203.206.103:8080"
+            }
         ))
 
 
