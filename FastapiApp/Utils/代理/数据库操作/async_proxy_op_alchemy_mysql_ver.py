@@ -201,7 +201,7 @@ class SubRedisStore(RedisManagerBase):
         redis_data.score += score_change_num
         if redis_data.score > 10000:
             redis_data.score = 10000
-        redis_data.success_times += succ_times_num
+        redis_data.success_times = (redis_data.success_times or 0) + succ_times_num
         await self._hmset(
             name=self.RedisMap.bili_proxy_changed_hm.value,
             field_values={
@@ -526,7 +526,7 @@ class SQLHelperClass(SqlHelperBase):
         ).values(
             status=proxy_tab.status,
             score=ProxyTab.score + change_score_num,
-            success_times=proxy_tab.success_times + succ_times_num,
+            success_times=(proxy_tab.success_times or 0) + succ_times_num,
             update_ts=proxy_tab.update_ts,
             add_ts=proxy_tab.add_ts
         )

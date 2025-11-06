@@ -106,7 +106,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
   unidbg:
-    container_name: unidbg
+    container_name: fastapi-unidbg
     image: unidbg-springboot-samsclub
     environment:
       - TZ=${ENV_TZ}
@@ -120,7 +120,7 @@ services:
       resources:
         limits:
           memory: 5G
-    container_name: fastapi_bili_explosion
+    container_name: fastapi-bili-explosion
     depends_on:
       - mysql
       - redis
@@ -185,8 +185,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PWD=
-      - FASTAPI_URI=http://fastapi:23333
-      - FASTAPI_DEV_URI=http://fastapi_dev:23333
+      - FASTAPI_URI=http://fastapi-bili-explosion:23333
+      - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
       - TZ=${ENV_TZ}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -210,8 +210,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PWD=
-      - FASTAPI_URI=http://fastapi:23333
-      - FASTAPI_DEV_URI=http://fastapi_dev:23333
+      - FASTAPI_URI=http://fastapi-bili-explosion:23333
+      - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
       - TZ=${ENV_TZ}
     restart: unless-stopped
     extra_hosts:
