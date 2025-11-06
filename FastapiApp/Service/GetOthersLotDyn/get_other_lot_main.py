@@ -1912,13 +1912,13 @@ class GetOthersLotDyn:
 get_others_lot_dyn = GetOthersLotDyn()
 
 if __name__ == '__main__':
-    async def main():
+    async def _test_main():
         await get_others_lot_dyn.get_new_dyn()
 
 
-    a = BiliSpaceUserItem(
-        lot_round_id=0,
-        uid=1,
-        _offset=2
-    )
-    print(a)
+    async def _test_get_target_uid_list():
+        await get_other_lot_redis_manager.get_target_uid_list()
+
+    asyncio.run(_test_get_target_uid_list())
+
+

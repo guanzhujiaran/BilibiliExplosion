@@ -68,7 +68,7 @@ def retry(func):
                 redis_logger.exception(f'Redis连接错误，重试中...{e}')
                 await asyncio.sleep(30)
             except Exception as e:
-                redis_logger.exception(e)
+                redis_logger.critical(f'\nRedis操作错误\n{func.__name__}\n{args}\n{kwargs}\n{e}')
                 await asyncio.sleep(30)
 
     return wrapper

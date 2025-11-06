@@ -34,7 +34,7 @@ class GetOtherLotRedisManager(RedisManagerBase):
 
     async def get_target_uid_list(self) -> List[int | str]:
         if val := await self._get(self.RedisMap.target_uid_list.value):
-            return ast.literal_eval(val)
+            return json.loads(val)
         else:
             return []
 

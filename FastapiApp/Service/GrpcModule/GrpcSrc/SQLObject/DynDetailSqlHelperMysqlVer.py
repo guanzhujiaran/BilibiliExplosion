@@ -979,4 +979,9 @@ if __name__ == '__main__':
         print(res)
 
 
-    asyncio.run(_test_query_dynData_by_date())
+    async def _test_get_lottery_result():
+        res = await grpc_sql_helper.get_lottery_result(uid=4237378)
+        print(res)
+
+
+    asyncio.run(_test_get_lottery_result())

@@ -59,7 +59,7 @@ def grpc_error(err):
 
 class BiliGrpc:
     def __init__(self):
-        self.base_uri = 'https://grpc.biliapi.net'
+        self.base_uri = 'http://grpc.biliapi.net'
         self.debug_mode = False
         self.metadata_pool_size = 30  # 元数据（headers）池大小
         self.metadata_list = []  # 元数据（headers）池大小列表

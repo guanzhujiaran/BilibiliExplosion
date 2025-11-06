@@ -74,7 +74,7 @@ class SubRedisStore(RedisManagerBase):
         """
         try:
             if isinstance(proxy_info_dict, str):
-                proxy_info_dict = ast.literal_eval(proxy_info_dict)
+                proxy_info_dict = json.loads(proxy_info_dict)
             inner_key = get_scheme_ip_port_form_proxy_dict(proxy_info_dict)
         except Exception as e:
             inner_key = str(proxy_info_dict)
@@ -143,9 +143,8 @@ class SubRedisStore(RedisManagerBase):
             *self._gen_proxy_key(proxy_info_dict=ip_dict, is_changed=from_changed)
         )
         if redis_data:
-            return ProxyTab(**ast.literal_eval(
-                redis_data
-            ))
+            redis_dict = json.loads(redis_data)
+            return ProxyTab(redis_dict)
         return None
 
     async def redis_bili_proxy_zset_count(self) -> int:
@@ -181,7 +180,7 @@ class SubRedisStore(RedisManagerBase):
             if proxy_tab_dict := await self._hmget(
                     *self._gen_proxy_key(proxy_info_dict=top_score_ip_dict)
             ):
-                return self.dict_2_model(ast.literal_eval(proxy_tab_dict))
+                return self.dict_2_model(json.loads(proxy_tab_dict))
             return None
 
     async def redis_update_proxy(self, proxy_tab: ProxyTab, score_change_num: int) -> bool | None:
@@ -738,4 +737,13 @@ if __name__ == "__main__":
         print(await SQLHelper.sub_redis_store.redis_select_one_proxy())
 
 
-    asyncio.run(_test_redis_select_one_proxy())
+    async def _test_redis_get_proxy_by_ip():
+        print(await SQLHelper.sub_redis_store.redis_get_proxy_by_ip(
+            ip_dict= {
+        "http": "http://116.203.206.103:8080",
+        "https": "http://116.203.206.103:8080"
+    }
+        ))
+
+
+    asyncio.run(_test_redis_get_proxy_by_ip())
