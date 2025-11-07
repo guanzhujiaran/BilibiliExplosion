@@ -187,6 +187,8 @@ services:
       - REDIS_PWD=
       - FASTAPI_URI=http://fastapi-bili-explosion:23333
       - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
+      - FASTAPI_RPA_URI=http://fastapi-rpa:8080
+      - FASTAPI_RPA_DEV_URI=http://fastapi-rpa:8000
       - TZ=${ENV_TZ}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -212,6 +214,8 @@ services:
       - REDIS_PWD=
       - FASTAPI_URI=http://fastapi-bili-explosion:23333
       - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
+      - FASTAPI_RPA_URI=http://fastapi-rpa:8080
+      - FASTAPI_RPA_DEV_URI=http://fastapi-rpa:8000
       - TZ=${ENV_TZ}
     restart: unless-stopped
     extra_hosts:
@@ -219,6 +223,9 @@ services:
   lm-studio:
     container_name: fastapi-lm-studio
     image: lmstudio/llmster-preview:cpu
+    mem_limit: 512m
+    volumes:
+      - /root/.lmstudio/models
     ports:
       - ${LMSTUDIO_PORT}:1234
     restart: unless-stopped

@@ -58,12 +58,10 @@
    pm2 start pm2.app.js
    ```
 
-~~2. Docker部署（已弃用）：~~
+2. Docker部署：
    ```bash
    docker-compose up -d
    ```
-   
-   > docker拉镜像太慢了，不用了
 
 ## 许可证
 

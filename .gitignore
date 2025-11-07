@@ -33,6 +33,8 @@ docker_vol/*
 !docker_vol/postgres/init/
 !docker_vol/nginx/
 !docker_vol/goaccess/
+!docker_vol/lm_studio
+!docker_vol/lm_studio/*
 !FastapiApp/requirements.txt
 !FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
 .env
