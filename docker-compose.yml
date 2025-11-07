@@ -222,7 +222,8 @@ services:
       - "host.docker.internal:host-gateway"
   lm-studio:
     container_name: fastapi-lm-studio
-    image: lmstudio/llmster-preview:cpu
+    build:
+      context: ./docker_vol/lm_studio
     mem_limit: 512m
     volumes:
       - /root/.lmstudio/models
