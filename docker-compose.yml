@@ -21,16 +21,18 @@ services:
     environment:
       - LANG=zh_CN.UTF-8
       - TZ=${ENV_TZ}
-    image: allinurl/goaccess
+    build:
+      context: ./docker_vol/goaccess
     ports:
       - "7890:7890"
     volumes:
       - ./docker_vol/goaccess/goaccess.conf:/srv/config/goaccess.conf
-      - /opt/1panel/apps/openresty/openresty/log/:/srv/logs
-      - /www/sites/serena.dynv6.net/index/:/srv/report
-      - /www/sites/serena.dynv6.net/ssl/:/srv/certs
+      - /srv/geodb
+      - ${SITE_LOG_DIR}:/srv/logs
+      - ${SITE_REPORT_DIR}:/srv/report
+      - ${SITE_CERT_DIR}:/srv/certs
     command: [ "--no-global-config", "--config-file=/srv/config/goaccess.conf" ]
-    restart: unless-stopped
+    restart: on-failure:3
     extra_hosts:
       - "host.docker.internal:host-gateway"
   standalone:
@@ -232,8 +234,25 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+  go-proxy-ipv6-server:
+    container_name: go-proxy-ipv6-server
+    build:
+      context: ./go-proxy-ipv6-pool-auto
+    ports:
+      - "3128:3128"
+    networks:
+      - my-network
+    environment:
+      - NET_IF=eth0
+      -
 networks:
   default:
     enable_ipv6: true
     name: fastapi
     driver: bridge
+  ipv6-proxy-server-network:
+    enable_ipv6: true
+    driver: bridge
+    ipam:
+      config:
+        - subnet: "2409:8a1e:2e90:d20::/64"

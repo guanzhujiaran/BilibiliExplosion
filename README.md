@@ -49,7 +49,10 @@
    cd puppeteer_Bili
    npm install
    ```
-
+6. 配置goaccess
+    ```
+   
+   ```
 ## 使用方法
 
 1. 启动ipv6代理池（或者使用supervisor之类的）：
