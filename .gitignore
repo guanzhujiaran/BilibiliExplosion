@@ -34,7 +34,8 @@ docker_vol/*
 !docker_vol/nginx/
 !docker_vol/goaccess/
 !docker_vol/lm_studio
-!docker_vol/lm_studio/*
+!docker_vol/lm_studio/init.sh
+!docker_vol/lm_studio/Dockerfile
 !FastapiApp/requirements.txt
 !FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
 .env
