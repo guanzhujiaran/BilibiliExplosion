@@ -241,10 +241,10 @@ services:
     ports:
       - "3128:3128"
     networks:
-      - my-network
+      - ipv6-proxy-server-network
     environment:
       - NET_IF=eth0
-      -
+      - RUN_ENV=prod
 networks:
   default:
     enable_ipv6: true
