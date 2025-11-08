@@ -234,25 +234,8 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
-  go-proxy-ipv6-server:
-    container_name: go-proxy-ipv6-server
-    build:
-      context: ./go-proxy-ipv6-pool-auto
-    ports:
-      - "3128:3128"
-    networks:
-      - ipv6-proxy-server-network
-    environment:
-      - NET_IF=eth0
-      - RUN_ENV=prod
 networks:
   default:
     enable_ipv6: true
     name: fastapi
     driver: bridge
-  ipv6-proxy-server-network:
-    enable_ipv6: true
-    driver: bridge
-    ipam:
-      config:
-        - subnet: "2409:8a1e:2e90:d20::/64"

@@ -274,8 +274,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             reserve_lot_logger.critical(
                 f'{self.ids}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'
                 f'{self.dynamic_timestamp.get_time_str_until_now()}\n'
-                f'最终成功的ids：https://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_success_params}\n'
-                f'最终ids: https://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_params}\n'
+                f'最终成功的ids：http://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_success_params}\n'
+                f'最终ids: http://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_params}\n'
             )
         none_num2 = self.null_stop_plugin.sequential_null_count if int(
             time.time()) - self.dynamic_timestamp.dynamic_timestamp < self.EndTimeSeconds else - self.null_time_quit

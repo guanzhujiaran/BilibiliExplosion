@@ -80,4 +80,4 @@ async def get_available_proxy(
 
 if __name__ == "__main__":
     result = asyncio.run(get_available_proxy(is_use_available_proxy=True))
-    print(result)
+    print(str(result[0]))

@@ -184,14 +184,14 @@ class RequestWithProxy:
                 curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError,
                 TimeoutError
         ) as _err:
-            self.log.debug(f'请求时发生网络错误：{type(_err)}\n{_err}')
+            self.log.debug(f'\n代理：{str(proxy)}\n请求时发生网络错误：{type(_err)}\n{_err}')
             if proxy:
                 await handle_proxy_request_fail(
                     proxy_tab=proxy,
                 )
             raise RequestProxyResponseError(_err)
         except AttributeError as _err:
-            self.log.exception(f'请求时出错，一般错误：{_err}')
+            self.log.exception(f'\n代理：{str(proxy)}\n请求时出错，一般错误：{_err}')
             if proxy:
                 await handle_proxy_request_fail(
                     proxy_tab=proxy,
@@ -199,10 +199,9 @@ class RequestWithProxy:
             raise RequestUnknownError(_err)
         except Exception as _err:
             self.log.exception(
-                f'未知请求错误！请求：\n{kwargs}'
+                f'\n代理：{str(proxy)}\n未知请求错误！请求：\n{kwargs}'
                 f'\n结束，报错了！'
                 f'\n{type(_err)}'
-                f'\t{sqlalchemy_model_2_dict(proxy)}'
                 f'\n{_err}\n{req_text}')
             if proxy:
                 await handle_proxy_request_fail(

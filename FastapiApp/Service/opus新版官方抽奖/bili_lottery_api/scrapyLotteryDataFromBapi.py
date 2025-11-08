@@ -57,7 +57,7 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
     async def handle_fetch(self, params: BusinessParams) -> WorkerStatus:
         return await self.pipeline(params.business_type, params.business_id)
 
-    def __init__(self, log, business_type: BusinessType, sem_num=1):
+    def __init__(self, log, business_type: BusinessType, sem_num=2):
         self.__business_type: BusinessType = business_type
         self.default_dyn_rid = 346492727
         self.default_reserve_sid = 4234284
@@ -150,11 +150,9 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
             await a_pushme(title=f'爬取B站lottery异常', content=str(e))
 
 
-lottery_api_robot_dyn = LotteryApiRobot(log=official_lot_logger, business_type=2, sem_num=1)
-lottery_api_robot_reserve = LotteryApiRobot(log=reserve_lot_logger, business_type=10, sem_num=1)
 if __name__ == '__main__':
     async def _test():
-        bp = BusinessParams(business_id=1,business_type=2)
+        bp = BusinessParams(business_id=1, business_type=2)
         print(bp)
         # await asyncio.gather(lottery_api_robot_dyn.main(), lottery_api_robot_reserve.main())
 

@@ -79,7 +79,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         # No need to calculate _total_run_duration or _current_speed here,
         # the properties will return the final values when accessed.
 
-        self.log.info(self.crawler.format_log(f"""StatsPlugin Summary:"
+        self.log.critical(self.crawler.format_log(f"""StatsPlugin Summary:"
   Initial Params: {self._init_params}")
   Final Params: {self._end_params}")
   Is Running: {self._is_running}")

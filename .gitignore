@@ -22,7 +22,7 @@ node_modules
 FastapiApp/__test/
 FastapiApp/Service/toutiao/src/Tools/Enc/node_modules
 FastapiApp/Service/GrpcModule/Utils/极验/Geetest_html
-FastapiApp/Service/samsclub/api/app_storage.jsondoc
+FastapiApp/Service/samsclub/api/app_storage.json
 .env.fastapi.dev
 go-proxy-ipv6-pool-auto/
 unidbgSpringBoot/

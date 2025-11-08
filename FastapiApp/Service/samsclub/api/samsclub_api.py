@@ -982,7 +982,7 @@ class SamsClubApi:
 sams_club_api = SamsClubApi()
 if __name__ == '__main__':
     async def _test():
-        # await sams_club_api.init_api_info()
+        await sams_club_api.init_api_info()
         resp = await sams_club_api.spu_query_detail(
             spuId=1333962
         )

@@ -30,7 +30,7 @@ from Service.GrpcModule.Grpc.GrpcProto.bilibili.metadata.network.network_pb2 imp
 from Service.GrpcModule.Grpc.GrpcProto.bilibili.metadata.restriction.restriction_pb2 import Restriction
 from Service.GrpcModule.Grpc.GrpcProto.datacenter.hakase.protobuf.android_device_info_pb2 import \
     AndroidDeviceInfo
-from Utils.代理.SealedRequests import my_async_httpx as myreq
+from Utils.代理.SealedRequests import my_async_httpx
 
 
 class Fp:
@@ -724,8 +724,8 @@ async def get_bili_ticket(device_info: bytes,
     proxy = CONFIG.custom_proxy
     while 1:
         try:
-            resp = await myreq.request(
-                url='https://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',
+            resp = await my_async_httpx.request(
+                url='http://app.bilibili.com/bilibili.api.ticket.v1.Ticket/GetTicket',
                 method='POST',
                 data=data,
                 headers=tuple(new_headers),
@@ -790,7 +790,7 @@ async def active_buvid(brand, build, buvid, channel, app_version_build, app_vers
         ('content-type', 'application/x-www-form-urlencoded; charset=utf-8'),
     )
 
-    req = await myreq.request(url=url, method='post', data=signed_data, headers=headers, proxies={
+    req = await my_async_httpx.request(url=url, method='post', data=signed_data, headers=headers, proxies={
         'http': proxy['proxy']['http'],
         'https': proxy['proxy']['https']} if proxy else CONFIG.custom_proxy, verify=False)
     BiliGrpcApi_logger.debug(f' {url} 激活buvid：{req.text}')

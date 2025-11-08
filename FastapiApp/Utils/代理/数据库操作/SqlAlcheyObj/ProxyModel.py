@@ -30,6 +30,8 @@ class ProxyTab(Base):
 
     available_proxy: Mapped[List['AvailableProxy']] = relationship('AvailableProxy', uselist=True, back_populates='proxy_tab')
 
+    def __str__(self):
+        return f"ProxyTab(proxy_id={self.proxy_id}, proxy={self.proxy}, status={self.status}, update_ts={self.update_ts}, score={self.score}, add_ts={self.add_ts}, success_times={self.success_times}, zhihu_status={self.zhihu_status})"
 
 class AvailableProxy(Base):
     __tablename__ = 'available_proxy'
