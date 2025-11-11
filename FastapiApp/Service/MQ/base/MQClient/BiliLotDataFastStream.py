@@ -1,19 +1,15 @@
-import asyncio
-import random
+from datetime import datetime
+import json
 import time
-from typing import Callable, Dict, Annotated, Any
-from fast_depends import Depends
-from faststream import AckPolicy
-from faststream.rabbit import RabbitQueue
-from faststream.rabbit.fastapi import RabbitBroker, RabbitMessage
-
+from typing import Dict, Any
+from faststream.rabbit.fastapi import RabbitMessage
 from Models.lottery_database.bili.LotteryDataModels import BiliLotteryStatusEnum
 from log.base_log import MQ_logger
 from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
-from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
+from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher, publisher_producer
 from Service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
-    upsert_milvus_bili_lot_data_prop, router, get_broker, bili_voucher_prop, upsert_bili_atari_prop
+    upsert_milvus_bili_lot_data_prop, router, get_broker, bili_voucher_prop, upsert_bili_atari_prop, test_mq_prop
 from Service.LangChainCompo.text_embed import lot_data_2_bili_lot_data_ls, save_bili_lot_data_embeddings
 from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
 from Service.GrpcModule.Utils.极验.极验点击验证码 import geetest_v3_breaker
@@ -35,56 +31,52 @@ async def handle_exception(
     MQ_logger.exception(error_msg)
     await a_pushme(
         f"抽奖MQ错误 - {module_name} - {e}",
-        error_msg
+        json.dumps(error_msg)
     )
     await msg.nack()
 
 
-def func_wrapper(func: Callable):
-    async def wrapper(*args, **kwargs):
-        # MQ_logger.debug(
-        #     f"【{func.__name__}】收到消息：{args}")
-        return await func(*args, **kwargs)
-
-    return wrapper
-
-
-__test_queue = RabbitQueue(
-    name="test",
-)
-
-
+# region 测试rabbitmq的连通性
 @router.after_startup
-async def _test(app_instance):
-    await router.broker.publish("Hello!", __test_queue)
+async def _test_publish_init(app_instance):
+    do_pubish = publisher_producer(mq_props=test_mq_prop)
+    pub_msg = f'Ciallo～(∠・ω< )⌒★ 起床时间【{datetime.now()}】喵~'
+    MQ_logger.critical(f"【{rabbit_mq_test.mq_props.queue_name}】发布测试消息！{pub_msg}")
+    return await do_pubish(
+        message=pub_msg
+    )
 
+class RabbitMQTest(BaseFastStreamMQ):
+    def __init__(self):
+        super().__init__(
+            mq_props=test_mq_prop
+        )
 
-@router.subscriber(__test_queue, ack_policy=AckPolicy.MANUAL)
-async def hello(
-        body: str,
-        msg: RabbitMessage,
+    async def consume(self,
+                      _body: str,
+                      msg: RabbitMessage,
+                      ):
+        try:
+            MQ_logger.critical(f"【{self.mq_props.queue_name}】收到消息：{_body}")
+            return await msg.ack()
+        except Exception as e:
+            await handle_exception(self.mq_props.queue_name, e, _body, msg)
+rabbit_mq_test = RabbitMQTest()
+@router.subscriber(**rabbit_mq_test.sub_params)
+async def _test_msg_consumer(
+        data:str,
+        msg:RabbitMessage
 ):
-    await asyncio.sleep(random.choice(range(0, 1000)))
-    is_ack = random.choice([True, False])
-    if is_ack:
-        ret = f"ACK!{body} from Rabbit subscriber test!"
-        # MQ_logger.info(ret)
-        await msg.ack()
-    else:
-        ret = f"NACK!{body} from Rabbit subscriber test!"
-        # MQ_logger.warning(ret)
-        await msg.nack()
-    return ret
+    return await rabbit_mq_test.consume(data, msg)
 
 
-@router.publisher(__test_queue)
-@router.get('/test')
-async def _test_msg_pub(msg: str, broker: Annotated[RabbitBroker, Depends(get_broker)]):
-    ret = f"{msg} from Rabbit publisher test!"
-    # MQ_logger.debug(ret)
-    await broker.publish(msg, __test_queue)
-    return ret
-
+@router.publisher(**rabbit_mq_test.pub_params)
+@router.post('/rabbitmq_test_publish')
+async def _test_msg_pub(msg: str=f'Ciallo～(∠・ω< )⌒★ 起床时间【{datetime.now()}】喵~') ->str:
+    ret = f"publish `{msg}` to rabbitmq test!"
+    MQ_logger.critical(ret)
+    return msg
+# endregion
 
 class OfficialReserveChargeLot(BaseFastStreamMQ):
     def __init__(self):
@@ -92,7 +84,6 @@ class OfficialReserveChargeLot(BaseFastStreamMQ):
             mq_props=official_reserve_charge_lot_mq_prop
         )
 
-    @func_wrapper
     async def consume(self,
                       _body: LotDataReq,
                       msg: RabbitMessage,
@@ -123,7 +114,7 @@ class UpsertOfficialReserveChargeLot(BaseFastStreamMQ):
             mq_props=upsert_official_reserve_charge_lot_mq_prop
         )
 
-    @func_wrapper
+    
     async def consume(
             self,
             newly_lot_data: Dict,
@@ -169,7 +160,7 @@ class UpsertLotDataByDynamicId(BaseFastStreamMQ):
             mq_props=upsert_lot_data_by_dynamic_id_prop
         )
 
-    @func_wrapper
+    
     async def consume(
             self,
             lot_data_dynamic_req: LotDataDynamicReq,
@@ -209,7 +200,7 @@ class UpsertTopicLot(BaseFastStreamMQ):
             mq_props=upsert_topic_lot_prop
         )
 
-    @func_wrapper
+    
     async def consume(
             self,
             _body: TopicLotData,
@@ -232,7 +223,7 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
             mq_props=upsert_milvus_bili_lot_data_prop
         )
 
-    @func_wrapper
+    
     async def consume(
             self,
             _body: Dict,
@@ -277,7 +268,7 @@ class BiliVoucher(BaseFastStreamMQ):
             mq_props=bili_voucher_prop
         )
 
-    @func_wrapper
+    
     async def consume(
             self,
             voucher_info: VoucherInfo,

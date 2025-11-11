@@ -20,7 +20,7 @@ def gen_sub_params(mq_client: BaseFastStreamMQ):
 
 
 @router.subscriber(
-    **gen_sub_params(official_reserve_charge_lot)
+    **official_reserve_charge_lot.sub_params
 )
 async def handle_official_reserve_charge_lot(
         body: LotDataReq,
@@ -34,7 +34,7 @@ async def handle_official_reserve_charge_lot(
 
 
 @router.subscriber(
-    **gen_sub_params(upsert_official_reserve_charge_lot)
+    **upsert_official_reserve_charge_lot.sub_params
 )
 async def handle_upsert_official_reserve_charge_lot(
         newly_lot_data: Dict,
@@ -48,7 +48,7 @@ async def handle_upsert_official_reserve_charge_lot(
 
 
 @router.subscriber(
-    **gen_sub_params(upsert_lot_data_by_dynamic_id)
+    **upsert_lot_data_by_dynamic_id.sub_params
 )
 async def handle_upsert_lot_data_by_dynamic_id(
         lot_data_dynamic_req: LotDataDynamicReq,
@@ -62,7 +62,7 @@ async def handle_upsert_lot_data_by_dynamic_id(
 
 
 @router.subscriber(
-    **gen_sub_params(upsert_topic_lot)
+    **upsert_topic_lot.sub_params
 )
 async def handle_upsert_topic_lot(
         body: TopicLotData,
@@ -76,7 +76,7 @@ async def handle_upsert_topic_lot(
 
 
 @router.subscriber(
-    **gen_sub_params(upsert_milvus_bili_lot_data)
+    **upsert_milvus_bili_lot_data.sub_params
 )
 async def handle_upsert_milvus_bili_lot_data(
         body: Dict,
@@ -90,7 +90,7 @@ async def handle_upsert_milvus_bili_lot_data(
 
 
 @router.subscriber(
-    **gen_sub_params(upsert_bili_atari)
+    **upsert_bili_atari.sub_params
 )
 async def handle_upsert_bili_atari(
         body: int,
@@ -104,7 +104,7 @@ async def handle_upsert_bili_atari(
 
 
 @router.subscriber(
-    **gen_sub_params(bili_voucher)
+    **bili_voucher.sub_params
 )
 async def handle_bili_voucher(
         body: VoucherInfo,

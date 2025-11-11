@@ -5,6 +5,7 @@ from faststream.rabbit import RabbitQueue, RabbitExchange
 
 
 class QueueName(StrEnum):
+    TestMQ = "test"
     OfficialReserveChargeLotMQ = "OfficialReserveChargeLotQueue"
     UpsertOfficialReserveChargeLotMQ = "UpsertOfficialReserveChargeLotQueue"
     UpsertLotDataByDynamicIdMQ = "UpsertLotDataByDynamicIdQueue"
@@ -20,6 +21,7 @@ class ExchangeName(StrEnum):
 
 # 定义一个名为RoutingKey的类，继承自str和Enum
 class RoutingKey(StrEnum):
+    TestMQ = "testRouter"
     OfficialReserveChargeLotMQ = "BiliData.OfficialReserveChargeLotMQ"
     UpsertOfficialReserveChargeLotMQ = "BiliData.UpsertOfficialReserveChargeLotMQ"
     UpsertLotDataByDynamicIdMQ = "BiliData.UpsertLotDataByDynamicIdMQ"

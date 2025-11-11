@@ -139,20 +139,16 @@ class AvailableProxySqlHelper(SqlHelperBase):
 
     # --- Keep existing methods ---
     @sql_retry_wrapper
-    async def get_available_proxy_by_proxy_id(self, proxy_tab_id: int) -> Optional[AvailableProxy]:
+    async def get_available_proxy_by_proxy_id(self, proxy_tab_id: int) -> AvailableProxy | None:
         async with self.async_session() as session:
-            try:
-                result = await session.execute(
-                    select(AvailableProxy)
-                    .where(
-                        AvailableProxy.proxy_tab_id == proxy_tab_id,
-                    )
-                    .limit(1)
+            result = await session.execute(
+                select(AvailableProxy)
+                .where(
+                    AvailableProxy.proxy_tab_id == proxy_tab_id,
                 )
-                return result.scalars().first()
-            except SQLAlchemyError as e:
-                self.log.error(f"Error getting proxy by tab id {proxy_tab_id}: {e}")
-                return None
+                .limit(1)
+            )
+            return result.scalars().first()
 
     @sql_retry_wrapper
     async def update_proxy_counter_and_time(self, proxy_pk: int):

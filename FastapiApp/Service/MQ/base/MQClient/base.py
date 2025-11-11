@@ -1,3 +1,4 @@
+from faststream import AckPolicy
 from faststream.rabbit import RabbitExchange, ExchangeType
 from faststream.rabbit.fastapi import RabbitRouter
 from CONFIG import CONFIG
@@ -12,6 +13,20 @@ class BaseFastStreamMQ:
     async def consume(self, *args, **kwargs):
         raise NotImplementedError("子类必须实现此方法")
 
+    @property
+    def sub_params(self) ->dict:
+        return {
+            "queue": self.mq_props.rabbit_queue,
+            "exchange": self.mq_props.exchange,
+            "ack_policy": AckPolicy.MANUAL,
+        }
+
+    @property
+    def pub_params(self) ->dict:
+        return {
+        "queue": self.mq_props.rabbit_queue,
+        "exchange": self.mq_props.exchange,
+    }
 
 router = RabbitRouter(
     CONFIG.RabbitMQConfig.broker_url,
@@ -58,5 +73,11 @@ upsert_bili_atari_prop = MQPropBase(
 bili_voucher_prop = MQPropBase(
     queue_name=QueueName.BiliVoucherMQ,
     routing_key_name=RoutingKey.BiliVoucherMQ,
+    exchange=exch
+)
+
+test_mq_prop = MQPropBase(
+    queue_name=QueueName.TestMQ,
+    routing_key_name=RoutingKey.TestMQ,
     exchange=exch
 )

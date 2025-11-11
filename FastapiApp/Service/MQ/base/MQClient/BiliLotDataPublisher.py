@@ -1,9 +1,11 @@
+import asyncio
+
 from Models.MQ.BaseMQModel import MQPropBase
 from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.BasicAsyncClient import _mq_retry_wrapper
 from Service.MQ.base.MQClient.base import official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
-    upsert_milvus_bili_lot_data_prop, get_broker, bili_voucher_prop, upsert_bili_atari_prop
+    upsert_milvus_bili_lot_data_prop, get_broker, bili_voucher_prop, upsert_bili_atari_prop, test_mq_prop
 from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
@@ -12,7 +14,6 @@ from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 def publisher_producer(mq_props: MQPropBase):
     async def publisher(message, extra_routing_key: str = ""):
         broker = get_broker()
-        await broker.connect()
         if extra_routing_key and type(extra_routing_key) is str:
             routing_key = mq_props.routing_key_name + "." + extra_routing_key
         else:
@@ -40,8 +41,8 @@ class BiliLotDataPublisher:
     ):
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
-        publisher = publisher_producer(official_reserve_charge_lot_mq_prop)
-        return await publisher(
+        do_publish = publisher_producer(official_reserve_charge_lot_mq_prop)
+        return await do_publish(
             message=LotDataReq(
                 business_type=business_type,
                 business_id=business_id,
@@ -70,8 +71,8 @@ class BiliLotDataPublisher:
         """
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
-        publisher = publisher_producer(upsert_official_reserve_charge_lot_mq_prop)
-        return await publisher(
+        do_publish = publisher_producer(upsert_official_reserve_charge_lot_mq_prop)
+        return await do_publish(
             message=da,
             extra_routing_key=extra_routing_key
         )
@@ -88,8 +89,8 @@ class BiliLotDataPublisher:
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
         da = LotDataDynamicReq(dynamic_id=dynamic_id, **kwargs)
-        publisher = publisher_producer(upsert_lot_data_by_dynamic_id_prop)
-        return await publisher(
+        do_publish = publisher_producer(upsert_lot_data_by_dynamic_id_prop)
+        return await do_publish(
             message=da, extra_routing_key=extra_routing_key
         )
 
@@ -104,8 +105,8 @@ class BiliLotDataPublisher:
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
         da = TopicLotData(topic_id=topic_id, **kwargs)
-        publisher = publisher_producer(mq_props=upsert_topic_lot_prop)
-        return await publisher(
+        do_publish = publisher_producer(mq_props=upsert_topic_lot_prop)
+        return await do_publish(
             message=da, extra_routing_key=extra_routing_key
         )
 
@@ -119,8 +120,8 @@ class BiliLotDataPublisher:
     ):
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
-        publisher = publisher_producer(mq_props=upsert_milvus_bili_lot_data_prop)
-        return await publisher(
+        do_publish = publisher_producer(mq_props=upsert_milvus_bili_lot_data_prop)
+        return await do_publish(
             message=sqlalchemy_model_2_dict(body), extra_routing_key=extra_routing_key
         )
 
@@ -134,8 +135,8 @@ class BiliLotDataPublisher:
     ):
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
-        publisher = publisher_producer(mq_props=bili_voucher_prop)
-        return await publisher(
+        do_publish = publisher_producer(mq_props=bili_voucher_prop)
+        return await do_publish(
             message=body, extra_routing_key=extra_routing_key
         )
 
@@ -149,8 +150,17 @@ class BiliLotDataPublisher:
     ):
         for i, value in enumerate(args, start=1):
             kwargs[f"extra_field_{i}"] = value
-        publisher = publisher_producer(mq_props=upsert_bili_atari_prop)
-        return await publisher(
+        do_publish = publisher_producer(mq_props=upsert_bili_atari_prop)
+        return await do_publish(
             message=lottery_id,
             extra_routing_key=extra_routing_key
         )
+
+if __name__ == '__main__':
+    async def _test_publisher():
+        do_pubish = publisher_producer(mq_props=test_mq_prop)
+        return await do_pubish(
+            message='Ciallo～(∠・ω< )⌒★'
+        )
+
+    asyncio.run(_test_publisher())
