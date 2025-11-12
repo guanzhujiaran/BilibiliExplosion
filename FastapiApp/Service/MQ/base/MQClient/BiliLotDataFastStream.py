@@ -1,15 +1,16 @@
 from datetime import datetime
 import json
 import time
-from typing import Dict, Any
+from typing import Any
 from faststream.rabbit.fastapi import RabbitMessage
+from Models.MQ.MQRouterModels import RabbitMQTestMsgModel
 from Models.lottery_database.bili.LotteryDataModels import BiliLotteryStatusEnum
 from log.base_log import MQ_logger
 from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher, publisher_producer
 from Service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_charge_lot_mq_prop, \
     upsert_official_reserve_charge_lot_mq_prop, upsert_lot_data_by_dynamic_id_prop, upsert_topic_lot_prop, \
-    upsert_milvus_bili_lot_data_prop, router, get_broker, bili_voucher_prop, upsert_bili_atari_prop, test_mq_prop
+    upsert_milvus_bili_lot_data_prop, router, bili_voucher_prop, upsert_bili_atari_prop, test_mq_prop
 from Service.LangChainCompo.text_embed import lot_data_2_bili_lot_data_ls, save_bili_lot_data_embeddings
 from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
 from Service.GrpcModule.Utils.极验.极验点击验证码 import geetest_v3_breaker
@@ -24,27 +25,39 @@ from Utils.PushMe import a_pushme
 async def handle_exception(
         module_name: str,
         e: Exception,
-        params: Dict | Any,
+        params: Any,
         msg: RabbitMessage
 ):
     error_msg = f"[ERROR]队列:{module_name}\n异常类型:{type(e)}\n异常:{e}\n时间:{time.strftime('%Y-%m-%d %H:%M:%S')}\n参数:{params}"
     MQ_logger.exception(error_msg)
     await a_pushme(
         f"抽奖MQ错误 - {module_name} - {e}",
-        json.dumps(error_msg)
+        json.dumps(error_msg, ensure_ascii=False)
     )
     await msg.nack()
+
+
+async def _test_publish(pub_msg: str):
+    do_pubish = publisher_producer(mq_props=test_mq_prop)
+    test_msg = RabbitMQTestMsgModel(
+        a=int(time.time()),
+        b=pub_msg,
+        c={1: pub_msg},
+        d=[pub_msg]
+    )
+    MQ_logger.critical(f"【{rabbit_mq_test.mq_props.queue_name}】发布测试消息！{test_msg}")
+    return await do_pubish(
+        message=test_msg,
+        extra_routing_key="test"
+    )
 
 
 # region 测试rabbitmq的连通性
 @router.after_startup
 async def _test_publish_init(app_instance):
-    do_pubish = publisher_producer(mq_props=test_mq_prop)
     pub_msg = f'Ciallo～(∠・ω< )⌒★ 起床时间【{datetime.now()}】喵~'
-    MQ_logger.critical(f"【{rabbit_mq_test.mq_props.queue_name}】发布测试消息！{pub_msg}")
-    return await do_pubish(
-        message=pub_msg
-    )
+    return await _test_publish(pub_msg)
+
 
 class RabbitMQTest(BaseFastStreamMQ):
     def __init__(self):
@@ -53,7 +66,7 @@ class RabbitMQTest(BaseFastStreamMQ):
         )
 
     async def consume(self,
-                      _body: str,
+                      _body: RabbitMQTestMsgModel,
                       msg: RabbitMessage,
                       ):
         try:
@@ -61,21 +74,8 @@ class RabbitMQTest(BaseFastStreamMQ):
             return await msg.ack()
         except Exception as e:
             await handle_exception(self.mq_props.queue_name, e, _body, msg)
-rabbit_mq_test = RabbitMQTest()
-@router.subscriber(**rabbit_mq_test.sub_params)
-async def _test_msg_consumer(
-        data:str,
-        msg:RabbitMessage
-):
-    return await rabbit_mq_test.consume(data, msg)
 
 
-@router.publisher(**rabbit_mq_test.pub_params)
-@router.post('/rabbitmq_test_publish')
-async def _test_msg_pub(msg: str=f'Ciallo～(∠・ω< )⌒★ 起床时间【{datetime.now()}】喵~') ->str:
-    ret = f"publish `{msg}` to rabbitmq test!"
-    MQ_logger.critical(ret)
-    return msg
 # endregion
 
 class OfficialReserveChargeLot(BaseFastStreamMQ):
@@ -114,10 +114,9 @@ class UpsertOfficialReserveChargeLot(BaseFastStreamMQ):
             mq_props=upsert_official_reserve_charge_lot_mq_prop
         )
 
-    
     async def consume(
             self,
-            newly_lot_data: Dict,
+            newly_lot_data: dict,
             msg: RabbitMessage,
     ):
         """
@@ -160,7 +159,6 @@ class UpsertLotDataByDynamicId(BaseFastStreamMQ):
             mq_props=upsert_lot_data_by_dynamic_id_prop
         )
 
-    
     async def consume(
             self,
             lot_data_dynamic_req: LotDataDynamicReq,
@@ -200,7 +198,6 @@ class UpsertTopicLot(BaseFastStreamMQ):
             mq_props=upsert_topic_lot_prop
         )
 
-    
     async def consume(
             self,
             _body: TopicLotData,
@@ -223,10 +220,9 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
             mq_props=upsert_milvus_bili_lot_data_prop
         )
 
-    
     async def consume(
             self,
-            _body: Dict,
+            _body: dict,
             msg: RabbitMessage,
     ):
         module_name = self.mq_props.queue_name
@@ -268,7 +264,6 @@ class BiliVoucher(BaseFastStreamMQ):
             mq_props=bili_voucher_prop
         )
 
-    
     async def consume(
             self,
             voucher_info: VoucherInfo,
@@ -303,11 +298,4 @@ upsert_topic_lot = UpsertTopicLot()
 upsert_milvus_bili_lot_data = UpsertMilvusBiliLotData()
 upsert_bili_atari = UpsertBiliAtari()
 bili_voucher = BiliVoucher()
-
-if __name__ == '__main__':
-    from fastapi import FastAPI
-    import uvicorn
-
-    app = FastAPI()
-    app.include_router(router)
-    uvicorn.run(app, host="0.0.0.0", port=23332, loop="uvloop")
+rabbit_mq_test = RabbitMQTest()

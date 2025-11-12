@@ -46,20 +46,20 @@ def comm_wrapper(func):
     return wrapper
 
 
-def lock_retry_wrapper(func):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        while 1:
-            try:
-                async with _comm_lock:
-                    res = await func(*args, **kwargs)
-                    return res
-            except Exception as e:
-                myfastapi_logger.exception(e)
-                await asyncio.sleep(10)
-
-    return wrapper
-
+def lock_retry_wrapper(lock:asyncio.Lock):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            while 1:
+                try:
+                    async with lock:
+                        res = await func(*args, **kwargs)
+                        return res
+                except Exception as e:
+                    myfastapi_logger.exception(e)
+                    await asyncio.sleep(10)
+        return wrapper
+    return decorator
 
 def retry_wrapper(func):
     @wraps(func)
@@ -179,7 +179,7 @@ def log_max_count_retry_wrapper(*, log: _logger = myfastapi_logger, max_count: i
                     return await func(*args, **kwargs)
                 except Exception as e:
                     last_exception = e
-                    if max_count > 0 and attempt >= max_count:
+                    if 0 < max_count <= attempt:
                         log.error(
                             f"All {max_count + 1} attempts failed for {func.__name__}. "
                             f"Last error: {str(e)}"

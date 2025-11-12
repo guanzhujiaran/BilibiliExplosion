@@ -226,7 +226,7 @@ services:
     container_name: fastapi-lm-studio
     build:
       context: ./docker_vol/lm_studio
-    mem_limit: 512m
+    mem_limit: 1g
     volumes:
       - /root/.lmstudio/models
     ports:
@@ -239,3 +239,4 @@ networks:
     enable_ipv6: true
     name: fastapi
     driver: bridge
+

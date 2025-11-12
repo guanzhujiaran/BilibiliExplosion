@@ -14,7 +14,7 @@ class BaseFastStreamMQ:
         raise NotImplementedError("子类必须实现此方法")
 
     @property
-    def sub_params(self) ->dict:
+    def sub_params(self) -> dict:
         return {
             "queue": self.mq_props.rabbit_queue,
             "exchange": self.mq_props.exchange,
@@ -22,11 +22,12 @@ class BaseFastStreamMQ:
         }
 
     @property
-    def pub_params(self) ->dict:
+    def pub_params(self) -> dict:
         return {
-        "queue": self.mq_props.rabbit_queue,
-        "exchange": self.mq_props.exchange,
-    }
+            "queue": self.mq_props.rabbit_queue,
+            "exchange": self.mq_props.exchange,
+        }
+
 
 router = RabbitRouter(
     CONFIG.RabbitMQConfig.broker_url,

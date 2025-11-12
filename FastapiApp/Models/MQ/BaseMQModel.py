@@ -36,13 +36,19 @@ class MQPropBase:
     queue_name: QueueName
     routing_key_name: RoutingKey
     exchange: RabbitExchange
+    _exchange_name: ExchangeName | str | None = None
     _rabbit_queue: RabbitQueue | None = None
 
     def __post_init__(self):
         self._rabbit_queue = RabbitQueue(
             name=self.queue_name,
             routing_key=self.routing_key_name + '.#')
+        self._exchange_name = self.exchange.name
 
     @property
     def rabbit_queue(self) -> RabbitQueue:
         return self._rabbit_queue
+
+    @property
+    def exchange_name(self) -> ExchangeName:
+        return self._exchange_name

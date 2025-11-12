@@ -8,28 +8,34 @@ import Service.LangChainCompo.lottery_data_vec_sql.sql_helper as sql_helper
 import Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
 import Service.GrpcModule.GrpcSrc.SQLObject.models as models
 from CONFIG import CONFIG
+from Utils.Common import log_max_count_retry_wrapper
 
-_client = AsyncOpenAI(base_url=f'{CONFIG.lm_studio_url}/v1', api_key="your-api-key-here")
+_client = AsyncOpenAI(base_url=f'{CONFIG.lm_studio_url}/v1', api_key="1", timeout=1)
 
 _model_name = 'text-embedding-multilingual-e5-base'
 
+_embedding_lock = asyncio.Lock()  # 防止并发请求，服务器性能太弱了
+
 
 async def _create_embedding(text: str | None, model: str = _model_name) -> list[float] | None:
-    if type(text) is not str:
+    async with _embedding_lock:
+        if type(text) is not str:
+            return None
+        if not text.strip():
+            return None
+        resp = await _client.embeddings.create(input=text, model=model)
+        if resp.data:
+            return resp.data[0].embedding
         return None
-    if not text.strip():
-        return None
-    resp = await _client.embeddings.create(input=text, model=model)
-    if resp.data:
-        return resp.data[0].embedding
-    return None
 
 
+@log_max_count_retry_wrapper()
 async def save_bili_lot_data_embeddings(data_ls: List[biliMilvusModel.BiliLotData]) -> list[list[float]]:
     return await sql_helper.milvus_sql_helper.upsert_bili_lot_data(
         [x for x in data_ls if x.prize_vec])  # 保存的时候确保vec是存在的
 
 
+@log_max_count_retry_wrapper()
 async def lot_data_2_bili_lot_data_ls(x: models.Lotdata) -> List[biliMilvusModel.BiliLotData]:
     """
     sqlalchemy的Lotdata转换成milvusdb的biliMilvusModel.BiliLotData模型
@@ -110,6 +116,7 @@ if __name__ == '__main__':
 
 
     async def _test_create_embedding():
+        _client.base_url = "http://192.168.81.172:10009/v1"
         print('执行embedding测试')
         result = await _create_embedding('测试一下')
         print(result)

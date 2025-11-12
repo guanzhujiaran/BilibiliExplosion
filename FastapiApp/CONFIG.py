@@ -123,6 +123,7 @@ class database:
     ipInfoRedisObj = _REDISINFO(2)
     getOtherLotRedis = _REDISINFO(15)
     commStorageRedis = _REDISINFO(0)
+    rabbitmqCacheRedis = _REDISINFO(0)
 
 
 class SqlAlchemyConfig:

@@ -2,10 +2,13 @@
 import asyncio
 import uvloop
 import sys
+
+from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
+
 if not sys.platform.startswith('win'):
     uvloop.install()
 elif sys.platform.startswith('windows'):
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import os
 import traceback
 from contextlib import asynccontextmanager
@@ -16,6 +19,7 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 from loguru import logger
 from starlette.requests import Request
 from starlette.responses import Response
+
 current_dir = os.path.dirname(__file__)
 grpc_dir = os.path.join(current_dir, 'Service/GrpcModule/Grpc/GrpcProto')
 sys.path.append(grpc_dir)
@@ -47,6 +51,7 @@ from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await asyncio.sleep(3)  # 等 HTTP server ready
+    await BiliLotDataPublisher.retry_pending_messages()  # 重试未处理的消息
     myfastapi_logger.critical("开启其他服务")
     show_log = False
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)

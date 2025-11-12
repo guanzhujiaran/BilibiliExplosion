@@ -1,22 +1,12 @@
-from typing import Dict
-
-from faststream import AckPolicy
+import contextlib
+from datetime import datetime
+import time
 from faststream.rabbit.fastapi import RabbitMessage
-from Service.MQ.base.MQClient.base import BaseFastStreamMQ
+from Models.MQ.MQRouterModels import LotDataReq, LotDataDynamicReq, TopicLotData, VoucherInfo, RabbitMQTestMsgModel
 from log.base_log import MQ_logger
-from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.MQClient.BiliLotDataFastStream import official_reserve_charge_lot, \
     upsert_official_reserve_charge_lot, upsert_lot_data_by_dynamic_id, upsert_topic_lot, router, \
-    upsert_milvus_bili_lot_data, bili_voucher, upsert_bili_atari
-from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
-
-
-def gen_sub_params(mq_client: BaseFastStreamMQ):
-    return {
-        "queue": mq_client.mq_props.rabbit_queue,
-        "exchange": mq_client.mq_props.exchange,
-        "ack_policy": AckPolicy.MANUAL,
-    }
+    upsert_milvus_bili_lot_data, bili_voucher, upsert_bili_atari, rabbit_mq_test
 
 
 @router.subscriber(
@@ -37,7 +27,7 @@ async def handle_official_reserve_charge_lot(
     **upsert_official_reserve_charge_lot.sub_params
 )
 async def handle_upsert_official_reserve_charge_lot(
-        newly_lot_data: Dict,
+        newly_lot_data: dict,
         msg: RabbitMessage,
 ) -> None:
     MQ_logger.debug(f'【{msg.raw_message.routing_key}】队列 消费消息：{newly_lot_data}')
@@ -79,7 +69,7 @@ async def handle_upsert_topic_lot(
     **upsert_milvus_bili_lot_data.sub_params
 )
 async def handle_upsert_milvus_bili_lot_data(
-        body: Dict,
+        body: dict,
         msg: RabbitMessage,
 ) -> None:
     MQ_logger.debug(f'【{msg.raw_message.routing_key}】队列 消费消息：{body}')
@@ -115,3 +105,38 @@ async def handle_bili_voucher(
         body,
         msg,
     )
+
+
+@router.subscriber(**rabbit_mq_test.sub_params)
+async def _test_msg_consumer(
+        data: RabbitMQTestMsgModel,
+        msg: RabbitMessage
+):
+    return await rabbit_mq_test.consume(data, msg)
+
+
+@router.publisher(**rabbit_mq_test.pub_params)
+@router.post('/rabbitmq_test_publish')
+async def _test_msg_pub(msg: str = f'Ciallo～(∠・ω< )⌒★ 起床时间【{datetime.now()}】喵~') -> RabbitMQTestMsgModel:
+    ret = f"publish `{msg}` to rabbitmq test!"
+    MQ_logger.critical(ret)
+    return RabbitMQTestMsgModel(
+        a=int(time.time()),
+        b=ret,
+        c={1: ret},
+        d=[ret]
+    )
+
+
+if __name__ == '__main__':
+    # 从controller启动才能正常加载所有的subscriber
+    from fastapi import FastAPI
+    import uvicorn
+
+    @contextlib.asynccontextmanager
+    async def _life_span(app:FastAPI):
+        yield
+
+    app = FastAPI(lifespan=_life_span)
+    app.include_router(router)
+    uvicorn.run(app, host="0.0.0.0", port=23332, loop="uvloop")

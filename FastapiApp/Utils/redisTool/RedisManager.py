@@ -77,7 +77,10 @@ def retry(func):
 def redis_client_factory(pool, sync=False):
     if sync:
         return sync_redis.Redis(connection_pool=pool, socket_timeout=10)
-    return redis.Redis(connection_pool=pool, socket_timeout=10)
+    return redis.Redis(
+        connection_pool=pool,
+        socket_timeout=10,
+    )
 
 
 def sync_retry(func):

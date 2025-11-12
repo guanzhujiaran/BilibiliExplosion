@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field, ConfigDict, computed_field
 
 
 class CustomBaseModel(BaseModel):
-    # extra_fields: Optional[Dict[str, Any]] = Field(default_factory=dict, exclude=True)
     model_config = ConfigDict(
         extra='allow',
     )

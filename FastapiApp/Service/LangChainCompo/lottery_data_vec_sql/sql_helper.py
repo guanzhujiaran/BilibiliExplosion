@@ -5,6 +5,9 @@ from log.base_log import milvus_db_logger
 from Models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
 from Utils.Common import lock_retry_wrapper
 from pymilvus import AsyncMilvusClient
+import asyncio
+
+_milvus_lock = asyncio.Lock()
 
 
 class Sqlhelper:
@@ -18,11 +21,12 @@ class Sqlhelper:
     def _client(self):
         return self.__client
 
-    @lock_retry_wrapper
+    @lock_retry_wrapper(_milvus_lock)
     async def upsert_bili_lot_data(self, data_ls: List[BiliLotData]):
-        return await self._client.upsert(collection_name=self.Collections.bili_lot_data,data=[x.model_dump() for x in data_ls])
+        return await self._client.upsert(collection_name=self.Collections.bili_lot_data,
+                                         data=[x.model_dump() for x in data_ls])
 
-    @lock_retry_wrapper
+    @lock_retry_wrapper(_milvus_lock)
     async def search_bili_lot_data(self, query_vec: list[float], limit: int = 10):
         res = await self._client.search(
             collection_name=self.Collections.bili_lot_data,  # 用你的集合的实际名称替换
@@ -36,7 +40,7 @@ class Sqlhelper:
         )
         return res
 
-    @lock_retry_wrapper
+    @lock_retry_wrapper(_milvus_lock)
     async def del_outdated_bili_lottery_data(self):
         result = await self._client.delete(
             collection_name=self.Collections.bili_lot_data,

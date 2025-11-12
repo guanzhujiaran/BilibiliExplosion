@@ -39,5 +39,6 @@ docker_vol/*
 !FastapiApp/requirements.txt
 !FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
 .env
+.env.dev
 venv/
 .venv/

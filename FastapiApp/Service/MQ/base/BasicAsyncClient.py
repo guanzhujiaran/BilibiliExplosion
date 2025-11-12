@@ -12,7 +12,7 @@ from Models.MQ.BaseMQModel import QueueName, ExchangeName, RoutingKey
 from Utils.PushMe import a_pushme
 
 
-def _mq_retry_wrapper(max_retries: int = 5, delay: int = 10):
+def _mq_retry_wrapper(max_retries: int = 5, delay: int = 30):
     """
     异步重试装饰器：在函数执行异常时进行重试
     :param max_retries: 最大重试次数，默认为 5 次
