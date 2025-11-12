@@ -1,7 +1,7 @@
 import asyncio
 import random
 from faststream.rabbit import RabbitExchange, ExchangeType
-from Service.MQ.base.MQClient.BiliLotDataFastStream import RabbitMQTestMsgModel
+from Models.MQ.MQRouterModels import RabbitMQTestMsgModel
 from Models.MQ.BaseMQModel import MQPropBase, QueueName, ExchangeName
 from Models.MQ.UpsertLotDataModel import LotDataReq, LotDataDynamicReq, TopicLotData
 from Service.MQ.base.BasicAsyncClient import _mq_retry_wrapper
@@ -250,7 +250,6 @@ if __name__ == '__main__':
 
 
     async def _test_redis_add_pending_message():
-
         msg = RabbitMQTestMsgModel(
             a=random.randint(1, 99999),
             b=_test_msg,
@@ -266,12 +265,14 @@ if __name__ == '__main__':
         await redis_obj.add_pending_message(cached_message)
         MQ_logger.info("添加缓存消息成功")
 
+
     async def _test_redis_add_pending_message_bulk():
         await asyncio.gather(
             *[
                 _test_redis_add_pending_message() for _ in range(10)
             ]
         )
+
 
     async def _test_get_pending_messages():
         pending_messages = await redis_obj.get_pending_messages()
