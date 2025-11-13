@@ -13,7 +13,7 @@ from dao.commStorageRedisObj import comm_storage_redis_obj
 from log.base_log import reserve_lot_logger
 from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
-from Service.BaseCrawler.model.base import WorkerStatus
+from Service.BaseCrawler.model.base import WorkerStatus, WorkerModel
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin
 from Service.GrpcModule.Grpc.Bapi.BiliApi import reserve_relation_info
 from Service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, ProgressCounter
@@ -57,6 +57,23 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         """
             退出时必定执行
         """
+        reserve_lot_logger.critical(f'开始将日志写入文件')
+        await self.write_in_file()
+        reserve_lot_logger.critical(f'日志写入文件完成')
+        reserve_lot_logger.critical(f'开始获取本轮统计信息')
+        latest_reserve_lots = await self.generate_update_reserve_lotterys_by_round_id(self.now_round_id)
+        new_round_info = TReserveRoundInfo(
+            round_id=self.now_round_id,
+            is_finished=True,
+            round_start_ts=self.round_start_ts,
+            round_add_num=self.totoal_count1 + self.totoal_count2 - 1 - self.none_num1 - self.none_num2,
+            round_lot_num=len(latest_reserve_lots),
+        )
+        await self.sqlHelper.add_reserve_round_info(new_round_info)
+        reserve_lot_logger.critical(f'本轮统计信息获取结束')
+        reserve_lot_logger.critical(f'开始刷新未开奖的预约抽奖')
+        await self.refresh_not_drawn_lottery()
+        reserve_lot_logger.critical(f'刷新未开奖的预约抽奖结束')
         if os.path.exists(self.unknown):
             await self.file_remove_repeat_contents(self.unknown)
         if os.path.exists(self.getfail):
@@ -87,6 +104,14 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         return await self.resolve_reserve(params.reserve_id)
 
     def __init__(self):
+        # region 统计类数据
+        self.totoal_count2 = 0
+        self.totoal_count1 = 0
+        self.none_num2 = 0
+        self.none_num1 = 0
+        self.round_start_ts = 0
+        # endregion
+
         self.sem_limit = 1  # 因为用的是自己的代理，所以速度可以慢点
         self.stats_plugin = StatsPlugin(self)
         self.null_time_quit = 1000  # 遇到连续500条data为None的sid 则退出
@@ -116,8 +141,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         self.list_deleted_maybe = list()  # 可能动态内容
         self.ids = int()
         self.dynamic_timestamp: DynamicTimestampInfo = DynamicTimestampInfo()
-        self.getfail = None  # 文件
-        self.unknown = None  # 文件
+        self.unknown = os.path.join(self.current_dir, 'log/未知类型.csv')  # 未知类型
+        self.getfail = os.path.join(self.current_dir, 'log/获取失败.csv')  # 获取失败
         # 文件
         self.list_getfail = list()
         self.list_unknown = list()
@@ -126,17 +151,17 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
 
         self.refresh_progress_counter: ProgressCounter | None = None
 
-    def write_in_file(self):
-        def my_write(path_Name, content_list: list, write_mode='a+'):
-            with open(path_Name, mode=write_mode, encoding='utf-8') as f:
-                f.writelines('\n'.join(str(i) for i in content_list))
+    async def write_in_file(self):
+        async def my_write(path_name, content_list: list, write_mode='a+'):
+            async with aiofiles.open(path_name, mode=write_mode, encoding='utf-8') as f:
+                await f.writelines('\n'.join(str(i) for i in content_list))
 
             content_list.clear()
 
         if self.list_getfail:
-            my_write(self.getfail, self.list_getfail)
+            await my_write(self.getfail, self.list_getfail)
         if self.list_unknown:
-            my_write(self.unknown, self.list_unknown)
+            await my_write(self.unknown, self.list_unknown)
 
     async def resolve_reserve(self, sid: int, is_refresh=False) -> WorkerStatus:
         result = await self.resolve_reserve_by_sid(sid, is_refresh=is_refresh)
@@ -230,6 +255,9 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
                 return WorkerStatus.fail
 
     def code_check(self, dycode):
+        """
+        没问题的业务码就返回0，有问题的返回非0
+        """
         if dycode == 0:
             return 0
         if dycode == 404:
@@ -254,14 +282,14 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         return reduce(run_function, [[], ] + list_dict_data)
 
     async def main(self):
-        await self._init()
+        await self._params_init()
         now_round: TReserveRoundInfo = await self.sqlHelper.get_latest_reserve_round()
-        round_start_ts = int(time.time()) if now_round.is_finished else now_round.round_start_ts
+        self.round_start_ts = int(time.time()) if now_round.is_finished else now_round.round_start_ts
         self.now_round_id = now_round.round_id + 1 if now_round.is_finished else now_round.round_id
-        none_num1 = 0
-        totoal_count1 = 0
+        self.none_num1 = 0
+        self.totoal_count1 = 0
         for ids_index in range(len(self.ids_list)):
-            none_num1 = self.null_stop_plugin.sequential_null_count if int(
+            self.none_num1 = self.null_stop_plugin.sequential_null_count if int(
                 time.time()) - self.dynamic_timestamp.dynamic_timestamp < self.EndTimeSeconds else - self.null_time_quit
             async with self.ids_change_lock:
                 self.ids = self.ids_list[ids_index]
@@ -269,7 +297,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
                 self.dynamic_timestamp = DynamicTimestampInfo()
             await self.run(ReserveParams(reserve_id=self.ids_list[ids_index]))
             self.ids = self.stats_plugin.end_params  # 加上这个才是最终的ids，否则ids并不会改变
-            totoal_count1 = self.stats_plugin.succ_count
+            self.totoal_count1 = self.stats_plugin.succ_count
             self.ids_list[ids_index] = self.ids
             reserve_lot_logger.critical(
                 f'{self.ids}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'
@@ -279,34 +307,24 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             )
         none_num2 = self.null_stop_plugin.sequential_null_count if int(
             time.time()) - self.dynamic_timestamp.dynamic_timestamp < self.EndTimeSeconds else - self.null_time_quit
-        totoal_count2 = self.stats_plugin.succ_count
+        self.totoal_count2 = self.stats_plugin.succ_count
         finnal_rid_list = [
-            str(self.ids_list[0].reserve_id - self.rollback_num - none_num1),
-            str(self.ids_list[1].reserve_id - self.rollback_num - none_num2)
+            str(self.ids_list[0].reserve_id - self.rollback_num - self.none_num1),
+            str(self.ids_list[1].reserve_id - self.rollback_num - self.none_num2)
         ]
         reserve_lot_logger.critical(
             f'{self.ids_list}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'
             f'{self.dynamic_timestamp.get_time_str_until_now()}秒，'
             f'ids：{self.dynamic_timestamp.ids}，退出！'
-            f'当前rid记录分别回滚{self.rollback_num + none_num1}和{self.rollback_num + none_num2}条'
+            f'当前rid记录分别回滚{self.rollback_num + self.none_num1}和{self.rollback_num + none_num2}条'
             f'最终写入文件rid记录：{finnal_rid_list}')
-
+        reserve_lot_logger.critical(f'开始设置结束rid')
         await comm_storage_redis_obj.set_val(
             comm_storage_redis_obj.RedisMap.reserve_scrapy_bot_rid_ls,
             "\n".join(
                 finnal_rid_list)
         )
-        await asyncio.to_thread(self.write_in_file)
-        latest_reserve_lots = await self.generate_update_reserve_lotterys_by_round_id(self.now_round_id)
-        new_round_info = TReserveRoundInfo(
-            round_id=self.now_round_id,
-            is_finished=True,
-            round_start_ts=round_start_ts,
-            round_add_num=totoal_count1 + totoal_count2 - 1 - none_num1 - none_num2,
-            round_lot_num=len(latest_reserve_lots),
-        )
-        await self.sqlHelper.add_reserve_round_info(new_round_info)
-        await self.refresh_not_drawn_lottery()
+        reserve_lot_logger.critical(f'结束rid设置完成')
 
     async def generate_update_reserve_lotterys_by_round_id(self, round_id) -> list[TUpReserveRelationInfo]:
         """
@@ -360,17 +378,13 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         await asyncio_gather(*task_list, log=self.log)
         self.refresh_progress_counter.is_running = False
 
-    async def _init(self):
+    async def _params_init(self):
         '''
         初始化信息
         :return:
         '''
         if not os.path.exists(os.path.join(self.current_dir, 'log')):
             os.mkdir(os.path.join(self.current_dir, 'log'))
-
-        self.unknown = os.path.join(self.current_dir, 'log/未知类型.csv')
-
-        self.getfail = os.path.join(self.current_dir, 'log/获取失败.csv')
 
         try:
             if file_contents := await comm_storage_redis_obj.get_val(

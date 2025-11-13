@@ -130,8 +130,8 @@ class SqlAlchemyConfig:
     engine_config = dict(
         echo=False,
         poolclass=AsyncAdaptedQueuePool,
-        pool_size=50,  # 默认是5
-        max_overflow=100,
+        pool_size=10,  # 默认是5
+        max_overflow=20,
         pool_recycle=True,
         pool_timeout=30,
         future=True,
