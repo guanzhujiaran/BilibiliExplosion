@@ -80,7 +80,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             await self.file_remove_repeat_contents(self.getfail)
         reserve_lot_logger.info(f'共{self.stats_plugin.processed_items_count}次获取动态'
                                 f'其中{self.stats_plugin.succ_count} 个有效动态')
-
+        await super().on_run_end(end_param)
     async def is_stop(self) -> bool:
         async with self.dynamic_ts_lock:
             if int(time.time()) - self.dynamic_timestamp.dynamic_timestamp <= self.EndTimeSeconds:  # 如果超过了最大data
