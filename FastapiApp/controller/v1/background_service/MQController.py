@@ -135,10 +135,10 @@ if __name__ == '__main__':
     from fastapi import FastAPI
     import uvicorn
 
-
     @contextlib.asynccontextmanager
     async def _life_span(app: FastAPI):
         yield
+
 
 
     app = FastAPI(lifespan=_life_span)
