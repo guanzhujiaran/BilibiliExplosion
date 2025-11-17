@@ -1,6 +1,8 @@
 import contextlib
 from datetime import datetime
 import time
+from typing import Dict
+
 from faststream.rabbit.fastapi import RabbitMessage
 from Models.MQ.MQRouterModels import LotDataReq, LotDataDynamicReq, TopicLotData, VoucherInfo, RabbitMQTestMsgModel
 from log.base_log import MQ_logger
@@ -69,7 +71,7 @@ async def handle_upsert_topic_lot(
     **upsert_milvus_bili_lot_data.sub_params
 )
 async def handle_upsert_milvus_bili_lot_data(
-        body: dict,
+        body: dict | Dict,
         msg: RabbitMessage,
 ) -> None:
     MQ_logger.debug(f'【{msg.raw_message.routing_key}】队列 消费消息：{body}')
@@ -133,9 +135,11 @@ if __name__ == '__main__':
     from fastapi import FastAPI
     import uvicorn
 
+
     @contextlib.asynccontextmanager
-    async def _life_span(app:FastAPI):
+    async def _life_span(app: FastAPI):
         yield
+
 
     app = FastAPI(lifespan=_life_span)
     app.include_router(router)

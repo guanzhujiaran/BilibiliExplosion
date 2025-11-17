@@ -1,7 +1,7 @@
 from datetime import datetime
 import json
 import time
-from typing import Any
+from typing import Any, Dict
 from faststream.rabbit.fastapi import RabbitMessage
 from Models.MQ.MQRouterModels import RabbitMQTestMsgModel
 from Models.lottery_database.bili.LotteryDataModels import BiliLotteryStatusEnum
@@ -222,7 +222,7 @@ class UpsertMilvusBiliLotData(BaseFastStreamMQ):
 
     async def consume(
             self,
-            _body: dict,
+            _body: dict | Dict,
             msg: RabbitMessage,
     ):
         module_name = self.mq_props.queue_name
@@ -299,3 +299,14 @@ upsert_milvus_bili_lot_data = UpsertMilvusBiliLotData()
 upsert_bili_atari = UpsertBiliAtari()
 bili_voucher = BiliVoucher()
 rabbit_mq_test = RabbitMQTest()
+
+__all__ = [
+    "official_reserve_charge_lot",
+    "upsert_official_reserve_charge_lot",
+    "upsert_lot_data_by_dynamic_id",
+    "upsert_topic_lot",
+    "upsert_milvus_bili_lot_data",
+    "upsert_bili_atari",
+    "bili_voucher",
+    "rabbit_mq_test",
+]

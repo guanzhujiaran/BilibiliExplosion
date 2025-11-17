@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 from CONFIG import CONFIG
 
 
-def sqlalchemy_model_2_dict(instance):
+def sqlalchemy_model_2_dict(instance)->dict:
     return {c.name: getattr(instance, c.name) for c in instance.__table__.columns}
 
 
