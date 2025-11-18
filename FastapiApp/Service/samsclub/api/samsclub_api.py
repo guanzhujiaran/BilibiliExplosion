@@ -11,7 +11,8 @@ from httpx import HTTPError
 
 from log.base_log import sams_club_logger
 from Models.v1.samsclub.api_model import RespUserProfile, ApiResponse, UserProfile
-from Models.v1.samsclub.samsclub_model import SamsClubAppStorage, SamsClubGrayConfigStrategy
+from Models.v1.samsclub.samsclub_model import SamsClubAppStorage, SamsClubGrayConfigStrategy, \
+    SamsClubGrayConfigStrategyDetails
 from Service.samsclub.exceptions.error import UnknownError
 from Service.samsclub.tools.headers_gen import SamsClubHeadersGen, sort_headers_with_missing_last
 from Utils.PushMe import a_pushme
@@ -273,16 +274,16 @@ class SamsClubApi:
         await self.goods_portal_spu_queryNewDetailsGoods()  # 118
         await self.get_gray_config()  # 119
         await self.configuration_abtest_portal_report(
-            self.gray_config_strategyDetails.goodsDetailParamPk.paramsJson
+            self.gray_config_strategyDetails.goodsDetailParamPk
         )  # 120
         await self.configuration_abtest_portal_report(
-            self.gray_config_strategyDetails.categoryAddCartRecom.paramsJson
+            self.gray_config_strategyDetails.categoryAddCartRecom
         )  # 121
         await self.configuration_abtest_portal_report(
-            self.gray_config_strategyDetails.widget3DTouchExp.paramsJson
+            self.gray_config_strategyDetails.widget3DTouchExp
         )  # 122
         await self.configuration_abtest_portal_report(
-            self.gray_config_strategyDetails.newTagManageExp.paramsJson
+            self.gray_config_strategyDetails.newTagManageExp
         )  # 123
         await self.__empty_request()  # 124
         await self.__empty_request()  # 125
@@ -468,7 +469,7 @@ class SamsClubApi:
         }
         resp = await self.send(url, body, is_add_amap_headers=True)
         await self.configuration_abtest_portal_report(
-            self.gray_config_strategyDetails.categoryRecommend.paramsJson
+            self.gray_config_strategyDetails.categoryRecommend
         )
         return resp
 
@@ -699,10 +700,13 @@ class SamsClubApi:
         )
         return resp.json()
 
-    async def configuration_abtest_portal_report(self, report_data_json: str):
+    async def configuration_abtest_portal_report(self, gray_config_strategy_details: SamsClubGrayConfigStrategyDetails):
+        if not gray_config_strategy_details.paramsJson:
+            self.log.critical(f"\n{gray_config_strategy_details}\ngray_config_strategy_details.paramsJson is None")
+            return {}
         url = self._base_url + '/api/v1/sams/configuration/abtest/portal/report'
         body = [
-            json.loads(report_data_json)
+            json.loads(gray_config_strategy_details.paramsJson)
         ]
         resp = await self.send(
             url,
