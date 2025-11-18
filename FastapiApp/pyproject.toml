@@ -42,7 +42,7 @@ dependencies = [
     "pydantic>=2.12.3",
     "pyexecjs2>=1.6.1",
     "pylangtools>=0.0.2",
-    "pymilvus>=2.6.2",
+    "pymilvus==2.6.0",
     "python-dotenv>=1.1.1",
     "python-socks>=2.7.2",
     "redis>=6.4.0",

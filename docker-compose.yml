@@ -35,9 +35,9 @@ services:
     restart: on-failure:3
     extra_hosts:
       - "host.docker.internal:host-gateway"
-  standalone:
+  fastapi-milvus:
     container_name: milvus-standalone
-    image: docker.1ms.run/milvusdb/milvus:v2.6.2
+    image: docker.1ms.run/milvusdb/milvus:latest
     command: [ "milvus", "run", "standalone" ]
     security_opt:
       - seccomp:unconfined
@@ -61,7 +61,7 @@ services:
     ports:
       - "9091:9091"
       - "2379:2379"
-      - "19530:19530"
+      - "${MILVUS_PORT}:19530"
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -186,7 +186,7 @@ def log_max_count_retry_wrapper(*, log: _logger = myfastapi_logger, max_count: i
                         )
                         break
 
-                    log.warning(
+                    log.exception(
                         f"Attempt {attempt + 1} failed for {func.__name__}: {str(e)}. "
                         f"{'Retrying...' if max_count <= 0 else f'Retrying... ({max_count - attempt} attempts left)'}"
                     )

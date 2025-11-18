@@ -947,7 +947,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.12.3" },
     { name = "pyexecjs2", specifier = ">=1.6.1" },
     { name = "pylangtools", specifier = ">=0.0.2" },
-    { name = "pymilvus", specifier = ">=2.6.2" },
+    { name = "pymilvus", specifier = "==2.6.0" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'test'", specifier = ">=0.21.0" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.0.0" },
@@ -1672,6 +1672,20 @@ wheels = [
 ]
 
 [[package]]
+name = "milvus-lite"
+version = "2.5.1"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "tqdm" },
+]
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/a9/b2/acc5024c8e8b6a0b034670b8e8af306ebd633ede777dcbf557eac4785937/milvus_lite-2.5.1-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:6b014453200ba977be37ba660cb2d021030375fa6a35bc53c2e1d92980a0c512" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/9b/2e/746f5bb1d6facd1e73eb4af6dd5efda11125b0f29d7908a097485ca6cad9/milvus_lite-2.5.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:a2e031088bf308afe5f8567850412d618cfb05a65238ed1a6117f60decccc95a" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/2e/cf/3d1fee5c16c7661cf53977067a34820f7269ed8ba99fe9cf35efc1700866/milvus_lite-2.5.1-py3-none-manylinux2014_aarch64.whl", hash = "sha256:a13277e9bacc6933dea172e42231f7e6135bd3bdb073dd2688ee180418abd8d9" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/d3/82/41d9b80f09b82e066894d9b508af07b7b0fa325ce0322980674de49106a0/milvus_lite-2.5.1-py3-none-manylinux2014_x86_64.whl", hash = "sha256:25ce13f4b8d46876dd2b7ac8563d7d8306da7ff3999bb0d14b116b30f71d706c" },
+]
+
+[[package]]
 name = "more-itertools"
 version = "10.8.0"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
@@ -1850,7 +1864,7 @@ wheels = [
 
 [[package]]
 name = "openai"
-version = "2.8.0"
+version = "2.8.1"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 dependencies = [
     { name = "anyio" },
@@ -1862,9 +1876,9 @@ dependencies = [
     { name = "tqdm" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/04/0c/b9321e12f89e236f5e9a46346c30fb801818e22ba33b798a5aca84be895c/openai-2.8.0.tar.gz", hash = "sha256:4851908f6d6fcacbd47ba659c5ac084f7725b752b6bfa1e948b6fbfc111a6bad" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/d5/e4/42591e356f1d53c568418dc7e30dcda7be31dd5a4d570bca22acb0525862/openai-2.8.1.tar.gz", hash = "sha256:cb1b79eef6e809f6da326a7ef6038719e35aa944c42d081807bfa1be8060f15f" }
 wheels = [
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/5b/e1/0a6560bab7fb7b5a88d35a505b859c6d969cb2fa2681b568eb5d95019dec/openai-2.8.0-py3-none-any.whl", hash = "sha256:ba975e347f6add2fe13529ccb94d54a578280e960765e5224c34b08d7e029ddf" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/55/4f/dbc0c124c40cb390508a82770fb9f6e3ed162560181a85089191a851c59a/openai-2.8.1-py3-none-any.whl", hash = "sha256:c6c3b5a04994734386e8dad3c00a393f56d3b68a27cd2e8acae91a59e4122463" },
 ]
 
 [[package]]
@@ -2617,19 +2631,20 @@ sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/1c/4f/e2c37c402
 
 [[package]]
 name = "pymilvus"
-version = "2.6.3"
+version = "2.6.0"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 dependencies = [
     { name = "grpcio" },
-    { name = "orjson" },
+    { name = "milvus-lite", marker = "sys_platform != 'win32'" },
     { name = "pandas" },
     { name = "protobuf" },
     { name = "python-dotenv" },
     { name = "setuptools" },
+    { name = "ujson" },
 ]
-sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/b6/c9/d83e22ae440f2331769e15f4d55e42af39215a04a412b0513a4e30a94089/pymilvus-2.6.3.tar.gz", hash = "sha256:10647808f201003d24eead2890722ffcba4b1ef713eff86c8da9623f93071ed9" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/86/21/5c25a975299415a5a8f26d4759ddf7852aefdf3595f002b5203c4aaf5c8e/pymilvus-2.6.0.tar.gz", hash = "sha256:2b2ca487e098abc34231755e33af2f5294e9f6a64d92d03551532defbac0a3fb" }
 wheels = [
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/fb/33/b0309aefe3d2046262c6174dd5765449064e31ae364839f4eb572777f44e/pymilvus-2.6.3-py3-none-any.whl", hash = "sha256:c8551491a194ecfb0b22d44aa809ce749bf6969f2fa8d321523833e2d6c1313d" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/f6/a2/dfc2a2225aeb90a7dff9443f2d26fe9d04f6f7bcefe537945b5d5220fddd/pymilvus-2.6.0-py3-none-any.whl", hash = "sha256:d743fdd928c9007184d24a52b4f5dfdd18d405a37b4dba66b5ea4bf196fac526" },
 ]
 
 [[package]]

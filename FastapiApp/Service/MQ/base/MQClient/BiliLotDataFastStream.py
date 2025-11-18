@@ -301,6 +301,7 @@ bili_voucher = BiliVoucher()
 rabbit_mq_test = RabbitMQTest()
 
 __all__ = [
+    "router",
     "official_reserve_charge_lot",
     "upsert_official_reserve_charge_lot",
     "upsert_lot_data_by_dynamic_id",

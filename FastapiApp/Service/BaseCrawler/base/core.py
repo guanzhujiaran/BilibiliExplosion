@@ -2,14 +2,14 @@ import asyncio
 from abc import ABC, abstractmethod
 from typing import Generic
 from loguru._logger import Logger
-from loguru import logger
+from log.base_log import myfastapi_logger
 from Service.BaseCrawler.model.base import WorkerModel, ParamsType
 from Utils.Common import sem_gen
 
 
 
 class BaseCrawler(ABC,Generic[ParamsType]):
-    def __init__(self, max_sem: int = 10, _logger: Logger = logger):
+    def __init__(self, max_sem: int = 10, _logger: Logger = myfastapi_logger):
         self.log = _logger
         self.max_sem = max_sem
         self.task_queue: asyncio.Queue[WorkerModel] = asyncio.Queue(1)  # 只要有一个就可以了

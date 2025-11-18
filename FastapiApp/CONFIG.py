@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     LMSTUDIO_HOST: str  # lm studio 开个网络服务
     LMSTUDIO_PORT: str
     PROXY_SERVER: str
+    MILVUS_HOST:str
+    MILVUS_PORT:str
     model_config = SettingsConfigDict(
         env_file=(
             os.path.join(_current_dir, ".env.fastapi.prod"),

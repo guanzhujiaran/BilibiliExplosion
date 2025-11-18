@@ -1,15 +1,12 @@
-import contextlib
 from datetime import datetime
 import time
 from typing import Dict
-
 from faststream.rabbit.fastapi import RabbitMessage
 from Models.MQ.MQRouterModels import LotDataReq, LotDataDynamicReq, TopicLotData, VoucherInfo, RabbitMQTestMsgModel
 from log.base_log import MQ_logger
 from Service.MQ.base.MQClient.BiliLotDataFastStream import official_reserve_charge_lot, \
     upsert_official_reserve_charge_lot, upsert_lot_data_by_dynamic_id, upsert_topic_lot, router, \
     upsert_milvus_bili_lot_data, bili_voucher, upsert_bili_atari, rabbit_mq_test
-
 
 @router.subscriber(
     **official_reserve_charge_lot.sub_params
@@ -129,18 +126,6 @@ async def _test_msg_pub(msg: str = f'Ciallo～(∠・ω< )⌒★ 起床时间【
         d=[ret]
     )
 
-
-if __name__ == '__main__':
-    # 从controller启动才能正常加载所有的subscriber
-    from fastapi import FastAPI
-    import uvicorn
-
-    @contextlib.asynccontextmanager
-    async def _life_span(app: FastAPI):
-        yield
-
-
-
-    app = FastAPI(lifespan=_life_span)
-    app.include_router(router)
-    uvicorn.run(app, host="0.0.0.0", port=23332, loop="uvloop")
+__all__ = [
+    "router"
+]
