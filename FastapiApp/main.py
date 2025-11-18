@@ -3,15 +3,12 @@ import asyncio
 import uvloop
 import sys
 
-from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-
 if not sys.platform.startswith('win'):
     uvloop.install()
 elif sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import os
 import traceback
-from contextlib import asynccontextmanager
 import fastapi_cdn_host
 from fastapi import FastAPI, HTTPException
 from fastapi_cache import FastAPICache
@@ -33,7 +30,7 @@ if not settings.SHOW_LOG:
 
 from log.base_log import myfastapi_logger
 from Utils.PushMe import a_pushme
-from Utils.Common import GLOBAL_SCHEDULER, asyncio_gather
+from Utils.FastapiLifespan import life_span
 from controller.damo import DamoML
 from controller.v1.ChatGpt3_5 import ReplySingle
 from controller.v1.lotttery_database.bili import LotteryData
@@ -47,26 +44,7 @@ from controller.v1.captcha import captchaController
 from Models.common import CommonResponseModel
 from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    await asyncio.sleep(3)  # 等 HTTP server ready
-    await BiliLotDataPublisher.retry_pending_messages()  # 重试未处理的消息
-    myfastapi_logger.critical("开启其他服务")
-    show_log = False
-    back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
-    GLOBAL_SCHEDULER.start()
-    myfastapi_logger.critical("其他服务已开启！可以开启服务了喵~")
-    yield
-    myfastapi_logger.critical("正在取消其他服务")
-    [
-        x.cancel() for x in back_ground_tasks
-    ]
-    await asyncio_gather(*back_ground_tasks, log=myfastapi_logger)
-    myfastapi_logger.critical("其他服务已取消")
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=life_span)
 fastapi_cdn_host.patch_docs(app)
 app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)

@@ -2,6 +2,8 @@
 import asyncio
 import uvloop
 
+from Utils.FastapiLifespan import life_span
+
 uvloop.install()
 import io
 import os
@@ -44,24 +46,7 @@ from controller.v1.samsClub import samsClubController
 from controller.v1.captcha import captchaController
 from Models.common import CommonResponseModel
 from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
-
-
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    myfastapi_logger.critical("开启其他服务")  # 提前开启，不导入其他无关的包，减少内存占用
-    show_log = False
-    # back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
-    GLOBAL_SCHEDULER.start()
-    yield
-    # myfastapi_logger.critical("正在取消其他服务")
-    # [
-    #     x.cancel() for x in back_ground_tasks
-    # ]
-    # await asyncio_gather(*back_ground_tasks, log=myfastapi_logger)
-    myfastapi_logger.critical("其他服务已取消")
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=life_span)
 fastapi_cdn_host.patch_docs(app)
 app.include_router(DamoML.router)
 app.include_router(ReplySingle.router)
