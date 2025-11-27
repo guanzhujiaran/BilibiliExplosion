@@ -12,10 +12,6 @@ from Utils.CommMethods import methods
 from Service.GrpcModule.GrpcSrc.DynObjectClass import lotDynData
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
-
-"""
-使用reg查询动态保存下来
-"""
 import os
 
 
@@ -137,7 +133,7 @@ class LotDynSortByDate:
                 lot_dyn_data.comment_count = str(comment_count)
                 lot_dyn_data.like_count = str(like_count)
                 lot_dyn_data.high_lights_list = high_lights_list
-                if self.manual_reply_judge(dynamic_content):
+                if self.manual_reply_judge.call('manual_reply_judge',dynamic_content):
                     lot_dyn_data.Manual_judge = True
                 else:
                     lot_dyn_data.Manual_judge = False
@@ -218,4 +214,6 @@ class LotDynSortByDate:
 
 if __name__ == '__main__':
     a = LotDynSortByDate()
-    a.main()
+    b = a.manual_reply_judge.call('manual_reply_judge',"2025 小刘的生日会哈喽大家~\n3.2是我的生日 在此邀请各位参加3.2晚七点的生日会\n服务器 - 南亚关跨\n除了狗运笨蛋球 本次还增加了新项目 滚轮背背平冠挑战\n大家都有机会夺冠\n\n当晚kook语音频道: 81354114\n活动将")
+
+    print(b)

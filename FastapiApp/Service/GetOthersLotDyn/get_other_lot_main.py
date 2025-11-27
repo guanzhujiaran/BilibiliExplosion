@@ -31,8 +31,8 @@ from Utils.PushMe import a_pushme
 from Utils.代理.mdoel.RequestConf import RequestConf
 
 BAPI = methods()
-ctx = MiniRacer()
-manual_reply_judge = ctx.eval(r"""
+manual_reply_judge = MiniRacer()
+manual_reply_judge.eval(r"""
         manual_reply_judge= function (dynamic_content) {
 					//判断是否需要人工回复 返回true需要人工判断  返回null不需要人工判断
 					//64和67用作判断是否能使用关键词回复
@@ -981,7 +981,7 @@ class BiliDynamicItem:
                 if BAPI.zhuanfapanduan(dynamic_content):
                     ret_url += '?tab=2'
                 manual_judge = ''
-                if await asyncio.to_thread(manual_reply_judge, dynamic_content):
+                if await asyncio.to_thread(manual_reply_judge.call, 'manual_reply_judge', dynamic_content):
                     manual_judge = '人工判断'
                 high_lights_list = []
                 for i in highlight_word_list:
@@ -1919,6 +1919,5 @@ if __name__ == '__main__':
     async def _test_get_target_uid_list():
         await get_other_lot_redis_manager.get_target_uid_list()
 
+
     asyncio.run(_test_get_target_uid_list())
-
-
