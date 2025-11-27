@@ -22,9 +22,6 @@ router = new_router()
 
 def start_background_service(show_log: bool):
     back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log))]
-    # back_ground_tasks.append(
-    # asyncio.create_task(schedule_refresh_bili_lot_database.async_schedule_refresh_bili_lotdata_database(True)))
-
     return back_ground_tasks
 
 

@@ -242,12 +242,8 @@ class SamsClubSPUDetailCrawler(UnlimitedCrawler[SamsClubSPUDetailCrawlerParams])
                 if self.stats_plugin.is_running:
                     return
         async with self.main_lock:
-            try:
-                await self.api.init_api_info()  # 先更新一下版本信息之类的
-                await self.run()
-            except Exception as e:
-                self.log.exception(f"发生异常：{e}")
-                await a_pushme(f'[SamsClubSPUDetailCrawler] 发生异常：{e}', str(e))
+            await self.api.init_api_info()  # 先更新一下版本信息之类的
+            await self.run()
 
 
 sams_club_crawler = SamsClubCrawler()  # 直接单例模式运行

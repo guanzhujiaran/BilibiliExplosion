@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import os
 import random
@@ -8,7 +9,8 @@ import aiofiles
 from curl_cffi import Response
 from curl_cffi.requests.exceptions import RequestException
 from httpx import HTTPError
-
+from enum import StrEnum
+from Models.base.custom_pydantic import CustomBaseModel
 from log.base_log import sams_club_logger
 from Models.v1.samsclub.api_model import RespUserProfile, ApiResponse, UserProfile
 from Models.v1.samsclub.samsclub_model import SamsClubAppStorage, SamsClubGrayConfigStrategy, \
@@ -21,10 +23,30 @@ from Utils.代理.SealedRequests import my_async_httpx
 StringNumber = NewType('StringNumber', str)
 
 
+class SamsClubApiTokenStatEnum(StrEnum):
+    INIT = "初始化"
+    FAIL = "失效"
+    VALID = "有效"
+
+
+class SamsClubApiStatus(CustomBaseModel):
+    token: str
+    token_stat: str
+    latest_request_ts: datetime.datetime
+
+
 class SamsClubApi:
     class FilePath:
         auth_token = os.path.join(os.path.dirname(__file__), 'auth_token.txt')
         app_storage = os.path.join(os.path.dirname(__file__), 'app_storage.json')
+
+    @property
+    def status(self) -> SamsClubApiStatus:
+        return SamsClubApiStatus(
+            token=self.headers_gen.auth_token,
+            token_stat=self.token_stat,
+            latest_request_ts=self.latest_request_ts
+        )
 
     async def update_auth_token(self, auth_token):
         async with aiofiles.open(self.FilePath.auth_token, 'w', encoding='utf-8') as f:
@@ -37,6 +59,8 @@ class SamsClubApi:
 
     def __init__(self):
         self.req_lock = asyncio.Lock()
+        self.latest_request_ts = datetime.datetime.now()
+        self.token_stat = SamsClubApiTokenStatEnum.INIT
         auth_token = ''
         try:
             if os.path.exists(self.FilePath.auth_token):
@@ -130,6 +154,7 @@ class SamsClubApi:
                 if self.isInited:
                     for i in range(random.choice(range(10))):
                         await self.__empty_request()
+                self.latest_request_ts = datetime.datetime.now()
                 cur_auth_token = self.headers_gen.auth_token
                 body_str = self.body_to_json(body) if body else ''
                 headers_model = await self.headers_gen.gen_headers(body_str)
@@ -148,7 +173,8 @@ class SamsClubApi:
                         # proxies=CONFIG.custom_proxy
                     )
                 except (RequestException, HTTPError) as e:
-                    await asyncio.sleep(10)
+                    self.log.exception(f'curl_cffi网络请求异常：{e}')
+                    await asyncio.sleep(30)
                     continue
                 except Exception as e:
                     self.log.exception(f'curl_cffi网络请求未知异常：{e}')
@@ -159,6 +185,7 @@ class SamsClubApi:
                 if not is_succ:
                     await asyncio.sleep(10)
                     continue
+                self.token_stat = SamsClubApiTokenStatEnum.VALID
                 self.log.info(f'请求成功：{resp.text}')
                 return resp
 
@@ -184,11 +211,12 @@ class SamsClubApi:
         resp_code = resp_dict.get('code')
         resp_msg = resp_dict.get('msg')
         if is_succ is not True:
+            self.token_stat = SamsClubApiTokenStatEnum.FAIL
             match resp_code:
                 case "SPU_NOT_EXIST":
-                    self.log.debug(f'{resp_dict}')
+                    self.log.critical(f'商品不存在：{resp_dict}')
                 case "INTERNAL_ERROR":
-                    self.log.critical(f'{response.request.url}'
+                    self.log.critical(f'服务器内部错误：{response.request.url}'
                                       f'\n{response.request.headers}'
                                       f'\n{response.request}'
                                       f'\n{resp_dict}')
@@ -196,19 +224,18 @@ class SamsClubApi:
                 case "AUTH_FAIL":
                     if is_updated_encrypt_key:
                         return False
-                    self.log.critical(f"被强制登出！{resp_dict}")
+                    self.log.critical(f"被强制登出，等待token更新：{resp_dict}")
                     await a_pushme(f'山姆会员商店token失效', f'{resp_dict}')
-                    self.log.debug(f'等待token更新')
                     while 1:
                         if auth_token != self.headers_gen.auth_token:
                             break
                         await asyncio.sleep(3)
-                # raise AUTH_FAIL(f"鉴权失败！响应code：{resp_code}")
+                    self.log.critical(f'token更新成功：{self.headers_gen.auth_token}')
                 case "BUSYNESS":
-                    self.log.critical(f'{resp_msg}')
+                    self.log.critical(f'服务器繁忙：{resp_msg}')
                     await asyncio.sleep(60)
                 case _:
-                    self.log.opt(exception=True).critical(f"请求未知错误！{resp_dict}")
+                    self.log.critical(f"请求未知错误！{resp_dict}")
                     raise UnknownError(f"未知响应code：{resp_dict}")
         return bool(is_succ)
 
@@ -702,7 +729,7 @@ class SamsClubApi:
 
     async def configuration_abtest_portal_report(self, gray_config_strategy_details: SamsClubGrayConfigStrategyDetails):
         if not gray_config_strategy_details.paramsJson:
-            self.log.critical(f"\n{gray_config_strategy_details}\ngray_config_strategy_details.paramsJson is None")
+            self.log.critical(f"{gray_config_strategy_details} gray_config_strategy_details.paramsJson is None")
             return {}
         url = self._base_url + '/api/v1/sams/configuration/abtest/portal/report'
         body = [

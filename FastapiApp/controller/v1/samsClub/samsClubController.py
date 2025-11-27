@@ -1,12 +1,11 @@
-from typing import Literal
-
 from Models.common import CommonResponseModel
-from Models.v1.background_service.background_service_model import ProgressStatusResp
 from Service.samsclub.Sql.SdlHelper import graphql_app
+from Service.samsclub.api.samsclub_api import SamsClubApiStatus
 from Service.samsclub.main import sams_club_crawler
 from .base import new_router
 
 router = new_router()
+
 
 @router.post(
     '/set_new_auth_token',
@@ -17,4 +16,10 @@ async def set_new_auth_token(auth_token: str):
     await sams_club_crawler.api.update_auth_token(auth_token)
     return CommonResponseModel(data="更新成功！")
 
+
 router.include_router(graphql_app, prefix='/graphql')
+
+
+@router.get('/samsclub_api_status', response_model=CommonResponseModel[SamsClubApiStatus])
+async def samsclub_api_status():
+    return CommonResponseModel(data=await sams_club_crawler.api.status)

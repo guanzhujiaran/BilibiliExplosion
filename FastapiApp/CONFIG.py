@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         )
     )
     SHOW_LOG: int = 0
-
+    IS_DEV:int = 0 # 默认开发环境
 
 settings = Settings()
 

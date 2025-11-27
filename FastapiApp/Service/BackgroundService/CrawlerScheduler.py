@@ -26,7 +26,7 @@ class BackgroundService:
     )
     samsclub_scheduler = GenericCrawlerScheduler(
         crawler=sams_club_crawler,
-        cron_expr="0 0 * * *",
+        cron_expr="0 3 * * *",
         default_interval_seconds=15 * 3600,
     )
     samsclub_spu_detail_scheduler = GenericCrawlerScheduler(

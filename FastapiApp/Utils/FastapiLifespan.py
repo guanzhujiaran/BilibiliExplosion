@@ -3,6 +3,7 @@ import contextlib
 
 from fastapi import FastAPI
 
+from CONFIG import settings
 from Service.LangChainCompo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Utils.Common import GLOBAL_SCHEDULER, asyncio_gather
@@ -14,14 +15,17 @@ from log.base_log import myfastapi_logger
 async def life_span(app: FastAPI):
     # 确保向量数据库集合存在
     await asyncio.sleep(3)  # 等 HTTP server ready
-    await milvus_sql_helper.ensure_collection_exists() # 必须执行
+    await milvus_sql_helper.ensure_collection_exists()  # 必须执行
 
     await BiliLotDataPublisher.retry_pending_messages()  # 重试未处理的消息
     myfastapi_logger.critical("开启其他服务")
     show_log = False
     back_ground_tasks = BackgroundService.start_background_service(show_log=show_log)
-    GLOBAL_SCHEDULER.start()
-    myfastapi_logger.critical("其他服务已开启！可以开启服务了喵~")
+    if settings.IS_DEV:
+        myfastapi_logger.critical("开发环境不启动定时任务喵~")
+    else:
+        GLOBAL_SCHEDULER.start()
+        myfastapi_logger.critical("其他服务已开启！可以开启服务了喵~")
     yield
     myfastapi_logger.critical("正在取消其他服务")
     [
