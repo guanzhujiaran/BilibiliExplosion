@@ -36,7 +36,7 @@ from controller.v1.ChatGpt3_5 import ReplySingle
 from controller.v1.lotttery_database.bili import LotteryData
 from controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
 from controller.v1.ip_info import get_ip_info
-from controller.v1.background_service import BackgroundService
+from controller.v1.background_service import BackgroundServiceController
 from controller.common import CommonRouter
 from controller.v1.background_service import MQController
 from controller.v1.samsClub import samsClubController
@@ -51,7 +51,7 @@ app.include_router(ReplySingle.router)
 app.include_router(LotteryData.router)
 app.include_router(LotteryStatistic.router)
 app.include_router(get_ip_info.router)
-app.include_router(BackgroundService.router)
+app.include_router(BackgroundServiceController.router)
 app.include_router(CommonRouter.router)
 app.include_router(MQController.router)
 app.include_router(captchaController.router)
@@ -107,3 +107,13 @@ async def global_middleware(request: Request, call_next):
             status_code=400,
             detail=CommonResponseModel(code=400, msg=str(err)),
         )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=23333
+    )

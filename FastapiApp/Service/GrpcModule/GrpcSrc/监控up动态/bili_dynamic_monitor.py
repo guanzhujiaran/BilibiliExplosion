@@ -11,7 +11,7 @@ from Utils.Common import asyncio_gather
 from Utils.PushMe import async_pushme_try_catch_decorator, a_pushme
 from Service.GrpcModule.Grpc.grpc_api import bili_grpc
 
-class monitor:
+class BiliSpaceMonitor:
     def __init__(self):
         self.dir_path = os.path.dirname(os.path.abspath(__file__))
         if not os.path.exists(os.path.join(self.dir_path, 'data/')):
@@ -112,7 +112,7 @@ class monitor:
             task_list.append(task)
         await asyncio_gather(*task_list, log=log)
 
-bili_space_monitor = monitor()
+bili_space_monitor = BiliSpaceMonitor()
 if __name__ == '__main__':
-    a = monitor()
+    a = BiliSpaceMonitor()
     asyncio.run(a.main())

@@ -95,32 +95,30 @@ class Sqlhelper:
 
         milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} created successfully")
 
+    @lock_retry_wrapper(_milvus_lock)
     async def ensure_collection_exists(self):
         """
         确保集合存在，如果不存在则创建
         """
-        try:
-            # 检查集合是否存在
-            collections = await self._client.list_collections()
-            if self.Collections.bili_lot_data not in collections:
-                await self._create_bili_lot_data_collection()
-            else:
-                # 集合已存在，检查是否已加载
-                try:
-                    # 尝试获取集合统计信息来确认它是否已加载
-                    await self._client.get_collection_stats(
-                        collection_name=self.Collections.bili_lot_data
-                    )
-                    milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} already exists and is loaded")
-                except Exception:
-                    # 集合存在但未加载，加载它
-                    await self._client.load_collection(
-                        collection_name=self.Collections.bili_lot_data
-                    )
-                    milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} loaded successfully")
-        except Exception as e:
-            milvus_db_logger.error(f"Error ensuring collection exists: {e}")
-            raise
+        # 检查集合是否存在
+        collections = await self._client.list_collections()
+        if self.Collections.bili_lot_data not in collections:
+            await self._create_bili_lot_data_collection()
+        else:
+            # 集合已存在，检查是否已加载
+            try:
+                # 尝试获取集合统计信息来确认它是否已加载
+                await self._client.get_collection_stats(
+                    collection_name=self.Collections.bili_lot_data
+                )
+                milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} already exists and is loaded")
+            except Exception:
+                # 集合存在但未加载，加载它
+                await self._client.load_collection(
+                    collection_name=self.Collections.bili_lot_data
+                )
+                milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} loaded successfully")
+
     # endregion
 
     @lock_retry_wrapper(_milvus_lock)
@@ -159,4 +157,5 @@ class Sqlhelper:
 milvus_sql_helper = Sqlhelper()
 
 if __name__ == '__main__':
+    print(settings)
     asyncio.run(milvus_sql_helper.ensure_collection_exists())

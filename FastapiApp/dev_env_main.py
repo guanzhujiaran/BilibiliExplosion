@@ -33,15 +33,13 @@ if sys.platform.startswith('windows'):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
 from log.base_log import myfastapi_logger
 from Utils.PushMe import a_pushme
-from Utils.Common import GLOBAL_SCHEDULER, asyncio_gather
 from controller.damo import DamoML
 from controller.v1.ChatGpt3_5 import ReplySingle
 from controller.v1.lotttery_database.bili import LotteryData
 from controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
 from controller.v1.ip_info import get_ip_info
-# from controller.v1.background_service import BackgroundService
 from controller.common import CommonRouter
-from controller.v1.background_service import MQController
+from controller.v1.background_service import MQController, BackgroundServiceController
 from controller.v1.samsClub import samsClubController
 from controller.v1.captcha import captchaController
 from Models.common import CommonResponseModel
@@ -53,7 +51,7 @@ app.include_router(ReplySingle.router)
 app.include_router(LotteryData.router)
 app.include_router(LotteryStatistic.router)
 app.include_router(get_ip_info.router)
-# app.include_router(BackgroundService.router)
+app.include_router(BackgroundServiceController.router)
 app.include_router(CommonRouter.router)
 app.include_router(MQController.router)
 app.include_router(captchaController.router)
