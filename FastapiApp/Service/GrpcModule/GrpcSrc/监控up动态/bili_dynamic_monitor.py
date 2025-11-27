@@ -113,6 +113,11 @@ class BiliSpaceMonitor:
         await asyncio_gather(*task_list, log=log)
 
 bili_space_monitor = BiliSpaceMonitor()
+
+__all__ = [
+    'bili_space_monitor',
+    'BiliSpaceMonitor'
+]
 if __name__ == '__main__':
     a = BiliSpaceMonitor()
     asyncio.run(a.main())

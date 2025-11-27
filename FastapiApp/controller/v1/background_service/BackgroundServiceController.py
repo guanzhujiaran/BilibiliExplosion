@@ -11,7 +11,7 @@ from Service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerSchedu
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GetOthersLotDyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
 from Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy
-from Service.GrpcModule.GrpcSrc.监控up动态.bili_dynamic_monitor import BiliSpaceMonitor
+from Service.GrpcModule.GrpcSrc.监控up动态.bili_dynamic_monitor import bili_space_monitor
 from Service.opus新版官方抽奖.bili_lottery_api.refresh_bili_lot_database import \
     refresh_bili_lot_database_crawler
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
@@ -22,8 +22,9 @@ from .base import new_router
 
 router = new_router()
 
+
 def start_background_service(show_log: bool):
-    back_ground_tasks = [asyncio.create_task(BiliSpaceMonitor.main(show_log=show_log))]
+    back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log))]
     return back_ground_tasks
 
 
@@ -200,8 +201,9 @@ def background_service_status():
                     )
     return CommonResponseModel(data=ret_list)
 
-@router.get('/GLOBAL_SCHEDULER/status', description='全局定时任务详细状态', 
-            response_model=CommonResponseModel[GlobalSchedulerStatusModel], 
+
+@router.get('/GLOBAL_SCHEDULER/status', description='全局定时任务详细状态',
+            response_model=CommonResponseModel[GlobalSchedulerStatusModel],
             response_model_exclude_none=True)
 def global_scheduler_status():
     """
@@ -215,7 +217,7 @@ def global_scheduler_status():
         executor_count=len(GLOBAL_SCHEDULER._executors) if hasattr(GLOBAL_SCHEDULER, '_executors') else 0,
         job_count=len(GLOBAL_SCHEDULER.get_jobs())
     )
-    
+
     # 收集所有任务信息
     jobs_details = []
     for job in GLOBAL_SCHEDULER.get_jobs():
@@ -227,7 +229,7 @@ def global_scheduler_status():
             trigger=str(job.trigger),
             next_run_time=job.next_run_time.timestamp() if job.next_run_time else None
         )
-        
+
         # 尝试获取任务关联的执行信息（如果是爬虫任务）
         execution_info = None
         # 检查是否可以通过BackgroundService访问到更详细的执行信息
@@ -243,16 +245,16 @@ def global_scheduler_status():
                     last_exec_time=last_exec_time.timestamp() if last_exec_time else None
                 )
                 break
-        
+
         jobs_details.append(SchedulerJobDetailModel(
             job_info=job_info,
             execution_info=execution_info
         ))
-    
+
     # 构造完整状态模型
     result = GlobalSchedulerStatusModel(
         scheduler_info=scheduler_info,
         jobs=jobs_details
     )
-    
+
     return CommonResponseModel(data=result)
