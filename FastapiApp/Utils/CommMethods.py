@@ -15,7 +15,7 @@ class methods:
         self.requests_with_proxy = request_with_proxy_internal
         self.copy_suffix = ['']  # 复制后缀
         self.changyongemo = []  # 常用的表情包
-        self.at_member = []
+        self._at_member = []
         self.username = ''  # 自己账号的名字，默认为空
         self.caihongpi_chance = 0  # 对官方使用彩虹屁的概率，数字越大，彩虹屁频率越高
         self.repostchance = 0.5  # 转发动态时，转发内容为评论内容的几率
@@ -38,6 +38,10 @@ class methods:
         self.None_nickname = list()
         self.hasemo = []  # 拥有的表情包
         self.s = requests.session()
+
+    @property
+    def at_member(self):
+        return self._at_member or ['陈睿']
 
     def timeshift(self, timestamp):
         local_time = time.localtime(timestamp)
