@@ -5,7 +5,7 @@ from typing import Callable, TypeVar, Awaitable, Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import _logger
-from sqlalchemy.exc import InternalError,TimeoutError
+from sqlalchemy.exc import InternalError, TimeoutError
 from pymysql.err import OperationalError
 from pymysql.constants import CR
 from log.base_log import myfastapi_logger, sql_log
@@ -46,7 +46,7 @@ def comm_wrapper(func):
     return wrapper
 
 
-def lock_retry_wrapper(lock:asyncio.Lock):
+def lock_retry_wrapper(lock: asyncio.Lock):
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -58,8 +58,11 @@ def lock_retry_wrapper(lock:asyncio.Lock):
                 except Exception as e:
                     myfastapi_logger.exception(e)
                     await asyncio.sleep(10)
+
         return wrapper
+
     return decorator
+
 
 def retry_wrapper(func):
     @wraps(func)
@@ -111,11 +114,11 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
             except OperationalError as operational_error:
                 await handle_sql_operational_error(_func, sql_log, operational_error)
                 continue
-            except TimeoutError as timeout_error: # 这个是超时了，可能mysql负载太高卡了
+            except TimeoutError as timeout_error:  # 这个是超时了，可能mysql负载太高卡了
                 await asyncio.sleep(60)
                 continue
             except Exception as e:
-                sql_log.exception(f'{args}\n{kwargs}\n{e}')
+                sql_log.critical(f'函数：【{_func.__name__}】\targs：【{args}\t{kwargs}】\t报错：【{e}】')
                 await asyncio.sleep(60)
                 continue
 

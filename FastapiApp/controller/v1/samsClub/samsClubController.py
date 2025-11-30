@@ -21,5 +21,5 @@ router.include_router(graphql_app, prefix='/graphql')
 
 
 @router.get('/samsclub_api_status', response_model=CommonResponseModel[SamsClubApiStatus])
-async def samsclub_api_status():
-    return CommonResponseModel(data=await sams_club_crawler.api.status)
+def samsclub_api_status():
+    return CommonResponseModel(data=sams_club_crawler.api.status)

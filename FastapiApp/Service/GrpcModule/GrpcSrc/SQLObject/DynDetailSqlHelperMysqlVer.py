@@ -894,12 +894,34 @@ ORDER BY
 
     @log_sql_retry_wrapper()
     async def delete_dyn_detail_by_dyn_rids(self, rid_list: list[str | int]):
-        async with self.async_session() as session:
-            await session.execute(
-                delete(Bilidyndetail)
-                .where(Bilidyndetail.rid.in_(rid_list))
-            )
-            await session.commit()
+        if not rid_list:
+            return
+        chunk_size = 100
+        successful_chunks = 0
+        failed_chunks = 0
+
+        for i in range(0, len(rid_list), chunk_size):
+            chunk = rid_list[i:i + chunk_size]
+
+            # 对每个分块单独应用重试机制
+            @log_sql_retry_wrapper()
+            async def process_chunk(chunk_data):
+                async with self.async_session() as session:
+                    try:
+                        # 执行数据库操作
+                        stmt = delete(Bilidyndetail).where(Bilidyndetail.rid.in_(chunk_data))
+                        await session.execute(stmt)
+                        await session.commit()
+                        return len(chunk_data)
+                    except Exception as e:
+                        await session.rollback()
+                        raise
+
+            processed_count = await process_chunk(chunk)
+            successful_chunks += 1
+            self.log.debug(f"成功处理分块 {successful_chunks}，包含 {processed_count} 条记录")
+
+        self.log.info(f"分块操作完成: 成功 {successful_chunks} 个分块, 失败 {failed_chunks} 个分块")
 
     def gen_bai(self,
                 lottery_result,
