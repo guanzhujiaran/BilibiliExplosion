@@ -42,7 +42,7 @@ class CrawlerExecutionInfo:
                 self.info.last_exec_time = datetime.fromtimestamp(float(ts_str))
                 self.logger.info(f"[{self.info.crawler_name}] 加载上次执行时间：{self.info.last_exec_time}")
             else:
-                self.logger.critical(f"[{self.info.crawler_name}] 未找到上次执行时间，使用默认值。")
+                self.logger.info(f"[{self.info.crawler_name}] 未找到上次执行时间，使用默认值。")
                 self.info.last_exec_time = datetime.fromtimestamp(86400)  # 默认时间点：1970-01-02 00:00:00
 
     async def save_last_exec_time(self):
@@ -54,15 +54,15 @@ class CrawlerExecutionInfo:
         """判断是否需要执行爬虫"""
         await self.load_last_exec_time()
         if self.info.last_exec_time is None:
-            self.logger.critical(f"[{self.info.crawler_name}] 上次执行时间为空，将执行一次。")
+            self.logger.info(f"[{self.info.crawler_name}] 上次执行时间为空，将执行一次。")
             return True
         now = datetime.now()
         delta = (now - self.info.last_exec_time).total_seconds()
         if delta >= self.info.default_interval_seconds:
-            self.logger.critical(f"[{self.info.crawler_name}] 满足执行条件，delta={delta}s")
+            self.logger.info(f"[{self.info.crawler_name}] 满足执行条件，delta={delta}s")
             return True
         else:
-            self.logger.critical(f"[{self.info.crawler_name}] 不满足执行条件，delta={delta}s")
+            self.logger.info(f"[{self.info.crawler_name}] 不满足执行条件，delta={delta}s")
             return False
 
 

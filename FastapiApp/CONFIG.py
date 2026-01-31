@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     PROXY_SERVER: str
     MILVUS_HOST:str
     MILVUS_PORT:str
+
     model_config = SettingsConfigDict(
         env_file=(
             os.path.join(_current_dir, ".env.fastapi.prod"),
@@ -39,7 +40,7 @@ class Settings(BaseSettings):
         )
     )
     SHOW_LOG: int = 0
-    IS_DEV:int = 0 # 默认开发环境
+    IS_DEV:int = 1 # 默认开发环境
 
 settings = Settings()
 

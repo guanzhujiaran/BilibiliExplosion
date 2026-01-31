@@ -368,7 +368,7 @@ class BiliGrpc:
                         '-352' in str(resp.headers.get('Grpc-Message')) or \
                         '-412' in str(resp.headers.get('bili-status-code')) or \
                         '-412' in str(resp.headers.get('Grpc-Message')):  # -352的话尝试把这个metadata丢弃
-                    self.grpc_api_any_log.critical(
+                    self.grpc_api_any_log.warning(
                         f'\n-352报错！\n'
                         f'url:{url}\n'
                         f'body:{grpc_req_message}'
@@ -434,7 +434,7 @@ class BiliGrpc:
                     if get_scheme_ip_port_form_proxy_dict(proxy.proxy) == self.my_proxy_addr:
                         self.latest_352_ts = int(time.time())
                         self.grpc_api_any_log.debug(f'设置本地代理最后-352时间为：{self.latest_352_ts}')
-                    Voucher352_logger.critical(
+                    Voucher352_logger.warning(
                         f"代理{proxy.proxy} 报错-352 被封禁\n{url}\n{new_headers}\n{grpc_req_message}")
                     await handle_proxy_352(
                         proxy_tab=proxy,
@@ -510,7 +510,7 @@ class BiliGrpc:
                 return ret_dict
             except grpc.RpcError as e:
                 stat, det = grpc_error(e)
-                self.grpc_api_any_log.critical(f"\nBiliGRPC error: {stat} - {proxy['proxy']}")
+                self.grpc_api_any_log.warning(f"\nBiliGRPC error: {stat} - {proxy['proxy']}")
                 score_change = -10
                 if 'HTTP proxy returned response code 400' in det or 'OPENSSL_internal' in det:  # 400状态码表示代理可能是http1.1协议，不支持grpc的http2.0
                     score_change = -10

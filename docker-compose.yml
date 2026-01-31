@@ -32,7 +32,8 @@ services:
       - ${SITE_REPORT_DIR}:/srv/report
       - ${SITE_CERT_DIR}:/srv/certs
     command: [ "--no-global-config", "--config-file=/srv/config/goaccess.conf" ]
-    restart: on-failure:3
+    profiles:
+      - disabled
     extra_hosts:
       - "host.docker.internal:host-gateway"
   fastapi-milvus:
@@ -67,7 +68,7 @@ services:
       - "host.docker.internal:host-gateway"
   mysql:
     container_name: fastapi-mysql
-    image: mysql:8
+    image: mysql:lts
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
       - TZ=${ENV_TZ}
@@ -141,6 +142,7 @@ services:
       - V2RAY_HOST=${V2RAY_HOST}
       - TZ=${ENV_TZ}
       - SHOW_LOG=${FASTAPI_SHOW_LOG}
+      - IS_DEV=${IS_DEV}
     build:
       context: ./FastapiApp
     volumes:
@@ -156,7 +158,7 @@ services:
     container_name: postgres
     image: postgres:alpine3.22
     volumes:
-      - ./docker_vol/postgres/data:/var/lib/postgresql
+      - /var/lib/postgresql
       - ./docker_vol/postgres/init:/docker-entrypoint-initdb.d
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -167,12 +169,12 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
-  nodejs-pptr: # 生产版本不挂载代码文件，生产环境需要修改代码必须重新build，需要存储的东西都在中间件里面
+  nodejs-pptr:
     container_name: nodejs-pptr
     depends_on:
       - postgres
       - redis
-      - fastapi
+      - casdoor
     build:
       context: ./puppeteer_Bili
       target: prod
@@ -189,37 +191,16 @@ services:
       - REDIS_PWD=
       - FASTAPI_URI=http://fastapi-bili-explosion:23333
       - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
-      - FASTAPI_RPA_URI=http://fastapi-rpa:8080
-      - FASTAPI_RPA_DEV_URI=http://fastapi-rpa:8000
+      - FASTAPI_RPA_URI=http://fastapi-rpa-browser:8000
+      - FASTAPI_RPA_DEV_URI=http://fastapi-rpa-browser:8000
+      - CASDOOR_ENABLED=true
+      - CASDOOR_ENDPOINT=http://casdoor:8000
+      - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
+      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
+      - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
+      - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
+      - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI}
       - TZ=${ENV_TZ}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  nodejs-pptr-dev:
-    container_name: nodejs-pptr-dev
-    depends_on:
-      - postgres
-      - redis
-    build:
-      context: ./puppeteer_Bili
-      target: dev
-    ports:
-      - "${NODEJS_PPTR_PORT}:9926"
-    volumes:
-      - ./puppeteer_Bili:/app
-      - ./docker_vol/pptr/dev/npm_logs:/root/.npm/_logs
-      - /app/node_modules  # 保护容器内node_modules
-    environment:
-      - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/PPTR_Bili_Lot
-      - DEV_DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/DEV_PPTR_Bili_Lot
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PWD=
-      - FASTAPI_URI=http://fastapi-bili-explosion:23333
-      - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
-      - FASTAPI_RPA_URI=http://fastapi-rpa:8080
-      - FASTAPI_RPA_DEV_URI=http://fastapi-rpa:8000
-      - TZ=${ENV_TZ}
-    restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
   lm-studio:
@@ -231,6 +212,39 @@ services:
       - /root/.lmstudio/models
     ports:
       - ${LMSTUDIO_PORT}:1234
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  casdoor:
+    container_name: fastapi-casdoor
+    image: casbin/casdoor:latest
+    restart: unless-stopped
+    ports:
+      - "${CASDOOR_PORT}:8000"
+    volumes:
+      - ./docker_vol/casdoor/conf/app.conf:/conf/app.conf
+    environment:
+      - TZ=${ENV_TZ}
+    depends_on:
+      - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  rpa-browser:
+    container_name: fastapi-rpa-browser
+    build:
+      context: ./RPA-Browser
+    depends_on:
+      - postgres
+      - redis
+      - casdoor
+    ports:
+      - "${RPA_BROWSER_PORT}:8000"
+    environment:
+      - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD}
+      - controller_base_path=/api/v1/rpa
+      - proxy_server_url=http://host.docker.internal:10809
+      - GEMINI_API_KEY=1234-2234-3234-4234
+      - TZ=${ENV_TZ}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

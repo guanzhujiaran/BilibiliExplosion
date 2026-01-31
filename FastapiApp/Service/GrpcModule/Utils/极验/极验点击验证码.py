@@ -50,7 +50,6 @@ class GeetestV3Breaker:
             if 1 or use_bili_ticket_gt:
                 gt, challenge = geetest_reg_info.geetest_gt, geetest_reg_info.geetest_challenge
                 if validation := await asyncio.to_thread(self.click.simple_match_retry, gt, challenge):
-                    self.log.critical(f'\nbili_ticket_gt_python验证码获取成功：{validation}')
                     validate_result = await validate_geetest(
                         geetest_reg_info.geetest_challenge,
                         geetest_reg_info.token,

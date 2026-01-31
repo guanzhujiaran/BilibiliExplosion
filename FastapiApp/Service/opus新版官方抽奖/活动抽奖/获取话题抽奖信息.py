@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import copy
 import datetime
 import json
@@ -7,10 +6,8 @@ import os
 import random
 import time
 from typing import List, Sequence
-
 from bs4 import BeautifulSoup
 from py_mini_racer import MiniRacer
-
 from CONFIG import CONFIG
 from log.base_log import topic_lot_logger
 from Service.opus新版官方抽奖.Base.generate_cv import GenerateCvBase
@@ -25,7 +22,7 @@ from Service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import T
 from Utils.Common import asyncio_gather
 from Utils.PushMe import a_pushme
 from Utils.代理.SealedRequests import my_async_httpx
-
+from Utils.Common import log_max_count_retry_wrapper
 
 class GenerateTopicLotCv(GenerateCvBase):
 
@@ -274,25 +271,23 @@ class ExtractTopicLottery:
         realtime = time.strftime('%Y-%m-%d %H:%M:%S', local_time)
         return realtime
 
+    @log_max_count_retry_wrapper(
+        log=topic_lot_logger
+    )
     async def get_resp(self, url: str):
         proxy = CONFIG.my_ipv6_addr
-        while 1:
-            try:
-                headers = copy.deepcopy(self.headers)
-                headers.update({
-                    'referer': url,
-                    "user-agent": CONFIG.rand_ua
-                })
-                resp = await my_async_httpx.get(url=url, headers=headers, proxies={
-                    'http': proxy,
-                    'https': proxy
-                })
-                assert resp.status_code == 200 or resp.status_code == 404, resp.text
-                return resp
-            except Exception as e:
-                topic_lot_logger.exception(f"获取{url}请求失败！{e}")
-                await asyncio.sleep(10)
-                proxy = None
+        headers = copy.deepcopy(self.headers)
+        headers.update({
+            'referer': url,
+            "user-agent": CONFIG.rand_ua
+        })
+        resp = await my_async_httpx.get(url=url, headers=headers, proxies={
+            'http': proxy,
+            'https': proxy
+        })
+        assert resp.status_code == 200 or resp.status_code == 404, resp.text
+        return resp
+
 
     async def handle_topic_lottery_url(self, url: str, traffic_card_id: int) -> int:
         """
@@ -518,23 +513,3 @@ class ExtractTopicLottery:
         await gc.main(pub_cv=is_need_post)
         topic_lot_logger.error('话题抽奖已更新')
         await a_pushme('话题抽奖已更新', f'话题抽奖：更新{num}条数据\n{[x.__dict__ for x in all_unread_traffic_card]}')
-
-
-if __name__ == "__main__":
-    async def _test():
-        _a = ExtractTopicLottery()
-        print(await _a.spider_all_unread_traffic_card([0, 3, None]))
-
-
-    async def _test_generate_cv():
-        gc = GenerateTopicLotCv(
-            # cookie="buvid3=434282F4-E364-7403-51C6-038E401B27F052974infoc; b_nut=1716813352; _uuid=5AC6FF4A-855E-55ED-51042-7E37D8753E2B57600infoc; enable_web_push=DISABLE; buvid4=68D497D9-DFB7-2DD5-EFBD-2640CA8327F167277-024052712-bkFP%2BfBKxK1jqmu4RNRApvMLVSVZSoxPLJw6dSJ1uURlMto45X0VJk1NHJXI5NTX; DedeUserID=4237378; DedeUserID__ckMd5=94093e21fe6687f9; hit-dyn-v2=1; rpdid=0zbfAHGGaN|BL7JC6EG|1za|3w1SbA29; buvid_fp_plain=undefined; header_theme_version=CLOSE; LIVE_BUVID=AUTO5417169088699210; CURRENT_BLACKGAP=0; PVID=1; home_feed_column=5; fingerprint=3c0395c5734f117c8547ff054c538ef7; CURRENT_FNVAL=4048; CURRENT_QUALITY=116; browser_resolution=1463-754; bili_ticket=eyJhbGciOiJIUzI1NiIsImtpZCI6InMwMyIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MjUyNDU3OTcsImlhdCI6MTcyNDk4NjUzNywicGx0IjotMX0.v7ZUi1Cj18rBWbYy6hsDFjI09ny1nd8SZWZ1iDuKc-w; bili_ticket_expires=1725245737; b_lsid=F5B37A103_191A38FEF3E; SESSDATA=213503be%2C1740578775%2C2cfb8%2A82CjBBtuR1OtNFGOyuCaOPH5WDmz4WVtQvqPXzTUdeZGLHUFxcj53LLZfP77LdfBWMo9YSVjcwTzlReGw4d2lKQVpnRzdJNFdHSm02SERyWENSUlVTbDg4azRVajlVVlNnWk9BOU9IQllxNEU3TXZlSlEyT0VySEVWa0ptWFRsalhxWFdpMEtwODR3IIEC; bili_jct=38d76480d1837d76e6c7c84d86511d06; sid=6w71b423; buvid_fp=3c0395c5734f117c8547ff054c538ef7; bp_t_offset_4237378=971489059387998208",
-            cookie="",
-            ua=CONFIG.rand_ua,
-            csrf='38d76480d1837d76e6c7c84d86511d06',
-            buvid="434282F4-E364-7403-51C6-038E401B27F052974infoc"
-        )
-        await gc.main()
-
-
-    asyncio.run(_test())

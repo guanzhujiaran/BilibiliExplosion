@@ -55,9 +55,12 @@ dependencies = [
     "strawberry-sqlalchemy-mapper>=0.7.0",
     "uvicorn[standard]>=0.38.0",
 ]
+[tool.uv]
+python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone/"
+
 [[tool.uv.index]]
-name = "tencent"
-url = "https://mirrors.cloud.tencent.com/pypi/simple/"
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 
 [project.optional-dependencies]
 test = [

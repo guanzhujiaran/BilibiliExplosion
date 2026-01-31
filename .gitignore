@@ -29,9 +29,12 @@ unidbgSpringBoot/
 docker_vol/*
 !docker_vol/mysql_data/
 !docker_vol/mysql_data/init/
+docker_vol/mysql_data/data
 !docker_vol/postgres/
 !docker_vol/postgres/init/
+docker_vol/postgres/data/
 !docker_vol/nginx/
+docker_vol/nginx/logs/
 !docker_vol/goaccess/
 !docker_vol/lm_studio
 !docker_vol/lm_studio/init.sh
@@ -42,3 +45,5 @@ docker_vol/*
 .env.dev
 venv/
 .venv/
+.lh
+.history

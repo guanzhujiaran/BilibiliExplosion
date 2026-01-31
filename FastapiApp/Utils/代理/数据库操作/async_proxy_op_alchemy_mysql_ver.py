@@ -340,42 +340,22 @@ class SQLHelperClass(SqlHelperBase):
             async with self._lock:
                 if not self.is_checking_redis_data:
                     if int(time.time()) - self.sub_redis_store.sync_sep_ts > self.sub_redis_store.sync_ts or force or self.sub_redis_store.sync_ts == 0:
-                        proxy_zset_count = await self.sub_redis_store.redis_bili_proxy_zset_count()
                         self.is_checking_redis_data = True
                         try:
                             redis_sync_ts = await self.sub_redis_store.get_sync_ts()
                             if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:
-                                sql_log.critical(
-                                    f'上次同步时间：{datetime.datetime.fromtimestamp(redis_sync_ts, tz=ZoneInfo("Asia/Shanghai"))}\n开始同步redis和mysql数据库')
-                                start_ts = int(time.time())
-                                sql_log.critical('开始将redis数据同步至MySQL中')
                                 await self.sync_2_database()
-                                sql_log.critical(f'将redis数据同步至MySQL中完成，耗时：{int(time.time() - start_ts)}秒！')
-
-                                sql_log.critical(f'开始清空redis中数据')
                                 await self.sub_redis_store.redis_clear_all_proxy()  # 不清除还没使用的代理
-                                sql_log.critical(f'清空redis中数据完成，耗时：{int(time.time() - start_ts)}秒！')
-
                                 sql_log.critical(f'开始清理无法使用的mysql中的代理数据')
-                                clean_unusable_proxy_num = await self.clear_unusable_proxy()
-                                sql_log.critical(
-                                    f'清理无法使用的mysql中的代理数据完成，清理了{clean_unusable_proxy_num}条无效代理，耗时：{int(time.time() - start_ts)}秒！')
-
-                                sql_log.critical(f'开始获取MySQL中可用代理数据')
+                                await self.clear_unusable_proxy()
                                 all_available_proxy_infos = await self.select_proxy(mode="all")
-                                sql_log.critical(f'获取MySQL中可用代理数据完成，耗时：{int(time.time() - start_ts)}秒！')
-
-                                sql_log.critical(f'开始将MySQL内容同步至redis中')
                                 await self.sub_redis_store.sync_2_redis(all_available_proxy_infos)
-                                sql_log.critical(f'将MySQL内容同步至redis中完成，耗时：{int(time.time() - start_ts)}秒！')
                                 await self.sub_redis_store.set_sync_ts()
-                                sql_log.critical(f'同步redis和mysqlMySQL完成，耗时{int(time.time() - start_ts)}秒！')
                         except Exception as e:
                             sql_log.exception(f'同步redis和mysql数据库失败！{e}')
                             raise e
                         finally:
                             self.is_checking_redis_data = False
-                            sql_log.critical(f'同步redis和mysql数据库任结束！')
                     else:
                         sql_log.debug(
                             f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_ts, tz=ZoneInfo("Asia/Shanghai"))}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
@@ -629,7 +609,6 @@ class SQLHelperClass(SqlHelperBase):
     @sql_retry_wrapper
     async def refresh_proxy(self):
         start_ts = int(time.time())
-        sql_log.critical('开始刷新数据库中代理')
         avaliable_score = -50
         available_status = 0
         now = int(time.time())
@@ -667,12 +646,9 @@ class SQLHelperClass(SqlHelperBase):
                 await session.execute(___sql)  # 刷新超过两小时的412风控代理 不改变分数，只改变status
                 await session.execute(__sql)  # 刷新超过12小时的无效代理，改变status和score
                 await session.commit()
-        sql_log.critical(f'刷新数据库中代理完成！耗时：{int(time.time() - start_ts)}秒')
         return
 
     async def sync_proxy_database_redis(self):
-        sql_log.critical('开始同步redis和数据库中代理')
-
         await self.check_redis_data()
 
     # endregion
