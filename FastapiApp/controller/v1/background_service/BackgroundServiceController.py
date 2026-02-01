@@ -29,7 +29,7 @@ from .base import new_router
 router = new_router()
 
 
-def start_background_service(show_log: bool):
+def start_monitor_tasks(show_log: bool):
     back_ground_tasks = [asyncio.create_task(bili_space_monitor.main(show_log=show_log))]
     return back_ground_tasks
 
