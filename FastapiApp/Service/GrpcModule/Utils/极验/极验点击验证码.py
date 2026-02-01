@@ -65,7 +65,7 @@ class GeetestV3Breaker:
                         self.succ_stats.succ_time += 1
                     return validate_result
         except Exception as e:
-            self.log.error(f'极验验证失败！{e}')
+            self.log.warning(f'极验验证失败！{e}')
             self.succ_stats.total_time -= 1
         finally:
             ...

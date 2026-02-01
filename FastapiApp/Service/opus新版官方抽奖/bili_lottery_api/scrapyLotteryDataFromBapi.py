@@ -79,14 +79,14 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
 
     async def solve_dyn_data(self, data: dict, rid: int):
         business_id = data.get('business_id')
-        if business_id:
+        if len(str(business_id))>=18:
             dynamic_ts = dynamic_id_2_ts(business_id)
             if int(time.time()) - dynamic_ts < self.min_dyn_sep_ts:
                 self._cur_stop_times += 1
                 self.latest_ts = dynamic_ts
             await self.redis_helper.set_id(self.redis_helper.RedisMap.dyn_rid, rid)
         else:
-            self.log.critical(f'business_id：{data} 获取动态时间失败！')
+            self.log.critical(f'lottery_notice api：{data} 获取动态时间失败！')
 
     async def solve_reserve_data(self, data: dict):
         reserve_sid = data.get('business_id')

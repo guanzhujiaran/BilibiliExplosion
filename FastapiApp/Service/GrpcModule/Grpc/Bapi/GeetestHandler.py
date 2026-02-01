@@ -73,7 +73,7 @@ async def get_geetest_reg_info(v_voucher: str,
             geetest_gt=resp_json.get("data").get("geetest").get("gt")
         )
     else:
-        bapi_log.error(f"\n获取极验信息失败: {resp_json}")
+        bapi_log.warning(f"\n获取极验信息失败: {resp_json}")
         return False
 
 
@@ -147,7 +147,7 @@ async def validate_geetest(challenge, token, validate,
         request_conf=request_conf
     )
     if resp_json.get("code") != 0:
-        bapi_log.error(
+        bapi_log.warning(
             f"\n发请求 {url} 验证validate极验失败:{challenge, token, validate}\n {resp_json}\n{data}\n{headers_raw}")
         return ""
     bapi_log.debug(f"\n发请求 {url} 验证validate极验成功：{resp_json}")

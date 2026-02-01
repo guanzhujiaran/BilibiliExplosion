@@ -293,9 +293,6 @@ class SQLHelperClass(SqlHelperBase):
                 sql_log.info("Filtered proxy list is empty. No updates to perform.")
                 return
 
-            sql_log.critical(
-                f'Starting database update for {total_proxies_to_update} proxies in chunks of {chunk_size}.')
-
             async def _update_single(cur_chunk: int):
                 chunk = update_mappings[_: _ + chunk_size]
                 if not chunk:
@@ -322,7 +319,6 @@ class SQLHelperClass(SqlHelperBase):
                 for _ in range(0, total_proxies_to_update, chunk_size):
                     tasks.add(asyncio.create_task(_update_single(_)))
                 await asyncio_gather(*tasks, log=sql_log)
-                sql_log.critical(f"Successfully updated {total_proxies_to_update} proxies in the database.")
             except Exception as err:
                 # Catch other potential errors during processing
                 sql_log.error(f"An unexpected error occurred: {err}")
@@ -346,7 +342,6 @@ class SQLHelperClass(SqlHelperBase):
                             if redis_sync_ts < int(time.time()) - self.sub_redis_store.sync_sep_ts or force:
                                 await self.sync_2_database()
                                 await self.sub_redis_store.redis_clear_all_proxy()  # 不清除还没使用的代理
-                                sql_log.critical(f'开始清理无法使用的mysql中的代理数据')
                                 await self.clear_unusable_proxy()
                                 all_available_proxy_infos = await self.select_proxy(mode="all")
                                 await self.sub_redis_store.sync_2_redis(all_available_proxy_infos)
