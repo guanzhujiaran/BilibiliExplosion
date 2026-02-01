@@ -2,12 +2,17 @@ import asyncio
 import inspect
 from typing import Literal, Union, Any
 from Models.common import CommonResponseModel
-from Models.v1.background_service.background_service_model import AllLotScrapyStatusResp, \
-    ProgressStatusResp, ProxyStatusResp
+from Models.v1.background_service.background_service_model import (
+    AllLotScrapyStatusResp,
+    BackgroundServiceName,
+    ProgressStatusResp,
+    ProxyStatusResp
+)
 from Models.v1.background_service.scheduler_status_model import GlobalSchedulerStatusModel, \
     SchedulerInfoModel, JobInfoModel, SchedulerJobDetailModel, ExecutionInfoModel
-from Service.BackgroundService.CrawlerScheduler import BackgroundService
-from Service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
+from Service.BackgroundService.CrawlerScheduler import background_service
+
+from Service.BaseCrawler.launcher.scheduler_launcher import BaseScheduler, GenericCrawlerScheduler
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GetOthersLotDyn.get_other_lot_main import get_others_lot_dyn as other_lot_class
 from Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy
@@ -174,7 +179,7 @@ async def get_proxy_status():
                                )
 
 
-@router.get('/GlobalSchedule/get_jobs', description='全局定时任务', response_model=CommonResponseModel[Any])
+@router.get('/GlobalSchedule/GetJobs', description='全局定时任务', response_model=CommonResponseModel[Any])
 def global_schedule():
     ret = []
     for job in GLOBAL_SCHEDULER.get_jobs():
@@ -186,7 +191,7 @@ def global_schedule():
             response_model_exclude_none=True)
 def background_service_status():
     ret_list = []
-    members = inspect.getmembers(BackgroundService)
+    members = inspect.getmembers(background_service)
     for name, value in members:
         if isinstance(value, GenericCrawlerScheduler):
             for plugin in value.crawler.plugins:
@@ -201,8 +206,85 @@ def background_service_status():
                     )
     return CommonResponseModel(data=ret_list)
 
+@router.post('/BackgroundService/Start', description='启动特定的后台爬虫服务')
+def start_background_service(background_service_name: BackgroundServiceName):
+    """
+    启动指定的后台爬虫服务
+    :param background_service_name: 服务名称枚举，必须是 BackgroundServiceName 枚举值
+    :return: 操作结果
+    """
+    members = inspect.getmembers(background_service)
+    scheduler = None
+    for name, value in members:
+        if name == background_service_name.value and isinstance(value, BaseScheduler):
+            scheduler = value
+            break
 
-@router.get('/GLOBAL_SCHEDULER/status', description='全局定时任务详细状态',
+    if scheduler is None:
+        return CommonResponseModel(
+            success=False,
+            message=f'未找到名为 {background_service_name.value} 的后台服务'
+        )
+
+    try:
+        if scheduler.job_id in GLOBAL_SCHEDULER:
+            return CommonResponseModel(
+                success=False,
+                message=f'服务 {background_service_name.value} 已经在运行中'
+            )
+
+        scheduler.add_job()
+        return CommonResponseModel(
+            success=True,
+            message=f'成功启动服务 {background_service_name.value}'
+        )
+    except Exception as e:
+        return CommonResponseModel(
+            success=False,
+            message=f'启动服务失败: {str(e)}'
+        )
+
+
+@router.post('/BackgroundService/Stop', description='停止特定的后台爬虫服务')
+def stop_background_service(background_service_name: BackgroundServiceName):
+    """
+    停止指定的后台爬虫服务
+    :param background_service_name: 服务名称枚举，必须是 BackgroundServiceName 枚举值
+    :return: 操作结果
+    """
+    members = inspect.getmembers(background_service)
+    scheduler = None
+    for name, value in members:
+        if name == background_service_name.value and isinstance(value, BaseScheduler):
+            scheduler = value
+            break
+
+    if scheduler is None:
+        return CommonResponseModel(
+            success=False,
+            message=f'未找到名为 {background_service_name.value} 的后台服务'
+        )
+
+    try:
+        if scheduler.job_id not in GLOBAL_SCHEDULER:
+            return CommonResponseModel(
+                success=False,
+                message=f'服务 {background_service_name.value} 未在运行'
+            )
+
+        scheduler.remove_job()
+        return CommonResponseModel(
+            success=True,
+            message=f'成功停止服务 {background_service_name.value}'
+        )
+    except Exception as e:
+        return CommonResponseModel(
+            success=False,
+            message=f'停止服务失败: {str(e)}'
+        )
+
+
+@router.get('/GlobalScheduler/Status', description='全局定时任务详细状态',
             response_model=CommonResponseModel[GlobalSchedulerStatusModel],
             response_model_exclude_none=True)
 def global_scheduler_status():
@@ -233,7 +315,7 @@ def global_scheduler_status():
         # 尝试获取任务关联的执行信息（如果是爬虫任务）
         execution_info = None
         # 检查是否可以通过BackgroundService访问到更详细的执行信息
-        members = inspect.getmembers(BackgroundService)
+        members = inspect.getmembers(background_service)
         for name, value in members:
             if isinstance(value, GenericCrawlerScheduler) and value.job_id == job.id:
                 # 从CrawlerExecutionInfoModel转换为ExecutionInfoModel

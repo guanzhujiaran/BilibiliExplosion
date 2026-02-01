@@ -115,7 +115,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
 
         self.sem_limit = 1  # 因为用的是自己的代理，所以速度可以慢点
         self.stats_plugin = StatsPlugin(self)
-        self.null_time_quit = 1000  # 遇到连续500条data为None的sid 则退出
+        self.null_time_quit = 10000  # 遇到连续n条data为None的树据 则退出
         self.null_stop_plugin = SequentialNullStopPlugin(self, self.null_time_quit)
         super().__init__(
             plugins=[self.stats_plugin, self.null_stop_plugin],

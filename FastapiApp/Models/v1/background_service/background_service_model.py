@@ -1,9 +1,25 @@
 import time
+from enum import Enum
 from typing import Any
 
 from pydantic import computed_field, Field
 
 from Models.base.custom_pydantic import CustomBaseModel
+
+
+class BackgroundServiceName(str, Enum):
+    """后台服务名称枚举"""
+    DYN_DETAIL_DATABASE_CLEANER = "dyn_detail_database_cleaner"
+    GET_PROXY_METHODS_SCHEDULER = "get_proxy_methods_scheduler"
+    SAMSCCLUB_SCHEDULER = "samsclub_scheduler"
+    SAMSCCLUB_SPU_DETAIL_SCHEDULER = "samsclub_spu_detail_scheduler"
+    GET_RESERVE_INFO = "get_reserve_info"
+    GET_DYN = "get_dyn"
+    GET_TOPIC = "get_topic"
+    REFRESH_BILI_LOTDATA_DATABASE = "refresh_bili_lotdata_database"
+    LOTTERY_API_ROBOT_DYN_SCHEDULER = "lottery_api_robot_dyn_scheduler"
+    LOTTERY_API_ROBOT_RESERVE_SCHEDULER = "lottery_api_robot_reserve_scheduler"
+    GMFLV2_SCHEDULER = "gmflv2_scheduler"
 
 
 class ProgressStatusResp(CustomBaseModel):
