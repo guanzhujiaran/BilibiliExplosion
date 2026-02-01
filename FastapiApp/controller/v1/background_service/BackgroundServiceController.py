@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+from datetime import datetime
 from typing import Literal, Union, Any
 from Models.common import CommonResponseModel
 from Models.v1.background_service.background_service_model import (
@@ -227,13 +228,22 @@ def start_background_service(background_service_name: BackgroundServiceName):
         )
 
     try:
-        if scheduler.job_id in GLOBAL_SCHEDULER:
+        if GLOBAL_SCHEDULER.get_job(scheduler.job_id) is not None:
             return CommonResponseModel(
                 success=False,
                 message=f'服务 {background_service_name.value} 已经在运行中'
             )
 
-        scheduler.add_job()
+        GLOBAL_SCHEDULER.add_job(
+            scheduler.run,
+            name=scheduler.job_id,
+            trigger=scheduler.trigger,
+            id=scheduler.job_id,
+            next_run_time=datetime.now(),
+            coalesce=True,
+            max_instances=3,
+            misfire_grace_time=3600
+        )
         return CommonResponseModel(
             success=True,
             message=f'成功启动服务 {background_service_name.value}'
@@ -266,13 +276,13 @@ def stop_background_service(background_service_name: BackgroundServiceName):
         )
 
     try:
-        if scheduler.job_id not in GLOBAL_SCHEDULER:
+        if GLOBAL_SCHEDULER.get_job(scheduler.job_id) is None:
             return CommonResponseModel(
                 success=False,
                 message=f'服务 {background_service_name.value} 未在运行'
             )
 
-        scheduler.remove_job()
+        scheduler.remove()
         return CommonResponseModel(
             success=True,
             message=f'成功停止服务 {background_service_name.value}'
@@ -281,6 +291,53 @@ def stop_background_service(background_service_name: BackgroundServiceName):
         return CommonResponseModel(
             success=False,
             message=f'停止服务失败: {str(e)}'
+        )
+
+
+@router.post('/BackgroundService/Restart', description='重启特定的后台爬虫服务')
+def restart_background_service(background_service_name: BackgroundServiceName):
+    """
+    重启指定的后台爬虫服务
+    :param background_service_name: 服务名称枚举，必须是 BackgroundServiceName 枚举值
+    :return: 操作结果
+    """
+    members = inspect.getmembers(background_service)
+    scheduler = None
+    for name, value in members:
+        if name == background_service_name.value and isinstance(value, BaseScheduler):
+            scheduler = value
+            break
+
+    if scheduler is None:
+        return CommonResponseModel(
+            success=False,
+            message=f'未找到名为 {background_service_name.value} 的后台服务'
+        )
+
+    try:
+        # 先停止（移除任务）
+        if GLOBAL_SCHEDULER.get_job(scheduler.job_id) is not None:
+            scheduler.remove()
+
+        # 再启动（添加任务）
+        GLOBAL_SCHEDULER.add_job(
+            scheduler.run,
+            name=scheduler.job_id,
+            trigger=scheduler.trigger,
+            id=scheduler.job_id,
+            next_run_time=datetime.now(),
+            coalesce=True,
+            max_instances=3,
+            misfire_grace_time=3600
+        )
+        return CommonResponseModel(
+            success=True,
+            message=f'成功重启服务 {background_service_name.value}'
+        )
+    except Exception as e:
+        return CommonResponseModel(
+            success=False,
+            message=f'重启服务失败: {str(e)}'
         )
 
 

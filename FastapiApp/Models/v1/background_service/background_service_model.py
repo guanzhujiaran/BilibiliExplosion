@@ -9,17 +9,17 @@ from Models.base.custom_pydantic import CustomBaseModel
 
 class BackgroundServiceName(str, Enum):
     """后台服务名称枚举"""
-    DYN_DETAIL_DATABASE_CLEANER = "dyn_detail_database_cleaner"
-    GET_PROXY_METHODS_SCHEDULER = "get_proxy_methods_scheduler"
-    SAMSCCLUB_SCHEDULER = "samsclub_scheduler"
-    SAMSCCLUB_SPU_DETAIL_SCHEDULER = "samsclub_spu_detail_scheduler"
-    GET_RESERVE_INFO = "get_reserve_info"
-    GET_DYN = "get_dyn"
-    GET_TOPIC = "get_topic"
-    REFRESH_BILI_LOTDATA_DATABASE = "refresh_bili_lotdata_database"
-    LOTTERY_API_ROBOT_DYN_SCHEDULER = "lottery_api_robot_dyn_scheduler"
-    LOTTERY_API_ROBOT_RESERVE_SCHEDULER = "lottery_api_robot_reserve_scheduler"
-    GMFLV2_SCHEDULER = "gmflv2_scheduler"
+    DYN_DETAIL_DATABASE_CLEANER = "DYN_DETAIL_DATABASE_CLEANER"
+    GET_PROXY_METHODS_SCHEDULER = "GET_PROXY_METHODS_SCHEDULER"
+    SAMSCCLUB_SCHEDULER = "SAMSCCLUB_SCHEDULER"
+    SAMSCCLUB_SPU_DETAIL_SCHEDULER = "SAMSCCLUB_SPU_DETAIL_SCHEDULER"
+    GET_RESERVE_INFO = "GET_RESERVE_INFO"
+    GET_DYN = "GET_DYN"
+    GET_TOPIC = "GET_TOPIC"
+    REFRESH_BILI_LOTDATA_DATABASE = "REFRESH_BILI_LOTDATA_DATABASE"
+    LOTTERY_API_ROBOT_DYN_SCHEDULER = "LOTTERY_API_ROBOT_DYN_SCHEDULER"
+    LOTTERY_API_ROBOT_RESERVE_SCHEDULER = "LOTTERY_API_ROBOT_RESERVE_SCHEDULER"
+    GMFLV2_SCHEDULER = "GMFLV2_SCHEDULER"
 
 
 class ProgressStatusResp(CustomBaseModel):

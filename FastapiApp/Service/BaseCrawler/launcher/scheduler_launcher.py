@@ -171,6 +171,24 @@ class BaseScheduler:
         """
         GLOBAL_SCHEDULER.remove_job(self.job_id)
 
+    def add_job(self):
+        """
+        添加任务到调度器
+        """
+        job = GLOBAL_SCHEDULER.get_job(self.job_id)
+        if job is None:
+            GLOBAL_SCHEDULER.add_job(
+                self.run,
+                name=self.job_id,
+                trigger=self.trigger,
+                id=self.job_id,
+                next_run_time=datetime.now(),
+                coalesce=True,
+                max_instances=3,
+                misfire_grace_time=3600
+            )
+            self.logger.info(f"[{self.exec_info.info.crawler_name}] 任务已重新添加到调度器")
+
 
 class GenericCrawlerScheduler(BaseScheduler):
     """
