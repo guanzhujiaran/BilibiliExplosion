@@ -128,7 +128,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         self.sqlHelper = bili_reserve_sqlhelper
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.now_round_id = 0
-        self.ids_list = []
+        self.ids_list:list[ReserveParams] = []
         self.ids_change_lock = asyncio.Lock()
         self.EndTimeSeconds = 3 * 3600  # 提前多久退出爬动态 （现在不应该按照这个作为退出的条件，因为预约现在有些是乱序排列的，所以应该以data为None作为判断标准）
         self.encounter_end_time_seconds_times = 0
@@ -140,7 +140,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             , '折现', '樱瞳', '盈通', '🧧', '键盘']  # 需要重点查看的关键词列表
         self.list_type_wrong = list()  # 出错动态内容
         self.list_deleted_maybe = list()  # 可能动态内容
-        self.ids = int()
+        self.reserve_params: ReserveParams | None = None
         self.dynamic_timestamp: DynamicTimestampInfo = DynamicTimestampInfo()
         self.unknown = os.path.join(self.current_dir, 'log/未知类型.csv')  # 未知类型
         self.getfail = os.path.join(self.current_dir, 'log/获取失败.csv')  # 获取失败
@@ -293,15 +293,15 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             self.none_num1 = self.null_stop_plugin.sequential_null_count if int(
                 time.time()) - self.dynamic_timestamp.dynamic_timestamp < self.EndTimeSeconds else - self.null_time_quit
             async with self.ids_change_lock:
-                self.ids = self.ids_list[ids_index]
+                self.reserve_params = self.ids_list[ids_index]
             async with self.dynamic_ts_lock:
                 self.dynamic_timestamp = DynamicTimestampInfo()
-            await self.run(ReserveParams(reserve_id=self.ids_list[ids_index]))
-            self.ids = self.stats_plugin.end_params  # 加上这个才是最终的ids，否则ids并不会改变
+            await self.run(self.ids_list[ids_index])
+            self.reserve_params = self.stats_plugin.end_params  # 加上这个才是最终的ids，否则ids并不会改变
             self.totoal_count1 = self.stats_plugin.succ_count
-            self.ids_list[ids_index] = self.ids
+            self.ids_list[ids_index] = self.reserve_params
             reserve_lot_logger.critical(
-                f'{self.ids}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'
+                f'{self.reserve_params}已经达到{self.null_stop_plugin.sequential_null_count}/{self.null_time_quit}条data为null信息或者最近预约时间只剩'
                 f'{self.dynamic_timestamp.get_time_str_until_now()}\n'
                 f'最终成功的ids：http://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_success_params}\n'
                 f'最终ids: http://api.bilibili.com/x/activity/up/reserve/relation/info?ids={self.stats_plugin.end_params}\n'
@@ -390,17 +390,17 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         try:
             if file_contents := await comm_storage_redis_obj.get_val(
                     comm_storage_redis_obj.RedisMap.reserve_scrapy_bot_rid_ls):
-                self.ids_list = [int(x) for x in file_contents.split('\n')]
-                self.ids = self.ids_list[0]
+                self.ids_list = [ReserveParams(reserve_id=int(x)) for x in file_contents.split('\n')]
+                self.reserve_params = self.ids_list[0]
             else:
                 self.ids_list = [1871812, 4996187]
-                reserve_lot_logger.info(f'获取rid开始文件失败，使用默认值：{self.ids}')
-            reserve_lot_logger.info('获取rid开始文件成功\nids开始值：{}'.format(self.ids))
-            if self.ids <= 0:
-                reserve_lot_logger.exception(f'rid开始文件内容不正确：{self.ids_list}，使用默认值：{self.ids}')
+                reserve_lot_logger.info(f'获取rid开始文件失败，使用默认值：{self.reserve_params}')
+            reserve_lot_logger.info('获取rid开始文件成功\nids开始值：{}'.format(self.reserve_params))
+            if self.reserve_params.reserve_id <= 0:
+                reserve_lot_logger.exception(f'rid开始文件内容不正确：{self.ids_list}，使用默认值：{self.reserve_params}')
                 self.ids_list = [1871812, 4996187]
         except Exception as e:
-            reserve_lot_logger.exception(f'获取rid开始文件失败，使用默认值：{self.ids}')
+            reserve_lot_logger.exception(f'获取rid开始文件失败，使用默认值：{self.reserve_params}')
             self.ids_list = [1871812, 4996187]
 
 

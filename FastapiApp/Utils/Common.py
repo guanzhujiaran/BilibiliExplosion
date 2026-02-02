@@ -90,6 +90,11 @@ async def handle_sql_operational_error(func, log, err: OperationalError):
         case 1129:
             log.error(f'{func} \t{err}')
             await asyncio.sleep(120)
+        case 1213:  # 死锁错误，随机等待后重试
+            import random
+            sleep_time = random.uniform(1, 5)  # 随机等待1-5秒
+            log.warning(f'{func} \t死锁错误: {err}, 将在{sleep_time:.2f}秒后重试')
+            await asyncio.sleep(sleep_time)
         case CR.CR_SERVER_LOST:  # mysql并发太高了，等待一段时间再重试
             await asyncio.sleep(120)
         case CR.CR_CONN_HOST_ERROR:  # mysql配置不正确或者mysql暂时挂了，在重启
