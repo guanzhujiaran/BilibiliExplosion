@@ -3,8 +3,12 @@ import asyncio
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy import select, func, Row
 from CONFIG import CONFIG
-from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
-    BiliLotStatisticRankDateTypeEnum, BiliLotStatisticRankTypeEnum, BiliUserInfoSimple
+from Models.lottery_database.bili.LotteryDataModels import (
+    BiliLotStatisticLotTypeEnum,
+    BiliLotStatisticRankDateTypeEnum,
+    BiliLotStatisticRankTypeEnum,
+    BiliUserInfoSimple,
+)
 from Service.GrpcModule.GrpcSrc.SQLObject.models import BiliUserInfo, BiliAtariInfo
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from dao.base.sqlHelperBase import SqlHelperBase
@@ -16,10 +20,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
         super().__init__(mysql_db_url=CONFIG.database.MYSQL.dyn_detail_URI)
         self.log = official_lot_logger
 
-    async def insert_lot_prize_count(
-            self,
-            bili_atari_info: BiliAtariInfo
-    ):
+    async def insert_lot_prize_count(self, bili_atari_info: BiliAtariInfo):
         stmt = insert(BiliUserInfo).values(
             sqlalchemy_model_2_dict(bili_atari_info.bili_user_info)
         )
@@ -30,17 +31,22 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
         await self.execute(stmt)
 
         # 插入 BiliAtariInfo 数据
-        stmt = insert(BiliAtariInfo).values(
-            sqlalchemy_model_2_dict(bili_atari_info)
-        )
+        stmt = insert(BiliAtariInfo).values(sqlalchemy_model_2_dict(bili_atari_info))
         stmt = stmt.on_duplicate_key_update(
-            mid=stmt.inserted.mid
+            mid=stmt.inserted.mid, atari_lot_id=stmt.inserted.atari_lot_id
         )
         await self.execute(stmt)
 
-    async def insert_lot_prize_count_bulk(self, bili_atari_info_list: list[BiliAtariInfo], chunk_size=100):
-        for i in range(0, len(bili_atari_info_list), chunk_size):
-            chunk = bili_atari_info_list[i:i + chunk_size]
+    async def insert_lot_prize_count_bulk(
+        self, bili_atari_info_list: list[BiliAtariInfo], chunk_size=10
+    ):
+        sorted_data = sorted(
+            bili_atari_info_list, 
+            key=lambda x: (x.mid, x.atari_lot_id)
+        )
+        
+        for i in range(0, len(sorted_data), chunk_size):
+            chunk = sorted_data[i : i + chunk_size]
             # 插入 BiliUserInfo 数据
             stmt = insert(BiliUserInfo).values(
                 [sqlalchemy_model_2_dict(x.bili_user_info) for x in chunk]
@@ -55,19 +61,17 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
             stmt = insert(BiliAtariInfo).values(
                 [sqlalchemy_model_2_dict(x) for x in chunk]
             )
-            stmt = stmt.on_duplicate_key_update(
-                mid=stmt.inserted.mid
-            )
+            stmt = stmt.on_duplicate_key_update(mid=stmt.inserted.mid)
             await self.execute(stmt)
 
     async def get_lot_prize_count(
-            self,
-            *,
-            offset: int,
-            limit: int = 10,
-            date: BiliLotStatisticRankDateTypeEnum | None = None,
-            lot_type: BiliLotStatisticLotTypeEnum | None = None,
-            rank_type: BiliLotStatisticRankTypeEnum | None = None,
+        self,
+        *,
+        offset: int,
+        limit: int = 10,
+        date: BiliLotStatisticRankDateTypeEnum | None = None,
+        lot_type: BiliLotStatisticLotTypeEnum | None = None,
+        rank_type: BiliLotStatisticRankTypeEnum | None = None,
     ) -> tuple[Sequence[Row[tuple[BiliUserInfo, int, int]]], int]:
         """
         获取抽奖奖品统计信息
@@ -105,21 +109,17 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
                 BiliAtariInfo.atari_lot_rank == atari_rank_enum,
             )
         if business_type := lot_type.business_type:
-            where_clause.append(
-                BiliAtariInfo.atari_lot_type == business_type
-            )
+            where_clause.append(BiliAtariInfo.atari_lot_type == business_type)
         if date and date != BiliLotStatisticRankDateTypeEnum.total:
             start, end = date.get_start_end_datetime()
-            where_clause.append(
-                BiliAtariInfo.atari_timestamp.between(
-                    start, end
-                )
-            )
+            where_clause.append(BiliAtariInfo.atari_timestamp.between(start, end))
         subq = (
             select(
-                BiliAtariInfo.mid.label('user_id'),
-                func.count(1).label('prize_count'),
-                func.row_number().over(order_by=func.count(1).desc()).label('atari_rank')
+                BiliAtariInfo.mid.label("user_id"),
+                func.count(1).label("prize_count"),
+                func.row_number()
+                .over(order_by=func.count(1).desc())
+                .label("atari_rank"),
             )
             .where(*where_clause)
             .group_by(BiliAtariInfo.mid)  # 按用户ID分组
@@ -127,11 +127,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
         )
         # 主查询：JOIN 用户信息表，获取完整用户资料
         query = (
-            select(
-                BiliUserInfo,
-                subq.c.prize_count,
-                subq.c.atari_rank
-            )
+            select(BiliUserInfo, subq.c.prize_count, subq.c.atari_rank)
             .join(subq, BiliUserInfo.uid == subq.c.user_id)
             .order_by(subq.c.atari_rank)
             .offset(offset)
@@ -139,10 +135,7 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
         )
 
         # 总数查询：统计满足条件的用户数（去重用户）
-        total_stmt = (
-            select(func.count(1))
-            .where(*where_clause)
-        )
+        total_stmt = select(func.count(1)).where(*where_clause)
 
         async with self.async_session() as session:
             total_result = await session.execute(total_stmt)
@@ -154,22 +147,21 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
             return users_with_stats, total
 
     async def get_bili_user_info(self, uid: int | str) -> BiliUserInfoSimple:
-        async  with self.async_session() as session:
+        async with self.async_session() as session:
             stmt = select(BiliUserInfo).where(BiliUserInfo.uid == uid)
             result = await session.execute(stmt)
             res = result.scalar_one_or_none()
             if res:
                 return BiliUserInfoSimple(
-                    uid=str(res.uid),
-                    name=res.name,
-                    face=res.face
+                    uid=str(res.uid), name=res.name, face=res.face
                 )
-            return BiliUserInfoSimple(uid=str(uid), face='', name='')
+            return BiliUserInfoSimple(uid=str(uid), face="", name="")
 
 
 lottery_data_statistic_sql_helper = LotteryDataStatisticSqlHelper()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+
     async def _test_get_lot_prize_count():
         lottery_data_statistic_sql_helper.engine.echo = True
         res = await lottery_data_statistic_sql_helper.get_lot_prize_count(
@@ -177,14 +169,12 @@ if __name__ == '__main__':
             limit=10,
             date=BiliLotStatisticRankDateTypeEnum.year,
             lot_type=BiliLotStatisticLotTypeEnum.official,
-            rank_type=BiliLotStatisticRankTypeEnum.first
+            rank_type=BiliLotStatisticRankTypeEnum.first,
         )
         print(res)
 
-
     async def _test_get_bili_user_info():
-        res = await lottery_data_statistic_sql_helper.get_bili_user_info(uid='4237378')
+        res = await lottery_data_statistic_sql_helper.get_bili_user_info(uid="4237378")
         print(res)
-
 
     asyncio.run(_test_get_lot_prize_count())

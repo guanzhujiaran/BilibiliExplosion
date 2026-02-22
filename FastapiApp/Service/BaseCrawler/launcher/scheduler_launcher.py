@@ -119,7 +119,7 @@ class BaseScheduler:
                 id=self.job_id,
                 next_run_time=datetime.now(),  # 立即执行第一次
                 coalesce=True,  # 错过的任务合并为一次
-                max_instances=3,  # 同时最多允许三个实例，因为有可能会卡住
+                max_instances=1,  # 同时最多允许一个实例
                 misfire_grace_time=3600  # 允许延迟最多 3600 秒
             )
             self.logger.info(f"[{self.exec_info.info.crawler_name}] 已添加新任务，首次运行时间已设为现在，将立即尝试执行")
@@ -184,7 +184,7 @@ class BaseScheduler:
                 id=self.job_id,
                 next_run_time=datetime.now(),
                 coalesce=True,
-                max_instances=3,
+                max_instances=1,
                 misfire_grace_time=3600
             )
             self.logger.info(f"[{self.exec_info.info.crawler_name}] 任务已重新添加到调度器")

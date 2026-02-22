@@ -241,7 +241,7 @@ def start_background_service(background_service_name: BackgroundServiceName):
             id=scheduler.job_id,
             next_run_time=datetime.now(),
             coalesce=True,
-            max_instances=3,
+            max_instances=1,
             misfire_grace_time=3600
         )
         return CommonResponseModel(
@@ -327,7 +327,7 @@ def restart_background_service(background_service_name: BackgroundServiceName):
             id=scheduler.job_id,
             next_run_time=datetime.now(),
             coalesce=True,
-            max_instances=3,
+            max_instances=1,
             misfire_grace_time=3600
         )
         return CommonResponseModel(

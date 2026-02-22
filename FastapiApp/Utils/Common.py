@@ -2,13 +2,13 @@ import asyncio
 import concurrent.futures
 from functools import wraps
 from typing import Callable, TypeVar, Awaitable, Any
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import _logger
 from sqlalchemy.exc import InternalError, TimeoutError
 from pymysql.err import OperationalError
 from pymysql.constants import CR
 from log.base_log import myfastapi_logger, sql_log
+import random
 
 GLOBAL_SCHEDULER: AsyncIOScheduler = AsyncIOScheduler()
 _comm_lock = asyncio.Lock()
@@ -91,9 +91,8 @@ async def handle_sql_operational_error(func, log, err: OperationalError):
             log.error(f'{func} \t{err}')
             await asyncio.sleep(120)
         case 1213:  # 死锁错误，随机等待后重试
-            import random
             sleep_time = random.uniform(1, 5)  # 随机等待1-5秒
-            log.warning(f'{func} \t死锁错误: {err}, 将在{sleep_time:.2f}秒后重试')
+            log.error(f'{func} \t死锁错误: {err}, 将在{sleep_time:.2f}秒后重试')
             await asyncio.sleep(sleep_time)
         case CR.CR_SERVER_LOST:  # mysql并发太高了，等待一段时间再重试
             await asyncio.sleep(120)
