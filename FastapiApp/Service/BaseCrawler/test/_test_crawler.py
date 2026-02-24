@@ -3,6 +3,14 @@ from typing import AsyncGenerator
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerStatus
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin
+from Models.base.custom_pydantic import CustomBaseModelHashable
+
+
+class TestParamsType(CustomBaseModelHashable):
+    a: int
+
+    def __hash__(self) -> int:
+        return hash(self.a)
 
 
 class TestCrawler(UnlimitedCrawler):
@@ -25,15 +33,15 @@ class TestCrawler(UnlimitedCrawler):
 
         return WorkerStatus.nullData
 
-    async def key_params_gen(self, params: int) -> AsyncGenerator[int, None]:
+    async def key_params_gen(self, params: TestParamsType) -> AsyncGenerator[TestParamsType, None]:
         if self.mode:
             for i in self.params_arr:
-                yield i
+                yield TestParamsType(a=i)
             return
         else:
             while 1:
-                yield params
-                params += 1
+                yield TestParamsType(a=params.a)
+                params.a += 1
 
     async def is_stop(self) -> bool:
         if self._count > 150:
@@ -44,9 +52,9 @@ class TestCrawler(UnlimitedCrawler):
         print(f'结束参数：{end_param}')
 
     async def main(self):
-        await self.run(self.params_arr[0])
+        await self.run(init_params= TestParamsType(a=self.params_arr[0]))
         self.mode = False
-        await self.run(114514)
+        await self.run(init_params= TestParamsType(a=0))
 
 
 async def _test():

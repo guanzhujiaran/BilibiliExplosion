@@ -14,7 +14,7 @@ class CrawlerPlugin(ABC,Generic[ParamsType]):
         self.log = None
         self.crawler = crawler  # 插件可以访问到宿主爬虫实例
 
-    async def on_run_start(self, init_params: ParamsType):
+    async def on_run_start(self, init_worker_model: WorkerModel):
         """
         在爬虫的 run 方法开始执行时触发。
         """
@@ -40,7 +40,7 @@ class CrawlerPlugin(ABC,Generic[ParamsType]):
         """
         return False
 
-    async def on_run_end(self, end_param: ParamsType):
+    async def on_run_end(self, end_param: WorkerModel):
         """
         在爬虫的 run 方法完全结束时（包括等待所有任务完成）触发。
         """

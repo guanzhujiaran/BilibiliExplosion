@@ -85,11 +85,21 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
             await self.on_worker_end(worker_model)
 
     async def run(self, init_params: ParamsType | None = None):
-        self.log.info(self.format_log(f"starting with init_params: {init_params}"))
-        await asyncio_gather(*[x.on_run_start(init_params) for x in self._plugins], log=self.log)
-        task_set = set()
-        last_param_yielded: Optional[ParamsType] = None
+        self.log.info(self.format_log(
+            f"starting with init_params: {init_params}"))
         seqId = 0
+        worker_model = WorkerModel(params=init_params, seqId=seqId)
+        await asyncio_gather(*[x.on_run_start(worker_model) for x in self._plugins], log=self.log)
+        task_set = set()
+        # 处理初始参数
+        seqId += 1
+        await self.task_queue.put(worker_model)
+        task = asyncio.create_task(self.worker())
+        task_set.add(task)
+        task.add_done_callback(task_set.discard)
+        self.log.debug(self.format_log(
+            f'当前线程存活数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}，添加初始任务：{init_params}'))
+        # 开始循环
         async for param in self.key_params_gen(init_params):
             worker_model = WorkerModel(
                 params=param,
@@ -97,7 +107,6 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
             )
             seqId += 1
             await self.task_queue.put(worker_model)  # 这个必须在最前面
-            last_param_yielded = param
 
             if await self.is_stop():
                 self.log.info(self.format_log('触发终止条件，停止生成新任务。'))
@@ -113,12 +122,13 @@ class UnlimitedCrawler(BaseCrawler[ParamsType]):
             task = asyncio.create_task(self.worker())
             task_set.add(task)
             task.add_done_callback(task_set.discard)
-            self.log.debug(self.format_log(f'当前线程存活数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}，添加任务：{param}'))
-
-        self.log.critical(self.format_log(f'任务生成完成。正在等待剩余线程完成任务，当前存活线程数量：{len(task_set)}'))
+            self.log.debug(self.format_log(
+                f'当前线程存活数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}，添加任务：{param}'))
+        self.log.critical(self.format_log(
+            f'任务生成完成。正在等待剩余线程完成任务，当前存活线程数量：{len(task_set)}'))
         await asyncio_gather(*task_set, log=self.log)
         self.log.info(self.format_log(f'所有任务已完成。'))
-        await self.on_run_end(last_param_yielded if last_param_yielded is not None else init_params)
+        await self.on_run_end(worker_model or None)
 
         self.log.info(self.format_log(f"run finished."))
         while not self.task_queue.empty():

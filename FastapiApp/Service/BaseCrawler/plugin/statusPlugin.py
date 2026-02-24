@@ -16,18 +16,18 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
 
     def __init__(self, crawler: Optional[BaseCrawler[ParamsType]] = None):
         super().__init__(crawler)
-        self._init_params: Optional[ParamsType] = None
-        self._end_params: Optional[ParamsType] = None
-        self._end_success_params: Optional[ParamsType] = None
+        self._init_params: Optional[WorkerModel] = None
+        self._end_params: Optional[WorkerModel] = None
+        self._end_success_params: Optional[WorkerModel] = None
         self._is_running: bool = False
         self._start_time: float = time.time()  # Stores the monotonic start time
         self._last_update_time: float = 0.0  # Stores the wall clock time of last worker finish
         self._processed_items_count: int = 0  # Fundamental counter
         self._null_count: int = 0
         self._succ_count: int = 0
-        self._running_params_set: set[ParamsType] = set()  # 把参数转换成字符串,避免unhashable的参数
+        self._running_params_set: set[WorkerModel] = set()  # 把参数转换成字符串,避免unhashable的参数
 
-    async def on_run_start(self, init_params: ParamsType):
+    async def on_run_start(self, init_params: WorkerModel):
         """
         在爬虫的 run 方法开始执行时触发，记录初始参数并重置统计数据。
         """
@@ -57,7 +57,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
                 self._null_count += 1
         self._end_params = worker_model.params
         # Log current speed by calling the property, which calculates it on demand
-        self._running_params_set.discard(worker_model.params)
+        self._running_params_set.discard(worker_model)
         self.log.debug(
             self.crawler.format_log(
                 f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
@@ -65,10 +65,10 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         await super().on_worker_end(worker_model)
 
     async def on_worker_start(self, worker_model: WorkerModel):
-        self._running_params_set.add(worker_model.params)
+        self._running_params_set.add(worker_model)
         await super().on_worker_start(worker_model)
 
-    async def on_run_end(self, end_param: ParamsType):
+    async def on_run_end(self, end_param: WorkerModel):
         """
         在爬虫的 run 方法完全结束时触发，记录最终参数。
         总时长和速度的计算现在放在 property 中。
@@ -93,12 +93,12 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
     # --- Public properties to access statistics ---
 
     @property
-    def init_params(self) -> Optional[ParamsType]:
+    def init_params(self) -> Optional[WorkerModel]:
         """最开始的参数"""
         return self._init_params
 
     @property
-    def end_params(self) -> Optional[ParamsType]:
+    def end_params(self) -> Optional[WorkerModel]:
         """最后的参数"""
         return self._end_params
 
@@ -166,7 +166,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         return self._succ_count
 
     @property
-    def running_params_set(self) -> set[ParamsType]:
+    def running_params_set(self) -> set[WorkerModel]:
         return self._running_params_set
 
     def get_all_status(self) -> dict:
@@ -205,7 +205,7 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
         self._status_vector = np.array([])
         self._sequential_null_count: int = 0
 
-    async def on_run_start(self, init_params: ParamsType):
+    async def on_run_start(self, init_params: WorkerModel):
         """
                在爬虫运行开始时重置所有状态变量。
                """
@@ -279,7 +279,7 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
 
         return False
 
-    async def on_run_end(self, end_param: ParamsType) -> None:
+    async def on_run_end(self, end_param: WorkerModel) -> None:
         """
         在爬虫运行完全结束时调用。
         """
