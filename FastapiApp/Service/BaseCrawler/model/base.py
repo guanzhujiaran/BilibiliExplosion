@@ -20,7 +20,7 @@ class WorkerStatus(Enum):
 
 
 class WorkerModel(CustomBaseModel):
-    params: ParamsType
+    params: ParamsType | None = None
     seqId: int = Field(..., description="任务序号（自增）从0开始")
     fetchStatus: WorkerStatus = Field(WorkerStatus.pending)
     created_at: datetime = Field(
