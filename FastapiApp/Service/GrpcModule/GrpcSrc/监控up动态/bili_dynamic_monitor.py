@@ -45,7 +45,7 @@ class BiliSpaceMonitor:
 
     async def save_monitor_uid_list(self):
         async with aiofiles.open(os.path.join(self.dir_path, 'data/monitor_uid_list.json'), 'w', encoding='utf-8') as f:
-            f.write(json.dumps(self.monitor_uid_list, indent='\t'))
+            await f.write(json.dumps(self.monitor_uid_list, indent='\t'))
 
     async def push_dyn_notify(self, dynamic_item):
         cardType = dynamic_item.get('cardType')
