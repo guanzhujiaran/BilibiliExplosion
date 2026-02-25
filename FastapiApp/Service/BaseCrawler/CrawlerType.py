@@ -1,3 +1,4 @@
+from typing import Generic
 import asyncio
 from abc import abstractmethod
 from types import EllipsisType
@@ -8,7 +9,7 @@ from Service.BaseCrawler.plugin.base import CrawlerPlugin
 from Utils.Common import asyncio_gather
 
 
-class UnlimitedCrawler(BaseCrawler[ParamsType]):
+class UnlimitedCrawler(BaseCrawler[ParamsType],Generic[ParamsType]):
     _plugins: List[CrawlerPlugin[ParamsType]]
 
     def __init__(self,

@@ -1,6 +1,35 @@
 from abc import abstractmethod, ABC
 from typing import Optional, Any, Union, Dict, List
 from pydantic import BaseModel, Field, ConfigDict, computed_field
+from pydantic.generics import GenericModel
+
+
+class CustomGenericModel(GenericModel):
+    model_config = ConfigDict(
+        extra='allow',
+    )
+
+    @computed_field
+    @property
+    def extra_fields(self) -> Optional[Dict[str, Any]]:
+        return self.model_extra or None
+
+    def dict(self, **kwargs):
+        original_data = super().model_dump(**kwargs)
+        converted_data = self._convert_large_ints_to_str(original_data)
+        return converted_data
+
+    def _convert_large_ints_to_str(self, data: Any) -> Union[Dict[str, Any], List[Any], str, int, float]:
+        max_safe_integer = 9007199254740991  # JavaScript 最大安全整数
+
+        if isinstance(data, dict):
+            return {k: self._convert_large_ints_to_str(v) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [self._convert_large_ints_to_str(item) for item in data]
+        elif isinstance(data, int) and data > max_safe_integer:
+            return str(data)
+        else:
+            return data
 
 
 class CustomBaseModel(BaseModel):
@@ -38,15 +67,3 @@ class CustomBaseModelHashable(ABC, CustomBaseModel):
         hash方法必须返回int类型
         """
         ...
-
-
-if __name__ == '__main__':
-    class _Test(CustomBaseModel):
-        abcdefg: bool = Field(True, description='a', alias='badjawdl')
-        awdasdwasb: bool = Field(False)
-
-
-    _test = _Test(
-        c=12324
-    )
-    print(_test.dict(by_alias=True))

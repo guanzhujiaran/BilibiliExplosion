@@ -1,10 +1,10 @@
 from enum import Enum
-from typing import TypeVar
+from typing import TypeVar, Generic
 import time
 from datetime import datetime
 from pydantic import Field
-
-from Models.base.custom_pydantic import CustomBaseModel, CustomBaseModelHashable
+from pydantic.generics import GenericModel
+from Models.base.custom_pydantic import CustomGenericModel, CustomBaseModelHashable
 
 ParamsType = TypeVar("ParamsType", bound=CustomBaseModelHashable)
 
@@ -19,7 +19,7 @@ class WorkerStatus(Enum):
     fail = 4
 
 
-class WorkerModel(CustomBaseModel):
+class WorkerModel(CustomGenericModel, Generic[ParamsType]):
     params: ParamsType | None = None
     seqId: int = Field(..., description="任务序号（自增）从0开始")
     fetchStatus: WorkerStatus = Field(WorkerStatus.pending)
@@ -35,5 +35,3 @@ class WorkerModel(CustomBaseModel):
         super().__setattr__(name, value)
         if name != 'updated_at' and name in self.__class__.model_fields:
             super().__setattr__('updated_at', datetime.now())
-
-
