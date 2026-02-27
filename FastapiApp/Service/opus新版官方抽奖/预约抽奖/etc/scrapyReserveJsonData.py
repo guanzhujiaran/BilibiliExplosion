@@ -306,7 +306,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
                 self.reserve_worker_model = self.reserve_ids_worker_model_list[ids_index]
             async with self.dynamic_ts_lock:
                 self.dynamic_timestamp = DynamicTimestampInfo()
-            await self.run(self.reserve_ids_worker_model_list[ids_index])
+            await self.run(self.reserve_ids_worker_model_list[ids_index].params)
             self.reserve_worker_model = self.stats_plugin.end_params  # 加上这个才是最终的ids，否则ids并不会改变
             self.totoal_count1 = self.stats_plugin.succ_count
             self.reserve_ids_worker_model_list[ids_index] = self.reserve_worker_model
