@@ -402,8 +402,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         if not os.path.exists(os.path.join(self.current_dir, 'log')):
             os.mkdir(os.path.join(self.current_dir, 'log'))
         self.reserve_ids_worker_model_list = [
-            WorkerModel(params=ReserveParams(reserve_id=1871812)),
-            WorkerModel(params=ReserveParams(reserve_id=4996187)),
+            WorkerModel(params=ReserveParams(reserve_id=1871812), seqId=0),
+            WorkerModel(params=ReserveParams(reserve_id=4996187), seqId=1),
         ]
         try:
             if file_contents := await comm_storage_redis_obj.get_val(

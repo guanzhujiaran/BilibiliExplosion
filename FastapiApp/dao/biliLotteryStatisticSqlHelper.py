@@ -41,28 +41,40 @@ class LotteryDataStatisticSqlHelper(SqlHelperBase):
         self, bili_atari_info_list: list[BiliAtariInfo], chunk_size=10
     ):
         sorted_data = sorted(
-            bili_atari_info_list, 
+            bili_atari_info_list,
             key=lambda x: (x.mid, x.atari_lot_id)
         )
-        
-        for i in range(0, len(sorted_data), chunk_size):
-            chunk = sorted_data[i : i + chunk_size]
-            # 插入 BiliUserInfo 数据
-            stmt = insert(BiliUserInfo).values(
-                [sqlalchemy_model_2_dict(x.bili_user_info) for x in chunk]
-            )
-            stmt = stmt.on_duplicate_key_update(
-                name=stmt.inserted.name,
-                face=stmt.inserted.face,
-            )
-            await self.execute(stmt)
 
-            # 插入 BiliAtariInfo 数据
-            stmt = insert(BiliAtariInfo).values(
-                [sqlalchemy_model_2_dict(x) for x in chunk]
-            )
-            stmt = stmt.on_duplicate_key_update(mid=stmt.inserted.mid)
-            await self.execute(stmt)
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                for i in range(0, len(sorted_data), chunk_size):
+                    chunk = sorted_data[i : i + chunk_size]
+                    # 插入 BiliUserInfo 数据
+                    stmt = insert(BiliUserInfo).values(
+                        [sqlalchemy_model_2_dict(x.bili_user_info) for x in chunk]
+                    )
+                    stmt = stmt.on_duplicate_key_update(
+                        name=stmt.inserted.name,
+                        face=stmt.inserted.face,
+                    )
+                    await self.execute(stmt)
+
+                    # 插入 BiliAtariInfo 数据
+                    stmt = insert(BiliAtariInfo).values(
+                        [sqlalchemy_model_2_dict(x) for x in chunk]
+                    )
+                    stmt = stmt.on_duplicate_key_update(mid=stmt.inserted.mid)
+                    await self.execute(stmt)
+                return
+            except Exception as e:
+                if "Deadlock" in str(e) and retry < max_retries - 1:
+                    import random
+                    wait_time = random.uniform(0.1, 0.5) * (retry + 1)
+                    self.log.warning(f"检测到死锁，第{retry+1}次重试，等待{wait_time:.2f}秒...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
 
     async def get_lot_prize_count(
         self,

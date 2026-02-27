@@ -29,7 +29,7 @@ class WorkerModel(CustomGenericModel, Generic[ParamsType]):
         default_factory=datetime.now, description="更新时间")
 
     def __hash__(self) -> int:
-        return hash((self.seqId or 0) + int(time.time()))
+        return hash((self.seqId or 0, str(self.params)))
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
