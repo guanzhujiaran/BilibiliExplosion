@@ -408,8 +408,8 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         try:
             if file_contents := await comm_storage_redis_obj.get_val(
                     comm_storage_redis_obj.RedisMap.reserve_scrapy_bot_rid_ls):
-                self.reserve_ids_worker_model_list = [ReserveParams(reserve_id=int(
-                    x)) for x in file_contents.split('\n')]
+                self.reserve_ids_worker_model_list = [WorkerModel(params=ReserveParams(reserve_id=int(
+                    x)), seqId=i) for i, x in enumerate(file_contents.split('\n'))]
                 self.reserve_worker_model = self.reserve_ids_worker_model_list[0]
             else:
                 reserve_lot_logger.info(
