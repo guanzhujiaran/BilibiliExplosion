@@ -49,13 +49,13 @@ class GetRmFollowingListV2(UnlimitedCrawler[BiliSpaceUserParamsType]):
 
     async def handle_fetch(self, params: BiliSpaceUserParamsType) -> WorkerStatus | Any:
         if params is None:
-            logger.error(f"[GetRmFollowingListV2] params为None，跳过处理")
+            self.log.error(f"[GetRmFollowingListV2] params为None，跳过处理")
             return WorkerStatus.fail
         return await self.fetch_uid_space_dyn(params)
 
     async def fetch_uid_space_dyn(self, params: BiliSpaceUserParamsType) -> WorkerStatus | Any:
         if not params or not params.uid:
-            logger.error(f"[GetRmFollowingListV2] params.uid为None: {params}")
+            self.log.error(f"[GetRmFollowingListV2] params.uid为None: {params}")
             return WorkerStatus.fail
         uid_space_update_time = await SqlHelper.get_lot_user_info_updatetime_by_uid(params.uid)
         if uid_space_update_time and (datetime.now() - uid_space_update_time).days < self.check_up_sep_days:
