@@ -1,12 +1,20 @@
 import datetime
 import inspect
 import time
+from enum import StrEnum
 from typing import Any, Optional
 import numpy as np
 from Service.BaseCrawler.base.core import ParamsType, BaseCrawler
 from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus
 from Service.BaseCrawler.plugin.base import CrawlerPlugin
 from Utils.Tool import ts_2_DateTime
+
+
+class CrawlerHealthStatus(StrEnum):
+    """爬虫健康状态枚举"""
+    NORMAL = "normal"  # 正常运行
+    STUCK = "stuck"    # 爬虫卡住
+    STOPPED = "stopped"  # 已停止
 
 
 class StatsPlugin(CrawlerPlugin[ParamsType]):
@@ -168,6 +176,34 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
     @property
     def running_params_set(self) -> set[WorkerModel]:
         return self._running_params_set
+
+    @property
+    def health_status(self) -> CrawlerHealthStatus:
+        """
+        爬虫健康状态。
+
+        判断逻辑：
+        - 如果未运行 (is_running=False)，返回 STOPPED
+        - 如果正在运行且有运行中的参数 (running_params_set 不为空)：
+          - 检查所有运行中参数的 updated_at 时间
+          - 如果任一参数的 updated_at 超过 1 天，返回 STUCK（爬虫卡住）
+          - 否则返回 NORMAL（正常运行）
+        - 如果正在运行但没有运行中的参数，返回 NORMAL
+        """
+        if not self.is_running:
+            return CrawlerHealthStatus.STOPPED
+
+        if not self.running_params_set:
+            return CrawlerHealthStatus.NORMAL
+
+        current_time = datetime.datetime.now()
+        one_day_ago = current_time - datetime.timedelta(days=1)
+
+        for worker_model in self.running_params_set:
+            if worker_model.updated_at < one_day_ago:
+                return CrawlerHealthStatus.STUCK
+
+        return CrawlerHealthStatus.NORMAL
 
     def get_all_status(self) -> dict:
         """

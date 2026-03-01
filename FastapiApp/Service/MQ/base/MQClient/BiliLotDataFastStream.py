@@ -1,6 +1,7 @@
 from datetime import datetime
 import json
 import time
+import asyncio
 from typing import Any, Dict
 from faststream.rabbit.fastapi import RabbitMessage
 from Models.MQ.MQRouterModels import RabbitMQTestMsgModel
@@ -20,6 +21,11 @@ from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
 from Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
 from Utils.PushMe import a_pushme
+
+
+# 全局锁，确保所有 lottery_id 的处理串行化，避免死锁
+# 简单粗暴但有效，适用于并发量不大的场景
+_global_lottery_lock = asyncio.Lock()
 
 
 async def handle_exception(
@@ -250,10 +256,11 @@ class UpsertBiliAtari(BaseFastStreamMQ):
     ):
         module_name = self.mq_props.queue_name
         try:
-            MQ_logger.debug(
-                f"【{module_name}】收到消息：{lottery_id}")
-            await grpc_sql_helper.sync_all_lottery_result_2_bili_user_info(lottery_id=lottery_id)
-            return await msg.ack()
+            async with _global_lottery_lock:
+                MQ_logger.debug(
+                    f"【{module_name}】收到消息：{lottery_id}")
+                await grpc_sql_helper.sync_all_lottery_result_2_bili_user_info(lottery_id=lottery_id)
+                return await msg.ack()
         except Exception as e:
             await handle_exception(module_name, e, lottery_id, msg)
 

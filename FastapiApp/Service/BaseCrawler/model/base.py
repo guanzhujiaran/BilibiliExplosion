@@ -1,9 +1,7 @@
 from enum import Enum
 from typing import TypeVar, Generic
-import time
 from datetime import datetime
 from pydantic import Field
-from pydantic.generics import GenericModel
 from Models.base.custom_pydantic import CustomGenericModel, CustomBaseModelHashable
 
 ParamsType = TypeVar("ParamsType", bound=CustomBaseModelHashable)
@@ -27,6 +25,11 @@ class WorkerModel(CustomGenericModel, Generic[ParamsType]):
         default_factory=datetime.now, description="创建时间")
     updated_at: datetime = Field(
         default_factory=datetime.now, description="更新时间")
+
+    @property
+    def fetchStatusStr(self) -> str:
+        """将 WorkerStatus 枚举转换为字符串"""
+        return self.fetchStatus.name
 
     def __hash__(self) -> int:
         return hash((self.seqId or 0, str(self.params)))

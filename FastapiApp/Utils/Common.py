@@ -145,6 +145,13 @@ def log_sql_retry_wrapper(log: _logger = myfastapi_logger):
                     await handle_sql_operational_error(_func, log, operational_error)
                     continue
                 except Exception as e:
+                    # 检查是否是死锁错误(已经在内层处理过重试)
+                    error_str = str(e)
+                    if "Deadlock" in error_str or "1213" in error_str:
+                        log.error(f'{_func.__name__} \t死锁错误(内层重试已耗尽): {error_str[:200]}')
+                        await asyncio.sleep(5)  # 短暂等待后继续重试
+                        continue
+                    # 其他异常保持原有逻辑
                     log.exception(f'{args}\n{kwargs}\n{e}')
                     await asyncio.sleep(60)
                     continue
