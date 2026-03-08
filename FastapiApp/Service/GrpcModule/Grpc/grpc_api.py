@@ -118,10 +118,12 @@ class BiliGrpc:
             }
         ]]
         try:
-            self.version_name_build_list: list[LatestVersionBuild] = get_latest_version_builds()[:70]  # 获取最新的build
+            self.version_name_build_list: list[LatestVersionBuild] = get_latest_version_builds()[
+                :70]  # 获取最新的build
         except Exception as e:
             self.grpc_api_any_log.exception(e)
-        self.channel_list = ['master', '360', 'bili', 'xiaomi', 'google']  # 渠道包列表
+        self.channel_list = ['master', '360',
+                             'bili', 'xiaomi', 'google']  # 渠道包列表
         with open(os.path.join(
                 current_file_path,
                 '../Utils/user-agents_dalvik_application_2-1.json'
@@ -130,8 +132,7 @@ class BiliGrpc:
             self.Dalvik_list = json.loads(f.read())
             self.Dalvik_list = list(filter(lambda x: 'Dalvik/2.1.0' in x
                                                      and '[ip:' not in x
-                                                     and 'AppleWebKit' not in x
-                                           , self.Dalvik_list))
+                                                     and 'AppleWebKit' not in x, self.Dalvik_list))
         self.brand_list = ['Xiaomi', 'Huawei', 'Samsung', 'Vivo', 'Oppo', 'Oneplus', 'Meizu', 'Nubia', 'Sony', 'Zte',
                            'Honor', 'Lenovo', 'Lg', 'Blu', 'Asus', 'Panasonic', 'Htc', 'Nokia', 'Motorola', 'Realme',
                            'Alcatel', 'BlackBerry']
@@ -154,7 +155,7 @@ class BiliGrpc:
         return proxy, channel
 
     async def _get_random_channel(self, is_need_channel: bool = False, is_use_available_proxy: bool = False) -> tuple[
-        ProxyTab, grpc.aio.Channel | None]:
+            ProxyTab, grpc.aio.Channel | None]:
         proxy_tab, _ = await get_available_proxy(is_use_available_proxy)
         channel = None
         if is_need_channel:
@@ -198,7 +199,8 @@ class BiliGrpc:
                 Dalvik = random.choice(self.Dalvik_list)
                 while not is_useable_Dalvik(Dalvik):
                     Dalvik = random.choice(self.Dalvik_list)
-                version_name_build: LatestVersionBuild = random.choice(self.version_name_build_list)
+                version_name_build: LatestVersionBuild = random.choice(
+                    self.version_name_build_list)
                 version_name = version_name_build.version
                 build = version_name_build.build
                 channel = random.choice(self.channel_list)
@@ -235,8 +237,8 @@ class BiliGrpc:
                             ticket=metadat_basic_info.ticket,
                             brand=metadat_basic_info.brand,
                         )
-                    except Exception as e:
-                        self.grpc_api_any_log.exception(f'激活metadata失败！')
+                    except Exception:
+                        self.grpc_api_any_log.exception('激活metadata失败！')
                     break
             metadata = MetaDataWrapper(
                 md=md,
@@ -326,7 +328,8 @@ class BiliGrpc:
             new_headers = []
             for k, v in md.md:
                 if isinstance(v, bytes):
-                    new_headers.append((k, base64.b64encode(v).decode('utf-8').strip('=')))
+                    new_headers.append(
+                        (k, base64.b64encode(v).decode('utf-8').strip('=')))
                     continue
                 if k == 'x-bili-trace-id':
                     new_headers.append((k, gen_trace_id()))
@@ -334,7 +337,8 @@ class BiliGrpc:
                 if k == 'x-bili-gaia-vtoken':
                     # if validate_token:
                     #     self.grpc_api_any_log.debug(f'x-bili-gaia-vtoken被覆盖！{validate_token}')
-                    new_headers.append((k, validate_token if validate_token else ''))
+                    new_headers.append(
+                        (k, validate_token if validate_token else ''))
                     continue
                 if isinstance(v, str):
                     new_headers.append((k, v))
@@ -345,10 +349,14 @@ class BiliGrpc:
             resp = Response(status_code=114514)
             try:
                 if 'gzip' in headers.get('grpc-encoding'):
-                    compressed_proto_bytes = gzip.compress(proto_bytes, compresslevel=6)
-                    data = b"\01" + len(compressed_proto_bytes).to_bytes(4, "big") + compressed_proto_bytes
+                    compressed_proto_bytes = gzip.compress(
+                        proto_bytes, compresslevel=6)
+                    data = b"\01" + \
+                        len(compressed_proto_bytes).to_bytes(
+                            4, "big") + compressed_proto_bytes
                 else:
-                    data = b"\01" + len(proto_bytes).to_bytes(4, "big") + proto_bytes
+                    data = b"\01" + \
+                        len(proto_bytes).to_bytes(4, "big") + proto_bytes
 
                 resp = await my_async_httpx.request(method="post",
                                                     url=url,
@@ -389,7 +397,8 @@ class BiliGrpc:
                             session_id=md.session_id,
                         )
                         if validate_token:
-                            self.grpc_api_any_log.debug(f'获取到-352验证token:{validate_token}')
+                            self.grpc_api_any_log.debug(
+                                f'获取到-352验证token:{validate_token}')
                             continue
                         else:
                             raise Request352Error(
@@ -421,7 +430,7 @@ class BiliGrpc:
                     curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
                     curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError,
                     TimeoutError
-            ) as httpx_err:
+            ):
                 if proxy_flag:
                     await handle_proxy_request_fail(proxy_tab=proxy, )
                     ipv6_proxy_weights += 1
@@ -433,7 +442,8 @@ class BiliGrpc:
                 if proxy:
                     if get_scheme_ip_port_form_proxy_dict(proxy.proxy) == self.my_proxy_addr:
                         self.latest_352_ts = int(time.time())
-                        self.grpc_api_any_log.debug(f'设置本地代理最后-352时间为：{self.latest_352_ts}')
+                        self.grpc_api_any_log.debug(
+                            f'设置本地代理最后-352时间为：{self.latest_352_ts}')
                     Voucher352_logger.warning(
                         f"代理{proxy.proxy} 报错-352 被封禁\n{url}\n{new_headers}\n{grpc_req_message}")
                     await handle_proxy_352(
@@ -443,7 +453,7 @@ class BiliGrpc:
                 else:
                     real_proxy_weights += 20
             except Exception as err:
-                if type(err) == DecodeError or type(err) == EncodeError:
+                if type(err) is DecodeError or type(err) is EncodeError:
                     self.grpc_api_any_log.error(
                         f'{func_name}\t'
                         f'解析grpc消息失败！\n'
@@ -510,9 +520,11 @@ class BiliGrpc:
                 return ret_dict
             except grpc.RpcError as e:
                 stat, det = grpc_error(e)
-                self.grpc_api_any_log.warning(f"\nBiliGRPC error: {stat} - {proxy['proxy']}")
+                self.grpc_api_any_log.warning(
+                    f"\nBiliGRPC error: {stat} - {proxy['proxy']}")
                 score_change = -10
-                if 'HTTP proxy returned response code 400' in det or 'OPENSSL_internal' in det:  # 400状态码表示代理可能是http1.1协议，不支持grpc的http2.0
+                # 400状态码表示代理可能是http1.1协议，不支持grpc的http2.0
+                if 'HTTP proxy returned response code 400' in det or 'OPENSSL_internal' in det:
                     score_change = -10
                 # 已知的不重要的错误
                 if det == 'Deadline Exceeded':
@@ -525,7 +537,8 @@ class BiliGrpc:
                     pass
                 else:
                     self.grpc_api_any_log.warning(
-                        f"{dyn_ids} grpc_api_get_DynDetails\n BiliGRPC error: {stat} - {det}\n{dyn_details_req}\n{type(e)}")  # 重大错误！
+                        # 重大错误！
+                        f"{dyn_ids} grpc_api_get_DynDetails\n BiliGRPC error: {stat} - {det}\n{dyn_details_req}\n{type(e)}")
                 proxy.status = -412
                 await SQLHelper.update_to_proxy_list(proxy, score_change)
 
@@ -575,7 +588,8 @@ class BiliGrpc:
         if type(dynamic_id) is int:
             dynamic_id = str(dynamic_id)
         if type(dynamic_id) is not str or not str.isdigit(dynamic_id):
-            raise TypeError(f'dynamic_id must be string type number! dynamic_id:{dynamic_id}')
+            raise TypeError(
+                f'dynamic_id must be string type number! dynamic_id:{dynamic_id}')
         url = f"{self.base_uri}/bilibili.app.dynamic.v2.Dynamic/DynDetail"
         data_dict = {
             # 'uid': random.randint(1, 3537105317792299),
@@ -640,6 +654,5 @@ if __name__ == '__main__':
         result1 = await bili_grpc.grpc_get_dynamic_detail_by_type_and_rid(dynamic_type=2, rid=343543865,
                                                                           force_proxy=True)
         print(result1)
-
 
     asyncio.run(_test())

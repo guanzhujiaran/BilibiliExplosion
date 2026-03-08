@@ -6,7 +6,7 @@ from pydantic.generics import GenericModel
 
 class CustomGenericModel(GenericModel):
     model_config = ConfigDict(
-        extra='allow',
+        extra="allow",
     )
 
     @computed_field
@@ -19,7 +19,9 @@ class CustomGenericModel(GenericModel):
         converted_data = self._convert_large_ints_to_str(original_data)
         return converted_data
 
-    def _convert_large_ints_to_str(self, data: Any) -> Union[Dict[str, Any], List[Any], str, int, float]:
+    def _convert_large_ints_to_str(
+        self, data: Any
+    ) -> Union[Dict[str, Any], List[Any], str, int, float]:
         max_safe_integer = 9007199254740991  # JavaScript 最大安全整数
 
         if isinstance(data, dict):
@@ -34,7 +36,7 @@ class CustomGenericModel(GenericModel):
 
 class CustomBaseModel(BaseModel):
     model_config = ConfigDict(
-        extra='allow',
+        extra="allow",
     )
 
     @computed_field
@@ -47,7 +49,9 @@ class CustomBaseModel(BaseModel):
         converted_data = self._convert_large_ints_to_str(original_data)
         return converted_data
 
-    def _convert_large_ints_to_str(self, data: Any) -> Union[Dict[str, Any], List[Any], str, int, float]:
+    def _convert_large_ints_to_str(
+        self, data: Any
+    ) -> Union[Dict[str, Any], List[Any], str, int, float]:
         max_safe_integer = 9007199254740991  # JavaScript 最大安全整数
 
         if isinstance(data, dict):
@@ -61,6 +65,12 @@ class CustomBaseModel(BaseModel):
 
 
 class CustomBaseModelHashable(ABC, CustomBaseModel):
+    """可哈希的自定义基础模型
+    Args:
+        ABC (_type_): _description_
+        CustomBaseModel (_type_): _description_
+    """
+
     @abstractmethod
     def __hash__(self) -> int:
         """

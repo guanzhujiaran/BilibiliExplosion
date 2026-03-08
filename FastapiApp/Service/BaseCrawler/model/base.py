@@ -21,10 +21,8 @@ class WorkerModel(CustomGenericModel, Generic[ParamsType]):
     params: ParamsType | None = None
     seqId: int = Field(..., description="任务序号（自增）从0开始")
     fetchStatus: WorkerStatus = Field(WorkerStatus.pending)
-    created_at: datetime = Field(
-        default_factory=datetime.now, description="创建时间")
-    updated_at: datetime = Field(
-        default_factory=datetime.now, description="更新时间")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
+    updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
 
     @property
     def fetchStatusStr(self) -> str:
@@ -36,5 +34,5 @@ class WorkerModel(CustomGenericModel, Generic[ParamsType]):
 
     def __setattr__(self, name, value):
         super().__setattr__(name, value)
-        if name != 'updated_at' and name in self.__class__.model_fields:
-            super().__setattr__('updated_at', datetime.now())
+        if name != "updated_at" and name in self.__class__.model_fields:
+            super().__setattr__("updated_at", datetime.now())
