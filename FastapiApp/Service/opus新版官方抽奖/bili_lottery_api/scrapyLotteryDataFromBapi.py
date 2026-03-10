@@ -64,7 +64,7 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
         return await self.pipeline(params.business_type, params.business_id)
 
     def __init__(
-        self, log, business_type: BusinessType, sem_num=1, max_stop_count=10000
+        self, log, business_type: BusinessType, sem_num=1
     ):
         self.__business_type: BusinessType = business_type
         self.default_dyn_rid = 346492727
@@ -77,15 +77,11 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
 
         self._cur_stop_times = 0
         self.latest_ts = 0
-        self._max_stop_count = max_stop_count
-        self.null_counter_plugin = SequentialNullStopPlugin(
-            self, max_consecutive_nulls=self._max_stop_count
-        )
         self.stats_plugin = StatsPlugin(self)
         super().__init__(
             max_sem=self.sem_limit,
             _logger=log,
-            plugins=[self.stats_plugin, self.null_counter_plugin],
+            plugins=[self.stats_plugin],
         )
 
     async def solve_dyn_data(self, data: dict, rid: int) -> WorkerStatus:
