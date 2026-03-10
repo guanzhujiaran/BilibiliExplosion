@@ -86,7 +86,7 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
 
     async def solve_dyn_data(self, data: dict, rid: int) -> WorkerStatus:
         business_id = data.get("business_id")
-        if len(str(business_id)) >= 18:
+        if business_id is not None and len(str(business_id)) >= 18:
             dynamic_ts = dynamic_id_2_ts(business_id)
             if int(time.time()) - dynamic_ts < self.min_dyn_sep_ts:
                 self._cur_stop_times += 1

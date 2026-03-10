@@ -2,7 +2,7 @@ import datetime
 import inspect
 import time
 from enum import StrEnum
-from typing import Any, Optional
+from typing import Any
 import numpy as np
 from Service.BaseCrawler.base.core import ParamsType, BaseCrawler
 from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus
@@ -12,8 +12,9 @@ from Utils.Tool import ts_2_DateTime
 
 class CrawlerHealthStatus(StrEnum):
     """爬虫健康状态枚举"""
+
     NORMAL = "normal"  # 正常运行
-    STUCK = "stuck"    # 爬虫卡住
+    STUCK = "stuck"  # 爬虫卡住
     STOPPED = "stopped"  # 已停止
 
 
@@ -22,24 +23,33 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
     一个用于收集和提供爬虫运行统计信息的插件。
     """
 
-    def __init__(self, crawler: Optional[BaseCrawler[ParamsType]] = None):
+    def __init__(self, crawler: BaseCrawler[ParamsType]):
         super().__init__(crawler)
-        self._init_params: Optional[WorkerModel] = None
-        self._end_params: Optional[WorkerModel] = None
-        self._end_success_params: Optional[WorkerModel] = None
+        self._init_params: WorkerModel | None = None
+        self._end_params: WorkerModel | None = None
+        self._end_success_params: WorkerModel | None = None
+        self._end_null_params: WorkerModel | None = None
         self._is_running: bool = False
         self._start_time: float = time.time()  # Stores the monotonic start time
-        self._last_update_time: float = 0.0  # Stores the wall clock time of last worker finish
+        self._last_update_time: float = (
+            0.0  # Stores the wall clock time of last worker finish
+        )
         self._processed_items_count: int = 0  # Fundamental counter
         self._null_count: int = 0
         self._succ_count: int = 0
-        self._running_params_set: set[WorkerModel] = set()  # 把参数转换成字符串,避免unhashable的参数
+        self._running_params_set: set[WorkerModel] = (
+            set()
+        )  # 把参数转换成字符串,避免unhashable的参数
 
     async def on_run_start(self, init_params: WorkerModel):
         """
         在爬虫的 run 方法开始执行时触发，记录初始参数并重置统计数据。
         """
-        self.log.info(self.crawler.format_log(f"StatsPlugin: Crawler run started. Init params: {init_params}"))
+        self.log.info(
+            self.crawler.format_log(
+                f"StatsPlugin: Crawler run started. Init params: {init_params}"
+            )
+        )
         self._init_params = init_params
         self._is_running = True
         self._start_time = time.time()
@@ -60,8 +70,9 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         if worker_model.fetchStatus in (WorkerStatus.complete, WorkerStatus.nullData):
             self._succ_count += 1
             if worker_model.fetchStatus == WorkerStatus.complete:
-                self._end_success_params = worker_model.params
+                self._end_success_params = worker_model
             if worker_model.fetchStatus == WorkerStatus.nullData:
+                self._end_null_params = worker_model
                 self._null_count += 1
         self._end_params = worker_model.params
         # Log current speed by calling the property, which calculates it on demand
@@ -69,7 +80,9 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self.log.debug(
             self.crawler.format_log(
                 f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
-                f"Current Speed: {self.crawling_speed:.2f} items/s"))
+                f"Current Speed: {self.crawling_speed:.2f} items/s"
+            )
+        )
         await super().on_worker_end(worker_model)
 
     async def on_worker_start(self, worker_model: WorkerModel):
@@ -81,13 +94,19 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         在爬虫的 run 方法完全结束时触发，记录最终参数。
         总时长和速度的计算现在放在 property 中。
         """
-        self.log.info(self.crawler.format_log(f"StatsPlugin: Crawler run ended. End params: {end_param}"))
+        self.log.info(
+            self.crawler.format_log(
+                f"StatsPlugin: Crawler run ended. End params: {end_param}"
+            )
+        )
         self._end_params = end_param
         self._is_running = False
         # No need to calculate _total_run_duration or _current_speed here,
         # the properties will return the final values when accessed.
 
-        self.log.info(self.crawler.format_log(f"""StatsPlugin Summary:"
+        self.log.info(
+            self.crawler.format_log(
+                f"""StatsPlugin Summary:"
   Initial Params: {self._init_params}")
   Final Params: {self._end_params}")
   Is Running: {self._is_running}")
@@ -95,18 +114,20 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
   Total Duration: {self.total_run_duration:.2f} seconds")
   Average Speed: {self.crawling_speed:.2f} items/second")
   Last Update Time: {time.ctime(self.last_update_time)}
-  Success Count: {self.succ_count}"""))
+  Success Count: {self.succ_count}"""
+            )
+        )
         await super().on_run_end(end_param)
 
     # --- Public properties to access statistics ---
 
     @property
-    def init_params(self) -> Optional[WorkerModel]:
+    def init_params(self) -> WorkerModel | None:
         """最开始的参数"""
         return self._init_params
 
     @property
-    def end_params(self) -> Optional[WorkerModel]:
+    def end_params(self) -> WorkerModel | None:
         """最后的参数"""
         return self._end_params
 
@@ -199,15 +220,17 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         current_time = datetime.datetime.now()
         one_day_ago = current_time - datetime.timedelta(days=1)
 
-        for worker_model in self.running_params_set:
-            if worker_model.updated_at < one_day_ago:
-                return CrawlerHealthStatus.STUCK
+        if next(
+            (wm for wm in self.running_params_set if wm.updated_at < one_day_ago),
+            None,
+        ):
+            return CrawlerHealthStatus.STUCK
 
         return CrawlerHealthStatus.NORMAL
 
     def get_all_status(self) -> dict:
         """
-            使用反射自动收集所有 @property 属性的当前值。
+        使用反射自动收集所有 @property 属性的当前值。
         """
         result = {}
 
@@ -215,7 +238,9 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         cls = type(self)
 
         # 遍历类的所有成员，找出是 property 的属性
-        for name, prop in inspect.getmembers(cls, predicate=lambda x: isinstance(x, property)):
+        for name, prop in inspect.getmembers(
+            cls, predicate=lambda x: isinstance(x, property)
+        ):
             try:
                 # 通过 getattr 动态获取属性值
                 value = getattr(self, name)
@@ -231,9 +256,11 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
     一个用于在连续多个任务（按原始生成顺序）返回 null 结果时触发停止的插件。
     """
 
-    def __init__(self,
-                 crawler: Optional["BaseCrawler[ParamsType]"] = None,
-                 max_consecutive_nulls: int = 5):
+    def __init__(
+        self,
+        crawler: "BaseCrawler[ParamsType]",
+        max_consecutive_nulls: int = 5,
+    ):
         super().__init__(crawler)
         self._max_consecutive_nulls: int = max_consecutive_nulls
         # --- 核心状态变量 ---
@@ -243,9 +270,13 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
 
     async def on_run_start(self, init_params: WorkerModel):
         """
-               在爬虫运行开始时重置所有状态变量。
-               """
-        self.log.info(self.crawler.format_log(f"插件启动，连续 {self._max_consecutive_nulls} 个 null 将触发停止。"))
+        在爬虫运行开始时重置所有状态变量。
+        """
+        self.log.info(
+            self.crawler.format_log(
+                f"插件启动，连续 {self._max_consecutive_nulls} 个 null 将触发停止。"
+            )
+        )
         self._status_vector = np.array([])
         self._sequential_null_count = 0
         await super().on_run_start(init_params)
@@ -258,7 +289,9 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
         current_len = len(self._status_vector)
         if task_id >= current_len:
             needed_extension = task_id - current_len + 1
-            self._status_vector = np.append(self._status_vector, [WorkerStatus.pending] * needed_extension)
+            self._status_vector = np.append(
+                self._status_vector, [WorkerStatus.pending] * needed_extension
+            )
         # 直接在相应位置记录状态
         self._status_vector[task_id] = status
 
@@ -297,20 +330,27 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
 
     async def should_stop_check(self) -> bool:
         """
-       高效地检查是否应停止爬虫。
-       1. 计算全局最长的 null 序列。
-       2. 将其赋值给 self._sequential_null_count。
-       3. 判断是否满足停止条件。
-       """
+        高效地检查是否应停止爬虫。
+        1. 计算全局最长的 null 序列。
+        2. 将其赋值给 self._sequential_null_count。
+        3. 判断是否满足停止条件。
+        """
         # 步骤 1: 调用辅助函数，计算当前全局的最大连续 null 计数
         self._sequential_null_count = self._calculate_max_streak()
         # (可选) 日志记录，便于调试
-        self.log.debug(self.crawler.format_log(f"全局最长连续 null 计数已更新为: {self._sequential_null_count}"))
+        self.log.debug(
+            self.crawler.format_log(
+                f"全局最长连续 null 计数已更新为: {self._sequential_null_count}"
+            )
+        )
 
         # 步骤 3: 使用新赋值的变量来判断是否停止
         if self._sequential_null_count >= self._max_consecutive_nulls:
             self.log.warning(
-                self.crawler.format_log(f"连续 null 计数已达到最大值 {self._max_consecutive_nulls}，将停止运行。"))
+                self.crawler.format_log(
+                    f"连续 null 计数已达到最大值 {self._max_consecutive_nulls}，将停止运行。"
+                )
+            )
             return True
 
         return False
@@ -321,7 +361,9 @@ class SequentialNullStopPlugin(CrawlerPlugin[ParamsType]):
         """
         self._sequential_null_count = self._calculate_max_streak()
         self.log.info(
-            self.crawler.format_log(f"插件结束。最终已处理的连续 null 计数: {self._sequential_null_count}。")
+            self.crawler.format_log(
+                f"插件结束。最终已处理的连续 null 计数: {self._sequential_null_count}。"
+            )
         )
         await super().on_run_end(end_param)
 
