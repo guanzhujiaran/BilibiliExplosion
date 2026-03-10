@@ -8,7 +8,10 @@ from log.base_log import official_lot_logger, reserve_lot_logger
 from Models.base.custom_pydantic import CustomBaseModelHashable
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerStatus
-from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
+from Service.BaseCrawler.plugin.statusPlugin import (
+    SequentialNullStopPlugin,
+    StatsPlugin,
+)
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GrpcModule.Grpc.Bapi.BiliApi import reserve_relation_info, get_lot_notice
 from Utils.dynamic_id_caculate import dynamic_id_2_ts
@@ -16,7 +19,9 @@ from Utils.PushMe import a_pushme
 from Utils.redisTool.RedisManager import RedisManagerBase
 
 BusinessIdType = Annotated[int, Field(gt=0)]  # 正整数
-BusinessType = Annotated[Literal[2, 10], Field(description="业务类型。2:官方抽奖；10：预约抽奖")]
+BusinessType = Annotated[
+    Literal[2, 10], Field(description="业务类型。2:官方抽奖；10：预约抽奖")
+]
 
 
 class BusinessParams(CustomBaseModelHashable):
@@ -46,18 +51,21 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
     async def is_stop(self) -> bool:
         return self._cur_stop_times >= self.__max_stop_times
 
-    async def key_params_gen(self, params: BusinessParams) -> AsyncGenerator[BusinessParams, None]:
+    async def key_params_gen(
+        self, params: BusinessParams
+    ) -> AsyncGenerator[BusinessParams, None]:
         while 1:
             params = BusinessParams(
-                business_type=params.business_type,
-                business_id=params.business_id + 1
+                business_type=params.business_type, business_id=params.business_id + 1
             )
             yield params
 
     async def handle_fetch(self, params: BusinessParams) -> WorkerStatus:
         return await self.pipeline(params.business_type, params.business_id)
 
-    def __init__(self, log, business_type: BusinessType, sem_num=2):
+    def __init__(
+        self, log, business_type: BusinessType, sem_num=1, max_stop_count=10000
+    ):
         self.__business_type: BusinessType = business_type
         self.default_dyn_rid = 346492727
         self.default_reserve_sid = 4234284
@@ -69,63 +77,72 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
 
         self._cur_stop_times = 0
         self.latest_ts = 0
-
+        self._max_stop_count = max_stop_count
+        self.null_counter_plugin = SequentialNullStopPlugin(
+            self, max_consecutive_nulls=self._max_stop_count
+        )
         self.stats_plugin = StatsPlugin(self)
         super().__init__(
             max_sem=self.sem_limit,
             _logger=log,
-            plugins=[self.stats_plugin],
+            plugins=[self.stats_plugin, self.null_counter_plugin],
         )
 
-    async def solve_dyn_data(self, data: dict, rid: int):
-        business_id = data.get('business_id')
-        if len(str(business_id))>=18:
+    async def solve_dyn_data(self, data: dict, rid: int) -> WorkerStatus:
+        business_id = data.get("business_id")
+        if len(str(business_id)) >= 18:
             dynamic_ts = dynamic_id_2_ts(business_id)
             if int(time.time()) - dynamic_ts < self.min_dyn_sep_ts:
                 self._cur_stop_times += 1
                 self.latest_ts = dynamic_ts
             await self.redis_helper.set_id(self.redis_helper.RedisMap.dyn_rid, rid)
+            return WorkerStatus.complete
         else:
-            self.log.critical(f'lottery_notice api：{data} 获取动态时间失败！')
+            self.log.critical(f"lottery_notice api：{data} 获取动态时间失败！")
+            return WorkerStatus.nullData
 
-    async def solve_reserve_data(self, data: dict):
-        reserve_sid = data.get('business_id')
+    async def solve_reserve_data(self, data: dict) -> WorkerStatus:
+        reserve_sid = data.get("business_id")
         reserve_resp = await reserve_relation_info(ids=reserve_sid)
-        if da := reserve_resp.get('data'):
-            stime = da.get('list', {}).get(str(reserve_sid), {}).get('stime')
+        if da := reserve_resp.get("data"):
+            stime = da.get("list", {}).get(str(reserve_sid), {}).get("stime")
             if isinstance(stime, int):
                 if int(time.time()) - stime < self.min_reserve_sep_ts:
                     self._cur_stop_times += 1
                     self.latest_ts = stime
             else:
-                self.log.critical(f'business_id：{data} 获取预约时间失败：{reserve_resp}')
-            await self.redis_helper.set_id(self.redis_helper.RedisMap.reserve_sid, reserve_sid)
+                self.log.critical(
+                    f"business_id：{data} 获取预约时间失败：{reserve_resp}"
+                )
+            await self.redis_helper.set_id(
+                self.redis_helper.RedisMap.reserve_sid, reserve_sid
+            )
+            return WorkerStatus.complete
         else:
-            self.log.critical(f'business_id：{data} 获取响应失败！')
+            self.log.critical(f"business_id：{data} 获取响应失败！")
+            return WorkerStatus.nullData
 
     async def pipeline(
-            self,
-            business_type: BusinessType,
-            business_id: BusinessIdType
+        self, business_type: BusinessType, business_id: BusinessIdType
     ) -> WorkerStatus:
         try:
             resp_dict = await get_lot_notice(business_type, business_id)
-            self.log.debug(f'params 【{business_type},{business_id}】\n'
-                           f' {resp_dict} \n'
-                           f'latest_ts:{self.latest_ts}\n'
-                           f'{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.latest_ts))}')
-            if data := resp_dict.get('data'):
+            self.log.debug(
+                f"params 【{business_type},{business_id}】\n"
+                f" {resp_dict} \n"
+                f"latest_ts:{self.latest_ts}\n"
+                f'{time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.latest_ts))}'
+            )
+            if data := resp_dict.get("data"):
                 await BiliLotDataPublisher.pub_upsert_official_reserve_charge_lot(
-                    da=data,
-                    extra_routing_key=self.__class__.__name__
+                    da=data, extra_routing_key=self.__class__.__name__
                 )
                 match business_type:
                     case 2:
-                        await self.solve_dyn_data(data, rid=business_id)
+                        return await self.solve_dyn_data(data, rid=business_id)
                     case 10:
-                        await self.solve_reserve_data(data)
-
-            return WorkerStatus.complete
+                        return await self.solve_reserve_data(data)
+            return WorkerStatus.nullData
         except Exception as e:
             self.log.exception(e)
             raise e
@@ -134,29 +151,35 @@ class LotteryApiRobot(UnlimitedCrawler[BusinessParams]):
         try:
             match self.__business_type:
                 case 2:
-                    await self.run(BusinessParams(
-                        business_type=2,
-                        business_id=await self.redis_helper.get_id(
-                            self.redis_helper.RedisMap.dyn_rid) or self.default_dyn_rid
-                    ))
+                    await self.run(
+                        BusinessParams(
+                            business_type=2,
+                            business_id=await self.redis_helper.get_id(
+                                self.redis_helper.RedisMap.dyn_rid
+                            )
+                            or self.default_dyn_rid,
+                        )
+                    )
                 case 10:
-                    await self.run(BusinessParams(
-                        business_type=10,
-                        business_id=await self.redis_helper.get_id(
-                            self.redis_helper.RedisMap.reserve_sid) or self.default_reserve_sid
-                    ))
+                    await self.run(
+                        BusinessParams(
+                            business_type=10,
+                            business_id=await self.redis_helper.get_id(
+                                self.redis_helper.RedisMap.reserve_sid
+                            )
+                            or self.default_reserve_sid,
+                        )
+                    )
         except Exception as e:
-            self.log.exception(f'[{__name__}] 发生异常！{e}')
-            await a_pushme(title=f'爬取B站lottery异常', content=str(e))
+            self.log.exception(f"[{__name__}] 发生异常！{e}")
+            await a_pushme(title=f"爬取B站lottery异常", content=str(e))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+
     async def _test():
         bp = BusinessParams(business_id=1, business_type=2)
         print(bp)
         # await asyncio.gather(lottery_api_robot_dyn.main(), lottery_api_robot_reserve.main())
 
-
-    asyncio.run(_test(
-
-    ))
+    asyncio.run(_test())

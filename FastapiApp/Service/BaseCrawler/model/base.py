@@ -27,7 +27,10 @@ class WorkerModel(CustomGenericModel, Generic[ParamsType]):
     @property
     def fetchStatusStr(self) -> str:
         """将 WorkerStatus 枚举转换为字符串"""
-        return self.fetchStatus.name
+        for i in WorkerStatus:
+            if i.value == self.fetchStatus:
+                return str(i)
+        return "unknown"
 
     def __hash__(self) -> int:
         return hash((self.seqId or 0, str(self.params)))

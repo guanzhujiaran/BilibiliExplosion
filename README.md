@@ -69,3 +69,6 @@
 ## 许可证
 
 MIT
+
+## 注意事项
+1.使用codebuddy之类的vscode魔改ide时，pylance在插件库找不到的话需要自己安装旧版本，ms-python.python(2023.4.1)和ms-python.vscode-pylance(2023.10.21)

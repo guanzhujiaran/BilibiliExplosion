@@ -20,17 +20,17 @@ from Models.v1.background_service.background_service_model import BackgroundServ
 
 
 class BackgroundService:
-    DYN_DETAIL_DATABASE_CLEANER: BaseScheduler = None
-    GET_PROXY_METHODS_SCHEDULER: GenericCrawlerScheduler = None
-    SAMSCCLUB_SCHEDULER: GenericCrawlerScheduler = None
-    SAMSCCLUB_SPU_DETAIL_SCHEDULER: GenericCrawlerScheduler = None
-    GET_RESERVE_INFO: GenericCrawlerScheduler = None
-    GET_DYN: GenericCrawlerScheduler = None
-    GET_TOPIC: GenericCrawlerScheduler = None
-    REFRESH_BILI_LOTDATA_DATABASE: GenericCrawlerScheduler = None
-    LOTTERY_API_ROBOT_DYN_SCHEDULER: GenericCrawlerScheduler = None
-    LOTTERY_API_ROBOT_RESERVE_SCHEDULER: GenericCrawlerScheduler = None
-    GMFLV2_SCHEDULER: GenericCrawlerScheduler = None
+    DYN_DETAIL_DATABASE_CLEANER: BaseScheduler | None = None
+    GET_PROXY_METHODS_SCHEDULER: GenericCrawlerScheduler | None = None
+    SAMSCCLUB_SCHEDULER: GenericCrawlerScheduler | None = None
+    SAMSCCLUB_SPU_DETAIL_SCHEDULER: GenericCrawlerScheduler | None = None
+    GET_RESERVE_INFO: GenericCrawlerScheduler | None = None
+    GET_DYN: GenericCrawlerScheduler | None = None
+    GET_TOPIC: GenericCrawlerScheduler | None = None
+    REFRESH_BILI_LOTDATA_DATABASE: GenericCrawlerScheduler | None = None
+    LOTTERY_API_ROBOT_DYN_SCHEDULER: GenericCrawlerScheduler | None = None
+    LOTTERY_API_ROBOT_RESERVE_SCHEDULER: GenericCrawlerScheduler | None = None
+    GMFLV2_SCHEDULER: GenericCrawlerScheduler | None = None
 
     def __init__(self):
         self.DYN_DETAIL_DATABASE_CLEANER = BaseScheduler(
@@ -76,7 +76,7 @@ class BackgroundService:
         )
         self.LOTTERY_API_ROBOT_DYN_SCHEDULER = GenericCrawlerScheduler(
             crawler=LotteryApiRobot(
-                log=official_lot_logger, business_type=2, sem_num=2
+                log=official_lot_logger, business_type=2, sem_num=1
             ),
             cron_expr="0 1 * * *",
             default_interval_seconds=15 * 3600,
@@ -84,7 +84,7 @@ class BackgroundService:
         )
         self.LOTTERY_API_ROBOT_RESERVE_SCHEDULER = GenericCrawlerScheduler(
             crawler=LotteryApiRobot(
-                log=reserve_lot_logger, business_type=10, sem_num=2
+                log=reserve_lot_logger, business_type=10, sem_num=1
             ),
             cron_expr="0 1 * * *",
             default_interval_seconds=15 * 3600,
