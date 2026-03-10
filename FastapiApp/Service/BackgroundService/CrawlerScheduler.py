@@ -76,7 +76,7 @@ class BackgroundService:
         )
         self.LOTTERY_API_ROBOT_DYN_SCHEDULER = GenericCrawlerScheduler(
             crawler=LotteryApiRobot(
-                log=official_lot_logger, business_type=2, sem_num=1
+                log=official_lot_logger, business_type=2, sem_num=2
             ),
             cron_expr="0 1 * * *",
             default_interval_seconds=15 * 3600,
@@ -84,7 +84,7 @@ class BackgroundService:
         )
         self.LOTTERY_API_ROBOT_RESERVE_SCHEDULER = GenericCrawlerScheduler(
             crawler=LotteryApiRobot(
-                log=reserve_lot_logger, business_type=10, sem_num=1
+                log=reserve_lot_logger, business_type=10, sem_num=2
             ),
             cron_expr="0 1 * * *",
             default_interval_seconds=15 * 3600,
