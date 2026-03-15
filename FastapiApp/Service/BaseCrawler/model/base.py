@@ -15,7 +15,7 @@ class WorkerStatus(Enum):
 
     pending = 3
     fail = 4
-
+    timeoutError=5
 
 class WorkerModel(CustomGenericModel, Generic[ParamsType]):
     params: ParamsType | None = None
@@ -23,6 +23,7 @@ class WorkerModel(CustomGenericModel, Generic[ParamsType]):
     fetchStatus: WorkerStatus = Field(WorkerStatus.pending)
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
     updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
+    retry_count: int = Field(0, description="重试次数")
 
     @property
     def fetchStatusStr(self) -> str:

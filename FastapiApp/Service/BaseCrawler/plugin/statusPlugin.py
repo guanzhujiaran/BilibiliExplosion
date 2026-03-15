@@ -77,12 +77,12 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         self._end_params = worker_model.params
         # Log current speed by calling the property, which calculates it on demand
         self._running_params_set.discard(worker_model)
-        self.log.debug(
-            self.crawler.format_log(
-                f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
-                f"Current Speed: {self.crawling_speed:.2f} items/s"
-            )
-        )
+        # self.log.debug(
+        #     self.crawler.format_log(
+        #         f"StatsPlugin: params:{worker_model.params} Worker finished. Total processed: {self._processed_items_count}, "
+        #         f"Current Speed: {self.crawling_speed:.2f} items/s"
+        #     )
+        # )
         await super().on_worker_end(worker_model)
 
     async def on_worker_start(self, worker_model: WorkerModel):

@@ -53,14 +53,14 @@ class ReserveParams(CustomBaseModelHashable):
 
 
 class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
-    async def on_run_end(self, end_param):
+    async def on_run_end(self, end_param:WorkerModel):
         """
             退出时必定执行
         """
-        reserve_lot_logger.critical(f'开始将日志写入文件')
+        self.log.critical(f'开始将日志写入文件')
         await self.write_in_file()
-        reserve_lot_logger.critical(f'日志写入文件完成')
-        reserve_lot_logger.critical(f'开始获取本轮统计信息')
+        self.log.critical(f'日志写入文件完成')
+        self.log.critical(f'开始获取本轮统计信息')
         latest_reserve_lots = await self.generate_update_reserve_lotterys_by_round_id(self.now_round_id)
         new_round_info = TReserveRoundInfo(
             round_id=self.now_round_id,

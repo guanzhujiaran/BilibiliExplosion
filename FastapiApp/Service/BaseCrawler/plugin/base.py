@@ -63,4 +63,4 @@ class CrawlerPlugin(ABC, Generic[ParamsType]):
                 f"Plugin {self.__class__.__name__} must be bound to a crawler before registration."
             )
         self.log = self.crawler.log
-        self.log.debug(f"Plugin {self.__class__.__name__} registered.")
+        # self.log.debug(f"Plugin {self.__class__.__name__} registered.")

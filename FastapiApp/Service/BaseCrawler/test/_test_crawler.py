@@ -1,66 +1,203 @@
 import asyncio
-from typing import AsyncGenerator
+import random
+from typing import AsyncGenerator, Literal
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
-from Service.BaseCrawler.model.base import WorkerStatus
-from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin, SequentialNullStopPlugin
+from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus
+from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Models.base.custom_pydantic import CustomBaseModelHashable
+import loguru
+import sys
+loguru.logger.remove()
+loguru.logger.add(sys.stderr, level="INFO")
 
 
 class TestParamsType(CustomBaseModelHashable):
     a: int
+    test_type: Literal["normal", "timeout",
+                       "error"] = "normal"  # normal, timeout, error
 
     def __hash__(self) -> int:
         return hash(self.a)
 
 
 class TestCrawler(UnlimitedCrawler):
-    def __init__(self):
+    def __init__(self, gen_num: int = 1000):
         self.stats_plugin = StatsPlugin(self)
-        self.null_stop_plugin = SequentialNullStopPlugin(self)
 
         super().__init__(
-            plugins=[self.null_stop_plugin, self.stats_plugin]
+            plugins=[self.stats_plugin],  # 启用 StatsPlugin
+            requeue_on_fetch_fail=True,   # 启用失败重试
+            requeue_on_timeout=True,     # 暂时禁用超时重试
+            max_retries=-1,                # 最大重试次数（-1表示无限重试）
+            worker_max_timeout=None,       # 暂时禁用超时
+            log_timeout_error=False,
+            log_error=False,
+            max_sem=1  # 暂时改为2，避免 max_sem=1 的潜在问题
         )
         self._count = 0
         print('初始化')
-        self.params_arr = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]
-        self.mode = True
+        self.params_arr = []
+        self.limit_mode = True
+        self.success_count = 0
+        self.fail_count = 0
+        self.timeout_count = 0
+        self.gen_num: int = gen_num
+        self.all_results = ["normal", "error", "timeout"]
+        self._mode = "mixed"  # 记录当前模式
+        self._count = 0
+        self._original_test_types = {}  # 保存原始的 test_type，用于统计
+        print('初始化')
+        self.params_arr = []
+        self.limit_mode = True
+        self.success_count = 0
+        self.fail_count = 0
+        self.timeout_count = 0
+        self.gen_num: int = gen_num
+        self.all_results = ["normal", "error", "timeout"]
 
-    async def handle_fetch(self, params: int) -> WorkerStatus:
-        print(params)
-        self._count += 1
-        # await asyncio.sleep(random.random() * 100)
+    async def handle_fetch(self, params: TestParamsType) -> WorkerStatus:
+        # 保存原始的 test_type（只在第一次执行时保存）
+        if params.a not in self._original_test_types:
+            self._original_test_types[params.a] = params.test_type
 
-        return WorkerStatus.nullData
+        # 根据测试类型模拟不同的场景
+        if params.test_type == "timeout":
+            # 模拟超时：睡眠超过 worker_max_timeout (2秒)
+            await asyncio.sleep(3)
+            return WorkerStatus.complete
+        elif params.test_type == "error":
+            # 模拟错误：总是抛出异常
+            raise Exception(f"模拟错误: 任务 {params.a}")
+        else:
+            # 正常任务：总是返回成功状态，避免无限重试
+            return WorkerStatus.complete
+
+    async def on_task_requeue(self, worker_model: WorkerModel):
+        """任务重新入队前，随机重新分配参数类型"""
+        # 随着重试次数增加，增加分配为 normal 的概率
+        # 这样可以确保任务最终会成功，避免无限重试
+        retry_count = worker_model.retry_count
+        # 基础概率：30% normal，35% error，35% timeout
+        # 每次重试增加 10% 的 normal 概率，最多 90%
+        normal_prob = min(0.3 + retry_count * 0.1, 0.9)
+        remaining = 1.0 - normal_prob
+        error_prob = remaining / 2
+        timeout_prob = remaining / 2
+
+        rand_val = random.random()
+        if rand_val < normal_prob:
+            worker_model.params.test_type = "normal"
+        elif rand_val < normal_prob + error_prob:
+            worker_model.params.test_type = "error"
+        else:
+            worker_model.params.test_type = "timeout"
+
+        print(f"任务 {worker_model.params.a} 第 {worker_model.retry_count} 次重试, 分配类型为: {worker_model.params.test_type} (normal_prob={normal_prob:.2f})")
+
+    async def on_worker_end(self, worker_model: WorkerModel):
+        """只在第一次执行时统计(不统计重试)"""
+        if worker_model.retry_count == 0:
+            self._count += 1
+            # 使用保存的原始测试类型，而不是 worker_model.params.test_type
+            # 因为 params.test_type 在 on_task_requeue 中会被修改
+            task_id = worker_model.params.a
+            test_type = self._original_test_types.get(
+                task_id, worker_model.params.test_type)
+            if worker_model.fetchStatus == WorkerStatus.complete:
+                if test_type == "timeout":
+                    self.timeout_count += 1
+                elif test_type == "error":
+                    self.fail_count += 1
+                else:
+                    self.success_count += 1
+            elif worker_model.fetchStatus == WorkerStatus.fail:
+                # 失败的任务（非重试）也统计
+                if test_type == "timeout":
+                    self.timeout_count += 1
+                elif test_type == "error":
+                    self.fail_count += 1
+                else:
+                    self.success_count += 1
+            elif worker_model.fetchStatus == WorkerStatus.timeoutError:
+                self.timeout_count += 1
+        # 调用 super().on_worker_end()，让插件回调正常执行
+        await super().on_worker_end(worker_model)
 
     async def key_params_gen(self, params: TestParamsType) -> AsyncGenerator[TestParamsType, None]:
-        if self.mode:
-            for i in self.params_arr:
-                yield TestParamsType(a=i)
+        if self.limit_mode:
+            # 简化测试用例
+            test_cases = [
+                (1, "normal"),
+                (2, "error"),    # 会失败并重试
+                (3, "normal"),
+                (4, "error"),
+                (5, "error"),
+                (6, "error"),
+                (7, "timeout"),
+                (8, "error"),
+                (9, "timeout"),
+                (10, "error"),
+                (11, "timeout"),
+                (12, "error"),
+            ]
+            for i, (value, test_type) in enumerate(test_cases):
+                print(
+                    f"[生成器] 准备 yield 第 {i+1} 个任务: a={value}, test_type={test_type}")
+                yield TestParamsType(a=value, test_type=test_type)
+                print(f"[生成器] 完成 yield 第 {i+1} 个任务")
+            print(f"[生成器] 所有任务已 yield，生成器结束")
             return
         else:
-            while 1:
-                yield TestParamsType(a=params.a)
-                params.a += 1
+            # 第二种模式：生成有限数量任务用于测试重试机制
+            # 初始化起始值
+            start_id = params.a if params is not None else 1
+            for i in range(start_id, start_id + self.gen_num):
+                # 随机选择任务类型
+                test_type = random.choice(self.all_results)
+                yield TestParamsType(a=i, test_type=test_type)
+            # 显式返回,结束生成器
+            print("key_params_gen: 生成器返回,结束")
+            return
 
     async def is_stop(self) -> bool:
-        if self._count > 150:
-            return True
         return False
 
     async def on_run_end(self, end_param):
         print(f'结束参数：{end_param}')
+        print(
+            f'统计信息: 成功={self.success_count}, 失败={self.fail_count}, 超时={self.timeout_count}, 总计={self._count}')
+        print(f'模式: {self._mode}, gen_num: {self.gen_num}')
 
     async def main(self):
-        await self.run(init_params= TestParamsType(a=self.params_arr[0]))
-        self.mode = False
-        await self.run(init_params= TestParamsType(a=0))
+        print("\n=== 第一种模式：混合测试 ===")
+        self.limit_mode = True
+        self._mode = "mixed"
+        await self.run()
+        print(self.stats_plugin.get_all_status())
+        print("\n=== 最终统计 ===")
+        print(
+            f'=== 第一种模式：混合测试 === \n统计信息: 成功={self.success_count}, 失败={self.fail_count}, 超时={self.timeout_count}, 总计={self._count}')
+        print("\n=== 第二种模式：随机测试 ===")
+        self.limit_mode = False
+        self._mode = "random"
+        # 为第二种模式设置较小的任务数量，避免长时间运行
+        self.gen_num = 20
+        # 重置统计
+        self._count = 0
+        self.success_count = 0
+        self.fail_count = 0
+        self.timeout_count = 0
+        self._original_test_types.clear()  # 清空原始类型记录
+        await self.run()
+        print(self.stats_plugin.get_all_status())
+        print("\n=== 最终统计 ===")
+        print(
+            f'=== 第二种模式：随机测试 ===\n统计信息: 成功={self.success_count}, 失败={self.fail_count}, 超时={self.timeout_count}, 总计={self._count}')
 
 
 async def _test():
-    a = TestCrawler()
+    a = TestCrawler(gen_num=100)
     await a.main()
-    print(a.stats_plugin.get_all_status())
 
 
 if __name__ == "__main__":
