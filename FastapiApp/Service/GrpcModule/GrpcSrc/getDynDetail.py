@@ -78,7 +78,8 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
             _logger=official_lot_logger,
             plugins=[self.status_plugin],
             worker_max_timeout=300,
-            requeue_on_fetch_fail=False
+            requeue_on_fetch_fail=False,
+            log_timeout_error=False
         )
 
     async def handle_fetch(self, params: DynDetailParams):

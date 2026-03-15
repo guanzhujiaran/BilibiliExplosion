@@ -43,6 +43,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         plugins: List[CrawlerPlugin[ParamsType]] = None,
         requeue_on_fetch_fail: bool = False,
         worker_max_timeout: int | None = None,
+        log_timeout_error: bool = True,
         *args,
         **kwargs,
     ):
@@ -65,6 +66,11 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                 整数: 设置超时时间，超时后会抛出 asyncio.TimeoutError
                 默认为 None（未在当前实现中使用，保留用于扩展）
 
+            log_timeout_error (bool, optional): 是否打印超时错误日志
+                True: 打印超时错误日志（默认）
+                False: 不打印超时错误日志
+                默认为 True
+
             *args, **kwargs: 传递给父类 BaseCrawler 的参数
                 包括：max_sem（最大并发数）、_logger（日志对象）等
 
@@ -78,6 +84,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         """
         self.requeue_on_fetch_fail = requeue_on_fetch_fail
         self.worker_max_timeout = worker_max_timeout
+        self.log_timeout_error = log_timeout_error
         if plugins is None:
             plugins = []
         super().__init__(*args, **kwargs)
@@ -163,7 +170,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         yield ...
 
     @abstractmethod
-    async def handle_fetch(self, params: ParamsType) -> WorkerStatus | Any:
+    async def handle_fetch(self, params: ParamsType | None) -> WorkerStatus | Any:
         """
         处理单个任务，获取数据
 
@@ -290,14 +297,13 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                 async with asyncio.timeout(self.worker_max_timeout):
                     fetch_result = await self.handle_fetch(worker_model.params)
             except asyncio.TimeoutError:
-                self.log.exception(
-                    self.format_log(f"爬取超时：{self.worker_max_timeout}s")
-                )
+                if self.log_timeout_error:
+                    self.log.exception(
+                        self.format_log(f"爬取超时：{self.worker_max_timeout}s")
+                    )
                 fetch_result = WorkerStatus.fail
-                if self.requeue_on_fetch_fail:
-                    should_requeue = True
-                else:
-                    await asyncio.sleep(30)
+                should_requeue = True  # 超时的任务都自动回到队列
+                await asyncio.sleep(30)
             except Exception as e:
                 self.log.exception(self.format_log(f"爬取异常：{e}"))
                 fetch_result = WorkerStatus.fail
