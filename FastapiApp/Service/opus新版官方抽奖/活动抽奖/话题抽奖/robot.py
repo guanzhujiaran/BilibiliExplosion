@@ -17,7 +17,7 @@ from Utils.PushMe import a_pushme
 
 
 class TopicParams(CustomBaseModelHashable):
-    topic_id: int | str
+    topic_id: int
 
     def __hash__(self):
         return hash(self.topic_id)
@@ -36,7 +36,7 @@ class TopicRobot(UnlimitedCrawler[TopicParams]):
     async def is_stop(self) -> bool:
         return self._cur_stop_times >= self.__max_stop_times
 
-    async def key_params_gen(self, params: TopicParams = None) -> AsyncGenerator[TopicParams, None]:
+    async def key_params_gen(self, params: TopicParams) -> AsyncGenerator[TopicParams, None]:
         if self.has_get_failed_topic_ids:
             topic_id = params.topic_id
             while 1:
@@ -52,7 +52,7 @@ class TopicRobot(UnlimitedCrawler[TopicParams]):
 
     def __init__(self):
         self.sem_limit = 1
-        self.start_topic_id = 1  # 开始的话题id
+        self.start_topic_id:int = 1  # 开始的话题id
         self.min_sep_ts = 2 * 3600  # 最小的间隔时间
         self.__max_stop_times = 5  # 遇到超过时间的话题次数
         self._cur_stop_times: int = 0
@@ -67,7 +67,8 @@ class TopicRobot(UnlimitedCrawler[TopicParams]):
             _logger=topic_lot_logger,
             plugins=[self.stats_plugin, self.null_counter_plugin],
             worker_max_timeout=300,
-            requeue_on_fetch_fail=False
+            requeue_on_fetch_fail=False,
+            requeue_on_timeout=True
         )
 
         self.has_get_failed_topic_ids = False

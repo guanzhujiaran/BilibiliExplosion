@@ -205,26 +205,37 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
 
         判断逻辑：
         - 如果未运行 (is_running=False)，返回 STOPPED
-        - 如果正在运行且有运行中的参数 (running_params_set 不为空)：
-          - 检查所有运行中参数的 updated_at 时间
-          - 如果任一参数的 updated_at 超过 1 天，返回 STUCK（爬虫卡住）
+        - 如果正在运行：
+          - 如果有运行中的参数 (running_params_set 不为空)：
+            - 检查所有运行中参数的 updated_at 时间
+            - 如果任一参数的 updated_at 超过 1 天，返回 STUCK（爬虫卡住）
+          - 如果没有运行中的参数 (running_params_set 为空)：
+            - 检查最后更新时间 (last_update_time)
+            - 如果最后更新时间超过 10 分钟未更新，返回 STUCK
           - 否则返回 NORMAL（正常运行）
-        - 如果正在运行但没有运行中的参数，返回 NORMAL
         """
         if not self.is_running:
             return CrawlerHealthStatus.STOPPED
 
-        if not self.running_params_set:
-            return CrawlerHealthStatus.NORMAL
+        # 有运行中的参数时，检查参数的更新时间
+        if self.running_params_set:
+            current_time = datetime.datetime.now()
+            one_day_ago = current_time - datetime.timedelta(days=1)
 
-        current_time = datetime.datetime.now()
-        one_day_ago = current_time - datetime.timedelta(days=1)
+            if next(
+                (wm for wm in self.running_params_set if wm.updated_at < one_day_ago),
+                None,
+            ):
+                return CrawlerHealthStatus.STUCK
+        else:
+            # 没有运行中的参数时，检查最后更新时间
+            # 如果超过10分钟没有更新，可能卡住了
+            current_time = datetime.datetime.now()
+            last_update_time = datetime.datetime.fromtimestamp(self.last_update_time)
+            time_since_last_update = current_time - last_update_time
 
-        if next(
-            (wm for wm in self.running_params_set if wm.updated_at < one_day_ago),
-            None,
-        ):
-            return CrawlerHealthStatus.STUCK
+            if time_since_last_update.total_seconds() > 600:  # 10分钟
+                return CrawlerHealthStatus.STUCK
 
         return CrawlerHealthStatus.NORMAL
 

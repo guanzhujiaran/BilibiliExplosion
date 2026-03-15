@@ -83,11 +83,13 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
         self.status_plugin = StatsPlugin(self)
         # 设置超时时间为300秒，避免任务无限等待
         # 设置requeue_on_fetch_fail=False，避免失败任务无限重试
+        # 设置requeue_on_timeout=True，超时任务重试
         super().__init__(
             _logger=sql_log,
             plugins=[self.status_plugin],
             worker_max_timeout=300,
-            requeue_on_fetch_fail=False
+            requeue_on_fetch_fail=False,
+            requeue_on_timeout=True
         )
 
     # region a从代理网站获取代理

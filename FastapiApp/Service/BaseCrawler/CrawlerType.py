@@ -42,6 +42,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         self,
         plugins: List[CrawlerPlugin[ParamsType]] = None,
         requeue_on_fetch_fail: bool = False,
+        requeue_on_timeout: bool = True,
         worker_max_timeout: int | None = None,
         log_timeout_error: bool = True,
         *args,
@@ -60,6 +61,12 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                 False: 失败的任务不会重试，直接标记为失败
                 注意：当 max_sem=1 时，设置为 True 可能导致死锁，已在代码中修复
                 默认为 False
+
+            requeue_on_timeout (bool, optional): 任务超时时是否重新入队
+                True: 超时的任务会被放回队列重试
+                False: 超时的任务不会重试，直接标记为失败
+                注意：独立于 requeue_on_fetch_fail，单独控制超时任务的重试行为
+                默认为 True
 
             max_timeout (int | None, optional): 单个任务的最大超时时间（秒）
                 None: 不设置超时（依赖具体实现）
@@ -83,6 +90,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
             )
         """
         self.requeue_on_fetch_fail = requeue_on_fetch_fail
+        self.requeue_on_timeout = requeue_on_timeout
         self.worker_max_timeout = worker_max_timeout
         self.log_timeout_error = log_timeout_error
         if plugins is None:
@@ -302,15 +310,13 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                         self.format_log(f"爬取超时：{self.worker_max_timeout}s")
                     )
                 fetch_result = WorkerStatus.fail
-                should_requeue = True  # 超时的任务都自动回到队列
-                await asyncio.sleep(30)
+                if self.requeue_on_timeout:
+                    should_requeue = True
             except Exception as e:
                 self.log.exception(self.format_log(f"爬取异常：{e}"))
                 fetch_result = WorkerStatus.fail
                 if self.requeue_on_fetch_fail:
                     should_requeue = True
-                else:
-                    await asyncio.sleep(30)
 
             if not isinstance(fetch_result, WorkerStatus):
                 worker_model.fetchStatus = WorkerStatus.complete
