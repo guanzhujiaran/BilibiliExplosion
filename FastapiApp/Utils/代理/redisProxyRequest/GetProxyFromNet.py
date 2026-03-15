@@ -40,14 +40,30 @@ class ProxyParams(CustomBaseModelHashable):
 class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
     async def key_params_gen(self, params: Any | None = None) -> AsyncGenerator[ProxyParams, None]:
         for x in self.proxy_list:
+            # 添加None验证，避免生成无效的任务参数
+            if x is None:
+                self.log.warning("遇到None参数，跳过该任务")
+                continue
+            if x.proxy is None or not isinstance(x.proxy, dict):
+                self.log.warning(f"代理参数无效: {x}, 跳过该任务")
+                continue
             yield x
 
     async def is_stop(self) -> bool:
         pass
 
     async def handle_fetch(self, params: ProxyParams) -> WorkerStatus | Any:
-        await self._check_ip_by_bili_zone(params.proxy)
-        return
+        # 添加参数验证，避免None导致的AttributeError
+        if params is None or params.proxy is None:
+            self.log.error(f"无效的参数: {params}, 标记任务为失败")
+            return WorkerStatus.fail
+
+        try:
+            await self._check_ip_by_bili_zone(params.proxy)
+            return WorkerStatus.complete
+        except Exception as e:
+            self.log.error(f"检查代理失败: {e}, proxy: {params.proxy}")
+            return WorkerStatus.fail
 
     async def main(self, *args, **kwargs):
         await self.get_proxy()
@@ -65,9 +81,13 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
         self.check_proxy_flag = False  # 是否检查ip可用，因为没有稳定的代理了，所以默认不去检查代理是否有效
         self.GetProxy_Flag = False
         self.status_plugin = StatsPlugin(self)
+        # 设置超时时间为300秒，避免任务无限等待
+        # 设置requeue_on_fetch_fail=False，避免失败任务无限重试
         super().__init__(
             _logger=sql_log,
-            plugins=[self.status_plugin]
+            plugins=[self.status_plugin],
+            worker_max_timeout=300,
+            requeue_on_fetch_fail=False
         )
 
     # region a从代理网站获取代理
@@ -3179,7 +3199,9 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
                 _t.append(ProxyParams(proxy=i))
                 _s.add(list(i.values())[0])
         del proxy_list
-        self.proxy_list = _t
+        self.proxy_list = _t if _t else []  # 确保proxy_list不为None
+        if not self.proxy_list:
+            self.log.warning('警告：未能获取到任何代理，proxy_list为空')
         self.log.info(f'最终共有{len(self.proxy_list)}个代理需要检查')
 
     async def get_proxy(self):

@@ -76,7 +76,9 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
         super().__init__(
             max_sem=max_sem,
             _logger=official_lot_logger,
-            plugins=[self.status_plugin]
+            plugins=[self.status_plugin],
+            worker_max_timeout=300,
+            requeue_on_fetch_fail=False
         )
 
     async def handle_fetch(self, params: DynDetailParams):

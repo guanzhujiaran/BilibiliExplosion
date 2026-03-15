@@ -354,17 +354,18 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
             *[x.on_run_start(worker_model) for x in self._plugins], log=self.log
         )
         task_set = set()
-        # 处理初始参数
-        seqId += 1
-        await self.task_queue.put(worker_model)
-        task = asyncio.create_task(self.worker())
-        task_set.add(task)
-        task.add_done_callback(task_set.discard)
-        self.log.debug(
-            self.format_log(
-                f"当前线程存活数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}，添加初始任务：{init_params}"
+        # 处理初始参数（仅当 init_params 不为 None 时才入队执行）
+        if init_params is not None:
+            seqId += 1
+            await self.task_queue.put(worker_model)
+            task = asyncio.create_task(self.worker())
+            task_set.add(task)
+            task.add_done_callback(task_set.discard)
+            self.log.debug(
+                self.format_log(
+                    f"当前线程存活数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}，添加初始任务：{init_params}"
+                )
             )
-        )
         # 开始循环
         async for param in self.key_params_gen(init_params):
             worker_model = WorkerModel(params=param, seqId=seqId)

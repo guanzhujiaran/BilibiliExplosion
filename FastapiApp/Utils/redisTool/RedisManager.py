@@ -37,7 +37,8 @@ def retry_async_generator(func):
                 break  # 成功完成，退出重试循环
             except ConnectionError as e:
                 redis_logger.exception(
-                    f'Redis连接错误 during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                    f"Redis连接错误 during generator iteration for {func.__name__}, retrying in 30s... {e}"
+                )
                 # 信号量在 'async with' 块结束时自动释放
                 await asyncio.sleep(30)
                 # while True 循环继续，尝试获取信号量并重新开始
@@ -45,7 +46,8 @@ def retry_async_generator(func):
             except Exception as e:
                 # 捕获其他异常
                 redis_logger.exception(
-                    f'An unexpected error occurred during generator iteration for {func.__name__}, retrying in 30s... {e}')
+                    f"An unexpected error occurred during generator iteration for {func.__name__}, retrying in 30s... {e}"
+                )
                 # 信号量在 'async with' 块结束时自动释放
                 await asyncio.sleep(30)
                 # while True 循环继续，尝试获取信号量并重新开始
@@ -65,10 +67,12 @@ def retry(func):
             except BusyLoadingError as e:
                 await asyncio.sleep(30)
             except ConnectionError as e:
-                redis_logger.exception(f'Redis连接错误，重试中...{e}')
+                redis_logger.exception(f"Redis连接错误，重试中...{e}")
                 await asyncio.sleep(30)
             except Exception as e:
-                redis_logger.critical(f'\nRedis操作错误\n{func.__name__}\n{args}\n{kwargs}\n{e}')
+                redis_logger.critical(
+                    f"\nRedis操作错误\n{func.__name__}\n{args}\n{kwargs}\n{e}"
+                )
                 await asyncio.sleep(30)
 
     return wrapper
@@ -104,18 +108,19 @@ class SyncRedisManagerBase:
     class RedisMap(StrEnum):
         pass
 
-    def __init__(self,
-                 host: str = CONFIG.database.proxyRedis.host,
-                 port: int = CONFIG.database.proxyRedis.port,
-                 db: int = CONFIG.database.proxyRedis.db,
-                 pwd: str = CONFIG.database.proxyRedis.pwd
-                 ):
+    def __init__(
+        self,
+        host: str = CONFIG.database.proxyRedis.host,
+        port: int = CONFIG.database.proxyRedis.port,
+        db: int = CONFIG.database.proxyRedis.db,
+        pwd: str = CONFIG.database.proxyRedis.pwd,
+    ):
         self.host = host
         self.port = port
         self.db = db
         self.pool = sync_redis.connection.ConnectionPool.from_url(
-            url=f'redis://:{pwd}@{self.host}:{self.port}/{self.db}?decode_responses=True&retry_on_timeout=30&socket_timeout=30',
-            max_connections=_MAX_SEM_NUM
+            url=f"redis://:{pwd}@{self.host}:{self.port}/{self.db}?decode_responses=True&retry_on_timeout=30&socket_timeout=30",
+            max_connections=_MAX_SEM_NUM,
         )
         self.RedisTimeout = 30
 
@@ -131,10 +136,10 @@ class SyncRedisManagerBase:
                 pipe = r.pipeline()
                 for k in key:
                     pipe.get(k)
-                with r.lock('Lock_' + str(key[0]), timeout=self.RedisTimeout):
+                with r.lock("Lock_" + str(key[0]), timeout=self.RedisTimeout):
                     return pipe.execute()
             else:
-                with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                with r.lock("Lock_" + str(key), timeout=self.RedisTimeout):
                     return r.get(key)
 
     @sync_retry
@@ -144,23 +149,28 @@ class SyncRedisManagerBase:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
                     pipe.set(key[idx], value[idx])
-                with r.lock('Lock_' + str(key[0]), timeout=self.RedisTimeout):
+                with r.lock("Lock_" + str(key[0]), timeout=self.RedisTimeout):
                     return pipe.execute()
             else:
-                with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                with r.lock("Lock_" + str(key), timeout=self.RedisTimeout):
                     return r.set(key, value)
 
     @sync_retry
-    def _setex(self, key: Union[Any, List[Any]], value: Union[Any, List[Any]], _time: Union[int, timedelta]):
+    def _setex(
+        self,
+        key: Union[Any, List[Any]],
+        value: Union[Any, List[Any]],
+        _time: Union[int, timedelta],
+    ):
         with redis_client_factory(pool=self.pool, sync=True) as r:
             if type(key) is list:
                 pipe = r.pipeline()
                 for idx in range(len(key)):
                     pipe.setex(name=key[idx], value=value[idx], time=_time)
-                with r.lock('Lock_' + str(key[0]), timeout=self.RedisTimeout):
+                with r.lock("Lock_" + str(key[0]), timeout=self.RedisTimeout):
                     return pipe.execute()
             else:
-                with r.lock('Lock_' + str(key), timeout=self.RedisTimeout):
+                with r.lock("Lock_" + str(key), timeout=self.RedisTimeout):
                     return r.setex(name=key, value=value, time=_time)
 
     @sync_retry
@@ -182,23 +192,27 @@ class RedisManagerBase:
     class RedisMap(StrEnum):
         pass
 
-    def __init__(self, host: str = CONFIG.database.proxyRedis.host,
-                 port: int = CONFIG.database.proxyRedis.port,
-                 db: int = CONFIG.database.proxyRedis.db,
-                 pwd: str = CONFIG.database.proxyRedis.pwd
-                 ):
+    def __init__(
+        self,
+        host: str = CONFIG.database.proxyRedis.host,
+        port: int | str = CONFIG.database.proxyRedis.port,
+        db: int = CONFIG.database.proxyRedis.db,
+        pwd: str = CONFIG.database.proxyRedis.pwd,
+    ):
         self.host = host
         self.port = port
         self.db = db
         self.pool = redis.ConnectionPool.from_url(
-            url=f'redis://:{pwd}@{self.host}:{self.port}/{self.db}?decode_responses=True&health_check_interval=30&retry_on_timeout=30&socket_timeout=30',
-            max_connections=_MAX_SEM_NUM
+            url=f"redis://:{pwd}@{self.host}:{self.port}/{self.db}?decode_responses=True&health_check_interval=30&retry_on_timeout=30&socket_timeout=30",
+            max_connections=_MAX_SEM_NUM,
         )
         self.RedisTimeout = 30
 
     # region 批量操作
     @retry_async_generator
-    async def _scan_keys_with_prefix_iter(self, prefix: str, chunk_size: int = 1000) -> AsyncIterator[List[bytes]]:
+    async def _scan_keys_with_prefix_iter(
+        self, prefix: str, chunk_size: int = 1000
+    ) -> AsyncIterator[List[bytes]]:
         """
         使用 SCAN 迭代获取带有指定前缀的 keys，逐批返回 key 列表。
         避免一次性加载所有 key 到内存。
@@ -207,7 +221,9 @@ class RedisManagerBase:
         async with redis_client_factory(pool=self.pool) as r:
             while True:
                 # SCAN 命令返回的 cursor 在没有更多匹配 key 时会变为 0
-                cursor, keys = await r.scan(cursor=cursor, match=f'{prefix}:*', count=chunk_size)
+                cursor, keys = await r.scan(
+                    cursor=cursor, match=f"{prefix}:*", count=chunk_size
+                )
                 if keys:
                     yield keys
                 if cursor == 0:
@@ -221,7 +237,9 @@ class RedisManagerBase:
         """
         deleted_count = 0
         # 使用 scan_keys_with_prefix_iter 迭代器逐批获取 key
-        async for key_batch in self._scan_keys_with_prefix_iter(prefix, chunk_size=batch_size):
+        async for key_batch in self._scan_keys_with_prefix_iter(
+            prefix, chunk_size=batch_size
+        ):
             if not key_batch:
                 continue
 
@@ -240,20 +258,26 @@ class RedisManagerBase:
         return deleted_count  # 返回总共尝试删除成功的 key 数量
 
     @retry_async_generator
-    async def _get_all_val_with_prefix(self, prefix: str, batch_size: int = 1000) -> AsyncIterator[Any]:
+    async def _get_all_val_with_prefix(
+        self, prefix: str, batch_size: int = 1000
+    ) -> AsyncIterator[Any]:
         """
         批量获取带有指定前缀的 keys 对应的 values，使用 MGET 和 Pipeline。
         通过迭代器获取 key 并生成 value，避免内存问题。
         """
         # 使用 scan_keys_with_prefix_iter 迭代器逐批获取 key
-        async for key_batch in self._scan_keys_with_prefix_iter(prefix, chunk_size=batch_size):
+        async for key_batch in self._scan_keys_with_prefix_iter(
+            prefix, chunk_size=batch_size
+        ):
             if not key_batch:
                 continue
 
             # 对每一批 key 执行 Pipeline MGET
             async with redis_client_factory(pool=self.pool) as r:
                 # redis-py MGET 可以接受 list of keys
-                values_batch = await r.mget(key_batch)  # MGET 在 Pipeline 中执行效率更高
+                values_batch = await r.mget(
+                    key_batch
+                )  # MGET 在 Pipeline 中执行效率更高
 
                 # 逐个生成获取到的 value
                 for value in values_batch:
@@ -371,12 +395,21 @@ class RedisManagerBase:
         if mapping:
             insert_map = {}
             for k, v in mapping.items():
-                if type(k) in [bytes, memoryview, str, int] and type(v) in [bytes, memoryview, str, int, float]:
+                if type(k) in [bytes, memoryview, str, int] and type(v) in [
+                    bytes,
+                    memoryview,
+                    str,
+                    int,
+                    float,
+                ]:
                     insert_map[k] = v
                 else:
                     redis_logger.critical(f"zadd name:{key} key:{k} value:{v} error")
             async with redis_client_factory(pool=self.pool) as r:
-                return await r.zadd(key, insert_map, )
+                return await r.zadd(
+                    key,
+                    insert_map,
+                )
         return None
 
     @retry
@@ -385,15 +418,18 @@ class RedisManagerBase:
             return await r.zincrby(key, score_change, element)
 
     @retry
-    async def _zget_range(self, key, start: int = 0, end: int = -1, num: int = None, offset: int = None):
+    async def _zget_range(
+        self, key, start: int = 0, end: int = -1, num: int = None, offset: int = None
+    ):
         async with redis_client_factory(pool=self.pool) as r:
             return await r.zrange(key, start=start, end=end, num=num, offset=offset)
 
     @retry
     async def _zget_range_with_score(self, key, num: int = None, offset: int = None):
         async with redis_client_factory(pool=self.pool) as r:
-            return await r.zrevrangebyscore(name=key, min='-inf', max='inf', num=num,
-                                            start=offset, withscores=True)
+            return await r.zrevrangebyscore(
+                name=key, min="-inf", max="inf", num=num, start=offset, withscores=True
+            )
 
     @retry
     async def _zget_rank(self, key, name):
@@ -433,9 +469,17 @@ class RedisManagerBase:
                 return None
 
     @retry
-    async def _zget_range_by_score(self, key, min_score: int, max_score: int, start: int = None, num: int = None):
+    async def _zget_range_by_score(
+        self, key, min_score: int, max_score: int, start: int = None, num: int = None
+    ):
         async with redis_client_factory(pool=self.pool) as r:
-            return await r.zrangebyscore(key, min_score, max_score, start=start, num=num, )
+            return await r.zrangebyscore(
+                key,
+                min_score,
+                max_score,
+                start=start,
+                num=num,
+            )
 
     @retry
     async def _zdel_elements(self, key, *elements_to_remove):
@@ -460,7 +504,9 @@ class RedisManagerBase:
             if count > 1:
                 random_nums = random.sample(range(total), count)
                 async with r.pipeline() as pipe:
-                    await asyncio_gather(*[pipe.zrange(key, i, i) for i in random_nums], log=redis_logger)
+                    await asyncio_gather(
+                        *[pipe.zrange(key, i, i) for i in random_nums], log=redis_logger
+                    )
                 values = await pipe.execute()
                 return values
             else:
@@ -480,7 +526,11 @@ class RedisManagerBase:
             return await r.hset(name=name, mapping=field_values)
 
     @retry
-    async def _hmset_bulk_batch(self, hm_name: str, hm_k_v_List: list[Dict[int | str, int | str | float | bytes]]):
+    async def _hmset_bulk_batch(
+        self,
+        hm_name: str,
+        hm_k_v_List: list[Dict[int | str, int | str | float | bytes]],
+    ):
         # 使用redis连接池创建redis对象
         async with redis_client_factory(pool=self.pool) as r:
             # 创建redis管道
@@ -490,7 +540,7 @@ class RedisManagerBase:
                 # 遍历hm_list，每次处理chunk_size个元素
                 for i in range(0, len(hm_k_v_List), chunk_size):
                     # 获取当前批次的元素
-                    chunk_kv = hm_k_v_List[i:i + chunk_size]
+                    chunk_kv = hm_k_v_List[i : i + chunk_size]
                     result = {}
                     for d in chunk_kv:
                         result.update(d)
@@ -499,7 +549,11 @@ class RedisManagerBase:
                     await pipe.execute()  # 执行当前批次的命令
 
     @retry
-    async def _hmget_bulk(self, name: str, key_arr: list[str], ):
+    async def _hmget_bulk(
+        self,
+        name: str,
+        key_arr: list[str],
+    ):
         async with redis_client_factory(pool=self.pool) as r:
             async with r.pipeline() as pipe:
                 for key in key_arr:
@@ -507,7 +561,10 @@ class RedisManagerBase:
                 return await pipe.execute()
 
     @retry
-    async def _hmgetall(self, name, ):
+    async def _hmgetall(
+        self,
+        name,
+    ):
         async with redis_client_factory(pool=self.pool) as r:
             return await r.hgetall(name=name)
 
@@ -527,7 +584,7 @@ class RedisManagerBase:
             return await r.delete(name)
 
     @retry
-    async def _scan(self, cursor: int = 0, match_str: str = ''):
+    async def _scan(self, cursor: int = 0, match_str: str = ""):
         """
         记得确保match_str 里面带个*，如果要获取多个的话
         :param cursor:
@@ -538,7 +595,9 @@ class RedisManagerBase:
             return await r.scan(cursor=cursor, match=match_str, count=5000)
 
     @retry
-    async def _zrevrange(self, key: str, start: int = 0, end: int = -1, withscores: bool = False):
+    async def _zrevrange(
+        self, key: str, start: int = 0, end: int = -1, withscores: bool = False
+    ):
         """
         返回有序集合中按分数从高到低排序的成员范围
         """
@@ -564,17 +623,22 @@ class RedisManagerBase:
             return await r.hget(name, key)
 
     @retry
-    async def _hset(self, name: str,
-                    key: Optional[str] = None,
-                    value: Optional[str] = None,
-                    mapping: Optional[dict] = None,
-                    items: Optional[list] = None, ):
+    async def _hset(
+        self,
+        name: str,
+        key: Optional[str] = None,
+        value: Optional[str] = None,
+        mapping: Optional[dict] = None,
+        items: Optional[list] = None,
+    ):
         async with redis_client_factory(pool=self.pool) as r:
-            return await r.hset(name,
-                                key,
-                                value,
-                                mapping,
-                                items, )
+            return await r.hset(
+                name,
+                key,
+                value,
+                mapping,
+                items,
+            )
 
     @retry
     async def _hgetall(self, name: str):
@@ -596,10 +660,10 @@ class RedisManagerBase:
 
 
 if __name__ == "__main__":
+
     async def _test():
         __ = RedisManagerBase()
-        ___ = await __.exists('ip_list')
+        ___ = await __.exists("ip_list")
         print(___)
-
 
     asyncio.run(_test())

@@ -122,7 +122,9 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         super().__init__(
             plugins=[self.stats_plugin, self.null_stop_plugin],
             max_sem=self.sem_limit,
-            _logger=reserve_lot_logger
+            _logger=reserve_lot_logger,
+            worker_max_timeout=300,
+            requeue_on_fetch_fail=False
         )
 
         self._use_custom_proxy = True

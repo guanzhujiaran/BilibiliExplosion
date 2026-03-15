@@ -150,15 +150,16 @@ class SqlAlchemyConfig:
     engine_config = dict(
         echo=False,
         poolclass=AsyncAdaptedQueuePool,
-        pool_size=20,  # 默认是5
-        max_overflow=40,
-        pool_timeout=30,
-        future=True,
-        pool_pre_ping=True,
-        pool_recycle=3600,
+        pool_size=10,        # 每个 engine 的基础连接数；有 6 个 DB，总连接 = pool_size * 6，不宜过大
+        max_overflow=20,     # 峰值最多额外 20 个，单 engine 上限 30，总上限 180
+        pool_timeout=10,     # 等待连接超时从 30s 缩短到 10s，尽早暴露连接耗尽问题
+        pool_pre_ping=True,  # 取连接前 ping，自动剔除僵尸连接（解决 Packet sequence number wrong）
+        pool_recycle=1800,   # 30min 回收，小于 MySQL 默认 wait_timeout(8h)，防止连接被服务端断开（原 3600 偏大）
+        pool_reset_on_return="rollback",  # 归还连接时自动 rollback，避免死锁残留事务污染连接
     )
     session_config = dict(
         expire_on_commit=False,
+        autoflush=False,     # 关闭自动 flush，减少隐式 IO，由业务代码显式控制
     )
 
 

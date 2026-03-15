@@ -66,6 +66,8 @@ class TopicRobot(UnlimitedCrawler[TopicParams]):
             max_sem=self.sem_limit,
             _logger=topic_lot_logger,
             plugins=[self.stats_plugin, self.null_counter_plugin],
+            worker_max_timeout=300,
+            requeue_on_fetch_fail=False
         )
 
         self.has_get_failed_topic_ids = False
