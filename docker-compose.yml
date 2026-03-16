@@ -200,6 +200,7 @@ services:
       - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
       - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
       - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI}
+      - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
       - TZ=${ENV_TZ}
     extra_hosts:
       - "host.docker.internal:host-gateway"
