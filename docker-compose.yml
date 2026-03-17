@@ -249,6 +249,8 @@ services:
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
+volumes:
+  puppeteer_Bili_node_modules:
 networks:
   default:
     enable_ipv6: true
