@@ -1,5 +1,4 @@
 services:
-
   nginx:
     container_name: fastapi-biliExplosion-nginx
     image: nginx:latest
@@ -31,7 +30,7 @@ services:
       - ${SITE_LOG_DIR}:/srv/logs
       - ${SITE_REPORT_DIR}:/srv/report
       - ${SITE_CERT_DIR}:/srv/certs
-    command: [ "--no-global-config", "--config-file=/srv/config/goaccess.conf" ]
+    command: ["--no-global-config", "--config-file=/srv/config/goaccess.conf"]
     profiles:
       - disabled
     extra_hosts:
@@ -39,7 +38,7 @@ services:
   fastapi-milvus:
     container_name: milvus-standalone
     image: docker.1ms.run/milvusdb/milvus:latest
-    command: [ "milvus", "run", "standalone" ]
+    command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined
     environment:
@@ -54,7 +53,7 @@ services:
       - ./docker_vol/milvus/conf/embedEtcd.yaml:/milvus/configs/embedEtcd.yaml
       - ./docker_vol/milvus/vol:/var/lib/milvus
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9091/healthz" ]
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
       start_period: 90s
       timeout: 20s
@@ -147,7 +146,7 @@ services:
       context: ./FastapiApp
     volumes:
       - ./FastapiApp:/app
-      - /app/node_modules  # 保护容器内node_modules
+      - /app/node_modules # 保护容器内node_modules
       - ./docker_vol/fastapi/log:/app/scripts/log
     ports:
       - "${FASTAPI_PORT}:23333"
@@ -179,7 +178,8 @@ services:
       context: ./puppeteer_Bili
       target: prod
     volumes:
-      - /app/node_modules  # 保护容器内node_modules
+      - puppeteer_Bili_node_modules:/app/node_modules # 使用命名卷保存 node_modules
+      - ./puppeteer_Bili:/app
     ports:
       - "${NODEJS_PPTR_PORT}:9923"
     restart: unless-stopped
@@ -254,4 +254,3 @@ networks:
     enable_ipv6: true
     name: fastapi
     driver: bridge
-
