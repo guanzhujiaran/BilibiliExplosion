@@ -144,9 +144,24 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
         :return: temp_rid, lot_id, dynamic_id, dynamic_created_time
         """
         try:
-            temp_rid = dynData.get("extend").get("businessId")
-            dynamic_id = dynData.get("extend").get("dynIdStr")
-            dynamic_calculated_ts = dynamic_id_2_ts(int(dynamic_id))
+            # 安全检查：确保extend字段存在
+            extend = dynData.get("extend")
+            if not extend:
+                self.log.warning(f"动态数据缺少extend字段：{dynData}")
+                return None, None, None, None
+
+            temp_rid = extend.get("businessId")
+            dynamic_id = extend.get("dynIdStr")
+            if not dynamic_id:
+                self.log.warning(f"动态缺少dynIdStr字段：{dynData}")
+                return None, None, None, None
+
+            try:
+                dynamic_calculated_ts = dynamic_id_2_ts(int(dynamic_id))
+            except (ValueError, TypeError) as e:
+                self.log.warning(f"动态ID格式错误：{dynamic_id}, 错误：{e}")
+                return None, None, None, None
+
             if is_running_scrapy:
                 if (
                     time.time() - dynamic_calculated_ts < self.stop_limit_time
@@ -159,6 +174,9 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
                 dynamic_calculated_ts
             )  # 通过公式获取大致的时间，误差大概20秒左右
             moduels = dynData.get("modules")
+            if not moduels:
+                moduels = []
+
             lot_id = None
             lot_data = {}
             for module in moduels:
@@ -166,22 +184,22 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
                     moduleAdditional = module.get("moduleAdditional")
                     if moduleAdditional.get("type") == "additional_type_up_reservation":
                         # lot_id不能在这里赋值，需要在底下判断是否为抽奖之后再赋值
-                        cardType = moduleAdditional.get("up").get("cardType")
-                        if cardType == "upower_lottery":  # 12是充电抽奖
-                            lot_rid = moduleAdditional.get("up").get("dynamicId")
-                            lot_notice_res = await get_lot_notice(
-                                business_type=12,
-                                business_id=lot_rid,
-                                origin_dynamic_id=dynamic_id,
-                            )
-                            lot_data = lot_notice_res.get("data")
-                            lot_id = lot_data.get("lottery_id")
-                        elif cardType == "reserve":  # 所有的预约
-                            if (
-                                moduleAdditional.get("up").get("lotteryType")
-                                is not None
-                            ):  # 10是预约抽奖
-                                lot_rid = moduleAdditional.get("up").get("rid")
+                        up = moduleAdditional.get("up")
+                        if up:
+                            cardType = up.get("cardType")
+                            if cardType == "upower_lottery":  # 12是充电抽奖
+                                lot_rid = up.get("dynamicId")
+                                lot_notice_res = await get_lot_notice(
+                                    business_type=12,
+                                    business_id=lot_rid,
+                                    origin_dynamic_id=dynamic_id,
+                                )
+                                lot_data = lot_notice_res.get("data")
+                                if lot_data:
+                                    lot_id = lot_data.get("lottery_id")
+                            elif cardType == "reserve":  # 所有的预约
+                                if up.get("lotteryType") is not None:  # 10是预约抽奖
+                                    lot_rid = up.get("rid")
                                 lot_notice_res = await get_lot_notice(
                                     business_type=10,
                                     business_id=lot_rid,

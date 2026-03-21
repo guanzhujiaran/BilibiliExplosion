@@ -223,15 +223,15 @@ def start_background_service(background_service_name: BackgroundServiceName):
 
     if scheduler is None:
         return CommonResponseModel(
-            success=False,
-            message=f'未找到名为 {background_service_name.value} 的后台服务'
+            code=404,
+            msg=f'未找到名为 {background_service_name.value} 的后台服务'
         )
 
     try:
         if GLOBAL_SCHEDULER.get_job(scheduler.job_id) is not None:
             return CommonResponseModel(
-                success=False,
-                message=f'服务 {background_service_name.value} 已经在运行中'
+                code=400,
+                msg=f'服务 {background_service_name.value} 已经在运行中'
             )
 
         GLOBAL_SCHEDULER.add_job(
@@ -245,13 +245,13 @@ def start_background_service(background_service_name: BackgroundServiceName):
             misfire_grace_time=3600
         )
         return CommonResponseModel(
-            success=True,
-            message=f'成功启动服务 {background_service_name.value}'
+            code=0,
+            msg=f'成功启动服务 {background_service_name.value}'
         )
     except Exception as e:
         return CommonResponseModel(
-            success=False,
-            message=f'启动服务失败: {str(e)}'
+            code=500,
+            msg=f'启动服务失败: {str(e)}'
         )
 
 
@@ -271,26 +271,26 @@ def stop_background_service(background_service_name: BackgroundServiceName):
 
     if scheduler is None:
         return CommonResponseModel(
-            success=False,
-            message=f'未找到名为 {background_service_name.value} 的后台服务'
+            code=404,
+            msg=f'未找到名为 {background_service_name.value} 的后台服务'
         )
 
     try:
         if GLOBAL_SCHEDULER.get_job(scheduler.job_id) is None:
             return CommonResponseModel(
-                success=False,
-                message=f'服务 {background_service_name.value} 未在运行'
+                code=400,
+                msg=f'服务 {background_service_name.value} 未在运行'
             )
 
         scheduler.remove()
         return CommonResponseModel(
-            success=True,
-            message=f'成功停止服务 {background_service_name.value}'
+            code=0,
+            msg=f'成功停止服务 {background_service_name.value}'
         )
     except Exception as e:
         return CommonResponseModel(
-            success=False,
-            message=f'停止服务失败: {str(e)}'
+            code=500,
+            msg=f'停止服务失败: {str(e)}'
         )
 
 
@@ -310,8 +310,8 @@ def restart_background_service(background_service_name: BackgroundServiceName):
 
     if scheduler is None:
         return CommonResponseModel(
-            success=False,
-            message=f'未找到名为 {background_service_name.value} 的后台服务'
+            code=404,
+            msg=f'未找到名为 {background_service_name.value} 的后台服务'
         )
 
     try:
@@ -331,13 +331,13 @@ def restart_background_service(background_service_name: BackgroundServiceName):
             misfire_grace_time=3600
         )
         return CommonResponseModel(
-            success=True,
-            message=f'成功重启服务 {background_service_name.value}'
+            code=0,
+            msg=f'成功重启服务 {background_service_name.value}'
         )
     except Exception as e:
         return CommonResponseModel(
-            success=False,
-            message=f'重启服务失败: {str(e)}'
+            code=500,
+            msg=f'重启服务失败: {str(e)}'
         )
 
 

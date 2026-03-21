@@ -41,9 +41,9 @@ docker_vol/nginx/logs/
 !docker_vol/lm_studio/Dockerfile
 !FastapiApp/requirements.txt
 !FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
-.env
 .env.dev
 venv/
 .venv/
 .lh
 .history
+.env

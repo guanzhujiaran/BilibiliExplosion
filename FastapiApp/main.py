@@ -3,9 +3,9 @@ import asyncio
 import uvloop
 import sys
 
-if not sys.platform.startswith('win'):
+if not sys.platform.startswith("win"):
     uvloop.install()
-elif sys.platform.startswith('windows'):
+elif sys.platform.startswith("windows"):
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import os
 import traceback
@@ -18,13 +18,13 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 current_dir = os.path.dirname(__file__)
-grpc_dir = os.path.join(current_dir, 'Service/GrpcModule/Grpc/GrpcProto')
+grpc_dir = os.path.join(current_dir, "Service/GrpcModule/Grpc/GrpcProto")
 sys.path.append(grpc_dir)
 from CONFIG import settings
 
-logger.info(f'运行 settings:{settings}')
+logger.info(f"运行 settings:{settings}")
 if not settings.SHOW_LOG:
-    logger.info('关闭日志输出')
+    logger.info("关闭日志输出")
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 
@@ -66,7 +66,7 @@ async def global_middleware(request: Request, call_next):
     try:
         response = await call_next(request)
         # 可选：仅在调试模式下返回错误堆栈
-        if hasattr(app, 'debug'):
+        if hasattr(app, "debug"):
             response_body = b""
             async for chunk in response.body_iterator:
                 response_body += chunk
@@ -82,7 +82,7 @@ async def global_middleware(request: Request, call_next):
                 content=response_body,
                 status_code=response.status_code,
                 headers=dict(response.headers),
-                media_type=response.media_type
+                media_type=response.media_type,
             )
         else:
             # 在非调试模式下，直接返回原始响应
@@ -93,14 +93,14 @@ async def global_middleware(request: Request, call_next):
             "error": str(err),
             "request_url": str(request.url),
             "request_method": request.method,
-            "client_host": request_ip
+            "client_host": request_ip,
         }
         myfastapi_logger.exception(f"FastAPI请求异常: {error_detail}")
         err_title = str(err).replace("\n", "")
         await a_pushme(
-            f'FastAPI请求异常！URL: {request.url}\n错误详情: {err_title}',
+            f"FastAPI请求异常！URL: {request.url}\n错误详情: {err_title}",
             traceback.format_exc(),
-            None
+            None,
         )
 
         raise HTTPException(
@@ -112,8 +112,4 @@ async def global_middleware(request: Request, call_next):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=23333
-    )
+    uvicorn.run(app, host="0.0.0.0", port=23333)

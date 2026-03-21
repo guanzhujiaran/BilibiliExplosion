@@ -1,7 +1,7 @@
 import asyncio
 import concurrent.futures
 from functools import wraps
-from typing import Callable, TypeVar, Awaitable, Any
+from typing import Callable, TypeVar, Awaitable, Any, Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import _logger
 from sqlalchemy.exc import InternalError, TimeoutError
@@ -9,9 +9,11 @@ from pymysql.err import OperationalError
 from pymysql.constants import CR
 from log.base_log import myfastapi_logger, sql_log
 import random
-
+import loguru
 GLOBAL_SCHEDULER: AsyncIOScheduler = AsyncIOScheduler()
 _comm_lock = asyncio.Lock()
+# 全局线程池，避免重复创建
+_global_executor = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
 TResult = TypeVar("TResult")
 FuncT = TypeVar("FuncT", bound=Callable[..., Awaitable[Any]])
@@ -22,13 +24,19 @@ def sem_gen(sem_limit=100):
 
 
 def ensure_asyncio_loop():
-    if asyncio.get_event_loop():
-        return
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    try:
+        loop = asyncio.get_running_loop()
+        if not loop.is_running():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        # 当前没有运行的事件循环，创建新的
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
 
 def comm_lock_wrapper(func):
+    @wraps(func)
     async def wrapper(*args, **kwargs):
         async with _comm_lock:
             res = await func(*args, **kwargs)
@@ -64,25 +72,38 @@ def lock_retry_wrapper(lock: asyncio.Lock):
     return decorator
 
 
-def retry_wrapper(func):
+def retry_wrapper(func, max_retries: int = -1, sleep_time: int = 10):
+    """
+    重试装饰器，支持最大重试次数配置
+
+    Args:
+        func: 要装饰的函数
+        max_retries: 最大重试次数，-1表示无限重试
+        sleep_time: 重试间隔时间(秒)
+    """
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        while 1:
+        retry_count = 0
+        while True:
             try:
                 res = await func(*args, **kwargs)
                 return res
             except Exception as e:
-                myfastapi_logger.exception(e)
-                await asyncio.sleep(10)
+                if max_retries >= 0 and retry_count >= max_retries:
+                    myfastapi_logger.error(f'函数【{func.__name__}】重试{max_retries}次后仍失败，抛出异常')
+                    raise
+
+                retry_count += 1
+                myfastapi_logger.exception(f'函数【{func.__name__}】执行失败，第{retry_count}次重试: {e}')
+                await asyncio.sleep(sleep_time)
 
     return wrapper
 
 
 async def run_in_executor(func, *args):
     loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor() as pool:
-        future = loop.run_in_executor(pool, func, *args)
-        return await future
+    future = loop.run_in_executor(_global_executor, func, *args)
+    return await future
 
 
 async def handle_sql_operational_error(func, log, err: OperationalError):
@@ -129,7 +150,7 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
     return wrapper
 
 
-def log_sql_retry_wrapper(log: _logger = myfastapi_logger):
+def log_sql_retry_wrapper(log: loguru._logger.Logger = myfastapi_logger):
     def _wrapper(_func: FuncT) -> FuncT:
         @wraps(_func)
         async def wrapper(*args: Any, **kwargs: Any) -> TResult:
@@ -161,7 +182,7 @@ def log_sql_retry_wrapper(log: _logger = myfastapi_logger):
     return _wrapper
 
 
-async def asyncio_gather(*coros_or_futures, log: _logger.Logger | None = myfastapi_logger):
+async def asyncio_gather(*coros_or_futures, log: Optional[_logger.Logger] = myfastapi_logger):
     async def _handle_coroutine(coro):
         try:
             return await coro
@@ -204,7 +225,7 @@ def log_max_count_retry_wrapper(*, log: _logger = myfastapi_logger, max_count: i
                         f"Attempt {attempt + 1} failed for {func.__name__}: {str(e)}. "
                         f"{'Retrying...' if max_count <= 0 else f'Retrying... ({max_count - attempt} attempts left)'}"
                     )
-                    await asyncio.sleep(sleep_time)  # Exponential backoff
+                    await asyncio.sleep(sleep_time)  # Fixed backoff interval
                     attempt += 1
             raise last_exception
 

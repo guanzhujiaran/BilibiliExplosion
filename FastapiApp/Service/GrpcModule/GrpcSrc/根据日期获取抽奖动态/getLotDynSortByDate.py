@@ -50,25 +50,44 @@ class LotDynSortByDate:
                 dynData = json.loads(dyn.dynData if dyn.dynData else 'null', strict=False)
                 # dynamic_content = ''.join([x.get('text') for x in dynData.get('extend').get('origDesc')])
                 dynamic_content = ''
-                if dynData.get('extend').get('onlyFansProperty').get('isOnlyFans'):
+
+                # 安全检查：确保dynData有extend字段
+                extend = dynData.get('extend')
+                if not extend:
                     continue
-                if dynData.get('extend').get('opusSummary').get('title'):
-                    dynamic_content += ''.join([x.get('rawText') for x in
-                                                dynData.get('extend').get('opusSummary').get('title').get('text').get(
-                                                    'nodes')])
-                if dynData.get('extend').get('opusSummary').get('summary'):
-                    dynamic_content += ''.join([x.get('rawText') for x in
-                                                dynData.get('extend').get('opusSummary').get('summary').get('text').get(
-                                                    'nodes')])
-                author_name = dynData.get('extend').get('origName')
-                author_space = f"https://space.bilibili.com/{dynData.get('extend').get('uid')}/dynamic"
+
+                # 安全检查：onlyFansProperty可能不存在
+                onlyFansProperty = extend.get('onlyFansProperty')
+                if onlyFansProperty and onlyFansProperty.get('isOnlyFans'):
+                    continue
+
+                # 安全检查：opusSummary可能不存在
+                opusSummary = extend.get('opusSummary')
+                if opusSummary:
+                    if opusSummary.get('title'):
+                        title_text = opusSummary.get('title').get('text')
+                        if title_text:
+                            nodes = title_text.get('nodes')
+                            if nodes:
+                                dynamic_content += ''.join([x.get('rawText') for x in nodes])
+                    if opusSummary.get('summary'):
+                        summary_text = opusSummary.get('summary').get('text')
+                        if summary_text:
+                            nodes = summary_text.get('nodes')
+                            if nodes:
+                                dynamic_content += ''.join([x.get('rawText') for x in nodes])
+
+                author_name = extend.get('origName')
+                author_space = f"https://space.bilibili.com/{extend.get('uid')}/dynamic"
                 if self.BAPI.daily_choujiangxinxipanduan(dynamic_content):
                     # myfastapi_logger.debug(f"忽略日常抽奖信息{dynamic_content}")
                     continue
-                dyn_url = f"https://t.bilibili.com/{dynData.get('extend').get('dynIdStr')}"
+                dyn_url = f"https://t.bilibili.com/{extend.get('dynIdStr')}"
                 if self.BAPI.zhuanfapanduan(dynamic_content):
                     dyn_url += '?tab=2'
                 moduels = dynData.get('modules')
+                if not moduels:
+                    continue
                 lot_rid = ''
                 lot_type = ''
                 forward_count = '0'
@@ -80,14 +99,16 @@ class LotDynSortByDate:
                         moduleAdditional = module.get('moduleAdditional')
                         if moduleAdditional.get('type') == 'additional_type_up_reservation':
                             # lot_id不能在这里赋值，需要在底下判断是否为抽奖之后再赋值
-                            cardType = moduleAdditional.get('up').get('cardType')
-                            if cardType == 'upower_lottery':  # 12是充电抽奖
-                                lot_rid = moduleAdditional.get('up').get('dynamicId')
-                                lot_type = '充电抽奖'
-                            elif cardType == 'reserve':  # 所有的预约
-                                if moduleAdditional.get('up').get('lotteryType') is not None:  # 10是预约抽奖
-                                    lot_rid = moduleAdditional.get('up').get('rid')
-                                    lot_type = '预约抽奖'
+                            up = moduleAdditional.get('up')
+                            if up:
+                                cardType = up.get('cardType')
+                                if cardType == 'upower_lottery':  # 12是充电抽奖
+                                    lot_rid = up.get('dynamicId')
+                                    lot_type = '充电抽奖'
+                                elif cardType == 'reserve':  # 所有的预约
+                                    if up.get('lotteryType') is not None:  # 10是预约抽奖
+                                        lot_rid = up.get('rid')
+                                        lot_type = '预约抽奖'
                     if module.get('moduleButtom'):
                         moduleState = module.get('moduleButtom').get('moduleStat')
                         if moduleState:
@@ -105,18 +126,26 @@ class LotDynSortByDate:
                         if desc:
                             for descNode in desc:
                                 if descNode.get('type') == 'desc_type_lottery':  # 获取官方抽奖，这里的比较全
-                                    lot_rid = dynData.get('extend').get('businessId')
-                                    lot_type = '官方抽奖'
-                if dynData.get('extend').get('origDesc') and not lot_rid:
-                    for descNode in dynData.get('extend').get('origDesc'):
+                                    businessId = extend.get('businessId')
+                                    if businessId:
+                                        lot_rid = businessId
+                                        lot_type = '官方抽奖'
+                # 安全检查：origDesc可能不存在
+                origDesc = extend.get('origDesc')
+                if origDesc and not lot_rid:
+                    for descNode in origDesc:
                         if descNode.get('type') == 'desc_type_lottery':
-                            lot_rid = dynData.get('extend').get('businessId')
+                            lot_rid = extend.get('businessId')
                             lot_type = '官方抽奖'
 
                 premsg = self.BAPI.pre_msg_processing(dynamic_content)
-                dynamic_calculated_ts = int(
-                    (int(dynData.get('extend').get('dynIdStr')) + 6437415932101782528) / 4294939971.297)
-                pub_time = self.BAPI.timeshift(dynamic_calculated_ts)
+                dynIdStr = extend.get('dynIdStr')
+                if dynIdStr:
+                    dynamic_calculated_ts = int(
+                        (int(dynIdStr) + 6437415932101782528) / 4294939971.297)
+                    pub_time = self.BAPI.timeshift(dynamic_calculated_ts)
+                else:
+                    pub_time = ''
 
                 high_lights_list = []
                 for i in self.highlight_word_list:

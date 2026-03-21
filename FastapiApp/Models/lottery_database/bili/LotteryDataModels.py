@@ -74,21 +74,21 @@ class TUpReserveRelationInfoResp(CustomBaseModel):
     def upmid_str(self) -> str:
         if self.upmid:
             return str(self.upmid)
-        return '0'
+        return "0"
 
     @computed_field
     @property
     def oid_str(self) -> str:
         if self.oid:
             return str(self.oid)
-        return '0'
+        return "0"
 
     @computed_field
     @property
     def dynamicId_str(self) -> str:
         if self.dynamicId:
             return str(self.dynamicId)
-        return '0'
+        return "0"
 
     ids: int | None  # 主键
     code: int | None
@@ -208,9 +208,25 @@ class LiveLotteryResp(CustomBaseModel):
 
 class AllLotteryResp(CustomBaseModel):
     common_lottery: list[CommonLotteryResp] = Field(..., description="一般抽奖")
-    must_join_common_lottery: list[CommonLotteryResp] = Field(..., description="必抽的一般抽奖")
-    reserve_lottery: list[reserveInfo] = Field(..., description="必抽的预约抽奖")
-    official_lottery: list[OfficialLotteryResp] = Field(..., description="必抽的官方抽奖")
+    must_join_common_lottery: list[CommonLotteryResp] = Field(
+        ..., description="必抽的一般抽奖"
+    )
+    reserve_lottery: list[ReserveInfoResp] = Field(..., description="必抽的预约抽奖")
+    official_lottery: list[OfficialLotteryResp] = Field(
+        ..., description="必抽的官方抽奖"
+    )
+
+
+class BaseAddLotteryResp(CustomBaseModel):
+    """添加抽奖响应基类"""
+    msg: str = Field(..., description="操作消息")
+    is_succ: bool = Field(..., description="是否成功")
+    is_new: bool = Field(..., description="是否是新的内容")
+
+
+class AddDynamicLotteryResp(BaseAddLotteryResp):
+    """添加动态抽奖响应"""
+    dynamic_id_or_url: str = Field(..., description="提交的动态ID或URL")
 
 
 class AddDynamicLotteryReq(CustomBaseModel):
@@ -221,12 +237,6 @@ class BulkAddDynamicLotteryReq(CustomBaseModel):
     dynamic_id_or_urls: list[str]
 
 
-class BulkAddDynamicLotteryRespItem(CustomBaseModel):
-    dynamic_id: str
-    msg: str
-    is_succ: bool
-
-
 class BiliUserInfoSimple(CustomBaseModel):
     uid: str
     name: str
@@ -235,6 +245,11 @@ class BiliUserInfoSimple(CustomBaseModel):
 
 class AddTopicLotteryReq(CustomBaseModel):
     topic_id: int | str
+
+
+class AddTopicLotteryResp(BaseAddLotteryResp):
+    """添加话题抽奖响应"""
+    topic_id: str | int = Field(..., description="提交的话题ID")
 
 
 # region Description：抽奖信息统计模型
@@ -309,24 +324,26 @@ class BiliLotStatisticRankTypeEnum(StrEnum):
 class BiliLotStatisticRankDateTypeEnum(StrEnum):
     month = "month"  # 当月
     pre_month = "pre_month"  # 上月
-    year = 'year'
-    pre_year = 'pre_year'
+    year = "year"
+    pre_year = "pre_year"
     total = "total"  # 总计
 
     def get_start_end_ts(self) -> tuple[int, int]:
         now = datetime.now()
-        if self.value == 'total':
+        if self.value == "total":
             return 0, 0
-        elif self.value == 'month':
+        elif self.value == "month":
             start_ts = datetime(now.year, now.month, 1)  # 本月1号
             end_ts = now
-        elif self.value == 'pre_month':
+        elif self.value == "pre_month":
             start_ts = datetime(now.year, now.month - 1, 1)  # 上月1号
-            end_ts = datetime(now.year, now.month, 1) - timedelta(seconds=1)  # 上月最后一天
-        elif self.value == 'year':
+            end_ts = datetime(now.year, now.month, 1) - timedelta(
+                seconds=1
+            )  # 上月最后一天
+        elif self.value == "year":
             start_ts = datetime(now.year, 1, 1)  # 本年1号
             end_ts = now
-        elif self.value == 'pre_year':
+        elif self.value == "pre_year":
             start_ts = datetime(now.year - 1, 1, 1)  # 上年1号
             end_ts = datetime(now.year, 1, 1) - timedelta(seconds=1)  # 上年最后一天
         else:
@@ -335,18 +352,20 @@ class BiliLotStatisticRankDateTypeEnum(StrEnum):
 
     def get_start_end_datetime(self) -> tuple[datetime | None, datetime | None]:
         now = datetime.now()
-        if self.value == 'total':
+        if self.value == "total":
             return None, None
-        elif self.value == 'month':
+        elif self.value == "month":
             start_ts = datetime(now.year, now.month, 1)  # 本月1号
             end_ts = now
-        elif self.value == 'pre_month':
+        elif self.value == "pre_month":
             start_ts = datetime(now.year, now.month - 1, 1)  # 上月1号
-            end_ts = datetime(now.year, now.month, 1) - timedelta(seconds=1)  # 上月最后一天
-        elif self.value == 'year':
+            end_ts = datetime(now.year, now.month, 1) - timedelta(
+                seconds=1
+            )  # 上月最后一天
+        elif self.value == "year":
             start_ts = datetime(now.year, 1, 1)  # 本年1号
             end_ts = now
-        elif self.value == 'pre_year':
+        elif self.value == "pre_year":
             start_ts = datetime(now.year - 1, 1, 1)  # 上年1号
             end_ts = datetime(now.year, 1, 1) - timedelta(seconds=1)  # 上年最后一天
         else:
@@ -357,5 +376,5 @@ class BiliLotStatisticRankDateTypeEnum(StrEnum):
 # endregion
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(BiliLotStatisticLotTypeEnum.charge.business_type)

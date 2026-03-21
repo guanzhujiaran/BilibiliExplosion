@@ -4,7 +4,7 @@ T = TypeVar('T')  # 泛型类型 T
 class CommonResponseModel(CustomBaseModel, Generic[T]):
     code: int = 0
     msg: str = 'success'
-    data: T = None
+    data: T | None = None
 
 
 class ResponsePaginationItems(CustomBaseModel, Generic[T]):

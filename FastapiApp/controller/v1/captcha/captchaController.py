@@ -11,8 +11,7 @@ router = new_router()
 captcha_service = CaptchaService()
 
 
-@router.get("/gen", description="生成验证码", response_model=CommonResponseModel[CaptchaGenResp],
-            response_model_exclude_none=True)
+@router.get("/gen", description="生成验证码", response_model=CommonResponseModel[CaptchaGenResp])
 async def generate_captcha():
     captcha_id, captcha_image_base64 = await captcha_service.generate_captcha()
     return CommonResponseModel(

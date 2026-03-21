@@ -16,7 +16,7 @@ _milvus_lock = asyncio.Lock()
 
 class Sqlhelper:
     class Collections(StrEnum):
-        bili_lot_data = 'bili_lot_data'
+        bili_lot_data = "bili_lot_data"
 
     __client: AsyncMilvusClient | None = None
 
@@ -24,11 +24,10 @@ class Sqlhelper:
         self._lock = asyncio.Lock()
 
     @property
-    def _client(self):
+    def _client(self) -> AsyncMilvusClient:
         if self.__client is None:
             self.__client = AsyncMilvusClient(
-                uri=f'http://{settings.MILVUS_HOST}:{settings.MILVUS_PORT}',
-                timeout=10
+                uri=f"http://{settings.MILVUS_HOST}:{settings.MILVUS_PORT}", timeout=10
             )
         return self.__client
 
@@ -48,31 +47,18 @@ class Sqlhelper:
                 name="lottery_id",
                 dtype=DataType.INT64,
             ),
-            FieldSchema(
-                name="prize_vec",
-                dtype=DataType.FLOAT_VECTOR,
-                dim=768
-            ),
-            FieldSchema(
-                name="prize_cmt",
-                dtype=DataType.VARCHAR,
-                max_length=65535
-            ),
-            FieldSchema(
-                name="lottery_time",
-                dtype=DataType.INT64
-            )
+            FieldSchema(name="prize_vec", dtype=DataType.FLOAT_VECTOR, dim=768),
+            FieldSchema(name="prize_cmt", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="lottery_time", dtype=DataType.INT64),
         ]
 
         # 创建集合schema
         schema = CollectionSchema(
-            fields=fields,
-            description="Bilibili lottery data with embeddings"
+            fields=fields, description="Bilibili lottery data with embeddings"
         )
         # 创建集合
         await self._client.create_collection(
-            collection_name=self.Collections.bili_lot_data,
-            schema=schema
+            collection_name=self.Collections.bili_lot_data, schema=schema
         )
 
         # 创建索引
@@ -81,11 +67,10 @@ class Sqlhelper:
             index_name="prize_vec_index",
             field_name="prize_vec",
             index_type="FLAT",
-            metric_type="COSINE"
+            metric_type="COSINE",
         )
         await self._client.create_index(
-            collection_name=self.Collections.bili_lot_data,
-            index_params=index_params
+            collection_name=self.Collections.bili_lot_data, index_params=index_params
         )
 
         # 加载集合
@@ -93,7 +78,9 @@ class Sqlhelper:
             collection_name=self.Collections.bili_lot_data
         )
 
-        milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} created successfully")
+        milvus_db_logger.info(
+            f"Collection {self.Collections.bili_lot_data} created successfully"
+        )
 
     @lock_retry_wrapper(_milvus_lock)
     async def ensure_collection_exists(self):
@@ -111,13 +98,17 @@ class Sqlhelper:
                 await self._client.get_collection_stats(
                     collection_name=self.Collections.bili_lot_data
                 )
-                milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} already exists and is loaded")
+                milvus_db_logger.info(
+                    f"Collection {self.Collections.bili_lot_data} already exists and is loaded"
+                )
             except Exception:
                 # 集合存在但未加载，加载它
                 await self._client.load_collection(
                     collection_name=self.Collections.bili_lot_data
                 )
-                milvus_db_logger.info(f"Collection {self.Collections.bili_lot_data} loaded successfully")
+                milvus_db_logger.info(
+                    f"Collection {self.Collections.bili_lot_data} loaded successfully"
+                )
 
     # endregion
 
@@ -125,8 +116,7 @@ class Sqlhelper:
     async def upsert_bili_lot_data(self, data_ls: List[BiliLotData]):
         data = [x.model_dump(exclude_none=True) for x in data_ls]
         return await self._client.upsert(
-            collection_name=self.Collections.bili_lot_data,
-            data=data
+            collection_name=self.Collections.bili_lot_data, data=data
         )
 
     @lock_retry_wrapper(_milvus_lock)
@@ -134,12 +124,12 @@ class Sqlhelper:
         # 确保集合存在
         res = await self._client.search(
             collection_name=self.Collections.bili_lot_data,
-            anns_field='prize_vec',
+            anns_field="prize_vec",
             data=[query_vec],
             group_by_field="lottery_id",
-            filter=f'lottery_time >= {int(time.time())}',
+            filter=f"lottery_time >= {int(time.time())}",
             limit=limit,
-            output_fields=['lottery_id', 'prize_cmt', 'lottery_time'],
+            output_fields=["lottery_id", "prize_cmt", "lottery_time"],
         )
         return res
 
@@ -148,14 +138,14 @@ class Sqlhelper:
         # 确保集合存在
         result = await self._client.delete(
             collection_name=self.Collections.bili_lot_data,
-            filter=f'lottery_time < {int(time.time())}'
+            filter=f"lottery_time < {int(time.time())}",
         )
-        milvus_db_logger.info(f'delete {result} outdated bili lottery data')
+        milvus_db_logger.info(f"delete {result} outdated bili lottery data")
         return result
 
 
 milvus_sql_helper = Sqlhelper()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     print(settings)
     asyncio.run(milvus_sql_helper.ensure_collection_exists())

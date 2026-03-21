@@ -18,9 +18,7 @@ router = new_router()
 @router.get('/lottery_hof/{lot_type}',
             summary="获取官方抽奖统计信息",
             description='获取中奖数据的分析情况，返回[{uid:中奖数}...]',
-            response_model=CommonResponseModel[BiliLotStatisticInfoResp],
-            response_model_exclude_unset=True,
-            response_model_exclude_none=True
+            response_model=CommonResponseModel[BiliLotStatisticInfoResp]
             )
 async def get_official_lottery_statistic(
         lot_type: BiliLotStatisticLotTypeEnum,
@@ -39,9 +37,7 @@ async def get_official_lottery_statistic(
 @router.get('/lottery_result',
             summary="获取uid中奖数据",
             description='根据uid获取某个b站用户的数据库中的中奖数据',
-            response_model=CommonResponseModel[BiliLotStatisticLotteryResultResp],
-            response_model_exclude_unset=True,
-            response_model_exclude_none=True
+            response_model=CommonResponseModel[BiliLotStatisticLotteryResultResp]
             )
 async def get_lottery_result(
         uid: int | str = Query(...),

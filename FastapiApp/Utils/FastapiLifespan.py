@@ -18,9 +18,9 @@ async def life_span(app: FastAPI):
     # 测试数据库连接
     await test_database_connections()
     
-    # 确保向量数据库集合存在
+    # 检查milvus数据库集合
     await asyncio.sleep(3)  # 等 HTTP server ready
-    myfastapi_logger.critical("确保milvus数据库集合存在")
+    myfastapi_logger.critical("检查milvus数据库集合")
     await milvus_sql_helper.ensure_collection_exists()  # 必须执行
     myfastapi_logger.critical("重试未处理的消息")
     await BiliLotDataPublisher.retry_pending_messages()  # 重试未处理的消息

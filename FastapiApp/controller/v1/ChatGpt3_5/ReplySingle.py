@@ -45,7 +45,7 @@ async def reply_single(reply_req: ReplyReq):
         return CommonResponseModel(code=500, data=None, msg=f'AI回复失败！\n{e}')
 
 
-@router.get('/LLMStatus', response_model=CommonResponseModel[LLMShowInfo], response_model_exclude_none=True)
+@router.get('/LLMStatus', response_model=CommonResponseModel[LLMShowInfo])
 async def get_llm_status():
     resp = chatgpt.show_openai_client()
     return CommonResponseModel(code=0, data=resp)
