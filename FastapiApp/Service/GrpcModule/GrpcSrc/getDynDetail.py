@@ -34,7 +34,7 @@ class StopCounter(BaseStopCounter):
 
 
 class SuccCounter(BaseSuccCounter):
-    first_dyn_id = 0
+    first_dyn_id:int = 0
     latest_rid: int = 0  # 最后的rid
     latest_succ_dyn_id: int = 0  # 最后获取成功的动态id
 
@@ -198,8 +198,15 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
                                 if lot_data:
                                     lot_id = lot_data.get("lottery_id")
                             elif cardType == "reserve":  # 所有的预约
-                                if up.get("lotteryType") is not None:  # 10是预约抽奖
-                                    lot_rid = up.get("rid")
+                                lot_rid = up.get("rid")  # 初始化 lot_rid，无论是否有 lotteryType
+                                if up.get("lotteryType") is not None:  # 10 是预约抽奖
+                                    pass  # lot_rid 已经在上面赋值
+                                else:
+                                    # 非抽奖类型的预约，不需要调用抽奖接口
+                                    self.log.info(
+                                        f"非抽奖预约卡片，跳过：http://www.bilibili.com/opus/{dynamic_id}"
+                                    )
+                                    continue  # 跳过本次循环
                                 lot_notice_res = await get_lot_notice(
                                     business_type=10,
                                     business_id=lot_rid,
@@ -436,7 +443,7 @@ class DynDetailScrapy(UnlimitedCrawler[DynDetailParams]):
         dynamic_id = ret_dict_list[0].get("dynamic_id")
         if dynamic_id != "-1":
             self.succ_counter.succ_count += 1
-            self.succ_counter.first_dyn_id = (
+            self.succ_counter.first_dyn_id = int(
                 dynamic_id
                 if not self.succ_counter.first_dyn_id
                 else self.succ_counter.first_dyn_id
