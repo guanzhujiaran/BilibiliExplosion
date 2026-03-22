@@ -4,7 +4,7 @@
 
 from typing import List
 
-from fastapi import Query, Body
+from fastapi import Query, Body, Request
 from fastapi_cache.decorator import cache
 from Models.common import CommonResponseModel, ResponsePaginationItems
 from Models.lottery_database.bili.LotteryDataModels import (
@@ -21,6 +21,7 @@ from Models.lottery_database.bili.LotteryDataModels import (
     BulkAddDynamicLotteryReq,
     LotdataResp,
     AddTopicLotteryResp,
+    SubmitFeedbackReq,
 )
 from Service.LangChainCompo.text_embed import search_lottery_text
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
@@ -36,6 +37,7 @@ from Service.lottery_database.bili_lotterty import (
     add_topic_lottery,
 )
 from Utils.Common import asyncio_gather
+from Utils.PushMe import a_pushme
 from .base import new_router
 
 router = new_router()
@@ -252,6 +254,67 @@ async def api_Search(
 ):
     result: List[Lotdata] = await search_lottery_text(keyword)
     return CommonResponseModel(data=result)
+
+
+@router.post(
+    "/SubmitFeedback",
+    summary="提交反馈信息到 PushMe",
+    response_model=CommonResponseModel[dict],
+    response_model_exclude_none=True,
+)
+async def api_SubmitFeedback(
+    request: Request,
+    data: SubmitFeedbackReq,
+):
+    """
+    提交反馈信息到 PushMe
+    会自动从请求头中获取 uid 信息
+    :param request: FastAPI Request 对象
+    :param data: 反馈请求体，包含 message 字段
+    :return: 推送结果
+    """
+    # 从 header 中获取 uid，支持多种可能的 header 名称
+    uid = (
+        request.headers.get("x-bili-uid")
+        or request.headers.get("x-bili-mid")
+        or request.headers.get("uid")
+        or "unknown"
+    )
+
+    title = f"抽奖数据库反馈 - UID: {uid}"
+
+    try:
+        resp = await a_pushme(title=title, content=data.message, push_type="text")
+        if resp.status_code == 200:
+            return CommonResponseModel(
+                code=0,
+                msg="success",
+                data={
+                    "status": "success",
+                    "message": "反馈已提交",
+                    "uid": uid,
+                }
+            )
+        else:
+            return CommonResponseModel(
+                code=resp.status_code,
+                msg="推送失败",
+                data={
+                    "status": "failed",
+                    "message": f"反馈提交失败：HTTP {resp.status_code}",
+                    "uid": uid,
+                }
+            )
+    except Exception as e:
+        return CommonResponseModel(
+            code=-1,
+            msg="异常错误",
+            data={
+                "status": "error",
+                "message": f"提交失败：{str(e)}",
+                "uid": uid,
+            }
+        )
 
 
 # endregion

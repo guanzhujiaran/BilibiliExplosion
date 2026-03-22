@@ -169,7 +169,7 @@ class StatsPlugin(CrawlerPlugin[ParamsType]):
         总运行时长 (秒)。
         无论爬虫是否仍在运行，此属性都将返回从启动到当前时间点或结束的总时长。
         """
-        if self.start_time == 0.0:
+        if self.start_time == 0.0 or self.last_update_time == 0.0:
             return 0.0
         return self.last_update_time - self.start_time
 

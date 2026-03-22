@@ -23,38 +23,48 @@ class CrawlerExecutionInfo:
     info: CrawlerExecutionInfoModel
 
     def __init__(
-            self,
-            crawler_name: str,
-            default_interval_seconds: int = 2 * 3600,
-            logger=default_logger
+        self,
+        crawler_name: str,
+        default_interval_seconds: int = 2 * 3600,
+        logger=default_logger,
     ):
         self.logger = logger
         self.info = CrawlerExecutionInfoModel(
             crawler_name=crawler_name,
             default_interval_seconds=default_interval_seconds,
         )
-        self._exec_info_redis_key = f'{self.info.crawler_name}_last_exec_time.txt'
+        self._exec_info_redis_key = f"{self.info.crawler_name}_last_exec_time.txt"
 
     async def load_last_exec_time(self):
         if self.info.last_exec_time is None:
             ts_str = await comm_storage_redis_obj.get_val(self._exec_info_redis_key)
             if ts_str:
                 self.info.last_exec_time = datetime.fromtimestamp(float(ts_str))
-                self.logger.info(f"[{self.info.crawler_name}] 加载上次执行时间：{self.info.last_exec_time}")
+                self.logger.info(
+                    f"[{self.info.crawler_name}] 加载上次执行时间：{self.info.last_exec_time}"
+                )
             else:
-                self.logger.info(f"[{self.info.crawler_name}] 未找到上次执行时间，使用默认值。")
-                self.info.last_exec_time = datetime.fromtimestamp(86400)  # 默认时间点：1970-01-02 00:00:00
+                self.logger.info(
+                    f"[{self.info.crawler_name}] 未找到上次执行时间，使用默认值。"
+                )
+                self.info.last_exec_time = datetime.fromtimestamp(
+                    86400
+                )  # 默认时间点：1970-01-02 00:00:00
 
     async def save_last_exec_time(self):
         now = datetime.now()
         self.info.last_exec_time = now
-        await comm_storage_redis_obj.set_val(self._exec_info_redis_key, str(now.timestamp()))
+        await comm_storage_redis_obj.set_val(
+            self._exec_info_redis_key, str(now.timestamp())
+        )
 
     async def is_need_to_execute(self) -> bool:
         """判断是否需要执行爬虫"""
         await self.load_last_exec_time()
         if self.info.last_exec_time is None:
-            self.logger.info(f"[{self.info.crawler_name}] 上次执行时间为空，将执行一次。")
+            self.logger.info(
+                f"[{self.info.crawler_name}] 上次执行时间为空，将执行一次。"
+            )
             return True
         now = datetime.now()
         delta = (now - self.info.last_exec_time).total_seconds()
@@ -62,7 +72,9 @@ class CrawlerExecutionInfo:
             self.logger.info(f"[{self.info.crawler_name}] 满足执行条件，delta={delta}s")
             return True
         else:
-            self.logger.info(f"[{self.info.crawler_name}] 不满足执行条件，delta={delta}s")
+            self.logger.info(
+                f"[{self.info.crawler_name}] 不满足执行条件，delta={delta}s"
+            )
             return False
 
 
@@ -72,12 +84,12 @@ class BaseScheduler:
     """
 
     def __init__(
-            self,
-            func: Callable,
-            cron_expr: str,
-            default_interval_seconds: int = 2 * 3600,
-            crawler_name: str = "",
-            logger=default_logger
+        self,
+        func: Callable,
+        cron_expr: str,
+        default_interval_seconds: int = 2 * 3600,
+        crawler_name: str = "",
+        logger=default_logger,
     ):
         self.func = func
         self.crawler_asyncio_task = None
@@ -88,17 +100,13 @@ class BaseScheduler:
         self.exec_info = CrawlerExecutionInfo(
             crawler_name=crawler_name,
             default_interval_seconds=default_interval_seconds,
-            logger=self.logger
+            logger=self.logger,
         )
 
         # 构建cron trigger
         minute, hour, day, month, day_of_week = cron_expr.split()
         self.trigger = CronTrigger(
-            minute=minute,
-            hour=hour,
-            day=day,
-            month=month,
-            day_of_week=day_of_week
+            minute=minute, hour=hour, day=day, month=month, day_of_week=day_of_week
         )
         # 添加或更新任务
         self._add_or_update_job()
@@ -120,17 +128,23 @@ class BaseScheduler:
                 next_run_time=datetime.now(),  # 立即执行第一次
                 coalesce=True,  # 错过的任务合并为一次
                 max_instances=1,  # 同时最多允许一个实例
-                misfire_grace_time=3600  # 允许延迟最多 3600 秒
+                misfire_grace_time=24 * 3600,  # 允许延迟最多 1 天
             )
-            self.logger.info(f"[{self.exec_info.info.crawler_name}] 已添加新任务，首次运行时间已设为现在，将立即尝试执行")
+            self.logger.info(
+                f"[{self.exec_info.info.crawler_name}] 已添加新任务，首次运行时间已设为现在，将立即尝试执行"
+            )
 
     @async_pushme_try_catch_decorator
     async def run(self):
-        self.logger.info(f"[{self.exec_info.info.crawler_name}] 定时任务被触发，正在检查是否需要执行...")
+        self.logger.info(
+            f"[{self.exec_info.info.crawler_name}] 定时任务被触发，正在检查是否需要执行..."
+        )
 
         if await self.exec_info.is_need_to_execute():
             try:
-                self.logger.info(f"[{self.exec_info.info.crawler_name}] 开始执行爬虫任务...")
+                self.logger.info(
+                    f"[{self.exec_info.info.crawler_name}] 开始执行爬虫任务..."
+                )
                 # 调用异步 main 函数
                 self.crawler_asyncio_task = asyncio.create_task(
                     self.func()
@@ -138,12 +152,21 @@ class BaseScheduler:
                 await self.crawler_asyncio_task  # 等待异步任务完成
                 await self.exec_info.save_last_exec_time()
             except asyncio.CancelledError as e:
-                self.logger.error(f"[{self.exec_info.info.crawler_name}] 爬虫主动终止：{e}")
+                self.logger.error(
+                    f"[{self.exec_info.info.crawler_name}] 爬虫主动终止：{e}"
+                )
             except Exception as e:
-                self.logger.exception(f"[{self.exec_info.info.crawler_name}] 爬虫执行出错：{e}")
-                await a_pushme(title=f"{self.exec_info.info.crawler_name} 执行异常", content=f"错误详情：{str(e)}")
+                self.logger.exception(
+                    f"[{self.exec_info.info.crawler_name}] 爬虫执行出错：{e}"
+                )
+                await a_pushme(
+                    title=f"{self.exec_info.info.crawler_name} 执行异常",
+                    content=f"错误详情：{str(e)}",
+                )
         else:
-            self.logger.info(f"[{self.exec_info.info.crawler_name}] 当前不满足执行条件，跳过本次任务。")
+            self.logger.info(
+                f"[{self.exec_info.info.crawler_name}] 当前不满足执行条件，跳过本次任务。"
+            )
 
     def terminate(self):
         """
@@ -185,9 +208,11 @@ class BaseScheduler:
                 next_run_time=datetime.now(),
                 coalesce=True,
                 max_instances=1,
-                misfire_grace_time=3600
+                misfire_grace_time=3600,
             )
-            self.logger.info(f"[{self.exec_info.info.crawler_name}] 任务已重新添加到调度器")
+            self.logger.info(
+                f"[{self.exec_info.info.crawler_name}] 任务已重新添加到调度器"
+            )
 
 
 class GenericCrawlerScheduler(BaseScheduler):
@@ -196,11 +221,11 @@ class GenericCrawlerScheduler(BaseScheduler):
     """
 
     def __init__(
-            self,
-            crawler: UnlimitedCrawler,
-            cron_expr: str,
-            default_interval_seconds: int = 2 * 3600,
-            crawler_name: Optional[str] = None
+        self,
+        crawler: UnlimitedCrawler,
+        cron_expr: str,
+        default_interval_seconds: int = 2 * 3600,
+        crawler_name: Optional[str] = None,
     ):
         self.crawler = crawler
         super().__init__(
@@ -208,17 +233,17 @@ class GenericCrawlerScheduler(BaseScheduler):
             cron_expr=cron_expr,
             default_interval_seconds=default_interval_seconds,
             crawler_name=crawler_name or self.crawler.__class__.__name__,
-            logger=self.crawler.log
+            logger=self.crawler.log,
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+
     class MockParams(CustomBaseModelHashable):
         a: int
 
         def __hash__(self):
             return hash(self.a)
-
 
     class MockCrawler(UnlimitedCrawler[MockParams]):
         """模拟的爬虫类，仅用于测试"""
@@ -227,18 +252,18 @@ if __name__ == '__main__':
             self.log.info(f"[MockCrawler] 模拟爬虫正在执行 handle_fetch...{params}")
             await asyncio.sleep(1)
 
-        async def key_params_gen(self, params: ParamsType) -> AsyncGenerator[MockParams, None]:
+        async def key_params_gen(
+            self, params: ParamsType
+        ) -> AsyncGenerator[MockParams, None]:
             for i in range(10):
                 yield MockParams(a=i)
 
-        async def is_stop(self) -> bool:
-            ...
+        async def is_stop(self) -> bool: ...
 
         async def main(self):
             self.log.info("[MockCrawler] 开始执行 main 方法...")
             await self.run()
             self.log.info("[MockCrawler] main 方法执行完成")
-
 
     async def _test_scheduler():
         # 启动全局调度器（如果尚未启动）
@@ -262,6 +287,5 @@ if __name__ == '__main__':
         finally:
             scheduler.remove()
             GLOBAL_SCHEDULER.shutdown()
-
 
     asyncio.run(_test_scheduler())

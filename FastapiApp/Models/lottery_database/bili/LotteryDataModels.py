@@ -247,9 +247,14 @@ class AddTopicLotteryReq(CustomBaseModel):
     topic_id: int | str
 
 
+class SubmitFeedbackReq(CustomBaseModel):
+    """提交反馈请求模型"""
+    message: str = Field(..., description="反馈内容")
+
+
 class AddTopicLotteryResp(BaseAddLotteryResp):
     """添加话题抽奖响应"""
-    topic_id: str | int = Field(..., description="提交的话题ID")
+    topic_id: str | int = Field(..., description="提交的话题 ID")
 
 
 # region Description：抽奖信息统计模型
