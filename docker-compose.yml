@@ -72,7 +72,9 @@ services:
       - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
       - TZ=${ENV_TZ}
     volumes:
-      - ./docker_vol/mysql_data/data:/var/lib/mysql
+      - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d # 配置文件目录
+      - ./docker_vol/mysql_data/data:/var/lib/mysql  # 数据文件目录
+      - ./docker_vol/mysql_data/log:/var/log/mysql     # 日志文件目录
       - ./docker_vol/mysql_data/init/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
