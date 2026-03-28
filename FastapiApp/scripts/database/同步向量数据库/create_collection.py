@@ -65,7 +65,7 @@ async def create_collection():
         datatype=DataType.INT64,
     )
     await milvus_sql_helper._client.create_collection(
-        collection_name=milvus_sql_helper.Collections.bili_lot_data,
+        collection_name=milvus_sql_helper.CollectionNameEnum.bili_lot_data,
         schema=schema,
         index_params=index_params
     )

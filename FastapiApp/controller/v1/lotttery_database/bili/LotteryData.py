@@ -2,7 +2,7 @@
 单轮回复
 """
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import Query, Body, Request
 from fastapi_cache.decorator import cache
@@ -18,12 +18,20 @@ from Models.lottery_database.bili.LotteryDataModels import (
     LiveLotteryResp,
     AddDynamicLotteryReq,
     AddTopicLotteryReq,
+    AddTopicLotteryResp,
     BulkAddDynamicLotteryReq,
     LotdataResp,
-    AddTopicLotteryResp,
     SubmitFeedbackReq,
 )
-from Service.LangChainCompo.text_embed import search_lottery_text
+from Models.lottery_database.bili.comm import (
+    LotteryPaginationParams,
+    LotteryWithLimitTimePaginationParams,
+    LotterySearchPaginationParams,
+)
+from Service.LangChainCompo.text_embed import (
+    get_lottery_entity_num,
+    search_lottery_text,
+)
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
 from Service.lottery_database.bili_lotterty import (
     get_common_lottery,
@@ -44,7 +52,7 @@ router = new_router()
 
 
 # region get方法
-@router.get(
+@router.post(
     "/GetCommonLottery",
     summary="获取数据库里存放的一般抽奖",
     response_model=CommonResponseModel[list[CommonLotteryResp]],
@@ -56,57 +64,57 @@ async def api_GetCommonLottery(round_num: int = Query(ge=1, le=10, default=2)):
     return CommonResponseModel(data=result)
 
 
-@router.get(
+@router.post(
     "/GetReserveLottery",
     summary="获取必抽的预约抽奖数据",
     response_model=CommonResponseModel[ResponsePaginationItems[ReserveInfoResp]],
     description="""获取必抽的预约抽奖数据
-当page_num和page_size任一为0时，返回svm判断过的必抽的数据
+当 page_num 和 page_size 任一为 0 时，返回 svm 判断过的必抽的数据
 否则返回分页了的全部数据""",
     response_model_exclude_none=True,
 )
+@cache(expire=30)
 async def api_GetMustReserveLottery(
-    limit_time: int = Query(ge=0, le=2**128, default=3 * 24 * 3600),
-    page_num: int = Query(ge=0, default=0, description="当前页数"),
-    page_size: int = Query(ge=0, default=0, description="每页的条数"),
+    pagination: LotteryWithLimitTimePaginationParams,
 ):
     """
     获取必抽的预约抽奖数据
-    当page_num和page_size任一为0时，返回svm判断过的必抽的数据
+    当 page_num 和 page_size 任一为 0 时，返回 svm 判断过的必抽的数据
     否则返回分页了的全部数据
-    :param page_num:
-    :param page_size:
-    :param limit_time:
+    :param pagination:
     :return:
     """
-    result_items, total = await get_reserve_lottery(limit_time, page_num, page_size)
+    result_items, total = await get_reserve_lottery(
+        pagination.limit_time, pagination.page_num, pagination.page_size
+    )
     return CommonResponseModel(
         data=ResponsePaginationItems[ReserveInfoResp](items=result_items, total=total)
     )
 
 
-@router.get(
+@router.post(
     "/GetOfficialLottery",
     summary="获取必抽的官方抽奖数据",
     response_model=CommonResponseModel[ResponsePaginationItems[OfficialLotteryResp]],
     description="""获取必抽的官方抽奖数据
-当page_num和page_size任一为0时，返回svm判断过的必抽的数据
+当 page_num 和 page_size 任一为 0 时，返回 svm 判断过的必抽的数据
 否则返回分页了的全部数据""",
     response_model_exclude_none=True,
 )
+@cache(expire=30)
 async def api_GetMustOfficialLottery(
-    limit_time: int = Query(ge=0, le=2**128, default=3 * 24 * 3600),
-    page_num: int = Query(ge=0, default=0, description="当前页数"),
-    page_size: int = Query(ge=0, default=0, description="每页的条数"),
+    pagination: LotteryWithLimitTimePaginationParams,
 ):
     """
     获取必抽的官方抽奖数据
-    当page_num和page_size任一为0时，返回svm判断过的必抽的数据
+    当 page_num 和 page_size 任一为 0 时，返回 svm 判断过的必抽的数据
     否则返回分页了的全部数据
-    :param limit_time:
+    :param pagination:
     :return:
     """
-    result_items, total = await get_official_lottery(limit_time, page_num, page_size)
+    result_items, total = await get_official_lottery(
+        pagination.limit_time, pagination.page_num, pagination.page_size
+    )
     return CommonResponseModel(
         data=ResponsePaginationItems[OfficialLotteryResp](
             items=result_items, total=total
@@ -114,66 +122,71 @@ async def api_GetMustOfficialLottery(
     )
 
 
-@router.get(
+@router.post(
     "/GetChargeLottery",
     summary="获取必抽的充电抽奖数据",
     response_model=CommonResponseModel[ResponsePaginationItems[ChargeLotteryResp]],
     description="""获取必抽的官方抽奖数据
-当page_num和page_size任一为0时，返回svm判断过的必抽的数据
+当 page_num 和 page_size 任一为 0 时，返回 svm 判断过的必抽的数据
 否则返回分页了的全部数据""",
     response_model_exclude_none=True,
 )
+@cache(expire=30)
 async def api_GetChargeLottery(
-    limit_time: int = Query(ge=0, le=2**128, default=3 * 24 * 3600),
-    page_num: int = Query(ge=0, default=0, description="当前页数"),
-    page_size: int = Query(ge=0, default=0, description="每页的条数"),
+    pagination: LotteryWithLimitTimePaginationParams,
 ):
     """
     获取必抽的官方抽奖数据
-    当page_num和page_size任一为0时，返回svm判断过的必抽的数据
+    当 page_num 和 page_size 任一为 0 时，返回 svm 判断过的必抽的数据
     否则返回分页了的全部数据
-    :param limit_time:
+    :param pagination:
     :return:
     """
-    result_items, total = await get_charge_lottery(limit_time, page_num, page_size)
+    result_items, total = await get_charge_lottery(
+        pagination.limit_time, pagination.page_num, pagination.page_size
+    )
     return CommonResponseModel(
         data=ResponsePaginationItems[ChargeLotteryResp](items=result_items, total=total)
     )
 
 
-@router.get(
+@router.post(
     "/GetLiveLottery",
     summary="获取所有直播抽奖数据（分页）",
     response_model=CommonResponseModel[ResponsePaginationItems[LiveLotteryResp]],
     response_model_exclude_none=True,
 )
+@cache(expire=30)
 async def api_GetLiveLottery(
-    page_num: int = Query(ge=0, default=0, description="当前页数"),
-    page_size: int = Query(ge=0, default=0, description="每页的条数"),
+    pagination: LotteryPaginationParams,
 ):
-    result_items, total = await get_live_lottery(page_num, page_size)
+    result_items, total = await get_live_lottery(
+        pagination.page_num, pagination.page_size
+    )
     return CommonResponseModel(
         data=ResponsePaginationItems[LiveLotteryResp](items=result_items, total=total)
     )
 
 
-@router.get(
+@router.post(
     "/GetTopicLottery",
     summary="获取所有话题抽奖数据（分页）",
     response_model=CommonResponseModel[ResponsePaginationItems[TopicLotteryResp]],
     response_model_exclude_none=True,
 )
+@cache(expire=30)
 async def api_GetTopicLottery(
-    page_num: int = Query(ge=0, default=0, description="当前页数"),
-    page_size: int = Query(ge=0, default=0, description="每页的条数"),
+    pagination: LotteryPaginationParams,
 ):
-    result_items, total = await get_topic_lottery(page_num, page_size)
+    result_items, total = await get_topic_lottery(
+        pagination.page_num, pagination.page_size
+    )
     return CommonResponseModel(
         data=ResponsePaginationItems[TopicLotteryResp](items=result_items, total=total)
     )
 
 
-@router.get(
+@router.post(
     "/GetAllLottery",
     summary="获取一轮的所有抽奖信息",
     response_model=CommonResponseModel[AllLotteryResp],
@@ -243,17 +256,22 @@ async def api_AddTopicLottery(
     return CommonResponseModel(data=resp)
 
 
-@router.get(
+@router.post(
     "/SearchLotteryByKeyword",
     summary="根据关键词搜索抽奖信息",
-    response_model=CommonResponseModel[List[LotdataResp]],
+    response_model=CommonResponseModel[ResponsePaginationItems[LotdataResp]],
     response_model_exclude_none=True,
 )
 async def api_Search(
-    keyword: str = Query(..., min_length=1),
+    pagination: LotterySearchPaginationParams,
 ):
-    result: List[Lotdata] = await search_lottery_text(keyword)
-    return CommonResponseModel(data=result)
+    # 转换为 offset-limit 形式传递给底层函数
+    offset = (pagination.page_num - 1) * pagination.page_size
+    result: List[Lotdata] = await search_lottery_text(
+        pagination.keyword, limit=pagination.page_size, offset=offset
+    )
+    total = await get_lottery_entity_num()
+    return CommonResponseModel(data=ResponsePaginationItems(items=result, total=total))
 
 
 @router.post(
@@ -293,7 +311,7 @@ async def api_SubmitFeedback(
                     "status": "success",
                     "message": "反馈已提交",
                     "uid": uid,
-                }
+                },
             )
         else:
             return CommonResponseModel(
@@ -303,7 +321,7 @@ async def api_SubmitFeedback(
                     "status": "failed",
                     "message": f"反馈提交失败：HTTP {resp.status_code}",
                     "uid": uid,
-                }
+                },
             )
     except Exception as e:
         return CommonResponseModel(
@@ -313,7 +331,7 @@ async def api_SubmitFeedback(
                 "status": "error",
                 "message": f"提交失败：{str(e)}",
                 "uid": uid,
-            }
+            },
         )
 
 

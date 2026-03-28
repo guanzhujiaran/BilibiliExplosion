@@ -1,7 +1,9 @@
 import asyncio
 import contextlib
+import socket
 
 from fastapi import FastAPI
+import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -18,9 +20,12 @@ async def life_span(app: FastAPI):
     # 测试数据库连接
     await test_database_connections()
     
-    # 检查milvus数据库集合
+    # 测试各个服务的端口和 host 连通性
+    await test_service_ports_and_hosts()
+    
+    # 检查 milvus 数据库集合
     await asyncio.sleep(3)  # 等 HTTP server ready
-    myfastapi_logger.critical("检查milvus数据库集合")
+    myfastapi_logger.critical("检查 milvus 数据库集合")
     await milvus_sql_helper.ensure_collection_exists()  # 必须执行
     myfastapi_logger.critical("重试未处理的消息")
     await BiliLotDataPublisher.retry_pending_messages()  # 重试未处理的消息
@@ -70,8 +75,135 @@ async def test_database_connections():
             
             myfastapi_logger.info(f"数据库 '{db_name}' 连接成功")
         except Exception as e:
-            myfastapi_logger.critical(f"数据库 '{db_name}' 连接失败: {e}")
-            raise SystemExit(f"数据库 '{db_name}' 连接失败: {e}")
+            myfastapi_logger.critical(f"数据库 '{db_name}' 连接失败：{e}")
+            raise SystemExit(f"数据库 '{db_name}' 连接失败：{e}")
+
+
+async def test_port_connectivity(host: str, port: int, service_name: str, timeout: float = 5.0) -> bool:
+    """
+    测试指定 host 和 port 的连通性
+    
+    Args:
+        host: 主机地址
+        port: 端口号
+        service_name: 服务名称
+        timeout: 超时时间（秒）
+    
+    Returns:
+        bool: 是否连接成功
+    """
+    try:
+        # 使用 asyncio 创建 socket 连接
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port),
+            timeout=timeout
+        )
+        writer.close()
+        await writer.wait_closed()
+        myfastapi_logger.info(f"服务 '{service_name}' ({host}:{port}) 连接成功")
+        return True
+    except asyncio.TimeoutError:
+        myfastapi_logger.error(f"服务 '{service_name}' ({host}:{port}) 连接超时")
+        return False
+    except ConnectionRefusedError:
+        myfastapi_logger.error(f"服务 '{service_name}' ({host}:{port}) 连接被拒绝")
+        return False
+    except OSError as e:
+        myfastapi_logger.error(f"服务 '{service_name}' ({host}:{port}) 连接失败：{e}")
+        return False
+    except Exception as e:
+        myfastapi_logger.error(f"服务 '{service_name}' ({host}:{port}) 连接异常：{e}")
+        return False
+
+
+async def test_http_endpoint(url: str, service_name: str, timeout: float = 5.0) -> bool:
+    """
+    测试 HTTP 端点的连通性
+    
+    Args:
+        url: HTTP 端点 URL
+        service_name: 服务名称
+        timeout: 超时时间（秒）
+    
+    Returns:
+        bool: 是否连接成功
+    """
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=timeout)
+            # 只要能收到响应就认为连接成功，不关心状态码
+            myfastapi_logger.info(f"HTTP 服务 '{service_name}' ({url}) 连接成功，状态码：{response.status_code}")
+            return True
+    except httpx.TimeoutException:
+        myfastapi_logger.error(f"HTTP 服务 '{service_name}' ({url}) 连接超时")
+        return False
+    except httpx.RequestError as e:
+        myfastapi_logger.error(f"HTTP 服务 '{service_name}' ({url}) 连接失败：{e}")
+        return False
+    except Exception as e:
+        myfastapi_logger.error(f"HTTP 服务 '{service_name}' ({url}) 连接异常：{e}")
+        return False
+
+
+async def test_service_ports_and_hosts():
+    """
+    测试 CONFIG 中设置的所有服务的端口和 host 连通性
+    """
+    myfastapi_logger.critical("开始测试各服务端口和 host 连通性...")
+    
+    failed_services = []
+    
+    # 定义要测试的服务列表
+    services_to_test = [
+        # MySQL (通过 socket 测试)
+        ("MySQL", settings.MYSQL_HOST, int(settings.MYSQL_PORT)),
+        
+        # Redis (通过 socket 测试)
+        ("Redis", settings.REDIS_HOST, int(settings.REDIS_PORT)),
+        
+        # RabbitMQ (通过 socket 测试)
+        ("RabbitMQ", settings.RABBITMQ_HOST, int(settings.RABBITMQ_PORT)),
+        
+        # Unidbg (通过 HTTP 测试)
+        ("Unidbg", None, int(settings.UNIDBG_PORT), settings.UNIDBG_HOST),
+        
+        # V2Ray (通过 socket 测试)
+        ("V2Ray", settings.V2RAY_HOST, int(settings.V2RAY_PORT)),
+        
+        # LM Studio (通过 HTTP 测试)
+        ("LM Studio", None, int(settings.LMSTUDIO_PORT), settings.LMSTUDIO_HOST),
+        
+        # Milvus (通过 socket 测试)
+        ("Milvus", settings.MILVUS_HOST, int(settings.MILVUS_PORT)),
+    ]
+    
+    for service_info in services_to_test:
+        if len(service_info) == 3:
+            # Socket 测试服务
+            service_name, host, port = service_info
+            success = await test_port_connectivity(host, port, service_name)
+            if not success:
+                failed_services.append(f"{service_name} ({host}:{port})")
+        else:
+            # HTTP 测试服务
+            service_name, _, port, host = service_info
+            url = f"http://{host}:{port}"
+            success = await test_http_endpoint(url, service_name)
+            if not success:
+                failed_services.append(f"{service_name} ({url})")
+    
+    if failed_services:
+        myfastapi_logger.critical("=" * 60)
+        myfastapi_logger.critical("以下服务连接失败:")
+        for failed_service in failed_services:
+            myfastapi_logger.critical(f"  ❌ {failed_service}")
+        myfastapi_logger.critical("=" * 60)
+        # 可以选择是否要继续启动或抛出异常
+        # myfastapi_logger.warning("部分服务不可用，但将继续启动应用...")
+        # 如果需要严格检查，取消下面注释
+        # raise SystemExit(f"以下服务连接失败：{', '.join(failed_services)}")
+    else:
+        myfastapi_logger.critical("✅ 所有服务端口和 host 连通性测试通过!")
 
 
 __all__ = [

@@ -61,24 +61,24 @@ class BackgroundService:
         )
         self.GET_DYN = GenericCrawlerScheduler(
             crawler=dyn_detail_scrapy,
-            cron_expr="0 1 * * *",
+            cron_expr="0 2 * * *",
             default_interval_seconds=15 * 3600,
         )
         self.GET_TOPIC = GenericCrawlerScheduler(
             crawler=topic_robot,
-            cron_expr="0 1 * * *",
+            cron_expr="0 3 * * *",
             default_interval_seconds=15 * 3600,
         )
         self.REFRESH_BILI_LOTDATA_DATABASE = GenericCrawlerScheduler(
             crawler=refresh_bili_lot_database_crawler,
-            cron_expr="0 1 * * *",
+            cron_expr="0 4 * * *",
             default_interval_seconds=15 * 3600,
         )
         self.LOTTERY_API_ROBOT_DYN_SCHEDULER = GenericCrawlerScheduler(
             crawler=LotteryApiRobot(
                 log=official_lot_logger, business_type=2, sem_num=2
             ),
-            cron_expr="0 1 * * *",
+            cron_expr="0 5 * * *",
             default_interval_seconds=15 * 3600,
             crawler_name=BackgroundServiceName.LOTTERY_API_ROBOT_DYN_SCHEDULER.value,
         )
@@ -86,13 +86,13 @@ class BackgroundService:
             crawler=LotteryApiRobot(
                 log=reserve_lot_logger, business_type=10, sem_num=2
             ),
-            cron_expr="0 1 * * *",
+            cron_expr="0 6 * * *",
             default_interval_seconds=15 * 3600,
             crawler_name=BackgroundServiceName.LOTTERY_API_ROBOT_RESERVE_SCHEDULER.value,
         )
         self.GMFLV2_SCHEDULER = GenericCrawlerScheduler(
             crawler=gmflv2,
-            cron_expr="0 1 * * *",
+            cron_expr="0 7 * * *",
             default_interval_seconds=1,
             crawler_name=BackgroundServiceName.GMFLV2_SCHEDULER.value,
         )
