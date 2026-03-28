@@ -59,7 +59,6 @@ class ChatGptSettings:
     open_ai_api_key: str = "sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS"
     model_name: str = "gpt-3.5-turbo"
 
-w
 # region 基本配置
 class pushme:
     _url = "https://push.i-i.me"
