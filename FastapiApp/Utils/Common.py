@@ -10,6 +10,7 @@ from pymysql.constants import CR
 from log.base_log import myfastapi_logger, sql_log
 import random
 import loguru
+
 GLOBAL_SCHEDULER: AsyncIOScheduler = AsyncIOScheduler()
 _comm_lock = asyncio.Lock()
 # 全局线程池，避免重复创建
@@ -81,6 +82,7 @@ def retry_wrapper(func, max_retries: int = -1, sleep_time: int = 10):
         max_retries: 最大重试次数，-1表示无限重试
         sleep_time: 重试间隔时间(秒)
     """
+
     @wraps(func)
     async def wrapper(*args, **kwargs):
         retry_count = 0
@@ -90,11 +92,15 @@ def retry_wrapper(func, max_retries: int = -1, sleep_time: int = 10):
                 return res
             except Exception as e:
                 if max_retries >= 0 and retry_count >= max_retries:
-                    myfastapi_logger.error(f'函数【{func.__name__}】重试{max_retries}次后仍失败，抛出异常')
+                    myfastapi_logger.error(
+                        f"函数【{func.__name__}】重试{max_retries}次后仍失败，抛出异常"
+                    )
                     raise
 
                 retry_count += 1
-                myfastapi_logger.exception(f'函数【{func.__name__}】执行失败，第{retry_count}次重试: {e}')
+                myfastapi_logger.exception(
+                    f"函数【{func.__name__}】执行失败，第{retry_count}次重试: {e}"
+                )
                 await asyncio.sleep(sleep_time)
 
     return wrapper
@@ -109,25 +115,25 @@ async def run_in_executor(func, *args):
 async def handle_sql_operational_error(func, log, err: OperationalError):
     match err.args[0]:
         case 1129:
-            log.error(f'{func} \t{err}')
+            log.error(f"{func} \t{err}")
             await asyncio.sleep(120)
         case 1213:  # 死锁错误，随机等待后重试
             sleep_time = random.uniform(1, 5)  # 随机等待1-5秒
-            log.error(f'{func} \t死锁错误: {err}, 将在{sleep_time:.2f}秒后重试')
+            log.error(f"{func} \t死锁错误: {err}, 将在{sleep_time:.2f}秒后重试")
             await asyncio.sleep(sleep_time)
         case CR.CR_SERVER_LOST:  # mysql并发太高了，等待一段时间再重试
             await asyncio.sleep(120)
         case CR.CR_CONN_HOST_ERROR:  # mysql配置不正确或者mysql暂时挂了，在重启
-            log.error(f'{func} \t{err}')
+            log.error(f"{func} \t{err}")
             await asyncio.sleep(120)
         case _:  # 未知代码
-            log.error(f'未知mysql错误代码：{func} \t{err}')
+            log.error(f"未知mysql错误代码：{func} \t{err}")
             await asyncio.sleep(120)
 
 
 def sql_retry_wrapper(_func: FuncT) -> FuncT:
     @wraps(_func)
-    async def wrapper(*args: Any, **kwargs: Any) -> TResult:
+    async def wrapper(*args: Any, **kwargs: Any):
         while True:
             try:
                 res = await _func(*args, **kwargs)
@@ -143,7 +149,9 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
                 await asyncio.sleep(60)
                 continue
             except Exception as e:
-                sql_log.critical(f'函数：【{_func.__name__}】\targs：【{args}\t{kwargs}】\t报错：【{e}】')
+                sql_log.critical(
+                    f"函数：【{_func.__name__}】\targs：【{args}\t{kwargs}】\t报错：【{e}】"
+                )
                 await asyncio.sleep(60)
                 continue
 
@@ -169,11 +177,13 @@ def log_sql_retry_wrapper(log: loguru._logger.Logger = myfastapi_logger):
                     # 检查是否是死锁错误(已经在内层处理过重试)
                     error_str = str(e)
                     if "Deadlock" in error_str or "1213" in error_str:
-                        log.error(f'{_func.__name__} \t死锁错误(内层重试已耗尽): {error_str[:200]}')
+                        log.error(
+                            f"{_func.__name__} \t死锁错误(内层重试已耗尽): {error_str[:200]}"
+                        )
                         await asyncio.sleep(5)  # 短暂等待后继续重试
                         continue
                     # 其他异常保持原有逻辑
-                    log.exception(f'{args}\n{kwargs}\n{e}')
+                    log.exception(f"{args}\n{kwargs}\n{e}")
                     await asyncio.sleep(60)
                     continue
 
@@ -182,7 +192,9 @@ def log_sql_retry_wrapper(log: loguru._logger.Logger = myfastapi_logger):
     return _wrapper
 
 
-async def asyncio_gather(*coros_or_futures, log: Optional[_logger.Logger] = myfastapi_logger):
+async def asyncio_gather(
+    *coros_or_futures, log: Optional[_logger.Logger] = myfastapi_logger
+):
     async def _handle_coroutine(coro):
         try:
             return await coro
@@ -194,7 +206,9 @@ async def asyncio_gather(*coros_or_futures, log: Optional[_logger.Logger] = myfa
     return results
 
 
-def log_max_count_retry_wrapper(*, log: _logger = myfastapi_logger, max_count: int = 3, sleep_time: int = 10):
+def log_max_count_retry_wrapper(
+    *, log: _logger = myfastapi_logger, max_count: int = 3, sleep_time: int = 10
+):
     """
     Decorator factory that creates a retry decorator with logging.
 

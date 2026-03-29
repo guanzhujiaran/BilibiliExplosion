@@ -10,25 +10,24 @@ skip-log-bin
 general_log = 0
 slow_query_log = 0
 log_error_verbosity = 1
+log-output = NONE
 
 # ---------------------------------------------------------
 # 3. 连接和超时优化
 # ---------------------------------------------------------
-wait_timeout = 28800
-interactive_timeout = 28800
-connect_timeout = 10
 max_connections = 500
 thread_cache_size = 100
-net_buffer_length = 32768
-max_allowed_packet = 64M
-
+wait_timeout=300
+interactive_timeout=300
+thread_cache_size=32
+back_log=10000
 # ---------------------------------------------------------
 # 4. InnoDB 引擎优化
 # ---------------------------------------------------------
-innodb_buffer_pool_size = 256M
+innodb_buffer_pool_size = 1
+innodb_buffer_pool_instances=4
 innodb_log_file_size = 64M
 innodb_flush_log_at_trx_commit = 2
-innodb_lock_wait_timeout = 50
 
 # ---------------------------------------------------------
 # 5. 字符集配置

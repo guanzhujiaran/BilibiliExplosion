@@ -59,6 +59,7 @@ class ChatGptSettings:
     open_ai_api_key: str = "sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS"
     model_name: str = "gpt-3.5-turbo"
 
+
 # region 基本配置
 class pushme:
     _url = "https://push.i-i.me"
@@ -148,18 +149,13 @@ class database:
 class SqlAlchemyConfig:
     engine_config = dict(
         echo=False,
-        poolclass=AsyncAdaptedQueuePool,
-        pool_size=20,        # 每个 engine 的基础连接数；有 6 个 DB，总连接 = pool_size * 6 = 120（原 10 偏低）
-        max_overflow=40,     # 峰值最多额外 40 个，单 engine 上限 60，总上限 360（原 20 偏低）
-        pool_timeout=30,     # 等待连接超时 30s，高并发时给予足够等待时间（原 10 偏短）
-        pool_pre_ping=True,  # 取连接前 ping，自动剔除僵尸连接（解决 Packet sequence number wrong）
-        pool_recycle=1800,   # 30min 回收，小于 MySQL 默认 wait_timeout(8h)，防止连接被服务端断开
-        pool_reset_on_return="rollback",  # 归还连接时自动 rollback，避免死锁残留事务污染连接
-        pool_use_lifo=True,  # 使用 LIFO 模式而非 FIFO，减少连接并发震荡，提高连接复用率
+        pool_size=100,
+        max_overflow=40,
+        pool_use_lifo=True,
     )
     session_config = dict(
         expire_on_commit=False,
-        autoflush=False,     # 关闭自动 flush，减少隐式 IO，由业务代码显式控制
+        autoflush=False,  # 关闭自动 flush，减少隐式 IO，由业务代码显式控制
     )
 
 
