@@ -28,7 +28,7 @@ innodb_buffer_pool_size = 1
 innodb_buffer_pool_instances=4
 innodb_log_file_size = 64M
 innodb_flush_log_at_trx_commit = 2
-
+max_allowed_packet =500M
 # ---------------------------------------------------------
 # 5. 字符集配置
 # ---------------------------------------------------------
