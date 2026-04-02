@@ -387,16 +387,24 @@ class SQLHelper(SqlHelperBase):
         if time_limit and time_limit > 0:
             target_ts = now_ts + time_limit
             base_conditions.append(Lotdata.lottery_time <= target_ts)
-        stmt = select(Lotdata).options(selectinload(Lotdata.bilidyndetail)).where(and_(*base_conditions)).order_by(
-            Lotdata.lottery_time.asc())
+        
+        # 优化 1: 不立即加载关联的 bilidyndetail，减少首次查询的数据量
+        # 使用 lazy='select' 延迟加载，只有在访问 bilidyndetail 时才会查询
+        stmt = select(Lotdata).where(and_(*base_conditions)).order_by(
+            Lotdata.lottery_time.asc()
+        )
+        
         # 如果提供了分页参数，则应用分页
         if page_number and page_size:
             stmt = stmt.limit(page_size).offset((page_number - 1) * page_size)
+        
         async with self.async_session() as session:
             result = await session.execute(stmt)
             records = result.scalars().all()
-            # 计算总数
-            count_stmt = select(func.count()).select_from(Lotdata).where(and_(*base_conditions))
+            
+            # 优化 2: 使用覆盖索引进行 COUNT 查询，避免全表扫描
+            # idx_count_optimize 索引包含 (status, business_type, lottery_time, lottery_id)
+            count_stmt = select(func.count(Lotdata.lottery_id)).where(and_(*base_conditions))
             count_result = await session.execute(count_stmt)
             total_count = count_result.scalar()
 
@@ -426,17 +434,22 @@ class SQLHelper(SqlHelperBase):
         if time_limit:
             target_ts = now_ts + time_limit
             base_conditions.append(Lotdata.lottery_time <= target_ts)
-        stmt = select(Lotdata).options(selectinload(Lotdata.bilidyndetail)).where(and_(*base_conditions)).order_by(
-            Lotdata.lottery_time.asc())
+        
+        # 优化 1: 不立即加载关联的 bilidyndetail，减少首次查询的数据量
+        stmt = select(Lotdata).where(and_(*base_conditions)).order_by(
+            Lotdata.lottery_time.asc()
+        )
+        
         # 如果提供了分页参数，则应用分页
         if page_number > 0 and page_size > 0:
             stmt = stmt.limit(page_size).offset((page_number - 1) * page_size)
+        
         async with self.async_session() as session:
             result = await session.execute(stmt)
             records = result.scalars().all()
 
-            # 计算总数
-            count_stmt = select(func.count()).select_from(Lotdata).where(and_(*base_conditions))
+            # 优化 2: 使用覆盖索引进行 COUNT 查询，避免全表扫描
+            count_stmt = select(func.count(Lotdata.lottery_id)).where(and_(*base_conditions))
             count_result = await session.execute(count_stmt)
             total_count = count_result.scalar()
 

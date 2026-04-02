@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Column, Computed, ForeignKeyConstraint, Index, Integer, TIMESTAMP, Text, text
+from sqlalchemy import BigInteger, Column, Computed, ForeignKeyConstraint, Index, Integer, TIMESTAMP, text
 from sqlalchemy.dialects.mysql import LONGTEXT, TEXT, TINYINT, VARCHAR
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.orm.base import Mapped
@@ -25,8 +25,7 @@ class Lotdata(Base):
     __tablename__ = 'lotdata'
     __table_args__ = (
         Index('UQ_business_id', 'business_id', unique=True),
-        Index('business_id', 'business_id'),
-        Index('idx_lottery_id', 'lottery_id', 'business_id', 'lottery_time', 'sender_uid', 'business_type'),
+        Index('idx_lottery_id', 'lottery_id', 'business_id', 'lottery_time', 'sender_uid', 'business_type', 'status'),
         Index('lottery_time', 'lottery_time'),
         Index('sender_uid', 'sender_uid')
     )
@@ -40,31 +39,31 @@ class Lotdata(Base):
     first_prize = mapped_column(BigInteger)
     second_prize = mapped_column(BigInteger)
     third_prize = mapped_column(BigInteger)
-    lottery_result = mapped_column(Text(collation='utf8mb4_general_ci'))
-    first_prize_cmt = mapped_column(Text(collation='utf8mb4_general_ci'))
-    second_prize_cmt = mapped_column(Text(collation='utf8mb4_general_ci'))
-    third_prize_cmt = mapped_column(Text(collation='utf8mb4_general_ci'))
-    first_prize_pic = mapped_column(Text(collation='utf8mb4_general_ci'))
-    second_prize_pic = mapped_column(Text(collation='utf8mb4_general_ci'))
-    third_prize_pic = mapped_column(Text(collation='utf8mb4_general_ci'))
+    lottery_result = mapped_column(TEXT)
+    first_prize_cmt = mapped_column(TEXT)
+    second_prize_cmt = mapped_column(TEXT)
+    third_prize_cmt = mapped_column(TEXT)
+    first_prize_pic = mapped_column(TEXT)
+    second_prize_pic = mapped_column(TEXT)
+    third_prize_pic = mapped_column(TEXT)
     need_post = mapped_column(BigInteger)
     business_type = mapped_column(BigInteger)
     sender_uid = mapped_column(BigInteger)
-    prize_type_first = mapped_column(Text(collation='utf8mb4_general_ci'))
-    prize_type_second = mapped_column(Text(collation='utf8mb4_general_ci'))
-    prize_type_third = mapped_column(Text(collation='utf8mb4_general_ci'))
+    prize_type_first = mapped_column(TEXT)
+    prize_type_second = mapped_column(TEXT)
+    prize_type_third = mapped_column(TEXT)
     pay_status = mapped_column(BigInteger)
     ts = mapped_column(BigInteger)
     _gt_ = mapped_column(BigInteger)
-    has_charge_right = mapped_column(Text(collation='utf8mb4_general_ci'))
-    lottery_detail_url = mapped_column(Text(collation='utf8mb4_general_ci'))
+    has_charge_right = mapped_column(TEXT)
+    lottery_detail_url = mapped_column(TEXT)
     participants = mapped_column(BigInteger)
-    participated = mapped_column(Text(collation='utf8mb4_general_ci'))
-    vip_batch_sign = mapped_column(Text(collation='utf8mb4_general_ci'))
-    exclusive_level = mapped_column(Text(collation='utf8mb4_general_ci'))
+    participated = mapped_column(TEXT)
+    vip_batch_sign = mapped_column(TEXT)
+    exclusive_level = mapped_column(TEXT)
     followed = mapped_column(BigInteger)
     reposted = mapped_column(BigInteger)
-    custom_extra_key = mapped_column(Text(collation='utf8mb4_general_ci'))
+    custom_extra_key = mapped_column(TEXT)
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 

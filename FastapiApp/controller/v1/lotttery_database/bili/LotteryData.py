@@ -13,7 +13,7 @@ from Models.lottery_database.bili.LotteryDataModels import (
     OfficialLotteryResp,
     AllLotteryResp,
     ChargeLotteryResp,
-    ReserveInfoResp,
+    ReserveInfoResp,    
     TopicLotteryResp,
     LiveLotteryResp,
     AddDynamicLotteryReq,
@@ -73,7 +73,7 @@ async def api_GetCommonLottery(round_num: int = Query(ge=1, le=10, default=2)):
 否则返回分页了的全部数据""",
     response_model_exclude_none=True,
 )
-@cache(expire=30)
+@cache(expire=180)
 async def api_GetMustReserveLottery(
     pagination: LotteryWithLimitTimePaginationParams,
 ):
@@ -101,7 +101,7 @@ async def api_GetMustReserveLottery(
 否则返回分页了的全部数据""",
     response_model_exclude_none=True,
 )
-@cache(expire=30)
+@cache(expire=180)
 async def api_GetMustOfficialLottery(
     pagination: LotteryWithLimitTimePaginationParams,
 ):
@@ -131,7 +131,7 @@ async def api_GetMustOfficialLottery(
 否则返回分页了的全部数据""",
     response_model_exclude_none=True,
 )
-@cache(expire=30)
+@cache(expire=180)
 async def api_GetChargeLottery(
     pagination: LotteryWithLimitTimePaginationParams,
 ):
@@ -156,7 +156,7 @@ async def api_GetChargeLottery(
     response_model=CommonResponseModel[ResponsePaginationItems[LiveLotteryResp]],
     response_model_exclude_none=True,
 )
-@cache(expire=30)
+@cache(expire=180)
 async def api_GetLiveLottery(
     pagination: LotteryPaginationParams,
 ):
@@ -174,7 +174,7 @@ async def api_GetLiveLottery(
     response_model=CommonResponseModel[ResponsePaginationItems[TopicLotteryResp]],
     response_model_exclude_none=True,
 )
-@cache(expire=30)
+@cache(expire=180)
 async def api_GetTopicLottery(
     pagination: LotteryPaginationParams,
 ):
