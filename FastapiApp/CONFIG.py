@@ -147,6 +147,7 @@ class database:
 
 
 class SqlAlchemyConfig:
+    # 业务连接池配置 - 供 router/service 等业务使用，保留足够的连接处理外部请求
     engine_config = dict(
         echo=False,
         pool_size=100,
@@ -155,7 +156,25 @@ class SqlAlchemyConfig:
     )
     session_config = dict(
         expire_on_commit=False,
-        autoflush=False,  # 关闭自动 flush，减少隐式 IO，由业务代码显式控制
+        autoflush=False,
+    )
+
+
+class CrawlerSqlAlchemyConfig:
+    """
+    爬虫专用连接池配置 - 与业务连接池完全隔离
+    即使爬虫并发高占用大量连接，也不会影响业务请求
+    池子大小与业务池相同，但使用独立的连接池实例
+    """
+    engine_config = dict(
+        echo=False,
+        pool_size=100,  # 与业务池大小相同，独立使用
+        max_overflow=40,
+        pool_use_lifo=True,
+    )
+    session_config = dict(
+        expire_on_commit=False,
+        autoflush=False,
     )
 
 
@@ -225,6 +244,7 @@ class _CONFIG:
     RabbitMQConfig = RabbitMQConfig()
     selenium_config = _SeleniumConfig()
     sql_alchemy_config = SqlAlchemyConfig()
+    crawler_sql_alchemy_config = CrawlerSqlAlchemyConfig()
     playwright_user_dir = PlaywrightUserDir
     _pc_ua = UserAgent(platforms=["desktop", "tablet"])
     _mobile_ua = UserAgent(platforms=["mobile"])

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from sqlalchemy.orm import InstrumentedAttribute
 
 from CONFIG import CONFIG
-from dao.base.sqlHelperBase import SqlHelperBase
+from dao.base.sqlHelperBase import CrawlerSqlHelperBase
 from log.base_log import reserve_lot_logger
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.opus新版官方抽奖.预约抽奖.db.models import TReserveRoundInfo, TUpReserveRelationInfo
@@ -31,7 +31,11 @@ def lock_wrapper(func: Callable) -> Callable:
     return wrapper
 
 
-class _SqlHelper(SqlHelperBase):
+class _SqlHelper(CrawlerSqlHelperBase):
+    """
+    爬虫用预约抽奖数据库操作类
+    使用独立的爬虫连接池，限制并发
+    """
     def __init__(self):
         mysql_db_url = CONFIG.database.MYSQL.bili_reserve_URI
         super().__init__(mysql_db_url=mysql_db_url)

@@ -19,7 +19,7 @@ from Service.GetOthersLotDyn.Sql.models import (
 )
 from Utils.Common import sql_retry_wrapper
 from Utils.redisTool.RedisManager import RedisManagerBase
-from dao.base.sqlHelperBase import SqlHelperBase
+from dao.base.sqlHelperBase import CrawlerSqlHelperBase
 
 
 class GetOtherLotRedisManager(RedisManagerBase):
@@ -51,7 +51,11 @@ class GetOtherLotRedisManager(RedisManagerBase):
         await self._set(self.RedisMap.get_dyn_ts.value, get_dyn_ts)
 
 
-class __SqlHelper(SqlHelperBase):
+class __SqlHelper(CrawlerSqlHelperBase):
+    """
+    爬虫用获取其他抽奖数据库操作类
+    使用独立的爬虫连接池，限制并发
+    """
     def __init__(self):
         mysql_db_url = CONFIG.database.MYSQL.get_other_lot_URI
         super().__init__(mysql_db_url=mysql_db_url)
