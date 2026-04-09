@@ -13,24 +13,75 @@ log_error_verbosity = 1
 log-output = NONE
 
 # ---------------------------------------------------------
-# 3. 连接和超时优化
+# 3. 连接和超时优化 - 支持超长时间查询
 # ---------------------------------------------------------
 max_connections = 500
 thread_cache_size = 100
-wait_timeout=300
-interactive_timeout=300
-thread_cache_size=32
-back_log=10000
+
+# 超时设置 - 允许超长时间查询（单位：秒）
+wait_timeout = 28800          # 8小时，非交互式连接超时
+interactive_timeout = 28800   # 8小时，交互式连接超时
+net_read_timeout = 600        # 10分钟，网络读取超时
+net_write_timeout = 600       # 10分钟，网络写入超时
+connect_timeout = 30          # 30秒，连接建立超时
+
+back_log = 10000
+
 # ---------------------------------------------------------
-# 4. InnoDB 引擎优化
+# 4. 包大小限制 - 防止大数据包被截断
 # ---------------------------------------------------------
-innodb_buffer_pool_size = 1
-innodb_buffer_pool_instances=4
-innodb_log_file_size = 64M
+max_allowed_packet = 500M
+
+# ---------------------------------------------------------
+# 5. 缓冲区尺寸优化 - 提升大数据量查询性能
+# ---------------------------------------------------------
+# 批量插入缓冲区
+bulk_insert_buffer_size = 64M
+
+# 连接查询缓冲区（每个线程）
+join_buffer_size = 16M
+
+# 排序缓冲区（每个线程）
+sort_buffer_size = 16M
+
+# 顺序读取缓冲区（每个线程）
+read_buffer_size = 16M
+
+# 随机读取缓冲区（每个线程）
+read_rnd_buffer_size = 32M
+
+# GROUP_CONCAT 最大长度
+group_concat_max_len = 1048576
+
+# ---------------------------------------------------------
+# 6. InnoDB 引擎优化
+# ---------------------------------------------------------
+# InnoDB 缓冲池大小（建议设置为物理内存的 50-70%）
+# 这里设置为 2GB，根据实际情况调整
+innodb_buffer_pool_size = 2G
+innodb_buffer_pool_instances = 4
+
+# InnoDB 日志文件大小
+innodb_log_file_size = 256M
+
+# 事务提交策略（2 表示每秒刷新一次，平衡性能和安全性）
 innodb_flush_log_at_trx_commit = 2
-max_allowed_packet =500M
+
+# InnoDB 排序缓冲区
+innodb_sort_buffer_size = 16M
+
+# InnoDB IO 线程数优化
+innodb_read_io_threads = 8
+innodb_write_io_threads = 8
+
+# InnoDB 并发线程数（0 表示自动调整）
+innodb_thread_concurrency = 0
+
+# InnoDB 锁等待超时（秒）
+innodb_lock_wait_timeout = 300
+
 # ---------------------------------------------------------
-# 5. 字符集配置
+# 7. 字符集配置
 # ---------------------------------------------------------
 character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
