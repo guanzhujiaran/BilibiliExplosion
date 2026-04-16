@@ -247,7 +247,8 @@ class SubRedisStore(RedisManagerBase):
 class SQLHelperClass(SqlHelperBase):
     def __init__(self):
         mysql_db_url = CONFIG.database.MYSQL.proxy_db_URI
-        super().__init__(mysql_db_url=mysql_db_url)
+        # 爬虫专用连接池，设置 is_crawler=True
+        super().__init__(mysql_db_url=mysql_db_url, is_crawler=True)
         self._lock = asyncio.Lock()
         self._underscore_spe_time = 24 * 3600  # 0分以下的无响应代理休眠时间
         self._412_sep_time = 2 * 3600  # 0分以上但是"-412"风控的代理休眠时间

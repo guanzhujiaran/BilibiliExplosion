@@ -25,7 +25,8 @@ from Utils.Common import sql_retry_wrapper
 class SQLHelper(SqlHelperBase):
     def __init__(self):
         mysql_db_url = CONFIG.database.MYSQL.sams_club_URI
-        super().__init__(mysql_db_url=mysql_db_url)
+        # 爬虫专用连接池，设置 is_crawler=True
+        super().__init__(mysql_db_url=mysql_db_url, is_crawler=True)
         self.is_update_price = False
         self.relationships = {
             'categoryIdList': SpuCategory,

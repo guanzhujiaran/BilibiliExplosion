@@ -3195,6 +3195,8 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
         _s = set()
         _t = []
         for i in proxy_list:
+            if i is None:
+                continue
             if list(i.values())[0] in _s:
                 continue
             else:

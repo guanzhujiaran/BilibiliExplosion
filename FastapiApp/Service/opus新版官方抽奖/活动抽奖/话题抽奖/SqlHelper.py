@@ -7,7 +7,7 @@ from sqlalchemy import select, update, func, and_, cast, DateTime
 from sqlalchemy.orm import joinedload
 
 from Utils.Common import log_sql_retry_wrapper
-from dao.base.sqlHelperBase import CrawlerSqlHelperBase
+from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import topic_lot_logger
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import (
     TClickAreaCard,
@@ -32,14 +32,14 @@ from Service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import (
 log = topic_lot_logger
 
 
-class SqlHelper(CrawlerSqlHelperBase):
+class SqlHelper(SqlHelperBase):
     """
     爬虫用话题抽奖数据库操作类
     使用独立的爬虫连接池，限制并发
     """
     def __init__(self):
         mysql_db_url = CONFIG.database.MYSQL.bili_db_URI
-        super().__init__(mysql_db_url=mysql_db_url)
+        super().__init__(mysql_db_url=mysql_db_url, is_crawler=True)
 
     # region a基础查询功能
     @log_sql_retry_wrapper(log=log)

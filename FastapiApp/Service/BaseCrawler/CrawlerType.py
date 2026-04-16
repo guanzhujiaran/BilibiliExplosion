@@ -104,6 +104,21 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         self.log_error = log_error
         if plugins is None:
             plugins = []
+        # 参数类型校验
+        if not isinstance(requeue_on_fetch_fail, bool):
+            raise TypeError(f"requeue_on_fetch_fail must be bool, got {type(requeue_on_fetch_fail).__name__}")
+        if not isinstance(requeue_on_timeout, bool):
+            raise TypeError(f"requeue_on_timeout must be bool, got {type(requeue_on_timeout).__name__}")
+        if not isinstance(max_retries, int):
+            raise TypeError(f"max_retries must be int, got {type(max_retries).__name__}")
+        if worker_max_timeout is not None and not isinstance(worker_max_timeout, int):
+            raise TypeError(f"worker_max_timeout must be int or None, got {type(worker_max_timeout).__name__}")
+        if not isinstance(log_timeout_error, bool):
+            raise TypeError(f"log_timeout_error must be bool, got {type(log_timeout_error).__name__}")
+        if not isinstance(log_error, bool):
+            raise TypeError(f"log_error must be bool, got {type(log_error).__name__}")
+        if not isinstance(plugins, list):
+            raise TypeError(f"plugins must be list, got {type(plugins).__name__}")
         super().__init__(*args, **kwargs)
         self._plugins = []
         for plugin in plugins:
