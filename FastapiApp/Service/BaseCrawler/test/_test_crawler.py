@@ -124,9 +124,6 @@ class TestCrawler(UnlimitedCrawler):
                 # 随机选择任务类型
                 test_type = random.choice(self.all_results)
                 yield TestParamsType(a=i, test_type=test_type)
-            # 显式返回,结束生成器
-            self.log.info("key_params_gen: 生成器返回,结束")
-            return
 
     async def is_stop(self) -> bool:
         return False
@@ -163,7 +160,7 @@ class TestCrawler(UnlimitedCrawler):
 
 
 async def _test():
-    a = TestCrawler(gen_num=10, max_sem=1)
+    a = TestCrawler(gen_num=10, max_sem=2)
     await a.main()
 
 

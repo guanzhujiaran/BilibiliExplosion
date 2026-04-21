@@ -2,8 +2,6 @@ import os
 import uuid
 from enum import Enum
 from loguru import logger
-from loguru._logger import Logger
-
 class UserMap(Enum):
     samsclub_logger = "samsclub_logger"
     httpx = "httpx"
@@ -37,7 +35,7 @@ class UserMap(Enum):
     milvus_db_logger = "milvus_db_logger"
 
 
-def create_logger(user: UserMap) -> Logger:
+def create_logger(user: UserMap):
     user_uq_value = uuid.uuid4().hex + user.value
     _user_logger = logger.opt(lazy=True).bind(user=user_uq_value)
     _user_logger.add(

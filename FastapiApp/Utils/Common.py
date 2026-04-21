@@ -3,13 +3,11 @@ import concurrent.futures
 from functools import wraps
 from typing import Callable, TypeVar, Awaitable, Any, Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from loguru import _logger
 from sqlalchemy.exc import InternalError, TimeoutError
 from pymysql.err import OperationalError
 from pymysql.constants import CR
 from log.base_log import myfastapi_logger, sql_log
 import random
-import loguru
 
 GLOBAL_SCHEDULER: AsyncIOScheduler = AsyncIOScheduler()
 _comm_lock = asyncio.Lock()
@@ -158,7 +156,7 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
     return wrapper
 
 
-def log_sql_retry_wrapper(log: loguru._logger.Logger = myfastapi_logger):
+def log_sql_retry_wrapper(log: "Logger" = myfastapi_logger):
     def _wrapper(_func: FuncT) -> FuncT:
         @wraps(_func)
         async def wrapper(*args: Any, **kwargs: Any) -> TResult:
@@ -193,7 +191,7 @@ def log_sql_retry_wrapper(log: loguru._logger.Logger = myfastapi_logger):
 
 
 async def asyncio_gather(
-    *coros_or_futures, log: Optional[_logger.Logger] = myfastapi_logger
+    *coros_or_futures, log: Optional["Logger"] = myfastapi_logger
 ):
     async def _handle_coroutine(coro):
         try:
@@ -207,7 +205,7 @@ async def asyncio_gather(
 
 
 def log_max_count_retry_wrapper(
-    *, log: _logger = myfastapi_logger, max_count: int = 3, sleep_time: int = 10
+    *, log: "Logger" = myfastapi_logger, max_count: int = 3, sleep_time: int = 10
 ):
     """
     Decorator factory that creates a retry decorator with logging.
