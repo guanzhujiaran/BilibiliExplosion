@@ -514,61 +514,6 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                 if self._is_pause:
                     while self._is_pause:
                         await asyncio.sleep(10)
-
-                # 如果 worker 数量已达到最大值，等待至少一个 worker 完成
-                while len(task_set) >= self.max_sem:
-                    # self.log.debug(
-                    #     self.format_log(
-                    #         f"Worker 数量已达到最大值且队列已满，等待 worker 完成。当前 worker 数：{len(task_set)}，max_sem：{self.max_sem}，队列大小：{self.task_queue.qsize()}"
-                    #     )
-                    # )
-                    # self.log.debug(
-                    #     self.format_log(
-                    #         f"即将等待 {len(task_set)} 个 task 完成，task_set: {task_set}"
-                    #     )
-                    # )
-
-                    # 在调用 asyncio.wait 之前,先清理已完成的任务
-                    # 因为 asyncio.wait 如果发现集合中有已完成的任务,会立即返回
-                    # 这可能导致任务没有被正确处理
-                    completed = {task for task in task_set if task.done()}
-                    if completed:
-                        # self.log.debug(
-                        #     self.format_log(
-                        #         f"发现 {len(completed)} 个已完成的任务，清理它们"
-                        #     )
-                        # )
-                        # self.log.debug(
-                        #     self.format_log(
-                        #         f"清理前 task_set: {task_set}"
-                        #     )
-                        # )
-                        task_set -= completed
-                        # self.log.debug(
-                        #     self.format_log(
-                        #         f"清理后 task_set: {task_set}，大小: {len(task_set)}"
-                        #     )
-                        # )
-
-                    # self.log.debug(
-                    #     self.format_log(
-                    #         f"即将调用 asyncio.wait，task_set: {task_set}，大小: {len(task_set)}"
-                    #     )
-                    # )
-                    done, _ = await asyncio.wait(task_set, return_when=asyncio.FIRST_COMPLETED)
-                    # self.log.debug(
-                    #     self.format_log(
-                    #         f"asyncio.wait 返回。完成的任务数：{len(done)}，当前 worker 数：{len(task_set)}，队列大小：{self.task_queue.qsize()}，done: {done}"
-                    #     )
-                    # )
-                    # asyncio.wait 返回后，手动清理已完成的任务
-                    task_set -= done
-                    # self.log.debug(
-                    #     self.format_log(
-                    #         f"清理后 task_set: {task_set}，大小: {len(task_set)}"
-                    #     )
-                    # )
-
                 await self.task_queue.put(worker_model)  # 这个必须在最前面
                 # self.log.debug(
                 #     self.format_log(
@@ -590,62 +535,11 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                 f"任务生成完成。正在等待剩余线程完成任务，当前存活线程数量：{len(task_set)}，队列大小：{self.task_queue.qsize()}"
             )
         )
-        # 等待所有 worker 完成，包括重试任务
-        while not self.task_queue.empty() or task_set:
-            # self.log.debug(
-            #     self.format_log(
-            #         f"等待循环: 队列大小={self.task_queue.qsize()}, 活跃worker数={len(task_set)}"
-            #     )
-            # )
-            # 如果队列中有任务但没有足够的 worker，创建新的 worker
-            if not self.task_queue.empty() and len(task_set) < self.max_sem:
-                task = asyncio.create_task(self.worker())
-                task_set.add(task)
-                # self.log.debug(
-                #     self.format_log(
-                #         f"队列中还有任务，创建新的 worker。当前队列大小：{self.task_queue.qsize()}，活跃 worker 数：{len(task_set)}，max_sem={self.max_sem}"
-                #     )
-                # )
-            elif not self.task_queue.empty():
-                # self.log.debug(
-                #     self.format_log(
-                #         f"队列中有任务但 worker 数量已达到最大值。当前队列大小：{self.task_queue.qsize()}，活跃 worker 数：{len(task_set)}，max_sem={self.max_sem}"
-                #     )
-                # )
-                pass
-            # 如果还有活跃的 worker，等待至少一个完成
-            if task_set:
-                # self.log.debug(
-                #     self.format_log(
-                #         f"等待 worker 完成，当前活跃 worker 数：{len(task_set)}"
-                #     )
-                # )
-                # 在调用 asyncio.wait 之前,先清理已完成的任务
-                completed = {task for task in task_set if task.done()}
-                if completed:
-                    # self.log.debug(
-                    #     self.format_log(
-                    #         f"发现 {len(completed)} 个已完成的任务，清理它们"
-                    #     )
-                    # )
-                    task_set -= completed
-                done, _ = await asyncio.wait(task_set, return_when=asyncio.FIRST_COMPLETED)
-                # asyncio.wait 返回后，手动清理已完成的任务
-                task_set -= done
-                # self.log.debug(
-                #     self.format_log(
-                #         f"worker 完成等待，完成的任务数：{len(done)}，剩余活跃 worker 数：{len(task_set)}，队列大小：{self.task_queue.qsize()}"
-                #     )
-                # )
-            else:
-                # task_set 为空，如果队列也为空则退出，否则继续循环创建 worker
-                if self.task_queue.empty():
-                    # self.log.debug("队列为空且没有活跃 worker，退出等待循环")
-                    break
-                # 队列不为空但 task_set 为空，继续循环创建 worker
-                # 添加短暂 sleep 让其他协程有机会执行
-                # self.log.debug("task_set 为空但队列不为空，继续循环创建 worker")
-                await asyncio.sleep(0)
+        
+        # 等待所有活跃的 worker 任务完成
+        if task_set:
+            await asyncio.gather(*task_set, return_exceptions=True)
+        
         self.log.info(self.format_log("所有任务已完成。"))
 
         await self.on_run_end(worker_model)

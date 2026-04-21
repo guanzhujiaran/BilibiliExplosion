@@ -10,6 +10,13 @@ class LotteryBusinessType(Enum):
     Reserve = 10
     Charge = 12
 
+class BiliLotDataStatusEnum(Enum):
+    CANCELED = -1
+    DELETED = -2
+    UNFINISHED = 0
+    FINISHED = 2
+    UNKNOWN = 404
+
 
 class LotteryPaginationParams(RequestPaginationParams):
     """抽奖分页参数，继承自通用页码分页参数"""

@@ -5,11 +5,6 @@ from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Models.base.custom_pydantic import CustomBaseModelHashable
-import loguru
-import sys
-
-loguru.logger.add(sys.stderr, level="INFO")
-
 
 class TestParamsType(CustomBaseModelHashable):
     a: int
@@ -30,10 +25,10 @@ class TestCrawler(UnlimitedCrawler):
             requeue_on_fetch_fail=True,  # 启用失败重试
             requeue_on_timeout=True,  # 暂时禁用超时重试
             max_retries=-1,  # 最大重试次数（-1表示无限重试）
-            worker_max_timeout=2,  # 暂时禁用超时
+            worker_max_timeout=None,  # 暂时禁用超时
             log_timeout_error=False,
             log_error=False,
-            max_sem=max_sem,  # 暂时改为2，避免 max_sem=1 的潜在问题
+            max_sem=max_sem,
         )
         self._count = 0
         print("初始化")
@@ -45,25 +40,18 @@ class TestCrawler(UnlimitedCrawler):
         self.gen_num: int = gen_num
         self.all_results = ["normal", "error", "timeout"]
         self._mode = "mixed"  # 记录当前模式
-        self._count = 0
-        self._original_test_types = {}  # 保存原始的 test_type，用于统计
-        print("初始化")
         self.params_arr = []
         self.limit_mode = True
-        self.success_count = 0
-        self.fail_count = 0
-        self.timeout_count = 0
-        self.gen_num: int = gen_num
-        self.all_results = ["normal", "error", "timeout"]
 
     async def handle_fetch(self, params: TestParamsType) -> WorkerStatus:
         # 保存原始的 test_type（只在第一次执行时保存）
-        if params.a not in self._original_test_types:
-            self._original_test_types[params.a] = params.test_type
-
+        self.log.info(f'处理任务:{params}')
+        await asyncio.sleep(random.randint(0, 4))
         # 根据测试类型模拟不同的场景
         if params.test_type == "timeout":
-            await asyncio.sleep(random.randint(0, 4))
+            if self.worker_max_timeout:
+                await asyncio.sleep(random.randint(self.worker_max_timeout, self.worker_max_timeout+4))
+            raise asyncio.TimeoutError()
             return WorkerStatus.complete
         elif params.test_type == "error":
             # 模拟错误：总是抛出异常
@@ -98,31 +86,6 @@ class TestCrawler(UnlimitedCrawler):
 
     async def on_worker_end(self, worker_model: WorkerModel[TestParamsType]):
         """只在第一次执行时统计(不统计重试)"""
-        if worker_model.retry_count == 0:
-            self._count += 1
-            # 使用保存的原始测试类型，而不是 worker_model.params.test_type
-            # 因为 params.test_type 在 on_task_requeue 中会被修改
-            task_id = worker_model.params.a
-            test_type = self._original_test_types.get(
-                task_id, worker_model.params.test_type
-            )
-            if worker_model.fetchStatus == WorkerStatus.complete:
-                if test_type == "timeout":
-                    self.timeout_count += 1
-                elif test_type == "error":
-                    self.fail_count += 1
-                else:
-                    self.success_count += 1
-            elif worker_model.fetchStatus == WorkerStatus.fail:
-                # 失败的任务（非重试）也统计
-                if test_type == "timeout":
-                    self.timeout_count += 1
-                elif test_type == "error":
-                    self.fail_count += 1
-                else:
-                    self.success_count += 1
-            elif worker_model.fetchStatus == WorkerStatus.timeoutError:
-                self.timeout_count += 1
         # 调用 super().on_worker_end()，让插件回调正常执行
         await super().on_worker_end(worker_model)
 
@@ -162,7 +125,7 @@ class TestCrawler(UnlimitedCrawler):
                 test_type = random.choice(self.all_results)
                 yield TestParamsType(a=i, test_type=test_type)
             # 显式返回,结束生成器
-            print("key_params_gen: 生成器返回,结束")
+            self.log.info("key_params_gen: 生成器返回,结束")
             return
 
     async def is_stop(self) -> bool:
@@ -192,7 +155,6 @@ class TestCrawler(UnlimitedCrawler):
         self.success_count = 0
         self.fail_count = 0
         self.timeout_count = 0
-        self._original_test_types.clear()  # 清空原始类型记录
         await self.run()
         print("\n=== 最终统计 ===")
         print(
@@ -201,7 +163,7 @@ class TestCrawler(UnlimitedCrawler):
 
 
 async def _test():
-    a = TestCrawler(gen_num=100000000, max_sem=10000)
+    a = TestCrawler(gen_num=10, max_sem=1)
     await a.main()
 
 

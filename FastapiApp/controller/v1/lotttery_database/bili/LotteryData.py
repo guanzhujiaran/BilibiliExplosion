@@ -7,13 +7,16 @@ from typing import List, Optional
 from fastapi import Query, Body, Request
 from fastapi_cache.decorator import cache
 from Models.common import CommonResponseModel, ResponsePaginationItems
+from Models.lottery_database.bili.LotteryDataBaseQueryModels import (
+    BiliLotDataQueryModel,
+)
 from Models.lottery_database.bili.LotteryDataModels import (
     AddDynamicLotteryResp,
     CommonLotteryResp,
     OfficialLotteryResp,
     AllLotteryResp,
     ChargeLotteryResp,
-    ReserveInfoResp,    
+    ReserveInfoResp,
     TopicLotteryResp,
     LiveLotteryResp,
     AddDynamicLotteryReq,
@@ -44,9 +47,11 @@ from Service.lottery_database.bili_lotterty import (
     add_dynamic_lottery_by_dynamic_id,
     add_topic_lottery,
 )
+from Models.lottery_database.bili.comm import BiliLotDataStatusEnum, LotteryBusinessType
 from Utils.Common import asyncio_gather
 from Utils.PushMe import a_pushme
 from .base import new_router
+from fastapi import BackgroundTasks
 
 router = new_router()
 
@@ -75,7 +80,7 @@ async def api_GetCommonLottery(round_num: int = Query(ge=1, le=10, default=2)):
 )
 @cache(expire=180)
 async def api_GetMustReserveLottery(
-    pagination: LotteryWithLimitTimePaginationParams,
+    pagination: LotteryWithLimitTimePaginationParams, background_task: BackgroundTasks
 ):
     """
     获取必抽的预约抽奖数据
@@ -85,7 +90,18 @@ async def api_GetMustReserveLottery(
     :return:
     """
     result_items, total = await get_reserve_lottery(
-        pagination.limit_time, pagination.page_num, pagination.page_size
+        q=BiliLotDataQueryModel(
+            business_type=LotteryBusinessType.Reserve,
+            status=BiliLotDataStatusEnum.UNFINISHED,
+            page_num=pagination.page_num,
+            page_size=pagination.page_size,
+            start_ts=None,
+            end_ts=None,
+            sender_uid=None,
+            min_participants=None,
+            max_participants=None,
+        ),
+        background_task=background_task,
     )
     return CommonResponseModel(
         data=ResponsePaginationItems[ReserveInfoResp](items=result_items, total=total)

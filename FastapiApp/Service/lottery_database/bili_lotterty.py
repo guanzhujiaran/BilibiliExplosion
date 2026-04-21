@@ -3,6 +3,12 @@ import re
 from datetime import datetime
 from typing import List
 from urllib.parse import quote
+from Models.lottery_database.bili.LotteryDataBaseQueryModels import (
+    BiliLotDataQueryModel,
+)
+from Models.lottery_database.bili.comm import BiliLotDataStatusEnum, LotteryBusinessType
+from Service.GrpcModule.Grpc.Bapi.BiliApi import get_lot_notice
+from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
 from dao.lotDataRedisObj import lot_data_redis
 from Models.lottery_database.bili.LotteryDataModels import (
     AddDynamicLotteryResp,
@@ -29,12 +35,14 @@ from Service.opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import (
     topic_sqlhelper as bili_topic_sqlhelper,
 )
+from Service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import reserve_robot
 from Service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from Service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import (
     grpc_sql_helper as bili_official_sqlhelper,
 )
 import asyncio
+from fastapi import BackgroundTasks
 
 bds = bili_dynamic_sqlhelper  # 获取普通抽奖（主要是非官方的
 brs = bili_reserve_sqlhelper
@@ -78,23 +86,41 @@ async def get_common_lottery(
     ]
 
 
-async def get_reserve_lottery(
-    limit_time: int, page_num: int = 0, page_size: int = 0
-) -> tuple[list[ReserveInfoResp], int]:
-    all_lots, total_num = await brs.get_all_available_reserve_lotterys_by_time(
-        limit_time, page_num, page_size
+async def update_lot_data(business_id: int, business_type: LotteryBusinessType):
+    lot_notice = await get_lot_notice(
+        business_type=business_type.value, business_id=business_id
     )
-    reserve_infos: List[str] = [x.text for x in all_lots]
-    if page_num and page_size:
-        ret_list: List[TUpReserveRelationInfo] = all_lots
+    await bos.upsert_lot_detail(lot_notice.get("data"))
+    bos.log.info(f'update lot_data:{lot_notice}')
+
+async def get_reserve_lottery(
+    q: BiliLotDataQueryModel, background_task: BackgroundTasks
+) -> tuple[list[ReserveInfoResp], int]:
+    all_lots, total_num = await bos.query_lottery(q)
+    reserve_info_list: list[tuple[TUpReserveRelationInfo, dict]] = (
+        await reserve_robot.handle_fetch_reserve_info_bulk(
+            [x.business_id for x in all_lots], False
+        )
+    )
+    reserve_info_text_list: List[str] = [x.text for x, _ in reserve_info_list]
+    if q.page_num and q.page_size:
+        ret_list: List[TUpReserveRelationInfo] = [x for x, _ in reserve_info_list]
     else:
-        is_lot_list = big_reserve_predict(reserve_infos)
+        is_lot_list = big_reserve_predict(reserve_info_text_list)
         ret_list: List[TUpReserveRelationInfo] = []
         for i in range(len(all_lots)):
             if is_lot_list[i] == 1:
-                ret_list.append(all_lots[i])
+                ret_list.append(all_lots[i][0])
     ret_reserve_infos: List[ReserveInfoResp] = []
     for i in ret_list:
+        if i.text is None:
+            background_task.add_task(
+                update_lot_data,
+                business_id=i.ids,
+                business_type=q.business_type,
+            )
+            total_num -= 1
+            continue
         reserve_info = ReserveInfoResp(
             app_sche=f"bilibili://space/{str(i.upmid)}",
             reserve_url=f"https://space.bilibili.com/{str(i.upmid)}/dynamic",
@@ -327,7 +353,17 @@ async def get_all_lottery(round_num) -> AllLotteryResp:
 
     # 获取所有预约抽奖动态
     reserve_lottery_resp_infos, reserve_lottery_total = await get_reserve_lottery(
-        limit_time=0
+        q=BiliLotDataQueryModel(
+            business_type=LotteryBusinessType.Reserve,
+            status=BiliLotDataStatusEnum.UNFINISHED,
+            page_num=0,
+            page_size=0,
+            start_ts=None,
+            end_ts=None,
+            sender_uid=None,
+            min_participants=None,
+            max_participants=None,
+        )
     )
     # 获取所有官方抽奖动态
     official_lottery_resp_infos, official_lottery_total = await get_official_lottery(
