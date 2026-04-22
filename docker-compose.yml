@@ -58,7 +58,7 @@ services:
       - "host.docker.internal:host-gateway"
   rabbitmq:
     container_name: fastapi-rabbitmq
-    image: rabbitmq:latest
+    image: rabbitmq:management
     ports:
       - "${RABBITMQ_PORT}:5672"
       - "${RABBITMQ_WEBUI_PORT}:15672"
