@@ -1,11 +1,11 @@
 from fastapi import APIRouter
+from ApiRoutes import RouterPrefix, RouterTags
 
 
 def new_router(dependencies=None):
     router = APIRouter()
-    router.tags = ['V1Bili']
-    router.prefix = '/api/v1/lottery_database/bili/lottery_statistic/rank'
-    # 将认证依赖项应用于所有路由
+    router.tags = [RouterTags.V1_BILI]
+    router.prefix = RouterPrefix.BILI_LOTTERY_STATISTIC
     if dependencies:
         router.dependencies = dependencies
     return router

@@ -31,6 +31,8 @@ from Models.lottery_database.bili.comm import (
     LotteryWithLimitTimePaginationParams,
     LotterySearchPaginationParams,
 )
+from Models.v1.background_service.background_service_model import AllLotScrapyStatusResp
+from Service.BackgroundServiceStatus.GetScrapyStaus import get_scrapy_status
 from Service.LangChainCompo.text_embed import (
     get_lottery_entity_num,
     search_lottery_text,
@@ -50,6 +52,7 @@ from Service.lottery_database.bili_lotterty import (
 from Models.lottery_database.bili.comm import BiliLotDataStatusEnum, LotteryBusinessType
 from Utils.Common import asyncio_gather
 from Utils.PushMe import a_pushme
+from ApiRoutes import RouterPaths, RouterNames
 from .base import new_router
 from fastapi import BackgroundTasks
 
@@ -58,7 +61,8 @@ router = new_router()
 
 # region get方法
 @router.post(
-    "/GetCommonLottery",
+    RouterPaths.GET_COMMON_LOTTERY,
+    name=RouterNames.GET_COMMON_LOTTERY,
     summary="获取数据库里存放的一般抽奖",
     response_model=CommonResponseModel[list[CommonLotteryResp]],
     response_model_exclude_none=True,
@@ -70,7 +74,8 @@ async def api_GetCommonLottery(round_num: int = Query(ge=1, le=10, default=2)):
 
 
 @router.post(
-    "/GetReserveLottery",
+    RouterPaths.GET_RESERVE_LOTTERY,
+    name=RouterNames.GET_RESERVE_LOTTERY,
     summary="获取必抽的预约抽奖数据",
     response_model=CommonResponseModel[ResponsePaginationItems[ReserveInfoResp]],
     description="""获取必抽的预约抽奖数据
@@ -109,7 +114,8 @@ async def api_GetMustReserveLottery(
 
 
 @router.post(
-    "/GetOfficialLottery",
+    RouterPaths.GET_OFFICIAL_LOTTERY,
+    name=RouterNames.GET_OFFICIAL_LOTTERY,
     summary="获取必抽的官方抽奖数据",
     response_model=CommonResponseModel[ResponsePaginationItems[OfficialLotteryResp]],
     description="""获取必抽的官方抽奖数据
@@ -139,7 +145,8 @@ async def api_GetMustOfficialLottery(
 
 
 @router.post(
-    "/GetChargeLottery",
+    RouterPaths.GET_CHARGE_LOTTERY,
+    name=RouterNames.GET_CHARGE_LOTTERY,
     summary="获取必抽的充电抽奖数据",
     response_model=CommonResponseModel[ResponsePaginationItems[ChargeLotteryResp]],
     description="""获取必抽的官方抽奖数据
@@ -167,7 +174,8 @@ async def api_GetChargeLottery(
 
 
 @router.post(
-    "/GetLiveLottery",
+    RouterPaths.GET_LIVE_LOTTERY,
+    name=RouterNames.GET_LIVE_LOTTERY,
     summary="获取所有直播抽奖数据（分页）",
     response_model=CommonResponseModel[ResponsePaginationItems[LiveLotteryResp]],
     response_model_exclude_none=True,
@@ -185,7 +193,8 @@ async def api_GetLiveLottery(
 
 
 @router.post(
-    "/GetTopicLottery",
+    RouterPaths.GET_TOPIC_LOTTERY,
+    name=RouterNames.GET_TOPIC_LOTTERY,
     summary="获取所有话题抽奖数据（分页）",
     response_model=CommonResponseModel[ResponsePaginationItems[TopicLotteryResp]],
     response_model_exclude_none=True,
@@ -203,7 +212,8 @@ async def api_GetTopicLottery(
 
 
 @router.post(
-    "/GetAllLottery",
+    RouterPaths.GET_ALL_LOTTERY,
+    name=RouterNames.GET_ALL_LOTTERY,
     summary="获取一轮的所有抽奖信息",
     response_model=CommonResponseModel[AllLotteryResp],
     description="""
@@ -225,7 +235,8 @@ async def api_GetAllLottery(
 
 # region a添加抽奖
 @router.post(
-    "/AddDynamicLottery",
+    RouterPaths.ADD_DYNAMIC_LOTTERY,
+    name=RouterNames.ADD_DYNAMIC_LOTTERY,
     summary="提交抽奖动态(官抽，预约，充电)，自动解析抽奖信息",
     response_model=CommonResponseModel[AddDynamicLotteryResp],
     response_model_exclude_none=True,
@@ -241,7 +252,8 @@ async def api_AddLottery(
 
 
 @router.post(
-    "/BulkAddDynamicLottery",
+    RouterPaths.BULK_ADD_DYNAMIC_LOTTERY,
+    name=RouterNames.BULK_ADD_DYNAMIC_LOTTERY,
     summary="批量提交抽奖动态(官抽，预约，充电)，自动解析抽奖信息",
     response_model=CommonResponseModel[list[AddDynamicLotteryResp]],
     response_model_exclude_none=True,
@@ -257,7 +269,8 @@ async def api_BulkAddLottery(
 
 
 @router.post(
-    "/AddTopicLottery",
+    RouterPaths.ADD_TOPIC_LOTTERY,
+    name=RouterNames.ADD_TOPIC_LOTTERY,
     summary="提交话题抽奖",
     response_model=CommonResponseModel[AddTopicLotteryResp],
     response_model_exclude_none=True,
@@ -273,7 +286,8 @@ async def api_AddTopicLottery(
 
 
 @router.post(
-    "/SearchLotteryByKeyword",
+    RouterPaths.SEARCH_LOTTERY_BY_KEYWORD,
+    name=RouterNames.SEARCH_LOTTERY_BY_KEYWORD,
     summary="根据关键词搜索抽奖信息",
     response_model=CommonResponseModel[ResponsePaginationItems[LotdataResp]],
     response_model_exclude_none=True,
@@ -291,7 +305,8 @@ async def api_Search(
 
 
 @router.post(
-    "/SubmitFeedback",
+    RouterPaths.SUBMIT_FEEDBACK,
+    name=RouterNames.SUBMIT_FEEDBACK,
     summary="提交反馈信息到 PushMe",
     response_model=CommonResponseModel[dict],
     response_model_exclude_none=True,
@@ -349,6 +364,23 @@ async def api_SubmitFeedback(
                 "uid": uid,
             },
         )
+
+
+@router.get(
+    RouterPaths.GET_ALL_LOT_SCRAPY_STATUS,
+    name=RouterNames.GET_ALL_LOT_SCRAPY_STATUS,
+    description="获取所有爬虫状态",
+    response_model=CommonResponseModel[AllLotScrapyStatusResp | None],
+    response_model_exclude_none=True,
+)
+def get_all_scrapy_status():
+    return CommonResponseModel(
+        data=AllLotScrapyStatusResp(
+            dyn_scrapy_status=get_scrapy_status("dyn"),
+            topic_scrapy_status=get_scrapy_status("topic"),
+            reserve_scrapy_status=get_scrapy_status("reserve"),
+        )
+    )
 
 
 # endregion

@@ -11,13 +11,14 @@ from log.base_log import myfastapi_logger
 from Models.common import CommonResponseModel
 from Models.v1.ChatGpt3_5.ReplySingleModel import ReplyReq, ReplyRes, LLMShowInfo
 from Service.LLM.handleLLMReplySingle import chatgpt
+from ApiRoutes import RouterPaths, RouterNames
 from .base import new_router
 
 router = new_router()
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-@router.post('/ReplySingle', summary='回复单轮消息', response_model=CommonResponseModel[Union[ReplyRes, None]])
+@router.post(RouterPaths.CHATGPT_REPLY_SINGLE, name=RouterNames.CHATGPT_REPLY_SINGLE, summary='回复单轮消息', response_model=CommonResponseModel[Union[ReplyRes, None]])
 async def reply_single(reply_req: ReplyReq):
     """
 
@@ -45,18 +46,18 @@ async def reply_single(reply_req: ReplyReq):
         return CommonResponseModel(code=500, data=None, msg=f'AI回复失败！\n{e}')
 
 
-@router.get('/LLMStatus', response_model=CommonResponseModel[LLMShowInfo])
+@router.get(RouterPaths.CHATGPT_LLM_STATUS, name=RouterNames.CHATGPT_LLM_STATUS, response_model=CommonResponseModel[LLMShowInfo])
 async def get_llm_status():
     resp = chatgpt.show_openai_client()
     return CommonResponseModel(code=0, data=resp)
 
 
-@router.post('ResetLLMStatus', response_model=CommonResponseModel)
+@router.post(RouterPaths.CHATGPT_RESET_LLM_STATUS, name=RouterNames.CHATGPT_RESET_LLM_STATUS, response_model=CommonResponseModel)
 async def reset_llm_status(base_url: str | None = Body(...)):
     return CommonResponseModel(msg=chatgpt.reset_llm_status(base_url))
 
 
-@router.get('/helloWorld', response_model=CommonResponseModel)
+@router.get(RouterPaths.CHATGPT_HELLO_WORLD, name=RouterNames.CHATGPT_HELLO_WORLD, response_model=CommonResponseModel)
 async def hello_world(mode: int = Query(..., le=2, title='模式，1为json，2为str，其他形式则报错')):
     if mode == 1:
         return CommonResponseModel(code=0, msg='服务运行中', data={'msg': '服务运行中'})

@@ -1,3 +1,4 @@
+from ApiRoutes import RouterPaths, RouterTags
 from datetime import datetime
 import time
 from typing import Dict
@@ -116,7 +117,7 @@ async def _test_msg_consumer(data: RabbitMQTestMsgModel, msg: RabbitMessage):
 
 
 @router.publisher(**rabbit_mq_test.pub_params)
-@router.post("/rabbitmq_test_publish",tags=["MQ测试"])
+@router.post(RouterPaths.RABBITMQ_TEST_PUBLISH, tags=[RouterTags.MQ_TEST])
 async def _test_msg_pub(
     msg: str = f"Ciallo～(∠・ω< )⌒★ 起床时间【{datetime.now()}】喵~",
 ) -> RabbitMQTestMsgModel:

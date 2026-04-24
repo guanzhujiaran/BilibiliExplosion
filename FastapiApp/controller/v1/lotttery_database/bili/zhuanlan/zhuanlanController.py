@@ -5,13 +5,15 @@ from Models.v1.bili.zhuanlan import LotteryArticleResp, lotteryArticleReq, Artic
 from Service.opus新版官方抽奖.活动抽奖.获取话题抽奖信息 import GenerateTopicLotCv
 from Service.opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
 from Service.opus新版官方抽奖.预约抽奖.etc.submitReserveLottery import GenerateReserveLotCv
+from ApiRoutes import RouterPaths, RouterNames
 from .base import new_router
 
 router = new_router()
 
 
 @router.post(
-    '/lotteryArticle',
+    RouterPaths.GET_LOTTERY_ARTICLE,
+    name=RouterNames.GET_LOTTERY_ARTICLE,
     summary="获取专栏文章",
     response_model=CommonResponseModel[LotteryArticleResp],
     response_model_exclude_none=True,

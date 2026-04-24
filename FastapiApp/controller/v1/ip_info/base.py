@@ -1,11 +1,11 @@
 from fastapi import APIRouter
+from ApiRoutes import RouterPrefix, RouterTags
 
 
 def new_router(dependencies=None):
     router = APIRouter()
-    router.tags = ['V1Ip']
-    router.prefix = '/api/v1/ip_info'
-    # 将认证依赖项应用于所有路由
+    router.tags = [RouterTags.V1_IP]
+    router.prefix = RouterPrefix.IP_INFO
     if dependencies:
         router.dependencies = dependencies
     return router

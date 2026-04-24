@@ -1,11 +1,11 @@
 from fastapi import APIRouter
+from ApiRoutes import RouterPrefix, RouterTags
 
 
 def new_router(dependencies=None):
     router = APIRouter()
-    router.tags = ['Captcha']
-    router.prefix = '/api/v1/captcha'
-    # 将认证依赖项应用于所有路由
+    router.tags = [RouterTags.CAPTCHA]
+    router.prefix = RouterPrefix.CAPTCHA
     if dependencies:
         router.dependencies = dependencies
     return router
