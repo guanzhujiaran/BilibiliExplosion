@@ -19,6 +19,7 @@ from Service.BaseCrawler.plugin.statusPlugin import (
     SequentialNullStopPlugin,
 )
 from Service.GrpcModule.Grpc.Bapi.BiliApi import reserve_relation_info
+from fastapi.background import BackgroundTasks
 from Service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, ProgressCounter
 from Service.opus新版官方抽奖.预约抽奖.db.models import (
     TReserveRoundInfo,
@@ -221,33 +222,41 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             self.refresh_progress_counter.succ_count += 1
         return result
 
-    async def handle_fetch_reserve_info(
-        self, sid, is_api_fetch: bool
-    ) -> tuple[TUpReserveRelationInfo, dict]:
+    async def _background_save_reserve_info(self, sid, round_id,x:TUpReserveRelationInfo):
+        if not sid:
+            raise ValueError(f"sid不能为空\n{x}")
+        resp_dict = await reserve_relation_info(sid)
+        resp_dict["ids"] = sid
+        _ = await self.sqlHelper.add_reserve_info_by_resp_dict(resp_dict, round_id)
+
+    async def bulk_handle_fetch_reserve_info(
+        self,
+        sid_list: list[int | str],
+        is_api_fetch: bool,
+        background_tasks: BackgroundTasks | None,
+    ) -> list[tuple[TUpReserveRelationInfo, dict]]:
         if not is_api_fetch:
-            _: TUpReserveRelationInfo | None = await self.sqlHelper.get_reserve_by_ids(
-                sid
+            _: list[TUpReserveRelationInfo] = (
+                await self.sqlHelper.get_reserve_by_ids_bulk(sid_list)
             )
             round_id = self.now_round_id
         else:
-            _ = None
+            _ = []
             round_id = None
+        resp = []
 
-        if _ and _.code == 0 and _.sid is not None:
-            resp_dict = _.raw_JSON
-        else:
-            resp_dict = await reserve_relation_info(sid)
-            resp_dict["ids"] = sid
-            _ = await self.sqlHelper.add_reserve_info_by_resp_dict(resp_dict, round_id)
-
-        return _, resp_dict
-
-    async def handle_fetch_reserve_info_bulk(
-        self, sid_list: list[int | str], is_api_fetch: bool
-    ) -> list[tuple[TUpReserveRelationInfo, dict]]:
-        return await asyncio_gather(
-            *[self.handle_fetch_reserve_info(x, is_api_fetch) for x in sid_list]
-        )
+        for x in _:
+            resp_dict = x.raw_JSON
+            if not x or x.code != 0 or x.sid is None:
+                self.log.info(f'刷新预约信息: {x.sid}')
+                if background_tasks:
+                    background_tasks.add_task(
+                        self._background_save_reserve_info, x.ids, round_id,x
+                    )
+                else:
+                    await self._background_save_reserve_info(x.ids, round_id,x)
+            resp.append((x, resp_dict))
+        return resp
 
     async def resolve_reserve_by_sid(
         self, sid: int, is_refresh: bool = False
@@ -259,7 +268,9 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         :return: WorkerStatus
         """
         while True:
-            _, resp_dict = await self.handle_fetch_reserve_info(sid, is_refresh)
+            _, resp_dict = (
+                await self.bulk_handle_fetch_reserve_info([sid], is_refresh, None)
+            )[0]
             if is_refresh:
                 return WorkerStatus.complete
             dycode = resp_dict.get("code")
@@ -415,12 +426,11 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
             f"当前rid记录分别回滚{self.rollback_num + self.none_num1}和{self.rollback_num + none_num2}条"
             f"最终写入文件rid记录：{finnal_rid_list}"
         )
-        reserve_lot_logger.critical(f"开始设置结束rid")
         await comm_storage_redis_obj.set_val(
             comm_storage_redis_obj.RedisMap.reserve_scrapy_bot_rid_ls,
             "\n".join(finnal_rid_list),
         )
-        reserve_lot_logger.critical(f"结束rid设置完成")
+        reserve_lot_logger.critical(f"结束rid设置完成\t{finnal_rid_list}")
 
     async def generate_update_reserve_lotterys_by_round_id(
         self, round_id

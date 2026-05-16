@@ -19,7 +19,6 @@ from Models.lottery_database.bili.LotteryDataModels import (
     ReserveInfoResp,
     TopicLotteryResp,
     LiveLotteryResp,
-    TUpReserveRelationInfoResp,
     LotdataResp,
     AddTopicLotteryResp,
 )
@@ -91,45 +90,48 @@ async def update_lot_data(business_id: int, business_type: LotteryBusinessType):
         business_type=business_type.value, business_id=business_id
     )
     await bos.upsert_lot_detail(lot_notice.get("data"))
-    bos.log.info(f'update lot_data:{lot_notice}')
+    bos.log.info(f"update lot_data:{lot_notice}")
+
 
 async def get_reserve_lottery(
     q: BiliLotDataQueryModel, background_task: BackgroundTasks
 ) -> tuple[list[ReserveInfoResp], int]:
     all_lots, total_num = await bos.query_lottery(q)
     reserve_info_list: list[tuple[TUpReserveRelationInfo, dict]] = (
-        await reserve_robot.handle_fetch_reserve_info_bulk(
-            [x.business_id for x in all_lots], False
+        await reserve_robot.bulk_handle_fetch_reserve_info(
+            [x.business_id for x in all_lots], False,background_task
         )
     )
-    reserve_info_text_list: List[str] = [x.text for x, _ in reserve_info_list]
-    if q.page_num and q.page_size:
-        ret_list: List[TUpReserveRelationInfo] = [x for x, _ in reserve_info_list]
-    else:
-        is_lot_list = big_reserve_predict(reserve_info_text_list)
-        ret_list: List[TUpReserveRelationInfo] = []
-        for i in range(len(all_lots)):
-            if is_lot_list[i] == 1:
-                ret_list.append(all_lots[i][0])
+    reserve_info_text_list: List[str] = [
+        f"预约有奖：{x.first_prize_cmt}*{x.first_prize}份{f'、{str(x.second_prize_cmt)}' if x.second_prize_cmt else ''}{f'*{str(x.second_prize)}份' if x.second_prize else ''}{f'、{str(x.third_prize_cmt)}' if x.third_prize_cmt else ''}{f'*{str(x.third_prize)}' + '份' if x.third_prize else ''}"
+        for x in all_lots
+    ]
     ret_reserve_infos: List[ReserveInfoResp] = []
-    for i in ret_list:
-        if i.text is None:
+    for x,_ in reserve_info_list:
+        if x.text is None:
             background_task.add_task(
                 update_lot_data,
-                business_id=i.ids,
+                business_id=x.ids,
                 business_type=q.business_type,
             )
-            total_num -= 1
-            continue
+    for i, t in zip(all_lots,reserve_info_text_list):
+        dynamic_id = None
+        total = None
+        for x,_ in reserve_info_list:
+            if x.ids == i.business_id:
+                dynamic_id = int(x.dynamicId) if x.dynamicId else None
+                total = x.total or None
         reserve_info = ReserveInfoResp(
-            app_sche=f"bilibili://space/{str(i.upmid)}",
-            reserve_url=f"https://space.bilibili.com/{str(i.upmid)}/dynamic",
-            etime=i.etime,
-            lottery_prize_info=i.text,
-            jump_url=i.jumpUrl,
-            reserve_sid=i.sid,
+            app_sche=f"bilibili://space/{str(i.sender_uid)}",
+            reserve_url=f"https://space.bilibili.com/{str(i.sender_uid)}/dynamic",
+            etime=i.lottery_time,
+            dynamic_id=dynamic_id,
+            total=total,
+            lottery_prize_info=t,
+            jump_url=i.lottery_detail_url,
+            reserve_sid=i.business_id,
             available=True,
-            raw=TUpReserveRelationInfoResp.model_validate(i),
+            raw=None
         )
         ret_reserve_infos.append(reserve_info)
     return ret_reserve_infos, total_num

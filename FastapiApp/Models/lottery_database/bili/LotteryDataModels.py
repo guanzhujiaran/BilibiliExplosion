@@ -137,7 +137,14 @@ class ReserveInfoResp(reserveInfo):
     jump_url: str  # 单独抽奖的跳转链接，like https://www.bilibili.com/h5/lottery/result?business_id=3640758&business_type=10
     reserve_sid: int  # 直播预约sid
     available: bool  # 预约是否正常存在
-    raw: TUpReserveRelationInfoResp
+    raw: TUpReserveRelationInfoResp | None
+    dynamic_id: int | None
+    total: int | None
+
+    @computed_field
+    @property
+    def dynamic_id_str(self) -> str | None:
+        return str(self.dynamic_id) if self.dynamic_id else None
 
 
 class CommonLotteryResp(CustomBaseModel):
@@ -219,6 +226,7 @@ class AllLotteryResp(CustomBaseModel):
 
 class BaseAddLotteryResp(CustomBaseModel):
     """添加抽奖响应基类"""
+
     msg: str = Field(..., description="操作消息")
     is_succ: bool = Field(..., description="是否成功")
     is_new: bool = Field(..., description="是否是新的内容")
@@ -226,6 +234,7 @@ class BaseAddLotteryResp(CustomBaseModel):
 
 class AddDynamicLotteryResp(BaseAddLotteryResp):
     """添加动态抽奖响应"""
+
     dynamic_id_or_url: str = Field(..., description="提交的动态ID或URL")
 
 
@@ -249,11 +258,13 @@ class AddTopicLotteryReq(CustomBaseModel):
 
 class SubmitFeedbackReq(CustomBaseModel):
     """提交反馈请求模型"""
+
     message: str = Field(..., description="反馈内容")
 
 
 class AddTopicLotteryResp(BaseAddLotteryResp):
     """添加话题抽奖响应"""
+
     topic_id: str | int = Field(..., description="提交的话题 ID")
 
 

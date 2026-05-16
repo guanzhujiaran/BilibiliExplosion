@@ -62,9 +62,9 @@ async def test_database_connections():
     
     for db_name, db_uri in databases.items():
         try:
+            myfastapi_logger.info(f"正在测试数据库 '{db_name}' 连接...")
             # 创建引擎
             engine = create_async_engine(db_uri)
-            
             # 尝试连接数据库
             async with engine.connect() as conn:
                 # 执行简单查询以确认连接正常
@@ -76,7 +76,7 @@ async def test_database_connections():
             myfastapi_logger.info(f"数据库 '{db_name}' 连接成功")
         except Exception as e:
             myfastapi_logger.critical(f"数据库 '{db_name}' 连接失败：{e}")
-            raise SystemExit(f"数据库 '{db_name}' 连接失败：{e}")
+            raise SystemExit(f"数据库 '{db_name}' 连接失败：{e}") from e
 
 
 async def test_port_connectivity(host: str, port: int, service_name: str, timeout: float = 5.0) -> bool:

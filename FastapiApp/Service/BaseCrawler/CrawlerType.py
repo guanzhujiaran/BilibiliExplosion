@@ -91,7 +91,6 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
             crawler = MyCrawler(
                 plugins=[StatsPlugin(self), SequentialNullStopPlugin(self, max_consecutive_nulls=100)],
                 requeue_on_fetch_fail=True,
-                max_retries=3,
                 max_sem=2,
                 _logger=logger
             )
@@ -423,6 +422,8 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                 worker_model.fetchStatus = WorkerStatus.pending
                 # 调用 on_task_requeue 钩子，允许子类修改任务参数
                 await self.on_task_requeue(worker_model)
+                # 重新入队直接放入队列，不需要背压控制
+                # 因为这是已存在的任务重试，不是新生成的任务
                 await self.task_queue.put(worker_model)
 
             await self.on_worker_end(worker_model)

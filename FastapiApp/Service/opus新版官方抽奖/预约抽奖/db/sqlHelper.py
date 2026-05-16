@@ -166,7 +166,18 @@ class _SqlHelper(SqlHelperBase):
             result = await session.execute(sql)
             result = result.scalars().first()
             return result
-
+    @lock_wrapper
+    async def get_reserve_by_ids_bulk(self, ids_list:list[int|str]) -> list[TUpReserveRelationInfo]:
+        async with self.async_session() as session:
+            # 使用 in_ 方法进行批量查询
+            sql = (
+                select(TUpReserveRelationInfo)
+                .where(TUpReserveRelationInfo.ids.in_(ids_list))
+                .order_by(TUpReserveRelationInfo.ids.desc())
+            )
+            result = await session.execute(sql)
+            return result.scalars().all()
+        
     @lock_wrapper
     async def get_reserve_by_dynamic_id(
         self, dynamic_id
