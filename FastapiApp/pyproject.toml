@@ -14,9 +14,9 @@ dependencies = [
     "asyncer>=0.0.10",
     "beautifulsoup4>=4.14.2",
     "bili-ticket-gt-python>=0.3.2",
+    "browserforge>=1.2.4",
     "captcha>=0.7.1",
     "cloudscraper>=1.2.71",
-    "crawlee[all]>=1.0.3",
     "cryptography>=46.0.3",
     "curl-cffi>=0.13.0",
     "exceptiongroup>=1.3.0",
@@ -67,12 +67,6 @@ default = true
 [[tool.uv.index]]
 name = "tencent"
 url = "https://mirrors.cloud.tencent.com/pypi/simple/"
-[[tool.uv.index]]
-name = "volces"
-url = "https://mirrors.volces.com/pypi/simple/"
-[[tool.uv.index]]
-name = "huaweicloud"
-url = "https://mirrors.huaweicloud.com/repository/pypi/simple/"
 
 [project.optional-dependencies]
 test = [
@@ -80,6 +74,12 @@ test = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
 ]
+[[tool.uv.index]]
+name = "volces"
+url = "https://mirrors.volces.com/pypi/simple/"
+[[tool.uv.index]]
+name = "huaweicloud"
+url = "https://mirrors.huaweicloud.com/repository/pypi/simple/"
 [[tool.uv.index]]
 name = "tuna"
 url = "https://pypi.tuna.tsinghua.edu.cn/simple/"

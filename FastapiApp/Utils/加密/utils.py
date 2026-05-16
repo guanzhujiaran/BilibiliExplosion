@@ -10,13 +10,13 @@ import time
 from typing import Optional, Literal, Any
 from pydantic import Field
 from Models.base.custom_pydantic import CustomBaseModel
-from crawlee.fingerprint_suite import DefaultFingerprintGenerator
+from browserforge.fingerprints import FingerprintGenerator
 
-fingerprint_generator = DefaultFingerprintGenerator()
+fingerprint_generator = FingerprintGenerator()
 
 config = {
-    'bilibili': {
-        'dmImgList': '[{"img_url": "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png"}, {"sub_url": "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png"}]'
+    "bilibili": {
+        "dmImgList": '[{"img_url": "https://i0.hdslb.com/bfs/wbi/7cd084941338484aae1ad9425b84077c.png"}, {"sub_url": "https://i0.hdslb.com/bfs/wbi/4932caff0ff746eab6f01bf08b70ac45.png"}]'
     }
 }
 
@@ -129,8 +129,8 @@ def hmac_sha256(key, message):
     :return: 加密后的哈希值
     """
     # 将密钥和消息转换为字节串
-    key = key.encode('utf-8')
-    message = message.encode('utf-8')
+    key = key.encode("utf-8")
+    message = message.encode("utf-8")
 
     # 创建HMAC对象，使用SHA256哈希算法
     hmac_obj = hmac.new(key, message, hashlib.sha256)
@@ -165,28 +165,29 @@ class GenWebCookieParams(CustomBaseModel):
     avail_w: int
     avail_h: int
     uuid: str = Field(default_factory=lambda: uuidInfoc.gen())
-    language: Literal['zh-CN', 'zh-TW', 'en-US', 'en-GB', 'ja-JP', 'ko-KR'] = 'zh-CN'
+    language: Literal["zh-CN", "zh-TW", "en-US", "en-GB", "ja-JP", "ko-KR"] = "zh-CN"
     timezone: str = "Asia/Shanghai"
     timezoneOffset: int = -480
 
-    payload_str: str = Field('')
-    buvid_fp: str = Field('')
+    payload_str: str = Field("")
+    buvid_fp: str = Field("")
     deviceMemory: int = Field(8)
     CPUCoreNum: int = Field(8)
-    renderer_id: str = Field('')
-    vendor: str = Field('', description='Apple Inc.')
+    renderer_id: str = Field("")
+    vendor: str = Field("", description="Apple Inc.")
     renderer: str = Field(
-        '',
-        description='''类似
+        "",
+        description="""类似
 `ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER (0x000021C4) Direct3D11 vs_5_0 ps_5_0, D3D11)`
-''')
+""",
+    )
 
     def model_post_init(self, context: Any):
         """
-                在模型初始化后，自动生成并填充随机的 renderer 和 webgl 信息。
-                - webgl_renderer 格式为: ANGLE (...) Google Inc. (厂商)
-                - renderer 格式为: ANGLE (...) #X...随机ID...
-                """
+        在模型初始化后，自动生成并填充随机的 renderer 和 webgl 信息。
+        - webgl_renderer 格式为: ANGLE (...) Google Inc. (厂商)
+        - renderer 格式为: ANGLE (...) #X...随机ID...
+        """
         rand_finger = fingerprint_generator.generate()
         self.CPUCoreNum = rand_finger.navigator.hardwareConcurrency
         self.deviceMemory = rand_finger.navigator.deviceMemory
@@ -211,15 +212,19 @@ class BuvidFp:
     @staticmethod
     def _gen_key_from_compoonents(compoonents: list[dict]) -> str:
         def change_str_to_js_string(string: str) -> str:
-            return string.replace('False', 'false').replace('True', 'true').replace('None', 'null')
+            return (
+                string.replace("False", "false")
+                .replace("True", "true")
+                .replace("None", "null")
+            )
 
         if type(compoonents) is not list:
             return ""
         ret_str = ""
         for cp in compoonents:
-            v = cp.get('value')
+            v = cp.get("value")
             if type(v) is list:
-                ret_str += ','.join([str(x) for x in v])
+                ret_str += ",".join([str(x) for x in v])
             elif type(v) is bool:
                 ret_str += change_str_to_js_string(str(v))
             else:
@@ -245,11 +250,11 @@ class BuvidFp:
                 "0bd0": buvid_payload_params.CPUCoreNum,  # hardwareConcurrency, navigator.hardwareConcurrency
                 "748e": [
                     buvid_payload_params.window_w,  # window.screen.width
-                    buvid_payload_params.window_h  # window.screen.height
+                    buvid_payload_params.window_h,  # window.screen.height
                 ],  # screenResolution
                 "d61f": [
                     buvid_payload_params.avail_w,  # window.screen.availWidth
-                    buvid_payload_params.avail_h  # window.screen.availHeight
+                    buvid_payload_params.avail_h,  # window.screen.availHeight
                 ],  # availableScreenResolution
                 "fc9d": buvid_payload_params.timezoneOffset,  # timezoneOffset, (new Date).getTimezoneOffset()
                 "6aa9": buvid_payload_params.timezone,
@@ -258,82 +263,46 @@ class BuvidFp:
                 "3b21": 1,  # localStorage, window.localStorage, html5 api
                 "8a1c": 0,  # openDatabase, window.openDatabase, html5 api
                 "d52f": "not available",  # cpuClass, navigator.cpuClass
-                "adca": "Win32" if "Linux" not in buvid_payload_params.ua else "Linux",  # platform, navigator.platform
+                "adca": (
+                    "Win32" if "Linux" not in buvid_payload_params.ua else "Linux"
+                ),  # platform, navigator.platform
                 "80c9": [
                     [
                         "PDF Viewer",
                         "Portable Document Format",
-                        [
-                            [
-                                "application/pdf",
-                                "pdf"
-                            ],
-                            [
-                                "text/pdf",
-                                "pdf"
-                            ]
-                        ]
+                        [["application/pdf", "pdf"], ["text/pdf", "pdf"]],
                     ],
                     [
                         "Chrome PDF Viewer",
                         "Portable Document Format",
-                        [
-                            [
-                                "application/pdf",
-                                "pdf"
-                            ],
-                            [
-                                "text/pdf",
-                                "pdf"
-                            ]
-                        ]
+                        [["application/pdf", "pdf"], ["text/pdf", "pdf"]],
                     ],
                     [
                         "Chromium PDF Viewer",
                         "Portable Document Format",
-                        [
-                            [
-                                "application/pdf",
-                                "pdf"
-                            ],
-                            [
-                                "text/pdf",
-                                "pdf"
-                            ]
-                        ]
+                        [["application/pdf", "pdf"], ["text/pdf", "pdf"]],
                     ],
                     [
                         "Microsoft Edge PDF Viewer",
                         "Portable Document Format",
-                        [
-                            [
-                                "application/pdf",
-                                "pdf"
-                            ],
-                            [
-                                "text/pdf",
-                                "pdf"
-                            ]
-                        ]
+                        [["application/pdf", "pdf"], ["text/pdf", "pdf"]],
                     ],
                     [
                         "WebKit built-in PDF",
                         "Portable Document Format",
-                        [
-                            [
-                                "application/pdf",
-                                "pdf"
-                            ],
-                            [
-                                "text/pdf",
-                                "pdf"
-                            ]
-                        ]
-                    ]
+                        [["application/pdf", "pdf"], ["text/pdf", "pdf"]],
+                    ],
                 ],  # plugins
-                "13ab": base64.b64encode(hex(int(time.time() * random.random()))[2:].encode('ascii')).decode('utf-8'),
+                "13ab": base64.b64encode(
+                    hex(int(time.time() * random.random()))[2:].encode("ascii")
+                ).decode("utf-8"),
                 # canvas fingerprint
-                "bfe9": ''.join([random.choice(string.ascii_letters + '1234567890') for x in range(50)]),  # webgl_str
+                "bfe9": "".join(
+                    [
+                        random.choice(string.ascii_letters + "1234567890")
+                        for x in range(50)
+                    ]
+                ),  # webgl_str
                 "a3c1": [
                     "extensions:ANGLE_instanced_arrays;EXT_blend_minmax;EXT_color_buffer_half_float;EXT_disjoint_timer_query;EXT_float_blend;EXT_frag_depth;EXT_shader_texture_lod;EXT_texture_compression_bptc;EXT_texture_compression_rgtc;EXT_texture_filter_anisotropic;EXT_sRGB;KHR_parallel_shader_compile;OES_element_index_uint;OES_fbo_render_mipmap;OES_standard_derivatives;OES_texture_float;OES_texture_float_linear;OES_texture_half_float;OES_texture_half_float_linear;OES_vertex_array_object;WEBGL_color_buffer_float;WEBGL_compressed_texture_s3tc;WEBGL_compressed_texture_s3tc_srgb;WEBGL_debug_renderer_info;WEBGL_debug_shaders;WEBGL_depth_texture;WEBGL_draw_buffers;WEBGL_lose_context;WEBGL_multi_draw",
                     "webgl aliased line width range:[1, 1]",
@@ -398,7 +367,7 @@ class BuvidFp:
                     "webgl fragment shader medium int precision rangeMax:30",
                     "webgl fragment shader low int precision:0",
                     "webgl fragment shader low int precision rangeMin:31",
-                    "webgl fragment shader low int precision rangeMax:30"
+                    "webgl fragment shader low int precision rangeMax:30",
                 ],  # webgl_params, cab be set to [] if webgl is not supported
                 "6bc5": f"{buvid_payload_params.vendor}~{buvid_payload_params.renderer}",
                 # webglVendorAndRenderer like "Google Inc. (NVIDIA)~ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER (0x000021C4) Direct3D11 vs_5_0 ps_5_0, D3D11)"
@@ -406,11 +375,7 @@ class BuvidFp:
                 "ed31": 0,  # hasLiedLanguages
                 "72bd": 0,  # hasLiedOs
                 "097b": 0,  # hasLiedBrowser
-                "52cd": [
-                    10,
-                    0,
-                    0
-                ],
+                "52cd": [10, 0, 0],
                 "a658": [
                     "Arial",
                     "Arial Black",
@@ -444,9 +409,9 @@ class BuvidFp:
                     "Times New Roman",
                     "Trebuchet MS",
                     "Verdana",
-                    "Wingdings"
+                    "Wingdings",
                 ],  # font details. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
-                "d02f": "124.04347527516074"  # str(124 + random.random())
+                "d02f": "124.04347527516074",  # str(124 + random.random())
                 # audio fingerprint. see https:#github.com/fingerprintjs/fingerprintjs for implementation details
             },
         }
