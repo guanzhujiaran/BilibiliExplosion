@@ -189,6 +189,11 @@ wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/dd/35/ce962f738ae28ffce6293e7607b129075633e6bb185a5ab87e49246eedc2/browserforge-1.2.4-py3-none-any.whl", hash = "sha256:fb1c14e62ac09de221dcfc73074200269f697596c642cb200ceaab1127a17542" },
 ]
 
+[package.optional-dependencies]
+all = [
+    { name = "orjson" },
+]
+
 [[package]]
 name = "captcha"
 version = "0.7.1"
@@ -755,7 +760,7 @@ dependencies = [
     { name = "asyncer" },
     { name = "beautifulsoup4" },
     { name = "bili-ticket-gt-python" },
-    { name = "browserforge" },
+    { name = "browserforge", extra = ["all"] },
     { name = "captcha" },
     { name = "cloudscraper" },
     { name = "cryptography" },
@@ -815,7 +820,7 @@ requires-dist = [
     { name = "asyncer", specifier = ">=0.0.10" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "bili-ticket-gt-python", specifier = ">=0.3.2" },
-    { name = "browserforge", specifier = ">=1.2.4" },
+    { name = "browserforge", extras = ["all"], specifier = ">=1.2.4" },
     { name = "captcha", specifier = ">=0.7.1" },
     { name = "cloudscraper", specifier = ">=1.2.71" },
     { name = "cryptography", specifier = ">=46.0.3" },
