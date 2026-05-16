@@ -15,7 +15,7 @@ services:
     volumes:
       - ./docker_vol/milvus/conf/user.yaml:/milvus/configs/user.yaml
       - ./docker_vol/milvus/conf/embedEtcd.yaml:/milvus/configs/embedEtcd.yaml
-      - ./docker_vol/milvus/data:/var/lib/milvus
+      - ./docker_vol/milvus/vol:/var/lib/milvus
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
