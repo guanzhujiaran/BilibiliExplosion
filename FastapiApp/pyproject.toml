@@ -57,10 +57,13 @@ dependencies = [
 ]
 [tool.uv]
 python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone/"
+index-default = "aliyun"
+index-strategy = "unsafe-best-match"
 
 [[tool.uv.index]]
 name = "aliyun"
 url = "https://mirrors.aliyun.com/pypi/simple/"
+trusted-host = "mirrors.aliyun.com"
 
 [project.optional-dependencies]
 test = [
