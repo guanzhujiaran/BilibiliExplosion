@@ -1,14 +1,14 @@
-# -*- coding:utf- 8 -*-
+# -*- coding:utf-8 -*-
 import random
 import re
 import time
-from pylangtools.langconv import Converter
-
+import opencc
 import numpy
 import requests
 from Utils.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 up_nickname_dict = {}
 kongpinglun = '⁡'
+converter = opencc.OpenCC('t2s.json')
 
 class methods:
     def __init__(self):
@@ -56,7 +56,7 @@ class methods:
         :return:
         '''
         tcontent = re.sub(r'@(.{0,12}?) ', '', tcontent)
-        tcontent = Converter(r'zh-hans').convert(tcontent)
+        tcontent = converter.convert(tcontent)
         tcontent = tcontent.lower()
         tcontent = tcontent.replace(' ', '')
         tcontent = tcontent.replace('传送门', '')

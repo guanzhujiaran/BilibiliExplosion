@@ -12,7 +12,6 @@ from urllib.parse import urlencode
 
 import requests
 from loguru import logger
-from pylangtools.langconv import Converter
 
 import Utils.CommMethods
 
@@ -324,7 +323,7 @@ class index:
                 print('获取动态内容出错，可能是已删除或审核中的动态')
                 print(self.BAPI.timeshift(time.time()))
                 # traceback.print_exc()
-            dynamic_content = Converter('zh-hans').convert(self.contentshow(_type, card, dynamicint, uid))
+            dynamic_content = self.contentshow(_type, card, dynamicint, uid)
             try:
                 picture_list = ['None'] * 9
                 if _type == 2:

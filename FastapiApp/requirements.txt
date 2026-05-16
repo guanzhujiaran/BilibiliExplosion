@@ -30,7 +30,6 @@ msgpack
 PyExecJS2
 py_mini_racer
 beautifulsoup4
-pylangtools
 requests
 exceptiongroup
 curl_cffi
