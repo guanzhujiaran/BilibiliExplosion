@@ -866,8 +866,8 @@ name = "faiss-cpu"
 version = "1.13.2"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
-    { name = "numpy" },
-    { name = "packaging" },
+    { name = "numpy", marker = "sys_platform != 'win32'" },
+    { name = "packaging", marker = "sys_platform != 'win32'" },
 ]
 wheels = [
     { url = "https://mirrors.aliyun.com/pypi/packages/07/c9/671f66f6b31ec48e5825d36435f0cb91189fa8bb6b50724029dbff4ca83c/faiss_cpu-1.13.2-cp310-abi3-macosx_14_0_arm64.whl", hash = "sha256:a9064eb34f8f64438dd5b95c8f03a780b1a3f0b99c46eeacb1f0b5d15fc02dc1" },
@@ -1031,7 +1031,7 @@ dependencies = [
     { name = "grpcio" },
     { name = "grpcio-tools" },
     { name = "httpx" },
-    { name = "jieba" },
+    { name = "jieba3" },
     { name = "langchain-openai" },
     { name = "loguru" },
     { name = "msgpack" },
@@ -1091,7 +1091,7 @@ requires-dist = [
     { name = "grpcio", specifier = "==1.75.1" },
     { name = "grpcio-tools", specifier = "==1.75.1" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "jieba", specifier = ">=0.42.1" },
+    { name = "jieba3", specifier = ">=1.0.2" },
     { name = "langchain-openai", specifier = ">=1.0.1" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "msgpack", specifier = ">=1.1.2" },
@@ -1684,10 +1684,16 @@ wheels = [
 ]
 
 [[package]]
-name = "jieba"
-version = "0.42.1"
+name = "jieba3"
+version = "1.0.2"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
-sdist = { url = "https://mirrors.aliyun.com/pypi/packages/c6/cb/18eeb235f833b726522d7ebed54f2278ce28ba9438e3135ab0278d9792a2/jieba-0.42.1.tar.gz", hash = "sha256:055ca12f62674fafed09427f176506079bc135638a14e23e25be909131928db2" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/23/67/8eaae19dd87120dc8a7ba6dff5b24676bd6b92b7570954283edf2bfb5696/jieba3-1.0.2.tar.gz", hash = "sha256:80054b147115ac6a09f50d54d68abcf55f2cb8d435ab71128da40effd0f4e2cb" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/66/5d/83622ef6020c83766b4d0c9675722c7b6ed00a1a37289c4f6e707c695d8f/jieba3-1.0.2-py3-none-any.whl", hash = "sha256:b6f33845d8dc32a7a55db95611efef7de5d42ba9964716d26f8d22d20cee9785" },
+]
 
 [[package]]
 name = "jinja2"
@@ -2072,10 +2078,10 @@ name = "milvus-lite"
 version = "3.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
 dependencies = [
-    { name = "faiss-cpu" },
-    { name = "grpcio" },
-    { name = "numpy" },
-    { name = "pyarrow" },
+    { name = "faiss-cpu", marker = "sys_platform != 'win32'" },
+    { name = "grpcio", marker = "sys_platform != 'win32'" },
+    { name = "numpy", marker = "sys_platform != 'win32'" },
+    { name = "pyarrow", marker = "sys_platform != 'win32'" },
 ]
 sdist = { url = "https://mirrors.aliyun.com/pypi/packages/a3/9a/d80d260e6fe1246818a8ef782c374ba9c6ca46ca3b987c14eabe914ef805/milvus_lite-3.0.tar.gz", hash = "sha256:2c35d0d046b1faae3402cde1fb73d65f51ee8c6aba65f54de1dda46f7bb18b9b" }
 wheels = [

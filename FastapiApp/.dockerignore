@@ -4,14 +4,14 @@
 *.svg
 *.txt
 .idea/
-.vscode
+.vscode/
 *.log
 *.zip
 *.pt
 *.jpg
 *.csv.gz
 *.png
-.git/
+.git
 */siamese.onnx
 */yolov11n_captcha.onnx
 Service/PlayWright/user_data
@@ -28,3 +28,4 @@ scripts/log
 !Service/GrpcModule/Grpc/GrpcProto
 !requirements.txt
 !Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
+__pycache__/

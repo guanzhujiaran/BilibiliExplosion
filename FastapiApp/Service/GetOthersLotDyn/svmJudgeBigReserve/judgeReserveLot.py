@@ -2,7 +2,7 @@
 # 或
 import os
 
-import jieba
+import jieba3
 import pickle
 
 current_file_dir = os.path.dirname(__file__)
@@ -11,10 +11,12 @@ with open(os.path.join(current_file_dir, 'svm_model.pkl'), 'rb') as file:
 with open(os.path.join(current_file_dir, 'svm_vectorizer.pkl'), 'rb') as file:
     loaded_vector = pickle.load(file)
 # 或者使用pickle加载模型
+tokenizer = jieba3.jieba3(model="small")
+
 def preprocess_text(text):
     text.replace('预约有奖：', '')
     try:
-        words = jieba.cut(text.strip())
+        words = tokenizer.cut_text(text.strip())
         return ' '.join(words)
     except Exception as e:
         return text

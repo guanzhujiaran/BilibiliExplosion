@@ -1,4 +1,4 @@
-import jieba
+import jieba3
 import numpy as np
 import os
 from PIL import Image
@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 from CONFIG import CONFIG
 
+tokenizer = jieba3.jieba3(model="small")
 
 def GenWordCloudBydf(df,date_start:datetime):
     # 将所有文本连接成一个长字符串
@@ -24,7 +25,7 @@ def GenWordCloudBydf(df,date_start:datetime):
     save_csv_path = f'dataAnalysis/WordCloud/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_词频.csv'
     save_png_path = f'dataAnalysis/WordCloud/{date_start.year}/{date_start.month}/{date_start.year}_{date_start.month}_{date_start.day}_词云图.png'
 
-    seg_list = jieba.cut(text, cut_all=False)
+    seg_list = tokenizer.cut_text(text, cut_all=False)
     words = ' '.join(seg_list)
     stopwords = set([line.strip() for line in open(path + 'chinese_stopwords.txt', 'r', encoding='utf-8')])
     filtered_words = [word for word in words.split() if word not in stopwords and len(word) > 1]

@@ -1,5 +1,6 @@
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 LABEL authors="1944637830@qq.com"
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright
 
 WORKDIR /app
 
@@ -20,7 +21,7 @@ RUN apt-get update && \
     libssl-dev \
     git \
     && rm -rf /var/lib/apt/lists/*
-
+    
 # 安装 Node.js 依赖
 COPY package.json .
 RUN npm config set registry https://registry.npmmirror.com && \
@@ -32,7 +33,6 @@ RUN uv lock
 
 RUN uv sync
 
-ENV PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright
 RUN uv run playwright install chromium
 
 COPY . .
