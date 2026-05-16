@@ -1,7 +1,7 @@
 services:
   fastapi-milvus:
     container_name: milvus-standalone
-    image: docker.1ms.run/milvusdb/milvus:latest
+    image: milvusdb/milvus:v3.0-beta
     command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined

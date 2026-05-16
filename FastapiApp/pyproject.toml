@@ -42,7 +42,7 @@ dependencies = [
     "py-mini-racer>=0.6.0",
     "pydantic>=2.12.3",
     "pyexecjs2>=1.6.1",
-    "pymilvus==2.6.0",
+    "pymilvus==3.0.0",
     "python-dotenv>=1.1.1",
     "python-socks>=2.7.2",
     "redis>=6.4.0",
@@ -57,20 +57,11 @@ dependencies = [
 ]
 [tool.uv]
 python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone/"
-index-strategy = "unsafe-best-match"
-
 [[tool.uv.index]]
 name = "aliyun"
 url = "https://mirrors.aliyun.com/pypi/simple/"
 trusted-host = "mirrors.aliyun.com"
 default = true
-
-[project.optional-dependencies]
-test = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-]
 [[tool.uv.index]]
 name = "tencent"
 url = "https://mirrors.cloud.tencent.com/pypi/simple/"
@@ -86,3 +77,13 @@ url = "https://pypi.tuna.tsinghua.edu.cn/simple/"
 [[tool.uv.index]]
 name = "ustc"
 url = "https://pypi.mirrors.ustc.edu.cn/simple/"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+]
+[[tool.uv.index]]
+name = "bfsu"
+url = "https://mirrors.bfsu.edu.cn/pypi/web/simple/"

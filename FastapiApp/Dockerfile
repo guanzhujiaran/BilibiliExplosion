@@ -1,7 +1,7 @@
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
-LABEL authors="1944637830@qq.com"
-ENV PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright
-
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup
+ENV RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
 WORKDIR /app
 
 # 配置 Debian 阿里云镜像源
@@ -29,10 +29,8 @@ RUN npm config set registry https://registry.npmmirror.com && \
 
 COPY pyproject.toml .python-version uv.lock ./
 
-RUN uv lock
-
-RUN uv sync
-
+RUN uv sync -v
+# ENV PLAYWRIGHT_DOWNLOAD_HOST=https://registry.npmmirror.com/-/binary/playwright
 RUN uv run playwright install chromium
 
 COPY . .
