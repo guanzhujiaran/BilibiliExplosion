@@ -7,6 +7,7 @@ from Service.BaseCrawler.base.core import BaseCrawler
 from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus, ParamsType
 from Service.BaseCrawler.plugin.base import CrawlerPlugin
 from Utils.Common import asyncio_gather
+from Utils.PushMe import a_pushme
 
 
 class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
@@ -47,6 +48,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         worker_max_timeout: int | None = None,
         log_timeout_error: bool = True,
         log_error: bool = True,
+        worker_error_delay:int = 300,
         *args,
         **kwargs,
     ):
@@ -83,6 +85,9 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                 True: 打印超时错误日志（默认）
                 False: 不打印超时错误日志
                 默认为 True
+            
+            worker_error_delay (int): 任务失败时的延迟时间（秒）
+                默认为 300 秒
 
             *args, **kwargs: 传递给父类 BaseCrawler 的参数
                 包括：max_sem（最大并发数）、_logger（日志对象）等
@@ -101,6 +106,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         self.worker_max_timeout = worker_max_timeout
         self.log_timeout_error = log_timeout_error
         self.log_error = log_error
+        self.worker_error_delay = worker_error_delay
         if plugins is None:
             plugins = []
         # 参数类型校验
@@ -385,8 +391,9 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
                     except Exception as e:
                         if self.log_error:
                             self.log.exception(self.format_log(f"爬取异常：{e}"))
+                            await a_pushme(title=f"爬取任务[{self.__class__.__name__}]异常", content=f'{worker_model}\n{e}')
+                        await asyncio.sleep(self.worker_error_delay)
                         fetch_result = WorkerStatus.fail
-
                     if not isinstance(fetch_result, WorkerStatus):
                         worker_model.fetchStatus = WorkerStatus.complete
                     else:
