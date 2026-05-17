@@ -257,7 +257,28 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
                     await self._background_save_reserve_info(x.ids, round_id,x)
             resp.append((x, resp_dict))
         return resp
+    
+    async def handle_fetch_reserve_info(
+        self, sid, is_api_fetch: bool
+    ) -> tuple[TUpReserveRelationInfo, dict]:
+        if not is_api_fetch:
+            _: TUpReserveRelationInfo | None = await self.sqlHelper.get_reserve_by_ids(
+                sid
+            )
+            round_id = self.now_round_id
+        else:
+            _ = None
+            round_id = None
 
+        if _ and _.code == 0 and _.sid is not None:
+            resp_dict = _.raw_JSON
+        else:
+            resp_dict = await reserve_relation_info(sid)
+            resp_dict["ids"] = sid
+            _ = await self.sqlHelper.add_reserve_info_by_resp_dict(resp_dict, round_id)
+
+        return _, resp_dict
+    
     async def resolve_reserve_by_sid(
         self, sid: int, is_refresh: bool = False
     ) -> WorkerStatus:
@@ -268,9 +289,7 @@ class ReserveScrapyRobot(UnlimitedCrawler[ReserveParams]):
         :return: WorkerStatus
         """
         while True:
-            _, resp_dict = (
-                await self.bulk_handle_fetch_reserve_info([sid], is_refresh, None)
-            )[0]
+            _, resp_dict = await self.handle_fetch_reserve_info(sid, is_refresh)
             if is_refresh:
                 return WorkerStatus.complete
             dycode = resp_dict.get("code")
