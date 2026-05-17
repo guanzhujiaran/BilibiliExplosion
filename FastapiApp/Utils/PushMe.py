@@ -14,17 +14,7 @@ push_msg_d = deque(maxlen=50)
 
 
 def __preprocess_content(content: str) -> str:
-    try:
-        ipv4 = requests.get('https://4.ipw.cn/').text
-    except:
-        ipv4 = ""
-    ipv4 = f'http://{ipv4}:23333/docs'
-    try:
-        ipv6 = requests.get('https://test.ipw.cn/', allow_redirects=True).text
-        ipv6 = f'http://[{ipv6}]:23333/docs'
-        content += f'\n{datetime.datetime.now()}当前服务器ip信息：\n{ipv4}\n{ipv6}'
-    except Exception as e:
-        pushme_logger.exception(e)
+    content += f'\n{datetime.datetime.now()}'
     return content
 
 
