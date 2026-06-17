@@ -218,7 +218,7 @@ async def reserve_relation_info(
         request_conf=request_conf,
         cookie_data=cookie_data,
     )
-    check_reserve_relation_info(req_dict, ids=ids)
+    check_reserve_relation_info(req_dict, ids=ids, params=params)
     return req_dict
 
 

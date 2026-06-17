@@ -47,3 +47,4 @@ venv/
 .lh
 .history
 .env
+/volumes

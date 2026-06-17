@@ -62,7 +62,7 @@ innodb_buffer_pool_size = 2G
 innodb_buffer_pool_instances = 4
 
 # InnoDB 日志文件大小
-innodb_log_file_size = 256M
+innodb_redo_log_capacity = 256M
 
 # 事务提交策略（2 表示每秒刷新一次，平衡性能和安全性）
 innodb_flush_log_at_trx_commit = 2
