@@ -1,0 +1,325 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "item": {
+      "basic": {
+        "comment_id_str": "398757595",
+        "comment_type": 11,
+        "jump_url": "//www.bilibili.com/opus/1216239392159432721",
+        "like_icon": {
+          "action_url": "https://i0.hdslb.com/bfs/garb/a041e754845c9cdbe39fa065acda435f7cf064cf.bin",
+          "end_url": "",
+          "id": 1769661347001,
+          "start_url": ""
+        },
+        "rid_str": "398757595"
+      },
+      "id_str": "1216239392159432721",
+      "modules": {
+        "module_author": {
+          "avatar": {
+            "container_size": {
+              "height": 1.35,
+              "width": 1.35
+            },
+            "fallback_layers": {
+              "is_critical_group": true,
+              "layers": [
+                {
+                  "general_spec": {
+                    "pos_spec": {
+                      "axis_x": 0.675,
+                      "axis_y": 0.675,
+                      "coordinate_pos": 2
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    },
+                    "size_spec": {
+                      "height": 1,
+                      "width": 1
+                    }
+                  },
+                  "layer_config": {
+                    "is_critical": true,
+                    "tags": {
+                      "AVATAR_LAYER": {},
+                      "GENERAL_CFG": {
+                        "config_type": 1,
+                        "general_config": {
+                          "web_css_style": {
+                            "borderRadius": "50%"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "resource": {
+                    "res_image": {
+                      "image_src": {
+                        "placeholder": 6,
+                        "remote": {
+                          "bfs_style": "widget-layer-avatar",
+                          "url": "https://i2.hdslb.com/bfs/face/53430e94de5ad8be7d7730bc3a91b7364e6b3afc.jpg"
+                        },
+                        "src_type": 1
+                      }
+                    },
+                    "res_type": 3
+                  },
+                  "visible": true
+                },
+                {
+                  "general_spec": {
+                    "pos_spec": {
+                      "axis_x": 0.8000000000000002,
+                      "axis_y": 0.8000000000000002,
+                      "coordinate_pos": 1
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    },
+                    "size_spec": {
+                      "height": 0.41666666666666663,
+                      "width": 0.41666666666666663
+                    }
+                  },
+                  "layer_config": {
+                    "tags": {
+                      "GENERAL_CFG": {
+                        "config_type": 1,
+                        "general_config": {
+                          "web_css_style": {
+                            "background-color": "rgb(255,255,255)",
+                            "border": "2px solid rgba(255,255,255,1)",
+                            "borderRadius": "50%",
+                            "boxSizing": "border-box"
+                          }
+                        }
+                      },
+                      "ICON_LAYER": {}
+                    }
+                  },
+                  "resource": {
+                    "res_image": {
+                      "image_src": {
+                        "local": 4,
+                        "src_type": 2
+                      }
+                    },
+                    "res_type": 3
+                  },
+                  "visible": true
+                }
+              ]
+            },
+            "mid": "80696429"
+          },
+          "face": "https://i2.hdslb.com/bfs/face/53430e94de5ad8be7d7730bc3a91b7364e6b3afc.jpg",
+          "face_nft": false,
+          "following": true,
+          "jump_url": "//space.bilibili.com/80696429/dynamic",
+          "label": "",
+          "mid": 80696429,
+          "name": "恋与制作人",
+          "official_verify": {
+            "desc": "",
+            "type": 1
+          },
+          "pendant": {
+            "expire": 0,
+            "image": "",
+            "image_enhance": "",
+            "image_enhance_frame": "",
+            "n_pid": 0,
+            "name": "",
+            "pid": 0
+          },
+          "pub_action": "",
+          "pub_location_text": "",
+          "pub_time": "2026年06月21日 12:30",
+          "pub_ts": 1782016200,
+          "type": "AUTHOR_TYPE_NORMAL",
+          "vip": {
+            "avatar_subscript": 1,
+            "avatar_subscript_url": "",
+            "due_date": 1787241600000,
+            "label": {
+              "bg_color": "#FB7299",
+              "bg_style": 1,
+              "border_color": "",
+              "img_label_uri_hans": "",
+              "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/8d4f8bfc713826a5412a0a27eaaac4d6b9ede1d9.png",
+              "img_label_uri_hant": "",
+              "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/VEW8fCC0hg.png",
+              "label_theme": "annual_vip",
+              "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+              "text": "年度大会员",
+              "text_color": "#FFFFFF",
+              "use_img_label": true
+            },
+            "nickname_color": "#FB7299",
+            "status": 1,
+            "theme_type": 0,
+            "type": 2
+          }
+        },
+        "module_dynamic": {
+          "additional": {
+            "common": {
+              "button": {
+                "jump_style": {
+                  "icon_url": "",
+                  "text": "进入"
+                },
+                "jump_url": "https://www.biligame.com/detail?id=144&sourceFrom=1005&biz_scene=dynamic",
+                "type": 1
+              },
+              "cover": "https://i0.hdslb.com/bfs/game/4cec8e0a2b7d8ff5a34b7866b279857b894d0e1f.jpg",
+              "desc1": "养成/乙女/手机游戏",
+              "desc2": "恋与制作人新活动好野！",
+              "head_text": "相关游戏",
+              "id_str": "144",
+              "jump_url": "https://www.biligame.com/detail?id=144&sourceFrom=1005&biz_scene=dynamic",
+              "style": 1,
+              "sub_type": "game",
+              "title": "恋与制作人"
+            },
+            "type": "ADDITIONAL_TYPE_COMMON"
+          },
+          "desc": null,
+          "major": {
+            "opus": {
+              "fold_action": [
+                "展开",
+                "收起"
+              ],
+              "jump_url": "//www.bilibili.com/opus/1216239392159432721",
+              "pics": [
+                {
+                  "aigc": null,
+                  "height": 6000,
+                  "live_url": null,
+                  "size": 7813.1142578125,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/cabeb36ae45136b503be8286658d275580696429.jpg",
+                  "width": 4000
+                },
+                {
+                  "aigc": null,
+                  "height": 6000,
+                  "live_url": null,
+                  "size": 4414.625,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/ccc24b3ec9232e030427bd621a25abbd80696429.jpg",
+                  "width": 4000
+                },
+                {
+                  "aigc": null,
+                  "height": 6000,
+                  "live_url": null,
+                  "size": 5098.6689453125,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/e8f0e5b15e65a704b07822eebc842e3c80696429.jpg",
+                  "width": 4000
+                },
+                {
+                  "aigc": null,
+                  "height": 6000,
+                  "live_url": null,
+                  "size": 4955.38671875,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/52d51a02f79760011fc62d03ce8a348480696429.jpg",
+                  "width": 4000
+                },
+                {
+                  "aigc": null,
+                  "height": 3643,
+                  "live_url": null,
+                  "size": 5576.3623046875,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/ecfe8cc7822ac5ba120aa362587a7ad580696429.jpg",
+                  "width": 6000
+                },
+                {
+                  "aigc": null,
+                  "height": 6000,
+                  "live_url": null,
+                  "size": 4488.177734375,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/b422dbdf6990f87cdadbea4a91ac56c880696429.jpg",
+                  "width": 4000
+                },
+                {
+                  "aigc": null,
+                  "height": 6000,
+                  "live_url": null,
+                  "size": 3971.228515625,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/aa371731960a5f5d1d76706472ee364180696429.jpg",
+                  "width": 4000
+                },
+                {
+                  "aigc": null,
+                  "height": 5699,
+                  "live_url": null,
+                  "size": 4760.7900390625,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/95aab9a279e7cc3572f4df100633f21680696429.jpg",
+                  "width": 3911
+                },
+                {
+                  "aigc": null,
+                  "height": 6000,
+                  "live_url": null,
+                  "size": 4263.1396484375,
+                  "url": "http://i0.hdslb.com/bfs/new_dyn/4f1343ba58ac4faa171767b3905f830f80696429.jpg",
+                  "width": 4000
+                }
+              ],
+              "summary": {
+                "rich_text_nodes": [
+                  {
+                    "jump_url": "//search.bilibili.com/all?keyword=%E6%81%8B%E4%B8%8E%E5%88%B6%E4%BD%9C%E4%BA%BA",
+                    "orig_text": "#恋与制作人#",
+                    "style": {},
+                    "text": "#恋与制作人#",
+                    "type": "RICH_TEXT_NODE_TYPE_TOPIC"
+                  },
+                  {
+                    "orig_text": "【凌肖生日快乐】\n每一个惊喜的转角，都会遇见自由。\n生日嘉宾已到场，跟着他走就对啦~\n\n于人间听雷鸣，于长夏见少年不羁。\n生日快乐，凌肖。\n\n⭐ 凌肖生日胖宝宝MMD模型「凌肖·世说心语」现已开放官网下载，模型包含寿桃头饰、灰色领带、滑板配件。",
+                    "text": "【凌肖生日快乐】\n每一个惊喜的转角，都会遇见自由。\n生日嘉宾已到场，跟着他走就对啦~\n\n于人间听雷鸣，于长夏见少年不羁。\n生日快乐，凌肖。\n\n⭐ 凌肖生日胖宝宝MMD模型「凌肖·世说心语」现已开放官网下载，模型包含寿桃头饰、灰色领带、滑板配件。",
+                    "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                  }
+                ],
+                "text": "#恋与制作人#【凌肖生日快乐】\n每一个惊喜的转角，都会遇见自由。\n生日嘉宾已到场，跟着他走就对啦~\n\n于人间听雷鸣，于长夏见少年不羁。\n生日快乐，凌肖。\n\n⭐ 凌肖生日胖宝宝MMD模型「凌肖·世说心语」现已开放官网下载，模型包含寿桃头饰、灰色领带、滑板配件。"
+              },
+              "title": null
+            },
+            "type": "MAJOR_TYPE_OPUS"
+          },
+          "topic": null
+        },
+        "module_more": {
+          "three_point_items": [
+            {
+              "label": "举报",
+              "type": "THREE_POINT_REPORT"
+            }
+          ]
+        },
+        "module_stat": {
+          "comment": {
+            "count": 9,
+            "forbidden": false
+          },
+          "forward": {
+            "count": 2,
+            "forbidden": false
+          },
+          "like": {
+            "count": 98,
+            "forbidden": false,
+            "status": false
+          }
+        }
+      },
+      "type": "DYNAMIC_TYPE_DRAW",
+      "visible": true
+    }
+  }
+}

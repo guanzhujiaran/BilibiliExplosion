@@ -89,7 +89,6 @@ class RouterPaths(StrEnum):
     
     # ==================== B站抽奖数据路由 ====================
     # --- 获取类路由 ---
-    GET_COMMON_LOTTERY = "/GetCommonLottery"  # 获取一般抽奖
     GET_RESERVE_LOTTERY = "/GetReserveLottery"  # 获取预约抽奖
     GET_OFFICIAL_LOTTERY = "/GetOfficialLottery"  # 获取官方抽奖
     GET_CHARGE_LOTTERY = "/GetChargeLottery"  # 获取充电抽奖
@@ -97,11 +96,14 @@ class RouterPaths(StrEnum):
     GET_TOPIC_LOTTERY = "/GetTopicLottery"  # 获取话题抽奖
     GET_ALL_LOTTERY = "/GetAllLottery"  # 获取所有抽奖
     GET_ALL_LOT_SCRAPY_STATUS = "/GetAllLotScrapyStatus"  # 获取所有爬虫状态
+    GET_OTHERS_LOT_DYN_LIST = "/GetOthersLotDynList"  # 获取第三方抽奖动态列表（分页+排序）
+    GET_LOTTERY_FILTER_PARAMS = "/GetLotteryFilterParams"  # 获取抽奖查询筛选参数元数据
     
     # --- 提交类路由 ---
     ADD_DYNAMIC_LOTTERY = "/AddDynamicLottery"  # 提交抽奖动态
     BULK_ADD_DYNAMIC_LOTTERY = "/BulkAddDynamicLottery"  # 批量提交抽奖动态
     ADD_TOPIC_LOTTERY = "/AddTopicLottery"  # 提交话题抽奖
+    ADD_OTHERS_LOT_DYN = "/AddOthersLotDyn"  # 提交第三方抽奖动态
     SUBMIT_FEEDBACK = "/SubmitFeedback"  # 提交反馈
     SEARCH_LOTTERY_BY_KEYWORD = "/SearchLotteryByKeyword"  # 关键词搜索
     
@@ -184,7 +186,6 @@ class RouterNames(StrEnum):
     
     # ==================== B站抽奖数据路由 ====================
     # --- 获取类路由 ---
-    GET_COMMON_LOTTERY = "get_common_lottery"  # 获取一般抽奖
     GET_RESERVE_LOTTERY = "get_reserve_lottery"  # 获取预约抽奖
     GET_OFFICIAL_LOTTERY = "get_official_lottery"  # 获取官方抽奖
     GET_CHARGE_LOTTERY = "get_charge_lottery"  # 获取充电抽奖
@@ -192,11 +193,14 @@ class RouterNames(StrEnum):
     GET_TOPIC_LOTTERY = "get_topic_lottery"  # 获取话题抽奖
     GET_ALL_LOTTERY = "get_all_lottery"  # 获取所有抽奖
     GET_ALL_LOT_SCRAPY_STATUS = "get_all_lot_scrapy_status"  # 获取所有爬虫状态
+    GET_OTHERS_LOT_DYN_LIST = "get_others_lot_dyn_list"  # 获取第三方抽奖动态列表
+    GET_LOTTERY_FILTER_PARAMS = "get_lottery_filter_params"  # 获取抽奖查询筛选参数元数据
     
     # --- 提交类路由 ---
     ADD_DYNAMIC_LOTTERY = "add_dynamic_lottery"  # 提交抽奖动态
     BULK_ADD_DYNAMIC_LOTTERY = "bulk_add_dynamic_lottery"  # 批量提交抽奖动态
     ADD_TOPIC_LOTTERY = "add_topic_lottery"  # 提交话题抽奖
+    ADD_OTHERS_LOT_DYN = "add_others_lot_dyn"  # 提交第三方抽奖动态
     SUBMIT_FEEDBACK = "submit_feedback"  # 提交反馈
     SEARCH_LOTTERY_BY_KEYWORD = "search_lottery_by_keyword"  # 关键词搜索
     

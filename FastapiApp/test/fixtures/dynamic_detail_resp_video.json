@@ -1,0 +1,183 @@
+{
+    "code": 0,
+    "message": "0",
+    "ttl": 1,
+    "data": {
+        "item": {
+            "basic": {
+                "comment_id_str": "116794152977885",
+                "comment_type": 1,
+                "like_icon": {
+                    "action_url": "https://i0.hdslb.com/bfs/garb/a041e754845c9cdbe39fa065acda435f7cf064cf.bin",
+                    "end_url": "",
+                    "id": 1769661347001,
+                    "start_url": ""
+                },
+                "rid_str": "116794152977885"
+            },
+            "id_str": "1216760957952327682",
+            "modules": {
+                "module_author": {
+                    "avatar": {
+                        "container_size": {
+                            "height": 1.35,
+                            "width": 1.35
+                        },
+                        "fallback_layers": {
+                            "is_critical_group": true,
+                            "layers": [
+                                {
+                                    "general_spec": {
+                                        "pos_spec": {
+                                            "axis_x": 0.675,
+                                            "axis_y": 0.675,
+                                            "coordinate_pos": 2
+                                        },
+                                        "render_spec": {
+                                            "opacity": 1
+                                        },
+                                        "size_spec": {
+                                            "height": 1,
+                                            "width": 1
+                                        }
+                                    },
+                                    "layer_config": {
+                                        "is_critical": true,
+                                        "tags": {
+                                            "AVATAR_LAYER": {},
+                                            "GENERAL_CFG": {
+                                                "config_type": 1,
+                                                "general_config": {
+                                                    "web_css_style": {
+                                                        "borderRadius": "50%"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "resource": {
+                                        "res_image": {
+                                            "image_src": {
+                                                "placeholder": 6,
+                                                "remote": {
+                                                    "bfs_style": "widget-layer-avatar",
+                                                    "url": "https://i0.hdslb.com/bfs/face/0edc4461bc9137d7b9308a946b1731e3a53de01f.jpg"
+                                                },
+                                                "src_type": 1
+                                            }
+                                        },
+                                        "res_type": 3
+                                    },
+                                    "visible": true
+                                }
+                            ]
+                        },
+                        "mid": "3546941224912923"
+                    },
+                    "face": "https://i0.hdslb.com/bfs/face/0edc4461bc9137d7b9308a946b1731e3a53de01f.jpg",
+                    "face_nft": false,
+                    "following": null,
+                    "jump_url": "//space.bilibili.com/3546941224912923/dynamic",
+                    "label": "",
+                    "mid": 3546941224912923,
+                    "name": "姜姜剪动漫丫",
+                    "official_verify": {
+                        "desc": "",
+                        "type": -1
+                    },
+                    "pendant": {
+                        "expire": 0,
+                        "image": "",
+                        "image_enhance": "",
+                        "image_enhance_frame": "",
+                        "n_pid": 0,
+                        "name": "",
+                        "pid": 0
+                    },
+                    "pub_action": "投稿了视频",
+                    "pub_location_text": "",
+                    "pub_time": "2026年06月22日 22:13",
+                    "pub_ts": 1782137637,
+                    "type": "AUTHOR_TYPE_NORMAL",
+                    "vip": {
+                        "avatar_subscript": 0,
+                        "avatar_subscript_url": "",
+                        "due_date": 0,
+                        "label": {
+                            "bg_color": "",
+                            "bg_style": 0,
+                            "border_color": "",
+                            "img_label_uri_hans": "",
+                            "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/d7b702ef65a976b20ed854cbd04cb9e27341bb79.png",
+                            "img_label_uri_hant": "",
+                            "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/KJunwh19T5.png",
+                            "label_theme": "",
+                            "path": "",
+                            "text": "",
+                            "text_color": "",
+                            "use_img_label": true
+                        },
+                        "nickname_color": "",
+                        "status": 0,
+                        "theme_type": 0,
+                        "type": 0
+                    }
+                },
+                "module_dynamic": {
+                    "additional": null,
+                    "desc": null,
+                    "major": {
+                        "archive": {
+                            "aid": "116794152977885",
+                            "badge": {
+                                "bg_color": "#FB7299",
+                                "color": "#FFFFFF",
+                                "icon_url": null,
+                                "text": "投稿视频"
+                            },
+                            "bvid": "BV18T7M6HEBs",
+                            "cover": "http://i1.hdslb.com/bfs/archive/e32c4071da12e5330c9e5d9f8dd391737839761c.jpg",
+                            "desc": "",
+                            "disable_preview": 0,
+                            "duration_text": "08:46",
+                            "jump_url": "//www.bilibili.com/video/BV18T7M6HEBs/",
+                            "stat": {
+                                "danmaku": "7",
+                                "play": "4879"
+                            },
+                            "title": "从老沙第一次叫路飞，水路飞的时候我就知道这个人再坏也坏不到哪去！《海贼王》",
+                            "type": 1
+                        },
+                        "type": "MAJOR_TYPE_ARCHIVE"
+                    },
+                    "topic": null
+                },
+                "module_more": {
+                    "three_point_items": [
+                        {
+                            "label": "举报",
+                            "type": "THREE_POINT_REPORT"
+                        }
+                    ]
+                },
+                "module_stat": {
+                    "comment": {
+                        "count": 15,
+                        "forbidden": false
+                    },
+                    "forward": {
+                        "count": 0,
+                        "forbidden": false
+                    },
+                    "like": {
+                        "count": 86,
+                        "forbidden": false,
+                        "status": false
+                    }
+                }
+            },
+            "type": "DYNAMIC_TYPE_AV",
+            "visible": true
+        }
+    }
+}

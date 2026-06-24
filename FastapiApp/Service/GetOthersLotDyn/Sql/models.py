@@ -38,6 +38,8 @@ class TLotuserinfo(Base):
     offset = mapped_column(BigInteger, comment='保存每一次循环之后的offset，如果中途推出了，从这个offset接着获取')
     latestFinishedOffset = mapped_column(BigInteger, comment='最后一次获取结束时候的offset，作为判断是否获取重复的标准')
     isPubLotUser = mapped_column(TINYINT(1), comment='0：要获取的抽奖用户的空间数据（判断这个抽奖号是否活跃的重要标志）\r\n1：发布抽奖用户的空间数据（不重要）')
+    created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
     t_lotuserspaceresp: Mapped[List['TLotuserspaceresp']] = relationship('TLotuserspaceresp', uselist=True, back_populates='t_lotuserinfo')
 
@@ -54,7 +56,9 @@ class TLotdyninfo(Base):
     __tablename__ = 't_lotdyninfo'
     __table_args__ = (
         ForeignKeyConstraint(['dynLotRound_id'], ['t_lotmaininfo.lotRound_id'], name='t_lotdyninfo_ibfk_1'),
-        Index('dynLotRound_id', 'dynLotRound_id')
+        Index('dynLotRound_id', 'dynLotRound_id'),
+        Index('idx_is_lot_pub_time', 'isLot', 'pubTime'),
+        Index('idx_is_lot_created_at', 'isLot', 'created_at'),
     )
 
     dynId = mapped_column(BigInteger, primary_key=True, server_default=text('(0)'))
@@ -65,7 +69,7 @@ class TLotdyninfo(Base):
     dynContent = mapped_column(Text)
     commentCount = mapped_column(Integer)
     repostCount = mapped_column(Integer)
-    highlightWords = mapped_column(Text)
+    likeCount = mapped_column(Integer)
     officialLotType = mapped_column(Text)
     officialLotId = mapped_column(Text)
     isOfficialAccount = mapped_column(TINYINT(1))
@@ -75,6 +79,8 @@ class TLotdyninfo(Base):
     hashTag = mapped_column(Text)
     dynLotRound_id = mapped_column(Integer)
     rawJsonStr = mapped_column(JSON)
+    created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
     dynLotRound: Mapped[Optional['TLotmaininfo']] = relationship('TLotmaininfo', back_populates='t_lotdyninfo')
 
@@ -95,3 +101,13 @@ class TLotuserspaceresp(Base):
 
     dynLotRound: Mapped[Optional['TLotmaininfo']] = relationship('TLotmaininfo', back_populates='t_lotuserspaceresp')
     t_lotuserinfo: Mapped[Optional['TLotuserinfo']] = relationship('TLotuserinfo', back_populates='t_lotuserspaceresp')
+
+
+class TOthersLotInfo(Base):
+    """第三方抽奖动态的 ModelScope 提取结果缓存表"""
+    __tablename__ = 't_others_lot_info'
+
+    dynId = mapped_column(BigInteger, primary_key=True, server_default=text('(0)'))
+    prize_names = mapped_column(JSON, comment='ModelScope 提取的奖品名称列表')
+    lottery_time = mapped_column(Text, comment='ModelScope 提取的开奖时间字符串')
+    created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))

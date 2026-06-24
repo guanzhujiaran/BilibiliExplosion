@@ -10,7 +10,7 @@ from Service.BaseCrawler.model.base import WorkerStatus, WorkerModel
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GetOthersLotDyn.Sql.models import TLotmaininfo, TLotdyninfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
-from Service.GetOthersLotDyn.get_other_lot_main import BiliSpaceUserItem, HighlightWordList
+from Service.GetOthersLotDyn import BiliSpaceUserItem
 from Utils.Common import asyncio_gather
 from Utils.dynamic_id_caculate import dynamic_id_2_ts
 
@@ -74,7 +74,7 @@ class GetRmFollowingListV2(UnlimitedCrawler[BiliSpaceUserParamsType]):
         )
         dyn_set = set(bsu.dynamic_infos)
         await asyncio_gather(
-            *[x.judge_lottery(highlight_word_list=HighlightWordList, lotRound_id=self.round_id) for x in dyn_set])
+            *[x.judge_lottery(lotRound_id=self.round_id) for x in dyn_set])
         return WorkerStatus.complete
 
     async def _get_round_id(self) -> int:

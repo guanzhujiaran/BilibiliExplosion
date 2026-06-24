@@ -1,0 +1,263 @@
+{
+    "code": 0,
+    "message": "0",
+    "ttl": 1,
+    "data": {
+        "item": {
+            "basic": {
+                "comment_id_str": "347607908",
+                "comment_type": 11,
+                "jump_url": "//www.bilibili.com/opus/1055251633329405957",
+                "like_icon": {
+                    "action_url": "https://i0.hdslb.com/bfs/garb/a041e754845c9cdbe39fa065acda435f7cf064cf.bin",
+                    "end_url": "",
+                    "id": 1769661347001,
+                    "start_url": ""
+                },
+                "rid_str": "347607908"
+            },
+            "id_str": "1055251633329405957",
+            "modules": {
+                "module_author": {
+                    "avatar": {
+                        "container_size": {
+                            "height": 1.35,
+                            "width": 1.35
+                        },
+                        "fallback_layers": {
+                            "is_critical_group": true,
+                            "layers": [
+                                {
+                                    "general_spec": {
+                                        "pos_spec": {
+                                            "axis_x": 0.675,
+                                            "axis_y": 0.675,
+                                            "coordinate_pos": 2
+                                        },
+                                        "render_spec": {
+                                            "opacity": 1
+                                        },
+                                        "size_spec": {
+                                            "height": 1,
+                                            "width": 1
+                                        }
+                                    },
+                                    "layer_config": {
+                                        "is_critical": true,
+                                        "tags": {
+                                            "AVATAR_LAYER": {},
+                                            "GENERAL_CFG": {
+                                                "config_type": 1,
+                                                "general_config": {
+                                                    "web_css_style": {
+                                                        "borderRadius": "50%"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "resource": {
+                                        "res_image": {
+                                            "image_src": {
+                                                "placeholder": 6,
+                                                "remote": {
+                                                    "bfs_style": "widget-layer-avatar",
+                                                    "url": "https://i2.hdslb.com/bfs/face/6271419e985c20bc2c0417809bb00209a849ab6b.jpg"
+                                                },
+                                                "src_type": 1
+                                            }
+                                        },
+                                        "res_type": 3
+                                    },
+                                    "visible": true
+                                }
+                            ]
+                        },
+                        "mid": "1823350916"
+                    },
+                    "face": "https://i2.hdslb.com/bfs/face/6271419e985c20bc2c0417809bb00209a849ab6b.jpg",
+                    "face_nft": false,
+                    "following": null,
+                    "jump_url": "//space.bilibili.com/1823350916/dynamic",
+                    "label": "",
+                    "mid": 1823350916,
+                    "name": "Tristan_LiZH",
+                    "official_verify": {
+                        "desc": "",
+                        "type": -1
+                    },
+                    "pendant": {
+                        "expire": 0,
+                        "image": "",
+                        "image_enhance": "",
+                        "image_enhance_frame": "",
+                        "n_pid": 0,
+                        "name": "",
+                        "pid": 0
+                    },
+                    "pub_action": "",
+                    "pub_location_text": "",
+                    "pub_time": "2025年04月13日 16:35",
+                    "pub_ts": 1744533317,
+                    "type": "AUTHOR_TYPE_NORMAL",
+                    "vip": {
+                        "avatar_subscript": 0,
+                        "avatar_subscript_url": "",
+                        "due_date": 0,
+                        "label": {
+                            "bg_color": "",
+                            "bg_style": 0,
+                            "border_color": "",
+                            "img_label_uri_hans": "",
+                            "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/d7b702ef65a976b20ed854cbd04cb9e27341bb79.png",
+                            "img_label_uri_hant": "",
+                            "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/KJunwh19T5.png",
+                            "label_theme": "",
+                            "path": "",
+                            "text": "",
+                            "text_color": "",
+                            "use_img_label": true
+                        },
+                        "nickname_color": "",
+                        "status": 0,
+                        "theme_type": 0,
+                        "type": 0
+                    }
+                },
+                "module_dynamic": {
+                    "additional": {
+                        "type": "ADDITIONAL_TYPE_UPOWER_LOTTERY",
+                        "upower_lottery": {
+                            "button": {
+                                "check": {
+                                    "disable": 1,
+                                    "icon_url": "",
+                                    "text": "已结束",
+                                    "toast": "抽奖已结束"
+                                },
+                                "status": 2,
+                                "type": 2
+                            },
+                            "desc": {
+                                "jump_url": "https://www.bilibili.com/h5/lottery/result?business_id=1055251633329405957&business_type=12",
+                                "style": 1,
+                                "text": "【鞋x1】*1份"
+                            },
+                            "hint": {
+                                "style": 0,
+                                "text": "加入当前UP主的「6元档包月充电」即可参与"
+                            },
+                            "jump_url": "https://www.bilibili.com/h5/lottery/result?business_id=1055251633329405957&business_type=12",
+                            "rid": 352687,
+                            "state": 0,
+                            "title": "为TA充电专属抽奖",
+                            "up_mid": 1823350916,
+                            "upower_action_state": 0,
+                            "upower_level": 10
+                        }
+                    },
+                    "desc": null,
+                    "major": {
+                        "opus": {
+                            "fold_action": [
+                                "展开",
+                                "收起"
+                            ],
+                            "jump_url": "//www.bilibili.com/opus/1055251633329405957",
+                            "pics": [
+                                {
+                                    "aigc": null,
+                                    "height": 3648,
+                                    "live_url": null,
+                                    "size": 2956.199951171875,
+                                    "url": "http://i0.hdslb.com/bfs/new_dyn/e238827bd30191040582e62c37aeeb691823350916.jpg",
+                                    "width": 2736
+                                },
+                                {
+                                    "aigc": null,
+                                    "height": 3648,
+                                    "live_url": null,
+                                    "size": 2522.889892578125,
+                                    "url": "http://i0.hdslb.com/bfs/new_dyn/6d934aaf1f12d2fd330431fd2f17f79e1823350916.jpg",
+                                    "width": 2736
+                                },
+                                {
+                                    "aigc": null,
+                                    "height": 3648,
+                                    "live_url": null,
+                                    "size": 3098.02001953125,
+                                    "url": "http://i0.hdslb.com/bfs/new_dyn/2252b09f149bf104699a7961c24b25711823350916.jpg",
+                                    "width": 2736
+                                },
+                                {
+                                    "aigc": null,
+                                    "height": 3648,
+                                    "live_url": null,
+                                    "size": 2521.5,
+                                    "url": "http://i0.hdslb.com/bfs/new_dyn/18592a64456ec476f949d809f1d939471823350916.jpg",
+                                    "width": 2736
+                                }
+                            ],
+                            "style": 1,
+                            "summary": {
+                                "rich_text_nodes": [
+                                    {
+                                        "orig_text": "40码\n之前体验了一下，\n不过总体还是蛮好的\n大家别嫌弃哈",
+                                        "text": "40码\n之前体验了一下，\n不过总体还是蛮好的\n大家别嫌弃哈",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "emoji": {
+                                            "icon_url": "https://i0.hdslb.com/bfs/emote/bf7e00ecab02171f8461ee8cf439c73db9797748.png",
+                                            "id": 3301,
+                                            "package_id": 1,
+                                            "size": 1,
+                                            "text": "[脱单doge]",
+                                            "type": 1
+                                        },
+                                        "orig_text": "[脱单doge]",
+                                        "text": "[脱单doge]",
+                                        "type": "RICH_TEXT_NODE_TYPE_EMOJI"
+                                    }
+                                ],
+                                "text": "40码\n之前体验了一下，\n不过总体还是蛮好的\n大家别嫌弃哈[脱单doge]"
+                            },
+                            "title": "慢跑鞋需要吗？福利来啦"
+                        },
+                        "type": "MAJOR_TYPE_OPUS"
+                    },
+                    "topic": {
+                        "id": 1106396,
+                        "jump_url": "https://m.bilibili.com/topic-detail?topic_id=1106396&topic_name=%E5%8C%85%E6%9C%88%E4%BC%9A%E5%91%98%E6%8A%BD%E5%A5%96",
+                        "name": "包月会员抽奖"
+                    }
+                },
+                "module_more": {
+                    "three_point_items": [
+                        {
+                            "label": "举报",
+                            "type": "THREE_POINT_REPORT"
+                        }
+                    ]
+                },
+                "module_stat": {
+                    "comment": {
+                        "count": 11,
+                        "forbidden": false
+                    },
+                    "forward": {
+                        "count": 2,
+                        "forbidden": false
+                    },
+                    "like": {
+                        "count": 20,
+                        "forbidden": false,
+                        "status": false
+                    }
+                }
+            },
+            "type": "DYNAMIC_TYPE_DRAW",
+            "visible": true
+        }
+    }
+}

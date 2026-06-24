@@ -1,0 +1,318 @@
+{
+    "code": 0,
+    "message": "0",
+    "ttl": 1,
+    "data": {
+        "item": {
+            "basic": {
+                "comment_id_str": "389327005",
+                "comment_type": 11,
+                "jump_url": "//www.bilibili.com/opus/1184416723156074498",
+                "like_icon": {
+                    "action_url": "https://i0.hdslb.com/bfs/garb/a041e754845c9cdbe39fa065acda435f7cf064cf.bin",
+                    "end_url": "",
+                    "id": 1769661347001,
+                    "start_url": ""
+                },
+                "rid_str": "389327005"
+            },
+            "id_str": "1184416723156074498",
+            "modules": {
+                "module_author": {
+                    "avatar": {
+                        "container_size": {
+                            "height": 1.35,
+                            "width": 1.35
+                        },
+                        "fallback_layers": {
+                            "is_critical_group": true,
+                            "layers": [
+                                {
+                                    "general_spec": {
+                                        "pos_spec": {
+                                            "axis_x": 0.675,
+                                            "axis_y": 0.675,
+                                            "coordinate_pos": 2
+                                        },
+                                        "render_spec": {
+                                            "opacity": 1
+                                        },
+                                        "size_spec": {
+                                            "height": 1,
+                                            "width": 1
+                                        }
+                                    },
+                                    "layer_config": {
+                                        "is_critical": true,
+                                        "tags": {
+                                            "AVATAR_LAYER": {},
+                                            "GENERAL_CFG": {
+                                                "config_type": 1,
+                                                "general_config": {
+                                                    "web_css_style": {
+                                                        "borderRadius": "50%"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "resource": {
+                                        "res_image": {
+                                            "image_src": {
+                                                "placeholder": 6,
+                                                "remote": {
+                                                    "bfs_style": "widget-layer-avatar",
+                                                    "url": "https://i2.hdslb.com/bfs/face/671dada3d8df5c62c8cb4242ec06d998d15a72a7.jpg"
+                                                },
+                                                "src_type": 1
+                                            }
+                                        },
+                                        "res_type": 3
+                                    },
+                                    "visible": true
+                                },
+                                {
+                                    "general_spec": {
+                                        "pos_spec": {
+                                            "axis_x": 0.8000000000000002,
+                                            "axis_y": 0.8000000000000002,
+                                            "coordinate_pos": 1
+                                        },
+                                        "render_spec": {
+                                            "opacity": 1
+                                        },
+                                        "size_spec": {
+                                            "height": 0.41666666666666663,
+                                            "width": 0.41666666666666663
+                                        }
+                                    },
+                                    "layer_config": {
+                                        "tags": {
+                                            "GENERAL_CFG": {
+                                                "config_type": 1,
+                                                "general_config": {
+                                                    "web_css_style": {
+                                                        "background-color": "rgb(255,255,255)",
+                                                        "border": "2px solid rgba(255,255,255,1)",
+                                                        "borderRadius": "50%",
+                                                        "boxSizing": "border-box"
+                                                    }
+                                                }
+                                            },
+                                            "ICON_LAYER": {}
+                                        }
+                                    },
+                                    "resource": {
+                                        "res_image": {
+                                            "image_src": {
+                                                "local": 4,
+                                                "src_type": 2
+                                            }
+                                        },
+                                        "res_type": 3
+                                    },
+                                    "visible": true
+                                }
+                            ]
+                        },
+                        "mid": "22863497"
+                    },
+                    "face": "https://i2.hdslb.com/bfs/face/671dada3d8df5c62c8cb4242ec06d998d15a72a7.jpg",
+                    "face_nft": false,
+                    "following": true,
+                    "jump_url": "//space.bilibili.com/22863497/dynamic",
+                    "label": "",
+                    "mid": 22863497,
+                    "name": "良笑GoodSmile官方",
+                    "official_verify": {
+                        "desc": "",
+                        "type": 1
+                    },
+                    "pendant": {
+                        "expire": 0,
+                        "image": "",
+                        "image_enhance": "",
+                        "image_enhance_frame": "",
+                        "n_pid": 0,
+                        "name": "",
+                        "pid": 0
+                    },
+                    "pub_action": "",
+                    "pub_location_text": "",
+                    "pub_time": "2026年03月27日 18:21",
+                    "pub_ts": 1774606908,
+                    "type": "AUTHOR_TYPE_NORMAL",
+                    "vip": {
+                        "avatar_subscript": 0,
+                        "avatar_subscript_url": "",
+                        "due_date": 0,
+                        "label": {
+                            "bg_color": "",
+                            "bg_style": 0,
+                            "border_color": "",
+                            "img_label_uri_hans": "",
+                            "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/activity-plat/static/20260428/3ef44f1297d498ef1faf9f07b2ca3105/rNvO3yh8VU.png",
+                            "img_label_uri_hant": "",
+                            "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/KJunwh19T5.png",
+                            "label_theme": "",
+                            "path": "",
+                            "text": "",
+                            "text_color": "",
+                            "use_img_label": true
+                        },
+                        "nickname_color": "",
+                        "status": 0,
+                        "theme_type": 0,
+                        "type": 0
+                    }
+                },
+                "module_dynamic": {
+                    "additional": null,
+                    "desc": null,
+                    "major": {
+                        "opus": {
+                            "fold_action": [
+                                "展开",
+                                "收起"
+                            ],
+                            "jump_url": "//www.bilibili.com/opus/1184416723156074498",
+                            "pics": [
+                                {
+                                    "aigc": null,
+                                    "height": 900,
+                                    "live_url": null,
+                                    "size": 501.6962890625,
+                                    "url": "http://i0.hdslb.com/bfs/new_dyn/44bcb40c87bf3f8c9e0ba406a5f36f6822863497.jpg",
+                                    "width": 1600
+                                }
+                            ],
+                            "summary": {
+                                "rich_text_nodes": [
+                                    {
+                                        "jump_url": "//search.bilibili.com/all?keyword=%E5%A1%AB%E5%86%99%E9%97%AE%E5%8D%B7%E8%B0%83%E6%9F%A5",
+                                        "orig_text": "#填写问卷调查#",
+                                        "style": {},
+                                        "text": "#填写问卷调查#",
+                                        "type": "RICH_TEXT_NODE_TYPE_TOPIC"
+                                    },
+                                    {
+                                        "orig_text": " ",
+                                        "text": " ",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "jump_url": "//search.bilibili.com/all?keyword=NIKKE",
+                                        "orig_text": "#NIKKE#",
+                                        "style": {},
+                                        "text": "#NIKKE#",
+                                        "type": "RICH_TEXT_NODE_TYPE_TOPIC"
+                                    },
+                                    {
+                                        "orig_text": " ",
+                                        "text": " ",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "jump_url": "//search.bilibili.com/all?keyword=GSC",
+                                        "orig_text": "#GSC#",
+                                        "style": {},
+                                        "text": "#GSC#",
+                                        "type": "RICH_TEXT_NODE_TYPE_TOPIC"
+                                    },
+                                    {
+                                        "orig_text": " ",
+                                        "text": " ",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "jump_url": "//search.bilibili.com/all?keyword=GSAS",
+                                        "orig_text": "#GSAS#",
+                                        "style": {},
+                                        "text": "#GSAS#",
+                                        "type": "RICH_TEXT_NODE_TYPE_TOPIC"
+                                    },
+                                    {
+                                        "orig_text": " \n／\n  GODDESS OF VICTORY: NIKKE\n  商品化问卷调查\n＼\n▶ 问卷地址：请扫码下方附图完成填写！\n欢迎大家踊跃参与填写",
+                                        "text": " \n／\n  GODDESS OF VICTORY: NIKKE\n  商品化问卷调查\n＼\n▶ 问卷地址：请扫码下方附图完成填写！\n欢迎大家踊跃参与填写",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "emoji": {
+                                            "icon_url": "https://i0.hdslb.com/bfs/emote/431432c43da3ee5aab5b0e4f8931953e649e9975.png",
+                                            "id": 510,
+                                            "package_id": 1,
+                                            "size": 1,
+                                            "text": "[打call]",
+                                            "type": 1
+                                        },
+                                        "orig_text": "[打call]",
+                                        "text": "[打call]",
+                                        "type": "RICH_TEXT_NODE_TYPE_EMOJI"
+                                    },
+                                    {
+                                        "orig_text": "！\n",
+                                        "text": "！\n",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "emoji": {
+                                            "icon_url": "https://i0.hdslb.com/bfs/emote/643d6c19c8164ffd89e3e9cdf093cf5d773d979c.png",
+                                            "id": 1866,
+                                            "package_id": 1,
+                                            "size": 1,
+                                            "text": "[锦鲤]",
+                                            "type": 1
+                                        },
+                                        "orig_text": "[锦鲤]",
+                                        "text": "[锦鲤]",
+                                        "type": "RICH_TEXT_NODE_TYPE_EMOJI"
+                                    },
+                                    {
+                                        "orig_text": "完成填写，我们将于4月28日抽出1位幸运用户，送上「DORO 桃乐丝+灰姑娘」*1套。",
+                                        "text": "完成填写，我们将于4月28日抽出1位幸运用户，送上「DORO 桃乐丝+灰姑娘」*1套。",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "互动抽奖",
+                                        "rid": "405105",
+                                        "text": "互动抽奖",
+                                        "type": "RICH_TEXT_NODE_TYPE_LOTTERY"
+                                    }
+                                ],
+                                "text": "#填写问卷调查# #NIKKE# #GSC# #GSAS# \n／\n  GODDESS OF VICTORY: NIKKE\n  商品化问卷调查\n＼\n▶ 问卷地址：请扫码下方附图完成填写！\n欢迎大家踊跃参与填写[打call]！\n[锦鲤]完成填写，我们将于4月28日抽出1位幸运用户，送上「DORO 桃乐丝+灰姑娘」*1套。互动抽奖"
+                            },
+                            "title": null
+                        },
+                        "type": "MAJOR_TYPE_OPUS"
+                    },
+                    "topic": null
+                },
+                "module_more": {
+                    "three_point_items": [
+                        {
+                            "label": "举报",
+                            "type": "THREE_POINT_REPORT"
+                        }
+                    ]
+                },
+                "module_stat": {
+                    "comment": {
+                        "count": 398,
+                        "forbidden": false
+                    },
+                    "forward": {
+                        "count": 1281,
+                        "forbidden": false
+                    },
+                    "like": {
+                        "count": 591,
+                        "forbidden": false,
+                        "status": false
+                    }
+                }
+            },
+            "type": "DYNAMIC_TYPE_DRAW",
+            "visible": true
+        }
+    }
+}

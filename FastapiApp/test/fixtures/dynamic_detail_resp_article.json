@@ -1,0 +1,335 @@
+{
+    "code": 0,
+    "message": "0",
+    "ttl": 1,
+    "data": {
+        "item": {
+            "basic": {
+                "comment_id_str": "41632749",
+                "comment_type": 12,
+                "jump_url": "//www.bilibili.com/opus/1065743740217327638",
+                "like_icon": {
+                    "action_url": "https://i0.hdslb.com/bfs/garb/a041e754845c9cdbe39fa065acda435f7cf064cf.bin",
+                    "end_url": "",
+                    "id": 1769661347001,
+                    "start_url": ""
+                },
+                "rid_str": "41632749"
+            },
+            "id_str": "1065743740217327638",
+            "modules": {
+                "module_author": {
+                    "avatar": {
+                        "container_size": {
+                            "height": 1.375,
+                            "width": 1.375
+                        },
+                        "fallback_layers": {
+                            "is_critical_group": true,
+                            "layers": [
+                                {
+                                    "general_spec": {
+                                        "pos_spec": {
+                                            "axis_x": 0.6875,
+                                            "axis_y": 0.6875,
+                                            "coordinate_pos": 2
+                                        },
+                                        "render_spec": {
+                                            "opacity": 1
+                                        },
+                                        "size_spec": {
+                                            "height": 0.787,
+                                            "width": 0.787
+                                        }
+                                    },
+                                    "layer_config": {
+                                        "is_critical": true,
+                                        "tags": {
+                                            "AVATAR_LAYER": {},
+                                            "GENERAL_CFG": {
+                                                "config_type": 1,
+                                                "general_config": {
+                                                    "web_css_style": {
+                                                        "borderRadius": "50%"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "resource": {
+                                        "res_image": {
+                                            "image_src": {
+                                                "placeholder": 6,
+                                                "remote": {
+                                                    "bfs_style": "widget-layer-avatar",
+                                                    "url": "https://i2.hdslb.com/bfs/face/e4a1f62de67bdff4870463d7df16257e85943bf3.jpg"
+                                                },
+                                                "src_type": 1
+                                            }
+                                        },
+                                        "res_type": 3
+                                    },
+                                    "visible": true
+                                },
+                                {
+                                    "general_spec": {
+                                        "pos_spec": {
+                                            "axis_x": 0.6875,
+                                            "axis_y": 0.6875,
+                                            "coordinate_pos": 2
+                                        },
+                                        "render_spec": {
+                                            "opacity": 1
+                                        },
+                                        "size_spec": {
+                                            "height": 1.375,
+                                            "width": 1.375
+                                        }
+                                    },
+                                    "layer_config": {
+                                        "tags": {
+                                            "PENDENT_LAYER": {}
+                                        }
+                                    },
+                                    "resource": {
+                                        "res_image": {
+                                            "image_src": {
+                                                "remote": {
+                                                    "bfs_style": "widget-layer-avatar",
+                                                    "url": "https://i2.hdslb.com/bfs/garb/item/5b2a35a802c292e64a4f551c7b1db09b00ec868f.png"
+                                                },
+                                                "src_type": 1
+                                            }
+                                        },
+                                        "res_type": 3
+                                    },
+                                    "visible": true
+                                }
+                            ]
+                        },
+                        "mid": "9308417"
+                    },
+                    "decoration_card": {
+                        "big_card_url": "https://i0.hdslb.com/bfs/garb/open/88e32d7e0de6d973b38f3f918489ded8f84b3ef8.png",
+                        "card_type": 2,
+                        "card_type_name": "免费",
+                        "card_url": "https://i0.hdslb.com/bfs/garb/open/88e32d7e0de6d973b38f3f918489ded8f84b3ef8.png",
+                        "fan": {
+                            "color": "#E5B261",
+                            "color_format": {
+                                "colors": [
+                                    "#E29D2FFF",
+                                    "#FDC773FF",
+                                    "#FDC773FF",
+                                    "#E19B2EFF"
+                                ],
+                                "end_point": "100,100",
+                                "gradients": [
+                                    0,
+                                    33,
+                                    67,
+                                    100
+                                ],
+                                "start_point": "0,0"
+                            },
+                            "is_fan": 1,
+                            "name": "XXXX",
+                            "num_desc": "010971",
+                            "number": 10971
+                        },
+                        "id": 72490,
+                        "image_enhance": "https://i0.hdslb.com/bfs/garb/open/88e32d7e0de6d973b38f3f918489ded8f84b3ef8.png",
+                        "item_id": 72490,
+                        "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=105833&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A9308417%7D",
+                        "name": "千恋万花勋章"
+                    },
+                    "face": "https://i2.hdslb.com/bfs/face/e4a1f62de67bdff4870463d7df16257e85943bf3.jpg",
+                    "face_nft": false,
+                    "following": null,
+                    "jump_url": "//space.bilibili.com/9308417/dynamic",
+                    "label": "",
+                    "mid": 9308417,
+                    "name": "非洲mighty乆",
+                    "official_verify": {
+                        "desc": "",
+                        "type": -1
+                    },
+                    "pendant": {
+                        "expire": 0,
+                        "image": "https://i2.hdslb.com/bfs/garb/item/5b2a35a802c292e64a4f551c7b1db09b00ec868f.png",
+                        "image_enhance": "https://i2.hdslb.com/bfs/garb/item/5b2a35a802c292e64a4f551c7b1db09b00ec868f.png",
+                        "image_enhance_frame": "",
+                        "n_pid": 1735821730001,
+                        "name": "千恋万花头像框",
+                        "pid": 654942417
+                    },
+                    "pub_action": "投稿了文章",
+                    "pub_location_text": "",
+                    "pub_time": "2025年05月11日 23:10",
+                    "pub_ts": 1746976201,
+                    "type": "AUTHOR_TYPE_NORMAL",
+                    "vip": {
+                        "avatar_subscript": 0,
+                        "avatar_subscript_url": "",
+                        "due_date": 1723651200000,
+                        "label": {
+                            "bg_color": "",
+                            "bg_style": 0,
+                            "border_color": "",
+                            "img_label_uri_hans": "",
+                            "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/d7b702ef65a976b20ed854cbd04cb9e27341bb79.png",
+                            "img_label_uri_hant": "",
+                            "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/KJunwh19T5.png",
+                            "label_theme": "",
+                            "path": "",
+                            "text": "",
+                            "text_color": "",
+                            "use_img_label": true
+                        },
+                        "nickname_color": "",
+                        "status": 0,
+                        "theme_type": 0,
+                        "type": 1
+                    }
+                },
+                "module_dynamic": {
+                    "additional": null,
+                    "desc": null,
+                    "major": {
+                        "opus": {
+                            "fold_action": [
+                                "全文"
+                            ],
+                            "jump_url": "//www.bilibili.com/opus/1065743740217327638",
+                            "pics": [],
+                            "summary": {
+                                "has_more": true,
+                                "paragraphs": [
+                                    {
+                                        "align": 0,
+                                        "format": {
+                                            "align": 0,
+                                            "indent": null
+                                        },
+                                        "para_type": 1,
+                                        "text": {
+                                            "nodes": [
+                                                {
+                                                    "type": "TEXT_NODE_TYPE_WORD",
+                                                    "word": {
+                                                        "bg_style": {
+                                                            "color": {}
+                                                        },
+                                                        "color": null,
+                                                        "font_level": "regular",
+                                                        "style": {},
+                                                        "words": "2026年在这专栏大致讲一下接下来的一些打算"
+                                                    }
+                                                },
+                                                {
+                                                    "type": "TEXT_NODE_TYPE_WORD",
+                                                    "word": {
+                                                        "bg_style": {
+                                                            "color": {}
+                                                        },
+                                                        "color": null,
+                                                        "font_level": "regular",
+                                                        "style": {},
+                                                        "words": "\n"
+                                                    }
+                                                },
+                                                {
+                                                    "type": "TEXT_NODE_TYPE_WORD",
+                                                    "word": {
+                                                        "bg_style": {
+                                                            "color": {}
+                                                        },
+                                                        "color": null,
+                                                        "font_level": "regular",
+                                                        "style": {},
+                                                        "words": "1：因为已经在上班了，所以码字的时间变得更少了，所以所有的同人文系列无奈缓慢更新，当然，如果有机会趁机摸鱼码字的话还是可以加快一些进展的，但毕竟摸鱼时间还..."
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ],
+                                "rich_text_nodes": [
+                                    {
+                                        "orig_text": "2026年在这专栏大致讲一下接下来的一些打算",
+                                        "text": "2026年在这专栏大致讲一下接下来的一些打算",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "\n",
+                                        "text": "\n",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "1：因为已经在上班了，所以码字的时间变得更少了，所以所有的同人文系列无奈缓慢更新，当然，如果有机会趁机摸鱼码字的话还是可以加快一些进展的，但毕竟摸鱼时间还是少数，所以只能慢慢来了，先说一声抱歉",
+                                        "text": "1：因为已经在上班了，所以码字的时间变得更少了，所以所有的同人文系列无奈缓慢更新，当然，如果有机会趁机摸鱼码字的话还是可以加快一些进展的，但毕竟摸鱼时间还是少数，所以只能慢慢来了，先说一声抱歉",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "\n",
+                                        "text": "\n",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "2：因为主线同人已经完结，所以主线同人除非突然灵光乍现一些新想法来更加完善优和女武神们的关系发展的话，否则应该是不会更新了，作为主线同人的后续，休伯利安的来访者系列因为很难和第二部接续所以只能无奈搁置，主要是因为自己设置的后崩同人的时间点太过凑巧撞上了第二部时间线，原本也打算同样搁置的，但又因为前段时间突然冒出来了一些关于十三英桀的想法，以及我其实早就给自己挖好了后路，所以现在后崩同人也能够缓慢更新了，我打算称呼为后崩同人 新乐土篇，不过也只是我打算这么称呼，实际还是都叫后崩同人就是了",
+                                        "text": "2：因为主线同人已经完结，所以主线同人除非突然灵光乍现一些新想法来更加完善优和女武神们的关系发展的话，否则应该是不会更新了，作为主线同人的后续，休伯利安的来访者系列因为很难和第二部接续所以只能无奈搁置，主要是因为自己设置的后崩同人的时间点太过凑巧撞上了第二部时间线，原本也打算同样搁置的，但又因为前段时间突然冒出来了一些关于十三英桀的想法，以及我其实早就给自己挖好了后路，所以现在后崩同人也能够缓慢更新了，我打算称呼为后崩同人 新乐土篇，不过也只是我打算这么称呼，实际还是都叫后崩同人就是了",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "\n",
+                                        "text": "\n",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "3：同人if线如今有了布洛妮娅篇和芽衣篇，当然其他人的if线也会有，比如德丽莎篇就是以前写过的一个被奥托下套强行与德丽莎订婚的内容，希儿篇则是在犹豫，一方面原本的希儿篇其实早就写了，但不小心写得和妹女仆丽塔接轨了导致变成了一边和丽塔作为希儿的监护人恩爱，一边还会和希儿出现父嫁情况，于是最终决定删除修改，但修改后又感觉几乎就是把布洛妮娅篇里布洛妮娅的内容替换成了希儿所以被我否了，现在还在考虑如何续写，丽塔篇则基本就是妹女仆丽塔了，其他人暂时未定",
+                                        "text": "3：同人if线如今有了布洛妮娅篇和芽衣篇，当然其他人的if线也会有，比如德丽莎篇就是以前写过的一个被奥托下套强行与德丽莎订婚的内容，希儿篇则是在犹豫，一方面原本的希儿篇其实早就写了，但不小心写得和妹女仆丽塔接轨了导致变成了一边和丽塔作为希儿的监护人恩爱，一边还会和希儿出现父嫁情况，于是最终决定删除修改，但修改后又感觉几乎就是把布洛妮娅篇里布洛妮娅的内容替换成了希儿所以被我否了，现在还在考虑如何续写，丽塔篇则基本就是妹女仆丽塔了，其他人暂时未定",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    },
+                                    {
+                                        "orig_text": "\n",
+                                        "text": "\n",
+                                        "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                                    }
+                                ],
+                                "text": "2026年在这专栏大致讲一下接下来的一些打算\n1：因为已经在上班了，所以码字的时间变得更少了，所以所有的同人文系列无奈缓慢更新，当然，如果有机会趁机摸鱼码字的话还是可以加快一些进展的，但毕竟摸鱼时间还是少数，所以只能慢慢来了，先说一声抱歉\n2：因为主线同人已经完结，所以主线同人除非突然灵光乍现一些新想法来更加完善优和女武神们的关系发展的话，否则应该是不会更新了，作为主线同人的后续，休伯利安的来访者系列因为很难和第二部接续所以只能无奈搁置，主要是因为自己设置的后崩同人的时间点太过凑巧撞上了第二部时间线，原本也打算同样搁置的，但又因为前段时间突然冒出来了一些关于十三英桀的想法，以及我其实早就给自己挖好了后路，所以现在后崩同人也能够缓慢更新了，我打算称呼为后崩同人 新乐土篇，不过也只是我打算这么称呼，实际还是都叫后崩同人就是了\n3：同人if线如今有了布洛妮娅篇和芽衣篇，当然其他人的if线也会有，比如德丽莎篇就是以前写过的一个被奥托下套强行与德丽莎订婚的内容，希儿篇则是在犹豫，一方面原本的希儿篇其实早就写了，但不小心写得和妹女仆丽塔接轨了导致变成了一边和丽塔作为希儿的监护人恩爱，一边还会和希儿出现父嫁情况，于是最终决定删除修改，但修改后又感觉几乎就是把布洛妮娅篇里布洛妮娅的内容替换成了希儿所以被我否了，现在还在考虑如何续写，丽塔篇则基本就是妹女仆丽塔了，其他人暂时未定\n..."
+                            },
+                            "title": "不知道有没有人看的专栏-2026修改版"
+                        },
+                        "type": "MAJOR_TYPE_OPUS"
+                    },
+                    "topic": null
+                },
+                "module_more": {
+                    "three_point_items": [
+                        {
+                            "label": "举报",
+                            "type": "THREE_POINT_REPORT"
+                        }
+                    ]
+                },
+                "module_stat": {
+                    "comment": {
+                        "count": 17,
+                        "forbidden": false
+                    },
+                    "forward": {
+                        "count": 4,
+                        "forbidden": false
+                    },
+                    "like": {
+                        "count": 58,
+                        "forbidden": false,
+                        "status": false
+                    }
+                }
+            },
+            "type": "DYNAMIC_TYPE_ARTICLE",
+            "visible": true
+        }
+    }
+}

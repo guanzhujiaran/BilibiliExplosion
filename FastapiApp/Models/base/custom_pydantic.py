@@ -1,10 +1,9 @@
 from abc import abstractmethod, ABC
 from typing import Optional, Any, Union, Dict, List
 from pydantic import BaseModel, Field, ConfigDict, computed_field
-from pydantic.generics import GenericModel
 
 
-class CustomGenericModel(GenericModel):
+class CustomGenericModel(BaseModel):
     model_config = ConfigDict(
         extra="allow",
     )

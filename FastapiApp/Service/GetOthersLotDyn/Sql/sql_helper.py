@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Union, List, Sequence
 
 from sqlalchemy import select, and_, func
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from CONFIG import CONFIG
 from Utils.dynamic_id_caculate import ts_2_fake_dynamic_id
@@ -16,6 +17,7 @@ from Service.GetOthersLotDyn.Sql.models import (
     TLotdyninfo,
     TLotuserspaceresp,
     TRiddynid,
+    TOthersLotInfo,
 )
 from Utils.Common import sql_retry_wrapper
 from Utils.redisTool.RedisManager import RedisManagerBase
@@ -167,6 +169,47 @@ class __SqlHelper(SqlHelperBase):
             return ret
 
     @sql_retry_wrapper
+    async def getAllLotDynByInsertTime(
+        self, time_limit: int = 20 * 3600 * 24
+    ) -> Sequence[TLotdyninfo]:
+        """按插入时间(created_at)过滤抽奖动态，替代按dynId过滤"""
+        cutoff_time = datetime.fromtimestamp(int(time.time()) - time_limit)
+        stmt = (
+            select(TLotdyninfo)
+            .filter(
+                and_(
+                    TLotdyninfo.isLot == True,
+                    TLotdyninfo.created_at >= cutoff_time,
+                )
+            )
+            .order_by(TLotdyninfo.pubTime.desc())
+        )
+        async with self.async_session() as session:
+            res = await session.execute(stmt)
+            ret = res.scalars().all()
+            return ret
+
+    @sql_retry_wrapper
+    async def countValidLotByUidList(
+        self, uid_list: list[int | str]
+    ) -> dict[int, int]:
+        """统计每个用户的有效抽奖数量"""
+        async with self.async_session() as session:
+            stmt = (
+                select(TLotdyninfo.up_uid, func.count(TLotdyninfo.dynId))
+                .filter(
+                    and_(
+                        TLotdyninfo.up_uid.in_(uid_list),
+                        TLotdyninfo.isLot == True,
+                    )
+                )
+                .group_by(TLotdyninfo.up_uid)
+            )
+            res = await session.execute(stmt)
+            rows = res.all()
+            return {int(row[0]): row[1] for row in rows}
+
+    @sql_retry_wrapper
     async def getAllLotDynByLotRoundNum(
         self, LotRoundNum: int, offset: int = 0, page_size=0
     ) -> list[TLotdyninfo]:
@@ -245,7 +288,7 @@ class __SqlHelper(SqlHelperBase):
     @sql_retry_wrapper
     async def addDynInfo(self, DynInfo: TLotdyninfo) -> None:
         """
-        直接把最新的动态信息merge进去
+        直接把最新的动态信息merge进去，同时提取奖品信息
         :param DynInfo:
         :return:
         """
@@ -253,6 +296,19 @@ class __SqlHelper(SqlHelperBase):
             async with self.async_session() as session:
                 await session.merge(DynInfo)
                 await session.commit()
+
+        # 爬取阶段同步提取奖品信息并存入数据库
+        if DynInfo.dynContent and DynInfo.dynId:
+            try:
+                from Service.GetOthersLotDyn.parser.prize_extractor import (
+                    extract_prize_names, extract_lottery_time)
+
+                prize_names = await extract_prize_names(DynInfo.dynContent)
+                lottery_time = await extract_lottery_time(DynInfo.dynContent)
+                if prize_names or lottery_time:
+                    await self.save_prize(DynInfo.dynId, prize_names, lottery_time)
+            except Exception:
+                pass  # 提取失败不影响主流程，接口端会做保险
 
     @sql_retry_wrapper
     async def getDynInfoByDynamicId(self, dynamic_id: int | str) -> TLotdyninfo | None:
@@ -457,6 +513,133 @@ class __SqlHelper(SqlHelperBase):
             result = await session.execute(stmt)
             records = result.scalars().all()
             return records
+
+    @sql_retry_wrapper
+    async def getLatestLotDyn(self) -> TLotdyninfo | None:
+        """获取最新的一条抽奖动态"""
+        async with self.async_session() as session:
+            sql = (
+                select(TLotdyninfo)
+                .filter(TLotdyninfo.isLot == True)
+                .order_by(TLotdyninfo.pubTime.desc())
+                .limit(1)
+            )
+            res = await session.execute(sql)
+            ret = res.scalars().first()
+            return ret
+
+    @sql_retry_wrapper
+    async def getRidAndTypeByDynId(self, dyn_id: int | str) -> tuple[int, int] | None:
+        """根据动态ID获取rid和type"""
+        async with self.async_session() as session:
+            sql = (
+                select(TRiddynid)
+                .filter(TRiddynid.dynamic_id == int(dyn_id))
+                .limit(1)
+            )
+            res = await session.execute(sql)
+            ret = res.scalars().first()
+            if ret:
+                return ret.rid, ret.dynamic_type
+            return None
+
+    @sql_retry_wrapper
+    async def getLotDynListPaginated(
+        self,
+        page_num: int = 1,
+        page_size: int = 20,
+        sort_by: str = "pubTime",
+        sort_order: str = "desc",
+        is_lot: bool | None = True,
+        pub_time_start: int | None = None,
+        pub_time_end: int | None = None,
+        created_at_start: int | None = None,
+        created_at_end: int | None = None,
+    ) -> tuple[list[TLotdyninfo], int]:
+        """分页获取抽奖动态列表，支持排序和时间筛选
+
+        :param page_num: 页码，从1开始
+        :param page_size: 每页数量
+        :param sort_by: 排序字段，支持 pubTime / created_at
+        :param sort_order: 排序方向，asc / desc
+        :param is_lot: 筛选是否抽奖，None 表示不过滤
+        :param pub_time_start: 发布时间起始（Unix 时间戳，秒）
+        :param pub_time_end: 发布时间截止（Unix 时间戳，秒）
+        :param created_at_start: 创建时间起始（Unix 时间戳，秒）
+        :param created_at_end: 创建时间截止（Unix 时间戳，秒）
+        :return: (items, total)
+        """
+        async with self.async_session() as session:
+            # 基础查询
+            stmt = select(TLotdyninfo)
+            if is_lot is not None:
+                stmt = stmt.filter(TLotdyninfo.isLot == is_lot)
+            if pub_time_start is not None:
+                stmt = stmt.filter(TLotdyninfo.pubTime >= datetime.fromtimestamp(pub_time_start))
+            if pub_time_end is not None:
+                stmt = stmt.filter(TLotdyninfo.pubTime <= datetime.fromtimestamp(pub_time_end))
+            if created_at_start is not None:
+                stmt = stmt.filter(TLotdyninfo.created_at >= datetime.fromtimestamp(created_at_start))
+            if created_at_end is not None:
+                stmt = stmt.filter(TLotdyninfo.created_at <= datetime.fromtimestamp(created_at_end))
+
+            # 获取总数
+            count_stmt = select(func.count()).select_from(stmt.subquery())
+            total_res = await session.execute(count_stmt)
+            total = total_res.scalar() or 0
+
+            # 排序
+            sort_column = getattr(TLotdyninfo, sort_by, TLotdyninfo.pubTime)
+            if sort_order == "asc":
+                stmt = stmt.order_by(sort_column.asc())
+            else:
+                stmt = stmt.order_by(sort_column.desc())
+
+            # 分页
+            offset = (page_num - 1) * page_size
+            stmt = stmt.offset(offset).limit(page_size)
+
+            res = await session.execute(stmt)
+            items = res.scalars().all()
+            return list(items), total
+
+    # region 第三方抽奖奖品缓存
+    @sql_retry_wrapper
+    async def get_prize_by_dyn_id(self, dyn_id: int | str) -> TOthersLotInfo | None:
+        """根据 dynId 获取已缓存的提取信息"""
+        async with self.async_session() as session:
+            sql = select(TOthersLotInfo).filter(TOthersLotInfo.dynId == int(dyn_id)).limit(1)
+            res = await session.execute(sql)
+            return res.scalars().first()
+
+    @sql_retry_wrapper
+    async def get_prizes_by_dyn_ids(self, dyn_ids: list[int]) -> dict[int, TOthersLotInfo]:
+        """批量获取多个 dynId 的提取信息缓存"""
+        if not dyn_ids:
+            return {}
+        async with self.async_session() as session:
+            sql = select(TOthersLotInfo).filter(TOthersLotInfo.dynId.in_(dyn_ids))
+            res = await session.execute(sql)
+            rows = res.scalars().all()
+            return {row.dynId: row for row in rows}
+
+    @sql_retry_wrapper
+    async def save_prize(self, dyn_id: int, prize_names: list[str],
+                        lottery_time: str | None = None) -> None:
+        """保存 ModelScope 提取的奖品信息（原子 upsert，避免并发重复插入）"""
+        async with self.async_session() as session:
+            stmt = mysql_insert(TOthersLotInfo).values(
+                dynId=int(dyn_id),
+                prize_names=prize_names,
+                lottery_time=lottery_time,
+            )
+            stmt = stmt.on_duplicate_key_update(
+                prize_names=stmt.inserted.prize_names,
+                lottery_time=stmt.inserted.lottery_time,
+            )
+            await session.execute(stmt)
+            await session.commit()
+    # endregion
 
 
 get_other_lot_redis_manager = GetOtherLotRedisManager()

@@ -20,10 +20,22 @@ class RequestPaginationParams(CustomBaseModel):
     """基于页码的分页请求参数"""
 
     page_num: int = Field(
-        default=1, ge=0, description="页码，最小值为 0"
+        default=1, ge=0, description="页码，最小值为 0",
+        json_schema_extra={
+            "filter_display_name": "页码",
+            "filter_widget": "number",
+            "filter_description": "分页页码",
+            "filter_placeholder": "输入页码",
+        },
     )  # 页码，默认第 1 页，最小值为 0
     page_size: int = Field(
-        default=10, ge=0, description="每页数量，最小值为 0"
+        default=10, ge=0, description="每页数量，最小值为 0",
+        json_schema_extra={
+            "filter_display_name": "每页条数",
+            "filter_widget": "number",
+            "filter_description": "每页返回数量",
+            "filter_placeholder": "输入每页条数",
+        },
     )  # 每页数量，默认 20 条，最小值为 0
 
 

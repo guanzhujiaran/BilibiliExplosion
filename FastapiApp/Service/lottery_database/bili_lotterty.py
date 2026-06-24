@@ -71,7 +71,7 @@ async def get_common_lottery(
             dynContent=x.dynContent,
             commentCount=x.commentCount,
             repostCount=x.repostCount,
-            highlightWords=x.highlightWords,
+            likeCount=x.likeCount,
             officialLotType=x.officialLotType,
             officialLotId=x.officialLotId,
             isOfficialAccount=x.isOfficialAccount,
@@ -138,11 +138,9 @@ async def get_reserve_lottery(
 
 
 async def get_official_lottery(
-    limit_time: int, page_num: int = 0, page_size: int = 0
+    q: BiliLotDataQueryModel,
 ) -> tuple[list[OfficialLotteryResp], int]:
-    all_lots, total_num = await bos.query_official_lottery_by_timelimit_page_offset(
-        limit_time, page_num, page_size
-    )
+    all_lots, total_num = await bos.query_official_lottery_by_timelimit_page_offset(q)
     all_official_lottery_resp_infos = [
         OfficialLotteryResp(
             dynId=(
@@ -167,7 +165,7 @@ async def get_official_lottery(
     ]
     ret_list = []
     official_texts = [x.lottery_text for x in all_official_lottery_resp_infos]
-    if page_num and page_size:
+    if q.page_num and q.page_size:
         is_lot_list = [1 for i in range(len(official_texts))]
     else:
         is_lot_list = await asyncio.to_thread(big_reserve_predict, official_texts)
@@ -178,11 +176,9 @@ async def get_official_lottery(
 
 
 async def get_charge_lottery(
-    limit_time: int, page_num: int = 0, page_size: int = 0
+    q: BiliLotDataQueryModel,
 ) -> tuple[list[ChargeLotteryResp], int]:
-    all_lots, total_num = await bos.query_charge_lottery_by_timelimit_page_offset(
-        limit_time, page_num, page_size
-    )
+    all_lots, total_num = await bos.query_charge_lottery_by_timelimit_page_offset(q)
     all_charge_lottery_resp_infos = []
     for x in all_lots:
         try:
@@ -218,7 +214,7 @@ async def get_charge_lottery(
             continue
     ret_list = []
     charge_texts = [x.lottery_text for x in all_charge_lottery_resp_infos]
-    if page_num and page_size:
+    if q.page_num and q.page_size:
         is_lot_list = [1 for i in range(len(charge_texts))]
     else:
         is_lot_list = await asyncio.to_thread(big_reserve_predict, charge_texts)
@@ -229,10 +225,10 @@ async def get_charge_lottery(
 
 
 async def get_topic_lottery(
-    page_num: int = 0, page_size: int = 0
+    page_num: int = 0, page_size: int = 0, keyword: str | None = None,
 ) -> tuple[list[TopicLotteryResp], int]:
     all_lots, total_num = await bts.get_all_available_traffic_info_by_page(
-        page_num, page_size
+        page_num, page_size, keyword=keyword,
     )
     all_charge_lottery_resp_infos: List[CvTopicItem] = [
         GenerateTopicLotCv.gen_cv_item(x) for x in all_lots
@@ -331,7 +327,7 @@ async def get_all_lottery(round_num) -> AllLotteryResp:
             dynContent=x.dynContent,
             commentCount=x.commentCount,
             repostCount=x.repostCount,
-            highlightWords=x.highlightWords,
+            likeCount=x.likeCount,
             officialLotType=x.officialLotType,
             officialLotId=x.officialLotId,
             isOfficialAccount=x.isOfficialAccount,
@@ -369,7 +365,12 @@ async def get_all_lottery(round_num) -> AllLotteryResp:
     )
     # 获取所有官方抽奖动态
     official_lottery_resp_infos, official_lottery_total = await get_official_lottery(
-        limit_time=0
+        q=BiliLotDataQueryModel(
+            business_type=LotteryBusinessType.Official,
+            status=BiliLotDataStatusEnum.UNFINISHED,
+            page_num=0,
+            page_size=0,
+        )
     )
 
     # 合并
@@ -458,6 +459,92 @@ async def add_dynamic_lottery_by_dynamic_id(
         is_succ=True,
         msg="成功添加进后台任务队列查询",
     )
+
+
+async def add_others_lot_dyn_by_dynamic_id(
+    dynamic_id_or_url: str,
+) -> tuple[AddDynamicLotteryResp, str | None, int | None]:
+    """
+    通过动态id添加第三方抽奖动态信息
+    与官抽提交类似，校验动态ID后查重，查重通过则返回 dynamic_id 和 lotRound_id 供后台任务处理
+    :param dynamic_id_or_url: 动态ID或URL
+    :return: (响应, dynamic_id, lotRound_id)，后两者为 None 表示无需后台处理
+    """
+    dynamic_id_re = [x for x in re.findall(r"\d+", dynamic_id_or_url) if len(x) > 10]
+    if not dynamic_id_re:
+        return (
+            AddDynamicLotteryResp(
+                dynamic_id_or_url=dynamic_id_or_url,
+                is_new=False,
+                is_succ=False,
+                msg="动态格式错误",
+            ),
+            None,
+            None,
+        )
+    dynamic_id = dynamic_id_re[0]
+    if len(str(dynamic_id)) < 18:
+        return (
+            AddDynamicLotteryResp(
+                dynamic_id_or_url=dynamic_id_or_url,
+                is_new=False,
+                is_succ=False,
+                msg="动态格式错误，动态dynamic_id长度不正确",
+            ),
+            None,
+            None,
+        )
+
+    # 查询是否已存在
+    existing = await bds.isExistDynInfoByDynId(dynamic_id)
+    if existing:
+        return (
+            AddDynamicLotteryResp(
+                dynamic_id_or_url=dynamic_id_or_url,
+                is_new=False,
+                is_succ=True,
+                msg="该动态已经存在",
+            ),
+            None,
+            None,
+        )
+
+    # 获取最新轮次，没有则创建
+    latest_round = await bds.getLatestRound()
+    if not latest_round:
+        from Service.GetOthersLotDyn.Sql.models import TLotmaininfo
+
+        latest_round = TLotmaininfo(
+            lotRound_id=1,
+            allNum=0,
+            lotNum=0,
+            uselessNum=0,
+            isRoundFinished=False,
+        )
+        await bds.addLotMainInfo(latest_round)
+
+    return (
+        AddDynamicLotteryResp(
+            dynamic_id_or_url=dynamic_id_or_url,
+            is_new=True,
+            is_succ=True,
+            msg="成功添加进后台任务队列查询",
+        ),
+        dynamic_id,
+        latest_round.lotRound_id,
+    )
+
+
+async def process_others_lot_dyn(dynamic_id: str, lot_round_id: int) -> None:
+    """
+    后台处理第三方抽奖动态：获取动态详情、解析并入库
+    :param dynamic_id: 动态ID
+    :param lot_round_id: 抽奖轮次ID
+    """
+    from Service.GetOthersLotDyn.core.bili_dynamic_item import BiliDynamicItem
+
+    item = BiliDynamicItem(dynamic_id=dynamic_id)
+    await item.judge_lottery(lotRound_id=lot_round_id)
 
 
 async def add_topic_lottery(topic_id: str | int) -> AddTopicLotteryResp:

@@ -67,7 +67,6 @@ class lotDynData:
     forward_count: str = ''
     like_count: str = ''
     Manual_judge: bool = False
-    high_lights_list: list = []
     lot_type: str = ''
     lot_rid: str = ''
     premsg: str = ''

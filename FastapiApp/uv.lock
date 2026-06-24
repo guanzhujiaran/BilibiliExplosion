@@ -82,6 +82,20 @@ wheels = [
 ]
 
 [[package]]
+name = "alembic"
+version = "1.18.4"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "mako" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/94/13/8b084e0f2efb0275a1d534838844926f798bd766566b1375174e2448cd31/alembic-1.18.4.tar.gz", hash = "sha256:cb6e1fd84b6174ab8dbb2329f86d631ba9559dd78df550b57804d607672cedbc" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/d2/29/6533c317b74f707ea28f8d633734dbda2119bbadfc61b2f3640ba835d0f7/alembic-1.18.4-py3-none-any.whl", hash = "sha256:a5ed4adcf6d8a4cb575f3d759f071b03cd6e5c7618eb796cb52497be25bfe19a" },
+]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
@@ -174,6 +188,10 @@ wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/e6/e9/c4687dbecb8e2f00d4a0191da11413bc58df298555d48766712463f5a2e7/bili_ticket_gt_python-0.3.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:57f03ee6bf36dbd636e99a8f2810acdd65a90f1add6c67da7792b11fb2207744" },
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/4d/35/cee78ef516d9cd1e3601423e3f118528d39531bb30135cf50080c93c4300/bili_ticket_gt_python-0.3.2-cp313-cp313-manylinux_2_38_x86_64.whl", hash = "sha256:98386e73c14558f378d3de3d4b3bc03206b3b3c84e02cfe9cb9760e80fba2b6d" },
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/ae/3f/d6a9bc41b0b06dc8e716fa51ce9ce3d3a8471bb5c3498de2f3d4d4f96c03/bili_ticket_gt_python-0.3.2-cp313-cp313-win_amd64.whl", hash = "sha256:f9e11280dfc0002feeb5deed7e04227e7e5d8788ee78e8c2c437eaab4793056d" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/91/d7/b34648ac28d426f76bb72bc2d35337a62e4843c9bb0f8c5e3171f3f4568e/bili_ticket_gt_python-0.3.2-cp314-cp314-macosx_10_12_x86_64.whl", hash = "sha256:e1f38e46e14408feb09f84f2f8da4d2a9b6b88a3acb9eb214f4252ccf782ead0" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/e0/89/f5f3fa7f1a66c920c88189dbed1d6f00b20d6848d0f3e4693eff9870b01b/bili_ticket_gt_python-0.3.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:f3559ab5be126bdcd0166e189ed53450f10261581f8d2d1585f1aa4832c6739b" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/02/b6/9edb89f76fffd73d13c6ae3c27676d0187577646a8b95fb4d450e94bc600/bili_ticket_gt_python-0.3.2-cp314-cp314-manylinux_2_38_x86_64.whl", hash = "sha256:d8ba27d4cdd85dd6fb0db8b05d00c6cdcc18842539c44ec0a51297580c04365c" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/84/24/4dd1f9e560bb895b1a71b05131d4767e5243c3473c9f35d846bffa1402dd/bili_ticket_gt_python-0.3.2-cp314-cp314-win_amd64.whl", hash = "sha256:a67191ee6411270df73faee8c64851cdebc2a4bde755e2474509148da838ae59" },
 ]
 
 [[package]]
@@ -748,6 +766,7 @@ dependencies = [
     { name = "aiofiles" },
     { name = "aiomysql" },
     { name = "aiosqlite" },
+    { name = "alembic" },
     { name = "apscheduler" },
     { name = "asyncer" },
     { name = "beautifulsoup4" },
@@ -770,6 +789,7 @@ dependencies = [
     { name = "jieba3" },
     { name = "langchain-openai" },
     { name = "loguru" },
+    { name = "modelscope" },
     { name = "msgpack" },
     { name = "opencc" },
     { name = "pandas" },
@@ -808,6 +828,7 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=25.1.0" },
     { name = "aiomysql", specifier = ">=0.3.2" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
+    { name = "alembic", specifier = ">=1.18.4" },
     { name = "apscheduler", specifier = ">=3.11.0" },
     { name = "asyncer", specifier = ">=0.0.10" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
@@ -830,6 +851,7 @@ requires-dist = [
     { name = "jieba3", specifier = ">=1.0.2" },
     { name = "langchain-openai", specifier = ">=1.0.1" },
     { name = "loguru", specifier = ">=0.7.3" },
+    { name = "modelscope", specifier = ">=1.37.1" },
     { name = "msgpack", specifier = ">=1.1.2" },
     { name = "opencc", specifier = ">=1.3.1" },
     { name = "pandas", specifier = ">=2.3.3" },
@@ -947,6 +969,15 @@ wheels = [
 [package.optional-dependencies]
 rabbit = [
     { name = "aio-pika" },
+]
+
+[[package]]
+name = "filelock"
+version = "3.29.4"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/e6/dc/be6cbe99670cd6e4ad387123647cb08e0c32975e223f82551e914c5568a6/filelock-3.29.4.tar.gz", hash = "sha256:10cdb3656fc44541cdf30652a93fb10ec6b05325620eb316bd26893e4201538a" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/13/37/a065dc3bd6e49423a6532c642ca7378d3f467b1ef44c2800c937af7f9739/filelock-3.29.4-py3-none-any.whl", hash = "sha256:dac1648087d5115554850d113e7dd8c83ab2d38e3435dde2d4f163847e57b767" },
 ]
 
 [[package]]
@@ -1413,6 +1444,18 @@ wheels = [
 ]
 
 [[package]]
+name = "mako"
+version = "1.3.12"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "markupsafe" },
+]
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/00/62/791b31e69ae182791ec67f04850f2f062716bbd205483d63a215f3e062d3/mako-1.3.12.tar.gz", hash = "sha256:9f778e93289bd410bb35daadeb4fc66d95a746f0b75777b942088b7fd7af550a" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/bc/b1/a0ec7a5a9db730a08daef1fdfb8090435b82465abbf758a596f0ea88727e/mako-1.3.12-py3-none-any.whl", hash = "sha256:8f61569480282dbf557145ce441e4ba888be453c30989f879f0d652e39f53ea9" },
+]
+
+[[package]]
 name = "markdown-it-py"
 version = "4.2.0"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
@@ -1494,6 +1537,23 @@ source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba" }
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8" },
+]
+
+[[package]]
+name = "modelscope"
+version = "1.37.1"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "filelock" },
+    { name = "packaging" },
+    { name = "requests" },
+    { name = "setuptools" },
+    { name = "tqdm" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/fa/9e/9fd75db9797b9543ce78a646538a3c5537cb6adb015d128b4cbc2b4169e2/modelscope-1.37.1.tar.gz", hash = "sha256:7d9124970b4e53639bebe89f60473dee7d5a80589bf35bfbef4c839933cdaf93" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/15/f5/286dd2d21802e4954a28e73913af7bc79e882f23fcd98db2b5810fc590cf/modelscope-1.37.1-py3-none-any.whl", hash = "sha256:7f7af2dd37339188cbd3c18a858b1297b8a75222b9a0fbf176c7df8189cac39a" },
 ]
 
 [[package]]

@@ -1,0 +1,494 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "item": {
+      "basic": {
+        "comment_id_str": "1216236920366956583",
+        "comment_type": 17,
+        "like_icon": {
+          "action_url": "https://i0.hdslb.com/bfs/garb/a041e754845c9cdbe39fa065acda435f7cf064cf.bin",
+          "end_url": "",
+          "id": 1769661347001,
+          "start_url": ""
+        },
+        "rid_str": "1216236920366956583"
+      },
+      "id_str": "1216236920366956583",
+      "modules": {
+        "module_author": {
+          "avatar": {
+            "container_size": {
+              "height": 1.35,
+              "width": 1.35
+            },
+            "fallback_layers": {
+              "is_critical_group": true,
+              "layers": [
+                {
+                  "general_spec": {
+                    "pos_spec": {
+                      "axis_x": 0.675,
+                      "axis_y": 0.675,
+                      "coordinate_pos": 2
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    },
+                    "size_spec": {
+                      "height": 1,
+                      "width": 1
+                    }
+                  },
+                  "layer_config": {
+                    "is_critical": true,
+                    "tags": {
+                      "AVATAR_LAYER": {},
+                      "GENERAL_CFG": {
+                        "config_type": 1,
+                        "general_config": {
+                          "web_css_style": {
+                            "borderRadius": "50%"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "resource": {
+                    "res_image": {
+                      "image_src": {
+                        "placeholder": 6,
+                        "remote": {
+                          "bfs_style": "widget-layer-avatar",
+                          "url": "https://i0.hdslb.com/bfs/face/98f19eb50500a17a07768aba941d1cb6f074eaa6.jpg"
+                        },
+                        "src_type": 1
+                      }
+                    },
+                    "res_type": 3
+                  },
+                  "visible": true
+                },
+                {
+                  "general_spec": {
+                    "pos_spec": {
+                      "axis_x": 0.8000000000000002,
+                      "axis_y": 0.8000000000000002,
+                      "coordinate_pos": 1
+                    },
+                    "render_spec": {
+                      "opacity": 1
+                    },
+                    "size_spec": {
+                      "height": 0.41666666666666663,
+                      "width": 0.41666666666666663
+                    }
+                  },
+                  "layer_config": {
+                    "tags": {
+                      "GENERAL_CFG": {
+                        "config_type": 1,
+                        "general_config": {
+                          "web_css_style": {
+                            "background-color": "rgb(255,255,255)",
+                            "border": "2px solid rgba(255,255,255,1)",
+                            "borderRadius": "50%",
+                            "boxSizing": "border-box"
+                          }
+                        }
+                      },
+                      "ICON_LAYER": {}
+                    }
+                  },
+                  "resource": {
+                    "res_image": {
+                      "image_src": {
+                        "local": 1,
+                        "src_type": 2
+                      }
+                    },
+                    "res_type": 3
+                  },
+                  "visible": true
+                }
+              ]
+            },
+            "mid": "1268155263"
+          },
+          "decoration_card": {
+            "big_card_url": "https://i0.hdslb.com/bfs/garb/open/0197c5b0afb3fbc84c1055b9360637bbc7c37295.png",
+            "card_type": 2,
+            "card_type_name": "免费",
+            "card_url": "https://i0.hdslb.com/bfs/garb/open/0197c5b0afb3fbc84c1055b9360637bbc7c37295.png",
+            "fan": {
+              "color": "#BFC8D2",
+              "color_format": {
+                "colors": [
+                  "#B8C7D0FF",
+                  "#A2A7B0FF"
+                ],
+                "end_point": "100,100",
+                "gradients": [
+                  0,
+                  100
+                ],
+                "start_point": "0,0"
+              },
+              "is_fan": 1,
+              "name": "XXXX",
+              "num_desc": "017493",
+              "number": 17493
+            },
+            "id": 69938,
+            "image_enhance": "https://i0.hdslb.com/bfs/garb/open/0197c5b0afb3fbc84c1055b9360637bbc7c37295.png",
+            "item_id": 69938,
+            "jump_url": "https://www.bilibili.com/h5/mall/digital-card/home?act_id=103031&lottery_id=0&hybrid_set_header=2&anchor_task=1&navhide=1&f_source=garb&from=post&window_params=%7B%22type%22%3A2%2C%22mid%22%3A1268155263%7D",
+            "name": "東雪蓮音乐收藏集"
+          },
+          "face": "https://i0.hdslb.com/bfs/face/98f19eb50500a17a07768aba941d1cb6f074eaa6.jpg",
+          "face_nft": false,
+          "following": true,
+          "jump_url": "//space.bilibili.com/1268155263/dynamic",
+          "label": "",
+          "mid": 1268155263,
+          "name": "粉霞天女_Official",
+          "official_verify": {
+            "desc": "",
+            "type": -1
+          },
+          "pendant": {
+            "expire": 0,
+            "image": "",
+            "image_enhance": "",
+            "image_enhance_frame": "",
+            "n_pid": 0,
+            "name": "",
+            "pid": 0
+          },
+          "pub_action": "",
+          "pub_location_text": "",
+          "pub_time": "2026年06月21日 12:20",
+          "pub_ts": 1782015625,
+          "type": "AUTHOR_TYPE_NORMAL",
+          "vip": {
+            "avatar_subscript": 1,
+            "avatar_subscript_url": "",
+            "due_date": 1782835200000,
+            "label": {
+              "bg_color": "#FB7299",
+              "bg_style": 1,
+              "border_color": "",
+              "img_label_uri_hans": "",
+              "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/3788b674c69072f1ee252b79a31ecc8c43af3039.png",
+              "img_label_uri_hant": "",
+              "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/jwXBWRVwa5.png",
+              "label_theme": "vip",
+              "path": "http://i0.hdslb.com/bfs/vip/label_vip.png",
+              "text": "大会员",
+              "text_color": "#FFFFFF",
+              "use_img_label": true
+            },
+            "nickname_color": "#FB7299",
+            "status": 1,
+            "theme_type": 0,
+            "type": 1
+          }
+        },
+        "module_dynamic": {
+          "additional": null,
+          "desc": {
+            "rich_text_nodes": [
+              {
+                "orig_text": "转发动态",
+                "text": "转发动态",
+                "type": "RICH_TEXT_NODE_TYPE_TEXT"
+              }
+            ],
+            "text": "转发动态"
+          },
+          "major": null,
+          "topic": null
+        },
+        "module_more": {
+          "three_point_items": [
+            {
+              "label": "举报",
+              "type": "THREE_POINT_REPORT"
+            }
+          ]
+        },
+        "module_stat": {
+          "comment": {
+            "count": 0,
+            "forbidden": false
+          },
+          "forward": {
+            "count": 0,
+            "forbidden": false
+          },
+          "like": {
+            "count": 4,
+            "forbidden": false,
+            "status": false
+          }
+        }
+      },
+      "orig": {
+        "basic": {
+          "comment_id_str": "",
+          "comment_type": 0,
+          "jump_url": "//www.bilibili.com/opus/1216231684783996976",
+          "like_icon": {
+            "action_url": "",
+            "end_url": "",
+            "id": 0,
+            "start_url": ""
+          },
+          "rid_str": ""
+        },
+        "id_str": "1216231684783996976",
+        "modules": {
+          "module_author": {
+            "avatar": {
+              "container_size": {
+                "height": 1.35,
+                "width": 1.35
+              },
+              "fallback_layers": {
+                "is_critical_group": true,
+                "layers": [
+                  {
+                    "general_spec": {
+                      "pos_spec": {
+                        "axis_x": 0.675,
+                        "axis_y": 0.675,
+                        "coordinate_pos": 2
+                      },
+                      "render_spec": {
+                        "opacity": 1
+                      },
+                      "size_spec": {
+                        "height": 1,
+                        "width": 1
+                      }
+                    },
+                    "layer_config": {
+                      "is_critical": true,
+                      "tags": {
+                        "AVATAR_LAYER": {},
+                        "GENERAL_CFG": {
+                          "config_type": 1,
+                          "general_config": {
+                            "web_css_style": {
+                              "borderRadius": "50%"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "resource": {
+                      "res_image": {
+                        "image_src": {
+                          "placeholder": 6,
+                          "remote": {
+                            "bfs_style": "widget-layer-avatar",
+                            "url": "https://i2.hdslb.com/bfs/face/1336282f4138c9fd870fe75281de1441125a64c9.jpg"
+                          },
+                          "src_type": 1
+                        }
+                      },
+                      "res_type": 3
+                    },
+                    "visible": true
+                  },
+                  {
+                    "general_spec": {
+                      "pos_spec": {
+                        "axis_x": 0.8000000000000002,
+                        "axis_y": 0.8000000000000002,
+                        "coordinate_pos": 1
+                      },
+                      "render_spec": {
+                        "opacity": 1
+                      },
+                      "size_spec": {
+                        "height": 0.41666666666666663,
+                        "width": 0.41666666666666663
+                      }
+                    },
+                    "layer_config": {
+                      "tags": {
+                        "GENERAL_CFG": {
+                          "config_type": 1,
+                          "general_config": {
+                            "web_css_style": {
+                              "background-color": "rgb(255,255,255)",
+                              "border": "2px solid rgba(255,255,255,1)",
+                              "borderRadius": "50%",
+                              "boxSizing": "border-box"
+                            }
+                          }
+                        },
+                        "ICON_LAYER": {}
+                      }
+                    },
+                    "resource": {
+                      "res_image": {
+                        "image_src": {
+                          "local": 4,
+                          "src_type": 2
+                        }
+                      },
+                      "res_type": 3
+                    },
+                    "visible": true
+                  }
+                ]
+              },
+              "mid": "1340190821"
+            },
+            "face": "https://i2.hdslb.com/bfs/face/1336282f4138c9fd870fe75281de1441125a64c9.jpg",
+            "face_nft": false,
+            "following": true,
+            "jump_url": "//space.bilibili.com/1340190821/dynamic",
+            "label": "",
+            "mid": 1340190821,
+            "name": "崩坏星穹铁道",
+            "official_verify": {
+              "desc": "",
+              "type": 1
+            },
+            "pendant": {
+              "expire": 0,
+              "image": "",
+              "image_enhance": "",
+              "image_enhance_frame": "",
+              "n_pid": 0,
+              "name": "",
+              "pid": 0
+            },
+            "pub_action": "",
+            "pub_time": "",
+            "pub_ts": 1782014406,
+            "type": "AUTHOR_TYPE_NORMAL",
+            "vip": {
+              "avatar_subscript": 1,
+              "avatar_subscript_url": "",
+              "due_date": 1800374400000,
+              "label": {
+                "bg_color": "#FB7299",
+                "bg_style": 1,
+                "border_color": "",
+                "img_label_uri_hans": "https://i0.hdslb.com/bfs/activity-plat/static/20220608/e369244d0b14644f5e1a06431e22a4d5/0DFy9BHgwE.gif",
+                "img_label_uri_hans_static": "https://i0.hdslb.com/bfs/vip/8d7e624d13d3e134251e4174a7318c19a8edbd71.png",
+                "img_label_uri_hant": "",
+                "img_label_uri_hant_static": "https://i0.hdslb.com/bfs/activity-plat/static/20220614/e369244d0b14644f5e1a06431e22a4d5/uckjAv3Npy.png",
+                "label_theme": "annual_vip",
+                "path": "http://i0.hdslb.com/bfs/vip/label_annual.png",
+                "text": "年度大会员",
+                "text_color": "#FFFFFF",
+                "use_img_label": true
+              },
+              "nickname_color": "#FB7299",
+              "status": 1,
+              "theme_type": 0,
+              "type": 2
+            }
+          },
+          "module_dynamic": {
+            "additional": {
+              "common": {
+                "button": {
+                  "jump_style": {
+                    "icon_url": "",
+                    "text": "进入"
+                  },
+                  "jump_url": "https://www.biligame.com/detail?id=107800&sourceFrom=1005&biz_scene=dynamic",
+                  "type": 1
+                },
+                "cover": "https://i0.hdslb.com/bfs/game/e394b6a2da35cdda28896051685a32a01acb1ff5.png",
+                "desc1": "角色扮演/箱庭/二次元",
+                "desc2": "全新4.3版本「沉于生者的忘川」现已推出！",
+                "head_text": "相关游戏",
+                "id_str": "107800",
+                "jump_url": "https://www.biligame.com/detail?id=107800&sourceFrom=1005&biz_scene=dynamic",
+                "style": 1,
+                "sub_type": "game",
+                "title": "崩坏：星穹铁道"
+              },
+              "type": "ADDITIONAL_TYPE_COMMON"
+            },
+            "desc": null,
+            "major": {
+              "opus": {
+                "fold_action": [
+                  "展开",
+                  "收起"
+                ],
+                "jump_url": "//www.bilibili.com/opus/1216231684783996976",
+                "pics": [
+                  {
+                    "aigc": null,
+                    "height": 5291,
+                    "live_url": null,
+                    "size": 1330.0869140625,
+                    "url": "http://i0.hdslb.com/bfs/new_dyn/7be2962e92c33e4aacf1bbb714c482201340190821.jpg",
+                    "width": 900
+                  }
+                ],
+                "summary": {
+                  "rich_text_nodes": [
+                    {
+                      "orig_text": "互动抽奖",
+                      "rid": "415531",
+                      "text": "互动抽奖",
+                      "type": "RICH_TEXT_NODE_TYPE_LOTTERY"
+                    },
+                    {
+                      "orig_text": "  ",
+                      "text": "  ",
+                      "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                    },
+                    {
+                      "jump_url": "//search.bilibili.com/all?keyword=%E5%B4%A9%E5%9D%8F%E6%98%9F%E7%A9%B9%E9%93%81%E9%81%93",
+                      "orig_text": "#崩坏星穹铁道#",
+                      "style": {},
+                      "text": "#崩坏星穹铁道#",
+                      "type": "RICH_TEXT_NODE_TYPE_TOPIC"
+                    },
+                    {
+                      "orig_text": " ",
+                      "text": " ",
+                      "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                    },
+                    {
+                      "jump_url": "//search.bilibili.com/all?keyword=%E6%B2%89%E4%BA%8E%E7%94%9F%E8%80%85%E7%9A%84%E5%BF%98%E5%B7%9D",
+                      "orig_text": "#沉于生者的忘川#",
+                      "style": {},
+                      "text": "#沉于生者的忘川#",
+                      "type": "RICH_TEXT_NODE_TYPE_TOPIC"
+                    },
+                    {
+                      "orig_text": " 幻月游戏赛程播报：「沉于生者的忘川」\n \n刃在贪饕啃噬下反复重生，锻身为笼永困倏忽，随后涅槃归来。\n不死途等人调查归寂，推测归寂、未抵、我见三人实为一人。\n归寂撕下隆介的伪装，于各地发动袭击，向民众宣告灾难降临。\n———————————————————\n当前已知谒者：8/8\n———————————————————\n▉转发抽奖：\n关注并转发本条动态，帕姆将于6月29日抽取10位幸运开拓者各获得「随机角色周边」一份。",
+                      "text": " 幻月游戏赛程播报：「沉于生者的忘川」\n \n刃在贪饕啃噬下反复重生，锻身为笼永困倏忽，随后涅槃归来。\n不死途等人调查归寂，推测归寂、未抵、我见三人实为一人。\n归寂撕下隆介的伪装，于各地发动袭击，向民众宣告灾难降临。\n———————————————————\n当前已知谒者：8/8\n———————————————————\n▉转发抽奖：\n关注并转发本条动态，帕姆将于6月29日抽取10位幸运开拓者各获得「随机角色周边」一份。",
+                      "type": "RICH_TEXT_NODE_TYPE_TEXT"
+                    }
+                  ],
+                  "text": "互动抽奖  #崩坏星穹铁道# #沉于生者的忘川# 幻月游戏赛程播报：「沉于生者的忘川」\n \n刃在贪饕啃噬下反复重生，锻身为笼永困倏忽，随后涅槃归来。\n不死途等人调查归寂，推测归寂、未抵、我见三人实为一人。\n归寂撕下隆介的伪装，于各地发动袭击，向民众宣告灾难降临。\n———————————————————\n当前已知谒者：8/8\n———————————————————\n▉转发抽奖：\n关注并转发本条动态，帕姆将于6月29日抽取10位幸运开拓者各获得「随机角色周边」一份。"
+                },
+                "title": null
+              },
+              "type": "MAJOR_TYPE_OPUS"
+            },
+            "topic": null
+          }
+        },
+        "type": "DYNAMIC_TYPE_DRAW",
+        "visible": true
+      },
+      "type": "DYNAMIC_TYPE_FORWARD",
+      "visible": true
+    }
+  }
+}

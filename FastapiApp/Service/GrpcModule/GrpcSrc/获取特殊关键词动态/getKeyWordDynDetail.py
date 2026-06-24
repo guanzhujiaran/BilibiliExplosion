@@ -103,7 +103,6 @@ class SearchKeyWordDyn:
             (int(dynData.get('extend').get('dynIdStr')) + 6437415932101782528) / 4294939971.297)
         pub_time = self.BAPI.timeshift(dynamic_calculated_ts)
 
-        high_lights_list = []
         LotDynData = lotDynData()
         LotDynData.dyn_url = f"https://t.bilibili.com/{dynData.get('extend').get('dynIdStr')}"
         LotDynData.lot_rid = str(lot_rid)
@@ -113,7 +112,6 @@ class SearchKeyWordDyn:
         LotDynData.forward_count = str(forward_count)
         LotDynData.comment_count = str(comment_count)
         LotDynData.like_count = str(like_count)
-        LotDynData.high_lights_list = high_lights_list
         LotDynData.Manual_judge = ''
         LotDynData.pub_time = str(pub_time)
         LotDynData.official_verify_type = str(official_verify_type)

@@ -29,8 +29,10 @@ from Models.lottery_database.bili.LotteryDataModels import (
     BiliLotStatisticRankTypeEnum,
     BiliUserInfoSimple,
     AtariLotRankEnum,
+    LotteryDataSortEnum,
+    SortOrderEnum,
 )
-from Models.lottery_database.bili.comm import BiliLotDataStatusEnum
+from Models.lottery_database.bili.comm import BiliLotDataStatusEnum, LotteryBusinessType
 from Utils.Common import log_sql_retry_wrapper
 from Utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 from Service.GrpcModule.GrpcSrc.SQLObject.models import (
@@ -480,12 +482,35 @@ class SQLHelper(SqlHelperBase):
         if q.max_participants is not None:
             base_conditions.append(Lotdata.participants <= q.max_participants)
 
+        # 关键词筛选（对抽奖结果描述做 LIKE 模糊匹配）
+        if q.keyword is not None and q.keyword.strip():
+            base_conditions.append(Lotdata.lottery_result.like(f"%{q.keyword.strip()}%"))
+
+        # 时间快捷筛选（优先级高于单独的 start_ts/end_ts）
+        import datetime as dt
+        if q.created_at_preset is not None:
+            days = int(q.created_at_preset.value.replace("d", ""))
+            threshold = dt.datetime.fromtimestamp(now_ts - days * 86400)
+            base_conditions.append(Lotdata.created_at >= threshold)
+        if q.pub_time_preset is not None:
+            days = int(q.pub_time_preset.value.replace("d", ""))
+            base_conditions.append(Lotdata.ts >= (now_ts - days * 86400))
+
         # 构建查询语句
         stmt = (
             select(Lotdata)
             .where(and_(*base_conditions))
-            .order_by(Lotdata.lottery_time.asc())
         )
+
+        # 排序：优先使用 q.sort_by，否则按 lottery_time 升序
+        if q.sort_by is not None:
+            sort_column = getattr(Lotdata, q.sort_by.value, Lotdata.lottery_time)
+            if q.sort_order == SortOrderEnum.asc:
+                stmt = stmt.order_by(sort_column.asc())
+            else:
+                stmt = stmt.order_by(sort_column.desc())
+        else:
+            stmt = stmt.order_by(Lotdata.lottery_time.asc())
 
         # 应用分页
         if q.page_num and q.page_size:
@@ -506,100 +531,53 @@ class SQLHelper(SqlHelperBase):
 
     @log_sql_retry_wrapper()
     async def query_official_lottery_by_timelimit_page_offset(
-        self, time_limit: int = 24 * 3600, page_number: int = 0, page_size: int = 0
+        self, q: BiliLotDataQueryModel
     ) -> tuple[Sequence[Lotdata], int]:
         """
-        通过日期查询需要的动态，默认查询当天
-        :param time_limit:
-        :param page_size:
-        :param page_number:
-        :return:
+        查询官方抽奖（business_type=1），通过 BiliLotDataQueryModel 统一筛选
+        :param q: BiliLotDataQueryModel，business_type 固定为 Official
+        :return: (记录列表, 总数)
         """
-        now_ts = int(time.time())
-        base_conditions = [
-            Lotdata.status == 0,
-            Lotdata.business_type == 1,
-            Lotdata.lottery_time >= now_ts,
-        ]
-
-        if time_limit and time_limit > 0:
-            target_ts = now_ts + time_limit
-            base_conditions.append(Lotdata.lottery_time <= target_ts)
-
-        # 优化 1: 不立即加载关联的 bilidyndetail，减少首次查询的数据量
-        # 使用 lazy='select' 延迟加载，只有在访问 bilidyndetail 时才会查询
-        stmt = (
-            select(Lotdata)
-            .where(and_(*base_conditions))
-            .order_by(Lotdata.lottery_time.asc())
-        )
-
-        # 如果提供了分页参数，则应用分页
-        if page_number and page_size:
-            stmt = stmt.limit(page_size).offset((page_number - 1) * page_size)
-
-        async with self.async_session() as session:
-            result = await session.execute(stmt)
-            records = result.scalars().all()
-
-            # 优化 2: 使用覆盖索引进行 COUNT 查询，避免全表扫描
-            # idx_count_optimize 索引包含 (status, business_type, lottery_time, lottery_id)
-            count_stmt = select(func.count(Lotdata.lottery_id)).where(
-                and_(*base_conditions)
+        return await self.query_lottery(
+            BiliLotDataQueryModel(
+                business_type=LotteryBusinessType.Official,
+                status=q.status,
+                page_num=q.page_num,
+                page_size=q.page_size,
+                start_ts=q.start_ts,
+                end_ts=q.end_ts,
+                sender_uid=q.sender_uid,
+                min_participants=q.min_participants,
+                max_participants=q.max_participants,
+                sort_by=q.sort_by,
+                sort_order=q.sort_order,
             )
-            count_result = await session.execute(count_stmt)
-            total_count = count_result.scalar()
-
-            return records, total_count
+        )
 
     @log_sql_retry_wrapper()
     async def query_charge_lottery_by_timelimit_page_offset(
-        self,
-        time_limit: int = 24 * 3600,
-        page_number: int = 0,
-        page_size: int = 0,
+        self, q: BiliLotDataQueryModel
     ) -> tuple[Sequence[Lotdata], int]:
         """
-        通过日期查询需要的动态，默认查询当天
-        :param page_number:
-        :param time_limit:
-        :param page_size:
-        :return:
+        查询充电抽奖（business_type=12），通过 BiliLotDataQueryModel 统一筛选
+        :param q: BiliLotDataQueryModel，business_type 固定为 Charge
+        :return: (记录列表, 总数)
         """
-        now_ts = int(time.time())
-        base_conditions = [
-            Lotdata.status == 0,
-            Lotdata.business_type == 12,
-            Lotdata.lottery_time >= now_ts,
-        ]
-
-        if time_limit:
-            target_ts = now_ts + time_limit
-            base_conditions.append(Lotdata.lottery_time <= target_ts)
-
-        # 优化 1: 不立即加载关联的 bilidyndetail，减少首次查询的数据量
-        stmt = (
-            select(Lotdata)
-            .where(and_(*base_conditions))
-            .order_by(Lotdata.lottery_time.asc())
-        )
-
-        # 如果提供了分页参数，则应用分页
-        if page_number > 0 and page_size > 0:
-            stmt = stmt.limit(page_size).offset((page_number - 1) * page_size)
-
-        async with self.async_session() as session:
-            result = await session.execute(stmt)
-            records = result.scalars().all()
-
-            # 优化 2: 使用覆盖索引进行 COUNT 查询，避免全表扫描
-            count_stmt = select(func.count(Lotdata.lottery_id)).where(
-                and_(*base_conditions)
+        return await self.query_lottery(
+            BiliLotDataQueryModel(
+                business_type=LotteryBusinessType.Charge,
+                status=q.status,
+                page_num=q.page_num,
+                page_size=q.page_size,
+                start_ts=q.start_ts,
+                end_ts=q.end_ts,
+                sender_uid=q.sender_uid,
+                min_participants=q.min_participants,
+                max_participants=q.max_participants,
+                sort_by=q.sort_by,
+                sort_order=q.sort_order,
             )
-            count_result = await session.execute(count_stmt)
-            total_count = count_result.scalar()
-
-            return records, total_count
+        )
 
     # endregion
 

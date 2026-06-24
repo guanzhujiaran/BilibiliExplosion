@@ -5,7 +5,7 @@ from Service.opus新版官方抽奖.bili_lottery_api.refresh_bili_lot_database i
 )
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
 from Service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import reserve_robot
-from Service.GetOthersLotDyn.get_other_lot_main import (
+from Service.GetOthersLotDyn import (
     get_others_lot_dyn as other_lot_class,
 )
 from Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy

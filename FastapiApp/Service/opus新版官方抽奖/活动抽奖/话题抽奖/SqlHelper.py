@@ -160,27 +160,33 @@ class SqlHelper(SqlHelperBase):
     # region b查询抽奖信息功能
     @log_sql_retry_wrapper(log=log)
     async def get_all_available_traffic_info_by_page(
-        self, page_num: int = 0, page_size: int = 0
+        self, page_num: int = 0, page_size: int = 0, keyword: str | None = None,
     ) -> tuple[Sequence[TTrafficCard], int]:
+        base_where = cast(
+            func.date_format(
+                TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")
+            ),
+            DateTime,
+        ) > func.now()
+        conditions = [base_where]
+
+        # 关键词筛选：对活动名称做 LIKE 模糊匹配
+        if keyword and keyword.strip():
+            conditions.append(TTrafficCard.name.like(f"%{keyword.strip()}%"))
+
+        base_order = (
+            cast(
+                func.date_format(
+                    TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")
+                ),
+                DateTime,
+            ).asc()
+        )
+
         sql = (
             select(TTrafficCard)
-            .where(
-                cast(
-                    func.date_format(
-                        TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")
-                    ),
-                    DateTime,
-                )
-                > func.now()
-            )
-            .order_by(
-                cast(
-                    func.date_format(
-                        TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")
-                    ),
-                    DateTime,
-                ).asc()
-            )
+            .where(and_(*conditions))
+            .order_by(base_order)
             .options(
                 joinedload(TTrafficCard.t_activity_lottery),
                 joinedload(TTrafficCard.t_activity_match_lottery),
@@ -194,15 +200,7 @@ class SqlHelper(SqlHelperBase):
         if page_num and page_size:
             offset_value = (page_num - 1) * page_size
             sql = sql.offset(offset_value).limit(page_size)
-        count_sql = select(func.count(TTrafficCard.id)).where(
-            cast(
-                func.date_format(
-                    TTrafficCard.card_desc, text("'%Y-%m-%d %H:%i:00截止'")
-                ),
-                DateTime,
-            )
-            > func.now()
-        )
+        count_sql = select(func.count(TTrafficCard.id)).where(and_(*conditions))
         async with self.async_session() as session:
             result = await session.execute(sql)
             data = result.scalars().unique().all()

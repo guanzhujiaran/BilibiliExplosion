@@ -225,7 +225,7 @@ class methods:
         :return:
         '''
         tcontent = re.sub('@(.{0,12}) ', '', tcontent)
-        tcontent = Converter('zh-hans').convert(tcontent)
+        tcontent = converter.convert(tcontent)
         tcontent = tcontent.lower()
         tcontent = tcontent.replace(' ', '')
         tcontent = tcontent.replace('传送门', '')

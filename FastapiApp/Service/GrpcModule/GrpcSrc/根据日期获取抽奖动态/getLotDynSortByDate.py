@@ -3,7 +3,7 @@ import datetime
 import json
 import time
 from typing import Sequence
-from Service.GetOthersLotDyn.get_other_lot_main import manual_reply_judge, HighlightWordList
+from Service.GetOthersLotDyn import manual_reply_judge
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Bilidyndetail
 import pandas as pd
 from log.base_log import myfastapi_logger
@@ -22,7 +22,6 @@ class LotDynSortByDate:
             os.makedirs(os.path.join(self.path, 'result'))
         self.sql = grpc_sql_helper
         self.BAPI = methods()
-        self.highlight_word_list = HighlightWordList  # 需要重点查看的关键词列表
         self.manual_reply_judge = manual_reply_judge
 
     def get_split_ts(self, between_ts: list[int]) -> list[list]:
@@ -147,11 +146,6 @@ class LotDynSortByDate:
                 else:
                     pub_time = ''
 
-                high_lights_list = []
-                for i in self.highlight_word_list:
-                    if i in dynamic_content:
-                        high_lights_list.append(i)
-
                 lot_dyn_data = lotDynData()
                 lot_dyn_data.dyn_url = dyn_url
                 lot_dyn_data.lot_rid = str(lot_rid)
@@ -161,7 +155,6 @@ class LotDynSortByDate:
                 lot_dyn_data.forward_count = str(forward_count)
                 lot_dyn_data.comment_count = str(comment_count)
                 lot_dyn_data.like_count = str(like_count)
-                lot_dyn_data.high_lights_list = high_lights_list
                 if self.manual_reply_judge.call('manual_reply_judge',dynamic_content):
                     lot_dyn_data.Manual_judge = True
                 else:
@@ -200,7 +193,6 @@ class LotDynSortByDate:
             df = pd.DataFrame(
                 [x.author_space, x.dyn_url, x.author_name, x.official_verify_type, x.pub_time, x.dynamic_content,
                  x.comment_count, x.forward_count, x.like_count, x.Manual_judge,
-                 ';'.join(x.high_lights_list),
                  x.lot_type,
                  x.lot_rid,
                  x.premsg,
@@ -211,7 +203,7 @@ class LotDynSortByDate:
                 df.columns = ['发布者空间', '动态链接', 'up昵称', '账号类型', '发布时间', '动态内容', '评论数',
                               '转发数',
                               '点赞数',
-                              '是否需要人工判断', '高亮关键词', '抽奖类型', '抽奖id', '需要携带的词']
+                              '是否需要人工判断', '抽奖类型', '抽奖id', '需要携带的词']
                 if not os.path.exists(os.path.join(self.path, f'result/{date_start.year}/{date_start.month}')):
                     os.makedirs(os.path.join(self.path, f'result/{date_start.year}/{date_start.month}'))
                 df.to_csv(

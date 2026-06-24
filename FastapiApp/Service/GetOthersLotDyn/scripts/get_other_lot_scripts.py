@@ -3,7 +3,7 @@ from typing import Sequence
 
 from Service.GetOthersLotDyn.Sql.models import TLotuserspaceresp
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper,get_other_lot_redis_manager
-from Service.GetOthersLotDyn.get_other_lot_main import BiliDynamicItem
+from Service.GetOthersLotDyn import BiliDynamicItem
 from Utils.Common import sem_gen, asyncio_gather
 
 _sem = sem_gen(100)
@@ -36,54 +36,11 @@ async def get_other_lot_by_lot_round_id(lot_round_id):
                                                          dynamic_raw_resp=orig_single_dynamic_resp)
                 all_dynamic_items.add(orig_bili_dynamic_item)
 
-    highlight_word_list = [
-        'jd卡',
-        '京东卡',
-        '京东E卡',
-        '红包',
-        '主机',
-        '显卡',
-        '电脑',
-        '天猫卡',
-        '猫超卡',
-        '现金',
-        '见盘',
-        '耳机',
-        '鼠标',
-        '手办',
-        '景品',
-        'ps5',
-        '内存',
-        '风扇',
-        '散热',
-        '水冷',
-        '硬盘',
-        '显示器',
-        '主板',
-        '电源',
-        '机箱',
-        'fgo',
-        '折现',
-        '樱瞳',
-        '盈通',
-        '🧧',
-        '键盘',
-        '游戏本',
-        '御神子',
-        '琉璃子',
-        '固态',
-        '手机',
-        'GB',
-        'TB',
-        'tb',  # 可能是显存大小，硬盘容量，内存条容量等参数
-        'switch',
-        '冰箱'
-    ]
     print(f'总共{len(all_dynamic_items)}条动态需要检查')
     task_set = set()
     for x in all_dynamic_items:
         await _sem.acquire()
-        task = asyncio.create_task(x.judge_lottery(highlight_word_list,lot_round_id))
+        task = asyncio.create_task(x.judge_lottery(lot_round_id))
         task.add_done_callback(lambda __: _sem.release())
         task_set.add(task)
     await asyncio_gather(

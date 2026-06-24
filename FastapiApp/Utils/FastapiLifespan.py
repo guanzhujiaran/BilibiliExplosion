@@ -1,11 +1,15 @@
 import asyncio
 import contextlib
+import os
 import socket
 
 from fastapi import FastAPI
 import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
+
+from alembic import command
+from alembic.config import Config as AlembicConfig
 
 from CONFIG import settings, CONFIG
 from Service.LangChainCompo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
@@ -19,7 +23,10 @@ from log.base_log import myfastapi_logger
 async def life_span(app: FastAPI):
     # 测试数据库连接
     await test_database_connections()
-    
+
+    # 执行 alembic 数据库迁移（upgrade head）
+    await run_alembic_migrations()
+
     # 测试各个服务的端口和 host 连通性
     await test_service_ports_and_hosts()
     
@@ -77,6 +84,29 @@ async def test_database_connections():
         except Exception as e:
             myfastapi_logger.critical(f"数据库 '{db_name}' 连接失败：{e}")
             raise SystemExit(f"数据库 '{db_name}' 连接失败：{e}") from e
+
+
+def _run_alembic_upgrade_head() -> None:
+    """同步执行 alembic upgrade head（在线模式）"""
+    # alembic.ini 位于 FastapiApp 根目录
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+    alembic_cfg = AlembicConfig(alembic_ini_path)
+    command.upgrade(alembic_cfg, "head")
+
+
+async def run_alembic_migrations() -> None:
+    """
+    执行 alembic 数据库迁移（upgrade head）。
+    alembic 使用同步 SQLAlchemy，通过 to_thread 放入线程执行以避免阻塞事件循环。
+    """
+    myfastapi_logger.critical("开始执行 alembic 数据库迁移（upgrade head）")
+    try:
+        await asyncio.to_thread(_run_alembic_upgrade_head)
+        myfastapi_logger.critical("alembic 数据库迁移完成")
+    except Exception as e:
+        myfastapi_logger.critical(f"alembic 数据库迁移失败：{e}")
+        raise SystemExit(f"alembic 数据库迁移失败：{e}") from e
 
 
 async def test_port_connectivity(host: str, port: int, service_name: str, timeout: float = 5.0) -> bool:

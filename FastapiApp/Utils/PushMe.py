@@ -1,5 +1,6 @@
 import datetime
 import json
+import time
 import traceback
 from collections import deque
 from functools import wraps
@@ -11,6 +12,8 @@ from Utils.代理.SealedRequests import my_async_httpx
 from log.base_log import pushme_logger
 
 push_msg_d = deque(maxlen=50)
+_last_push_time: float = 0
+_PUSH_INTERVAL = 60  # 推送间隔（秒），至少间隔1分钟
 
 
 def __preprocess_content(content: str) -> str:
@@ -31,9 +34,14 @@ async def _pushme(title: str, content: str, push_type: Literal[
                                                            "route",
                                                            "pay"
                                                        ] | None = 'text') -> Response:
+    global _last_push_time
     resp = Response()
     if content in push_msg_d:
         return Response()
+    now = time.time()
+    if now - _last_push_time < _PUSH_INTERVAL:
+        return Response()
+    _last_push_time = now
     push_msg_d.append(content)
     try:
         url = CONFIG.pushnotify.pushme.url
