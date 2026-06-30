@@ -41,7 +41,8 @@ from controller.v1.lotttery_database.bili import LotteryData
 from controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
 from controller.v1.ip_info import get_ip_info
 from controller.common import CommonRouter
-from controller.v1.background_service import MQController, BackgroundServiceController
+from controller.v1.background_service import BackgroundServiceController
+from controller.v1.mq import mq_controller as MQController
 from controller.v1.samsClub import samsClubController
 from controller.v1.captcha import captchaController
 from Models.common import CommonResponseModel

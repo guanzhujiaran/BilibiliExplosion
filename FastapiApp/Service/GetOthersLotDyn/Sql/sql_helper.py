@@ -5,10 +5,13 @@ import time
 from datetime import datetime
 from enum import StrEnum
 from typing import Union, List, Sequence
-
-from sqlalchemy import select, and_, func
+from Service.GetOthersLotDyn.svmJudgeBigLot.judgeBigLot import (
+big_lot_predict,
+)
+from Service.GetOthersLotDyn.parser.prize_extractor import (
+                    extract_prize_names, extract_lottery_time)
+from sqlalchemy import select, and_, func, text
 from sqlalchemy.dialects.mysql import insert as mysql_insert
-
 from CONFIG import CONFIG
 from Utils.dynamic_id_caculate import ts_2_fake_dynamic_id
 from Service.GetOthersLotDyn.Sql.models import (
@@ -18,6 +21,7 @@ from Service.GetOthersLotDyn.Sql.models import (
     TLotuserspaceresp,
     TRiddynid,
     TOthersLotInfo,
+    TLotGrandPrizeFlag,
 )
 from Utils.Common import sql_retry_wrapper
 from Utils.redisTool.RedisManager import RedisManagerBase
@@ -58,6 +62,7 @@ class __SqlHelper(SqlHelperBase):
     爬虫用获取其他抽奖数据库操作类
     使用独立的爬虫连接池，限制并发
     """
+
     def __init__(self):
         mysql_db_url = CONFIG.database.MYSQL.get_other_lot_URI
         super().__init__(mysql_db_url=mysql_db_url)
@@ -69,7 +74,8 @@ class __SqlHelper(SqlHelperBase):
             sql = (
                 select(TRiddynid.dynamic_id)
                 .filter(
-                    and_(TRiddynid.rid == rid, TRiddynid.dynamic_type == dynamic_type)
+                    and_(TRiddynid.rid == rid,
+                         TRiddynid.dynamic_type == dynamic_type)
                 )
                 .limit(1)
             )
@@ -107,7 +113,8 @@ class __SqlHelper(SqlHelperBase):
     async def getLatestRound(self) -> Union[TLotmaininfo, None]:
         async with self.async_session() as session:
             sql = (
-                select(TLotmaininfo).order_by(TLotmaininfo.lotRound_id.desc()).limit(1)
+                select(TLotmaininfo).order_by(
+                    TLotmaininfo.lotRound_id.desc()).limit(1)
             )
             res = await session.execute(sql)
             ret: TLotmaininfo = res.scalars().first()
@@ -190,6 +197,50 @@ class __SqlHelper(SqlHelperBase):
             return ret
 
     @sql_retry_wrapper
+    async def getAllLotDynByInsertTimeRange(
+        self,
+        created_at_start: int | None = None,
+        created_at_end: int | None = None,
+        pub_time_start: int | None = None,
+        pub_time_end: int | None = None,
+    ) -> Sequence[TLotdyninfo]:
+        """按收录时间(created_at)和发布时间(pubTime)范围过滤抽奖动态
+
+        :param created_at_start: 收录起始时间（Unix 秒），None 表示不限制下界
+        :param created_at_end: 收录结束时间（Unix 秒），None 表示不限制上界
+        :param pub_time_start: 发布起始时间（Unix 秒），None 表示不限制下界
+        :param pub_time_end: 发布结束时间（Unix 秒），None 表示不限制上界
+        """
+        conditions = [TLotdyninfo.isLot == True]
+        if created_at_start is not None:
+            conditions.append(
+                TLotdyninfo.created_at >= datetime.fromtimestamp(
+                    created_at_start)
+            )
+        if created_at_end is not None:
+            conditions.append(
+                TLotdyninfo.created_at <= datetime.fromtimestamp(
+                    created_at_end)
+            )
+        if pub_time_start is not None:
+            conditions.append(
+                TLotdyninfo.pubTime >= datetime.fromtimestamp(pub_time_start)
+            )
+        if pub_time_end is not None:
+            conditions.append(
+                TLotdyninfo.pubTime <= datetime.fromtimestamp(pub_time_end)
+            )
+        stmt = (
+            select(TLotdyninfo)
+            .filter(and_(*conditions))
+            .order_by(TLotdyninfo.pubTime.desc())
+        )
+        async with self.async_session() as session:
+            res = await session.execute(stmt)
+            ret = res.scalars().all()
+            return ret
+
+    @sql_retry_wrapper
     async def countValidLotByUidList(
         self, uid_list: list[int | str]
     ) -> dict[int, int]:
@@ -234,6 +285,9 @@ class __SqlHelper(SqlHelperBase):
             )
             if page_size:
                 sql = sql.offset(offset).limit(page_size)
+            else:
+                # 未给 page_size 时默认 limit 1000，避免全量返回
+                sql = sql.limit(1000)
             res = await session.execute(sql)
             ret = res.scalars().all()
             return ret
@@ -255,7 +309,8 @@ class __SqlHelper(SqlHelperBase):
     @sql_retry_wrapper
     async def isExistDynInfoByDynId(self, DynId: str) -> Union[TLotdyninfo, None]:
         async with self.async_session() as session:
-            sql = select(TLotdyninfo).filter(TLotdyninfo.dynId == DynId).limit(1)
+            sql = select(TLotdyninfo).filter(
+                TLotdyninfo.dynId == DynId).limit(1)
             res = await session.execute(sql)
             ret = res.scalars().first()
             return ret
@@ -297,18 +352,22 @@ class __SqlHelper(SqlHelperBase):
                 await session.merge(DynInfo)
                 await session.commit()
 
-        # 爬取阶段同步提取奖品信息并存入数据库
         if DynInfo.dynContent and DynInfo.dynId:
-            try:
-                from Service.GetOthersLotDyn.parser.prize_extractor import (
-                    extract_prize_names, extract_lottery_time)
-
-                prize_names = await extract_prize_names(DynInfo.dynContent)
-                lottery_time = await extract_lottery_time(DynInfo.dynContent)
-                if prize_names or lottery_time:
-                    await self.save_prize(DynInfo.dynId, prize_names, lottery_time)
-            except Exception:
-                pass  # 提取失败不影响主流程，接口端会做保险
+            prize_names = await extract_prize_names(DynInfo.dynContent)
+            lottery_time = await extract_lottery_time(DynInfo.dynContent)
+            if prize_names or lottery_time:
+                await self.save_prize(DynInfo.dynId, prize_names, lottery_time)
+        
+        if DynInfo.dynContent and DynInfo.dynId:
+            predictions = await big_lot_predict([DynInfo.dynContent])
+            if predictions:
+                is_grand = int(predictions[0])
+                await self.save_grand_prize_flag(
+                    ref_id=DynInfo.dynId,
+                    lot_type="common",
+                    is_grand_prize=is_grand,
+                )
+    
 
     @sql_retry_wrapper
     async def getDynInfoByDynamicId(self, dynamic_id: int | str) -> TLotdyninfo | None:
@@ -570,38 +629,48 @@ class __SqlHelper(SqlHelperBase):
         :return: (items, total)
         """
         async with self.async_session() as session:
-            # 基础查询
-            stmt = select(TLotdyninfo)
+            # 构建筛选条件（count 和 data 共用，确保一致）
+            conditions = []
             if is_lot is not None:
-                stmt = stmt.filter(TLotdyninfo.isLot == is_lot)
+                conditions.append(TLotdyninfo.isLot == is_lot)
             if pub_time_start is not None:
-                stmt = stmt.filter(TLotdyninfo.pubTime >= datetime.fromtimestamp(pub_time_start))
+                conditions.append(TLotdyninfo.pubTime >= datetime.fromtimestamp(pub_time_start))
             if pub_time_end is not None:
-                stmt = stmt.filter(TLotdyninfo.pubTime <= datetime.fromtimestamp(pub_time_end))
+                conditions.append(TLotdyninfo.pubTime <= datetime.fromtimestamp(pub_time_end))
             if created_at_start is not None:
-                stmt = stmt.filter(TLotdyninfo.created_at >= datetime.fromtimestamp(created_at_start))
+                conditions.append(TLotdyninfo.created_at >= datetime.fromtimestamp(created_at_start))
             if created_at_end is not None:
-                stmt = stmt.filter(TLotdyninfo.created_at <= datetime.fromtimestamp(created_at_end))
-
-            # 获取总数
-            count_stmt = select(func.count()).select_from(stmt.subquery())
-            total_res = await session.execute(count_stmt)
-            total = total_res.scalar() or 0
+                conditions.append(TLotdyninfo.created_at <= datetime.fromtimestamp(created_at_end))
 
             # 排序
             sort_column = getattr(TLotdyninfo, sort_by, TLotdyninfo.pubTime)
-            if sort_order == "asc":
-                stmt = stmt.order_by(sort_column.asc())
-            else:
-                stmt = stmt.order_by(sort_column.desc())
+            order_clause = sort_column.asc() if sort_order == "asc" else sort_column.desc()
 
-            # 分页
-            offset = (page_num - 1) * page_size
-            stmt = stmt.offset(offset).limit(page_size)
+            # 分页：max(0, ...) 防止 page_num=0 时 offset 为负数
+            offset = max(0, (page_num - 1) * page_size)
 
+            # 使用窗口函数在同一查询中获取数据和总数，
+            # 避免 autocommit=true 下 count 与 data 两条查询间数据被爬虫修改导致不一致
+            stmt = (
+                select(TLotdyninfo, func.count().over().label('_total_count'))
+                .where(*conditions)
+                .order_by(order_clause)
+                .offset(offset)
+                .limit(page_size)
+            )
             res = await session.execute(stmt)
-            items = res.scalars().all()
-            return list(items), total
+            rows = res.all()
+            items = [row[0] for row in rows]
+
+            if rows:
+                # 窗口函数返回的总数（不受 LIMIT/OFFSET 影响）
+                total = rows[0][1]
+            else:
+                # 无数据时回退到单独 count 查询（如 offset 超出范围）
+                count_stmt = select(func.count(TLotdyninfo.dynId)).where(*conditions)
+                total = (await session.execute(count_stmt)).scalar() or 0
+
+            return items, total
 
     # region 第三方抽奖奖品缓存
     @sql_retry_wrapper
@@ -639,6 +708,101 @@ class __SqlHelper(SqlHelperBase):
             )
             await session.execute(stmt)
             await session.commit()
+    # endregion
+
+    # region 大奖SVM判断结果子表
+    @sql_retry_wrapper
+    async def save_grand_prize_flag(self, ref_id: int, lot_type: str, is_grand_prize: int) -> None:
+        """保存或更新大奖SVM判断结果（原子 upsert）"""
+        async with self.async_session() as session:
+            stmt = mysql_insert(TLotGrandPrizeFlag).values(
+                ref_id=ref_id,
+                lot_type=lot_type,
+                is_grand_prize=is_grand_prize,
+            )
+            stmt = stmt.on_duplicate_key_update(
+                is_grand_prize=stmt.inserted.is_grand_prize,
+                predicted_at=text('CURRENT_TIMESTAMP'),
+            )
+            await session.execute(stmt)
+            await session.commit()
+
+    @sql_retry_wrapper
+    async def get_grand_prize_flags_by_ref_ids(
+        self, ref_ids: list[int], lot_type: str
+    ) -> dict[int, int]:
+        """批量查询大奖SVM判断结果，返回 {ref_id: is_grand_prize}"""
+        if not ref_ids:
+            return {}
+        async with self.async_session() as session:
+            stmt = select(TLotGrandPrizeFlag).filter(
+                and_(
+                    TLotGrandPrizeFlag.ref_id.in_(ref_ids),
+                    TLotGrandPrizeFlag.lot_type == lot_type,
+                )
+            )
+            res = await session.execute(stmt)
+            rows = res.scalars().all()
+            return {row.ref_id: row.is_grand_prize for row in rows}
+
+    @sql_retry_wrapper
+    async def get_ref_ids_without_grand_prize_flag(
+        self, lot_type: str, limit: int = 5000
+    ) -> list[int]:
+        """查询未做过SVM判断的记录ID列表（用于手动回填脚本）"""
+        async with self.async_session() as session:
+            # 找出所有抽奖动态的dynId，排除已有flag的
+            if lot_type == "common":
+                subq = select(TLotGrandPrizeFlag.ref_id).filter(
+                    TLotGrandPrizeFlag.lot_type == "common"
+                )
+                stmt = (
+                    select(TLotdyninfo.dynId)
+                    .filter(
+                        and_(
+                            TLotdyninfo.isLot == 1,
+                            TLotdyninfo.dynContent.isnot(None),
+                            TLotdyninfo.dynContent != "",
+                            TLotdyninfo.dynId.notin_(subq),
+                        )
+                    )
+                    .limit(limit)
+                )
+            else:
+                return []  # 其他类型暂不支持批量查询
+            res = await session.execute(stmt)
+            return [row[0] for row in res.all()]
+
+    @sql_retry_wrapper
+    async def get_all_common_lot_dyn_ids(self, limit: int = 10000) -> list[int]:
+        """获取所有普通抽奖动态的dynId（用于全量SVM判断脚本）"""
+        async with self.async_session() as session:
+            stmt = (
+                select(TLotdyninfo.dynId)
+                .filter(
+                    and_(
+                        TLotdyninfo.isLot == 1,
+                        TLotdyninfo.dynContent.isnot(None),
+                        TLotdyninfo.dynContent != "",
+                    )
+                )
+                .limit(limit)
+            )
+            res = await session.execute(stmt)
+            return [row[0] for row in res.all()]
+
+    @sql_retry_wrapper
+    async def get_dyn_info_batch(self, dyn_ids: list[int]) -> dict[int, str]:
+        """批量获取动态内容，返回 {dynId: dynContent}"""
+        if not dyn_ids:
+            return {}
+        async with self.async_session() as session:
+            stmt = select(TLotdyninfo.dynId, TLotdyninfo.dynContent).filter(
+                TLotdyninfo.dynId.in_(dyn_ids)
+            )
+            res = await session.execute(stmt)
+            rows = res.all()
+            return {row[0]: row[1] for row in rows if row[1]}
     # endregion
 
 

@@ -38,7 +38,8 @@ from controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatis
 from controller.v1.ip_info import get_ip_info
 from controller.v1.background_service import BackgroundServiceController
 from controller.common import CommonRouter
-from controller.v1.background_service import MQController
+from controller.v1.mq import mq_controller as MQController
+from controller.v1.mq.rpc_info_controller import router as RpcInfoRouter
 from controller.v1.samsClub import samsClubController
 from controller.v1.captcha import captchaController
 from Models.common import CommonResponseModel
@@ -54,6 +55,7 @@ app.include_router(get_ip_info.router)
 app.include_router(BackgroundServiceController.router)
 app.include_router(CommonRouter.router)
 app.include_router(MQController.router)
+app.include_router(RpcInfoRouter)
 app.include_router(captchaController.router)
 app.include_router(samsClubController.router)
 app.include_router(zhuanlanController.router)

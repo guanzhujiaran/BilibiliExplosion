@@ -126,4 +126,8 @@ async def _test_msg_pub(
     return RabbitMQTestMsgModel(a=int(time.time()), b=ret, c={1: ret}, d=[ret])
 
 
+# 导入 lottery_data 模块以触发 @rpc_subscriber 装饰器注册 RPC handler
+# 必须放在所有 @router.subscriber 注册之后，确保 broker 已就绪
+from controller.v1.mq import lottery_data  # noqa: F401, E402
+
 __all__ = ["router"]

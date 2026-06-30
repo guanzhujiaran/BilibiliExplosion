@@ -25,7 +25,7 @@ if not args.logger:
     print('关闭日志输出')
     logger.remove()
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
-from controller.v1.background_service.MQController import router
+from controller.v1.mq.mq_controller import router
 import fastapi
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend

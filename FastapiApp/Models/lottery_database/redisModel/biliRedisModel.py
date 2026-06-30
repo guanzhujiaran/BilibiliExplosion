@@ -34,6 +34,9 @@ class BiliLiveLotteryRedis(RedisManagerBase):
                 start_index = (page_num - 1) * page_size
                 end_index = start_index + page_size
                 all_lot_infos = all_lot_infos[start_index:end_index]
+            else:
+                # 未给分页参数时默认只返回前 1000 条，避免全量返回
+                all_lot_infos = all_lot_infos[:1000]
             return all_lot_infos, total_num
         return [], 0
 

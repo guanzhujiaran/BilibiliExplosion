@@ -362,6 +362,9 @@ class _SqlHelper(SqlHelperBase):
         if page_number and page_size:
             offset_value = (page_number - 1) * page_size
             sql = sql.offset(offset_value).limit(page_size)
+        else:
+            # 未给分页参数时默认 limit 1000，避免全量返回
+            sql = sql.limit(1000)
         count_sql = select(func.count(TUpReserveRelationInfo.ids)).filter(and_clause)
         async with self.async_session() as session:
             result = await session.execute(sql)

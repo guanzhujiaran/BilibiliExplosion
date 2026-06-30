@@ -1,5 +1,6 @@
 # 使用joblib加载模型
 # 或
+import asyncio
 import os
 
 import jieba3
@@ -21,27 +22,27 @@ def preprocess_text(text):
     except Exception as e:
         return text
 
-def big_reserve_predict(da_list: list[str]) -> list[int]:
-    if len(da_list) == 0:
+def _big_reserve_predict_sync(da_list: list[str]) -> list[int]:
+    """SVM 大奖判断的同步实现"""
+    if not da_list:
         return []
-
-    X_list = []
-    for i in da_list:
-        X_list.append(preprocess_text(i))
+    X_list = [preprocess_text(i) for i in da_list]
     X = loaded_vector.transform(X_list)
-    predictions = loaded_model.predict(X)
+    return loaded_model.predict(X)
 
-    return predictions
+async def big_reserve_predict(da_list: list[str]) -> list[int]:
+    """异步执行 SVM 大奖判断（在线程池中运行以避免阻塞事件循环）"""
+    return await asyncio.to_thread(_big_reserve_predict_sync, da_list)
 
 
 if __name__ == '__main__':
-    rest = big_reserve_predict(
+    rest = asyncio.run(big_reserve_predict(
         [
             '星极破冰1000W电源*1份、冰心360水冷*1份、琥珀海景房机箱*1份、耕升周边*5份',
             '预约有奖：随机隐藏款手办一份*1份',
             '预约有奖：万代随机景品一个*1份',
             '预约有奖：肩颈按摩仪*1份'
         ]
-    )
+    ))
     print(rest)
     print(len(rest))

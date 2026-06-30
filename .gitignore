@@ -48,4 +48,3 @@ venv/
 .history
 .env
 /volumes
-FastapiApp/alembic/versions

@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy import BigInteger, Column, DateTime, ForeignKeyConstraint, Index, Integer, JSON, TIMESTAMP, Text, text
+from sqlalchemy import BigInteger, Column, DateTime, ForeignKeyConstraint, Index, Integer, JSON, String, TIMESTAMP, Text, text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
 from sqlalchemy.orm.base import Mapped
@@ -110,4 +110,19 @@ class TOthersLotInfo(Base):
     dynId = mapped_column(BigInteger, primary_key=True, server_default=text('(0)'))
     prize_names = mapped_column(JSON, comment='ModelScope 提取的奖品名称列表')
     lottery_time = mapped_column(Text, comment='ModelScope 提取的开奖时间字符串')
+    created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+
+
+class TLotGrandPrizeFlag(Base):
+    """抽奖大奖SVM判断结果子表 — 独立于原有表，不破坏原有代码逻辑"""
+    __tablename__ = 't_lot_grand_prize_flag'
+    __table_args__ = (
+        Index('idx_ref_id_type', 'ref_id', 'lot_type', unique=True),
+    )
+
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ref_id = mapped_column(BigInteger, nullable=False, comment='关联原始记录的ID (dynId/business_id/sid)')
+    lot_type = mapped_column(String(32), nullable=False, comment='抽奖类型: common/reserve/official/charge')
+    is_grand_prize = mapped_column(TINYINT(1), nullable=False, comment='是否大奖: 1-是, 0-否')
+    predicted_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='SVM判断时间')
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))

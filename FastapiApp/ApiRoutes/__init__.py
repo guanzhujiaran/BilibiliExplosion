@@ -51,6 +51,9 @@ class RouterPrefix(StrEnum):
     # 达摩模型前缀
     DAMO = "/damo"  # 达摩机器学习前缀
 
+    # RPC 服务前缀
+    RPC = "/api/v1/rpc"  # RPC 服务信息前缀
+
 
 class RouterTags(StrEnum):
     """API路由标签枚举 - 用于OpenAPI文档分组"""
@@ -67,6 +70,7 @@ class RouterTags(StrEnum):
     COMMON = "CommonRouter"  # 公共路由
     MQ_TEST = "MQ测试"  # 消息队列测试
     DAMO = "modelscope达摩机器学习"  # 达摩机器学习服务
+    RPC = "RPC服务"  # RPC 服务信息
 
 
 class RouterPaths(StrEnum):
@@ -150,6 +154,9 @@ class RouterPaths(StrEnum):
     
     # ==================== MQ测试路由 ====================
     RABBITMQ_TEST_PUBLISH = "/rabbitmq_test_publish"  # RabbitMQ测试消息发布
+
+    # ==================== RPC 服务路由 ====================
+    GET_RPC_METHODS = "/methods"  # 获取所有 RPC 方法信息
     
     # ==================== 公共路由 ====================
     GET_LIVE_LOTS = "/v1/get/live_lots"  # 获取直播抽奖
@@ -272,7 +279,7 @@ class RouterModule(StrEnum):
     ZHUILAN = "controller.v1.lotttery_database.bili.zhuanlan.zhuanlanController"  # 专栏模块
     IP_INFO = "controller.v1.ip_info.get_ip_info"  # IP信息模块
     BACKGROUND_SERVICE = "controller.v1.background_service.BackgroundServiceController"  # 后台服务模块
-    MQ_CONTROLLER = "controller.v1.background_service.MQController"  # MQ控制器模块
+    MQ_CONTROLLER = "controller.v1.mq.mq_controller"  # MQ控制器模块
     COMMON = "controller.common.CommonRouter"  # 公共路由模块
     CAPTCHA = "controller.v1.captcha.captchaController"  # 验证码模块
     SAMS_CLUB = "controller.v1.samsClub.samsClubController"  # Sams Club模块

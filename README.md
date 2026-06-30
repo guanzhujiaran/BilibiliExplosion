@@ -66,6 +66,65 @@
    docker-compose up -d
    ```
 
+## 数据库版本管理 (Alembic)
+
+项目通过 Alembic 管理 6 个 MySQL 数据库的 schema 版本，通过 `-x db=xxx` 指定目标库：
+
+```bash
+cd FastapiApp
+
+# 查看各数据库当前版本
+alembic -x db=biliopusdb  current
+alembic -x db=bilidb      current
+alembic -x db=bili_reserve current
+alembic -x db=dyndetail   current
+alembic -x db=proxy_db    current
+alembic -x db=samsclub    current
+
+# 生成迁移脚本 (autogenerate 对比模型与数据库自动生成)
+alembic -x db=biliopusdb revision --autogenerate -m "描述此次变更"
+
+# 执行迁移到最新版本
+alembic -x db=biliopusdb upgrade head
+
+# 回滚一个版本
+alembic -x db=biliopusdb downgrade -1
+
+# 查看迁移历史
+alembic -x db=biliopusdb history
+```
+
+### 数据库对应关系
+
+| `-x db=` | 数据库 | 主要表 |
+|-----------|--------|--------|
+| `biliopusdb` | 普通抽奖动态库 | `t_lotdyninfo` / `t_lot_grand_prize_flag` 等 |
+| `bilidb` | 话题抽奖库 | `t_topic` / `t_traffic_card` 等 |
+| `bili_reserve` | 预约抽奖库 | `t_up_reserve_relation_info` 等 |
+| `dyndetail` | 动态详情库 | `bilidyndetail` / `lotdata` 等 |
+| `proxy_db` | 代理数据库 | `proxy_tab` / `available_proxy` |
+| `samsclub` | 山姆会员店库 | `spu_info` / `spu_category` 等 |
+
+## SVM 大奖判断脚本
+
+对所有已入库的抽奖数据执行 SVM 判断，将结果写入 `t_lot_grand_prize_flag` 子表：
+
+```bash
+cd FastapiApp
+
+# 预演模式（查看有多少条待判断，不实际写入）
+python3 scripts/judge_all_grand_prize_flags.py --dry-run
+
+# 正式执行（默认每批200条，仅判断未标记的记录）
+python3 scripts/judge_all_grand_prize_flags.py
+
+# 自定义批次大小
+python3 scripts/judge_all_grand_prize_flags.py --batch-size 500
+
+# 强制重新判断所有记录（覆盖已有结果）
+python3 scripts/judge_all_grand_prize_flags.py --force-update
+```
+
 ## 许可证
 
 MIT

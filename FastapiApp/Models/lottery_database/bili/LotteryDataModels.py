@@ -169,12 +169,45 @@ class CommonLotteryResp(CustomBaseModel):
     repostCount: Optional[int] = 0
     likeCount: Optional[int] = 0
     officialLotType: OfficialLotType | None
-    officialLotId: str
+    officialLotId: str = ""
     isOfficialAccount: int
     isManualReply: str
     isFollowed: int
     isLot: int
     hashTag: str
+    isBigLot: int = Field(default=0, description="SVM 大奖判断结果: 1-大奖, 0-非大奖")
+
+    @field_validator("officialLotType", mode="before")
+    @classmethod
+    def _empty_str_to_none_official_lot_type(cls, v):
+        # 数据库中可能存储了空字符串，需转换为 None 以通过枚举校验
+        if v == "" or v is None:
+            return None
+        return v
+
+    @field_validator("officialLotId", "dynamicUrl", "authorName", "dynContent", "isManualReply", "hashTag", mode="before")
+    @classmethod
+    def _str_none_to_empty(cls, v):
+        # 数据库中这些文本字段可能为 None，转为空字符串
+        if v is None:
+            return ""
+        return v
+
+    @field_validator("isOfficialAccount", "isFollowed", "isLot", "up_uid", mode="before")
+    @classmethod
+    def _int_none_to_zero(cls, v):
+        # 数据库中这些整数字段可能为 None，转为 0
+        if v is None:
+            return 0
+        return v
+
+    @field_validator("pubTime", mode="before")
+    @classmethod
+    def _pubtime_none_to_epoch(cls, v):
+        # 数据库中 pubTime 可能为 None，转为 Unix epoch
+        if v is None:
+            return datetime.fromtimestamp(0)
+        return v
 
 
 class OfficialLotteryResp(CustomBaseModel):
@@ -250,9 +283,12 @@ class LiveLotteryResp(CustomBaseModel):
 
 
 class AllLotteryResp(CustomBaseModel):
-    common_lottery: list[CommonLotteryResp] = Field(..., description="一般抽奖")
+    common_lottery: list[CommonLotteryResp] = Field(..., description="一般抽奖（分页后）")
+    common_lottery_total: int = Field(
+        default=0, description="一般抽奖总数（分页前），用于前端计算总页数"
+    )
     must_join_common_lottery: list[CommonLotteryResp] = Field(
-        ..., description="必抽的一般抽奖"
+        ..., description="必抽的一般抽奖（来自当前页）"
     )
     reserve_lottery: list[ReserveInfoResp] = Field(..., description="必抽的预约抽奖")
     official_lottery: list[OfficialLotteryResp] = Field(

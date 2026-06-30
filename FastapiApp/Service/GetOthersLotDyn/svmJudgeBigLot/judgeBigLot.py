@@ -1,3 +1,4 @@
+import asyncio
 import os
 import jieba3
 import pickle
@@ -17,27 +18,28 @@ def preprocess_text(text):
         print(f"Error processing text: {text}")
         return text
 
-def big_lot_predict(da_list: list[str])->list[int]:
-    if len(da_list)==0:
+def _big_lot_predict_sync(da_list: list[str]) -> list[int]:
+    """SVM 大奖判断的同步实现"""
+    if len(da_list) == 0:
         return []
-
-    x_list=[]
-    for i in da_list:
-        processed_text = preprocess_text(i)
-        x_list.append(processed_text)
+    x_list = [preprocess_text(i) for i in da_list]
     x = loaded_vector.transform(x_list)
     predictions = loaded_model.predict(x)
     return predictions
 
+async def big_lot_predict(da_list: list[str]) -> list[int]:
+    """异步执行 SVM 大奖判断（在线程池中运行以避免阻塞事件循环）"""
+    return await asyncio.to_thread(_big_lot_predict_sync, da_list)
+
 
 if __name__ == '__main__':
-    rest = big_lot_predict(
+    rest = asyncio.run(big_lot_predict(
         [
             """#互动抽奖#影石旗舰影像运动相机Ace Pro 2正式发布！
  AI双芯出动，画质更出众；4K60fps夜景录像，暗光画质「天花板」；全新一代徕卡SUMMARIT镜头，树立旗舰运动影像新标杆！
 【关注@影石Insta360 】转发+评论此动态，11月22日抽送一台Ace Pro 2 （中奖规则见置顶评论）"""
 
         ]
-    )
+    ))
     print(rest)
 

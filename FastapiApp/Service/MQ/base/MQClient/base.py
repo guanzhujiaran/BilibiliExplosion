@@ -30,9 +30,7 @@ class BaseFastStreamMQ:
 
 
 router = RabbitRouter(
-    CONFIG.RabbitMQConfig.broker_url,
-    include_in_schema=True,
-    logger=None,
+    url=CONFIG.RabbitMQConfig.broker_url,
 )
 
 

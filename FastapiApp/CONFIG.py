@@ -188,7 +188,7 @@ class RabbitMQConfig:
     pwd = settings.RABBITMQ_PASSWORD
     protocol = "amqp"
     queue_name_list = [x.value for x in QueueName]
-    broker_url = f"{protocol}://{user}:{pwd}@{host}:{port}/"
+    broker_url = f"{protocol}://{user}:{pwd}@{host}:{port}/?heartbeat=180"
 
 
 class _SeleniumConfig:

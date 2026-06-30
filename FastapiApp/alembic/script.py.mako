@@ -4,6 +4,7 @@ Revision ID: ${up_revision}
 Revises: ${down_revision | comma,n}
 Create Date: ${create_date}
 
+数据库: 请在运行 alembic 时通过 -x db=xxx 指定，version_table 由 env.py 自动管理。
 """
 from typing import Sequence, Union
 

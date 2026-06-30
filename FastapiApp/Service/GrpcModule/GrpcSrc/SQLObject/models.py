@@ -64,6 +64,7 @@ class Lotdata(Base):
     followed = mapped_column(BigInteger)
     reposted = mapped_column(BigInteger)
     custom_extra_key = mapped_column(TEXT)
+    is_grand_prize = mapped_column(TINYINT(1), nullable=False, server_default=text('0'), comment='SVM 大奖判断结果: 1-大奖, 0-非大奖')
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 

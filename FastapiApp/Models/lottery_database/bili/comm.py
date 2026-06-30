@@ -43,18 +43,7 @@ class BiliLotDataStatusEnum(Enum):
 
 class LotteryPaginationParams(RequestPaginationParams):
     """抽奖分页参数，继承自通用页码分页参数"""
-
-    # 不设置最大值限制，符合项目规范
-    page_size: int = Field(
-        default=10, ge=0, le=100, description="每页数量，最小值为 0,最大为 100",
-        json_schema_extra={
-            "filter_display_name": "每页条数",
-            "filter_widget": "number",
-            "filter_description": "每页返回数量",
-            "filter_placeholder": "输入每页条数",
-        },
-    )
-
+    pass
 
 class LotterySearchPaginationParams(LotteryPaginationParams):
     """抽奖搜索分页参数，包含 keyword"""
@@ -138,6 +127,21 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
             ],
             "filter_description": "按抽奖状态筛选",
             "filter_default": "unfinished",
+        },
+    )
+
+    # 是否大奖筛选
+    is_grand_prize: Optional[bool] = Field(
+        default=None, description="是否大奖: True-是, False-否, None-不过滤",
+        json_schema_extra={
+            "filter_display_name": "是否大奖",
+            "filter_widget": "select",
+            "filter_param_type": "enum",
+            "filter_enum_values": [
+                {"label": "是", "value": "true"},
+                {"label": "否", "value": "false"},
+            ],
+            "filter_description": "SVM判断是否为大奖",
         },
     )
 

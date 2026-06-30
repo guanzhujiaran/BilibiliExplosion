@@ -486,6 +486,12 @@ class SQLHelper(SqlHelperBase):
         if q.keyword is not None and q.keyword.strip():
             base_conditions.append(Lotdata.lottery_result.like(f"%{q.keyword.strip()}%"))
 
+        # 大奖筛选：is_grand_prize=True 只返回大奖，False 只返回非大奖，None 不过滤
+        if q.is_grand_prize is True:
+            base_conditions.append(Lotdata.is_grand_prize == 1)
+        elif q.is_grand_prize is False:
+            base_conditions.append(Lotdata.is_grand_prize == 0)
+
         # 时间快捷筛选（优先级高于单独的 start_ts/end_ts）
         import datetime as dt
         if q.created_at_preset is not None:
@@ -512,9 +518,12 @@ class SQLHelper(SqlHelperBase):
         else:
             stmt = stmt.order_by(Lotdata.lottery_time.asc())
 
-        # 应用分页
+        # 应用分页：page_num 从 1 开始，offset 由 BiliLotDataQueryModel.offset 统一计算
+        # 未给分页参数时默认 limit 1000，避免全量返回导致性能问题
         if q.page_num and q.page_size:
-            stmt = stmt.limit(q.page_size).offset((q.page_num - 1) * q.page_size)
+            stmt = stmt.limit(q.page_size).offset(q.offset)
+        else:
+            stmt = stmt.limit(1000)
 
         async with self.async_session() as session:
             result = await session.execute(stmt)
@@ -551,6 +560,7 @@ class SQLHelper(SqlHelperBase):
                 max_participants=q.max_participants,
                 sort_by=q.sort_by,
                 sort_order=q.sort_order,
+                is_grand_prize=q.is_grand_prize,
             )
         )
 
@@ -576,6 +586,7 @@ class SQLHelper(SqlHelperBase):
                 max_participants=q.max_participants,
                 sort_by=q.sort_by,
                 sort_order=q.sort_order,
+                is_grand_prize=q.is_grand_prize,
             )
         )
 
@@ -650,6 +661,26 @@ class SQLHelper(SqlHelperBase):
         :return:更新 返回{'mode':'update'}
                 插入 返回{'mode':'insert'}
         """
+        # 入库时进行 SVM 大奖判断，将结果写入 is_grand_prize 字段
+        from Service.GetOthersLotDyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
+
+        prize_cmts = [
+            lot_data_dict.get("first_prize_cmt"),
+            lot_data_dict.get("second_prize_cmt"),
+            lot_data_dict.get("third_prize_cmt"),
+        ]
+        lottery_text = " ".join(filter(lambda a: a, prize_cmts)).strip()
+        if lottery_text:
+            try:
+                predictions = await big_reserve_predict([lottery_text])
+                is_grand_prize = int(predictions[0]) if predictions else 0
+            except Exception as e:
+                self.log.error(f"SVM 大奖判断失败，默认 0: {e}")
+                is_grand_prize = 0
+        else:
+            is_grand_prize = 0
+        lot_data_dict["is_grand_prize"] = is_grand_prize
+
         async with self.async_session() as session:
             lottery_id = lot_data_dict.get("lottery_id")
             existing_record = await session.execute(

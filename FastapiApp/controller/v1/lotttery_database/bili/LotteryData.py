@@ -118,6 +118,7 @@ async def api_GetMustReserveLottery(
             pub_time_preset=pagination.pub_time_preset,
             sort_by=pagination.sort_by,
             sort_order=pagination.sort_order,
+            is_grand_prize=pagination.is_grand_prize,
         ),
         background_task=background_task,
     )
@@ -156,6 +157,7 @@ async def api_GetMustOfficialLottery(
             pub_time_preset=pagination.pub_time_preset,
             sort_by=pagination.sort_by,
             sort_order=pagination.sort_order,
+            is_grand_prize=pagination.is_grand_prize,
         )
     )
     return CommonResponseModel(
@@ -195,6 +197,7 @@ async def api_GetChargeLottery(
             pub_time_preset=pagination.pub_time_preset,
             sort_by=pagination.sort_by,
             sort_order=pagination.sort_order,
+            is_grand_prize=pagination.is_grand_prize,
         )
     )
     return CommonResponseModel(
@@ -243,19 +246,53 @@ async def api_GetTopicLottery(
 @router.post(
     RouterPaths.GET_ALL_LOTTERY,
     name=RouterNames.GET_ALL_LOTTERY,
-    summary="获取一轮的所有抽奖信息",
+    summary="获取所有抽奖信息（按收录时间和发布时间过滤，支持分页）",
     response_model=CommonResponseModel[AllLotteryResp],
     description="""
-获取svm判断过的必抽的预约抽奖数据和官方抽奖数据    
+获取svm判断过的必抽的预约抽奖数据和官方抽奖数据，按收录时间(created_at)和发布时间(pubTime)过滤普通抽奖
+普通抽奖列表支持分页：page_num 从 0 开始，page_size 默认 1000（最大 1000），page_size=0 时返回全部
         """,
     response_model_exclude_none=True,
 )
 async def api_GetAllLottery(
-    round_num: int = Query(
-        ge=1,
-    )
+    created_at_preset: TimePresetEnum | None = Query(
+        default=None,
+        description="收录时间快捷筛选: 1d/3d/5d/7d/14d/30d，默认不筛选",
+    ),
+    created_at_start: int | None = Query(
+        default=None, ge=0, description="收录起始时间（Unix 秒），preset 优先级高于此字段"
+    ),
+    created_at_end: int | None = Query(
+        default=None, ge=0, description="收录结束时间（Unix 秒）"
+    ),
+    pub_time_preset: TimePresetEnum | None = Query(
+        default=None,
+        description="发布时间快捷筛选: 1d/3d/5d/7d/14d/30d，默认不筛选",
+    ),
+    pub_time_start: int | None = Query(
+        default=None, ge=0, description="发布起始时间（Unix 秒），preset 优先级高于此字段"
+    ),
+    pub_time_end: int | None = Query(
+        default=None, ge=0, description="发布结束时间（Unix 秒）"
+    ),
+    page_num: int = Query(
+        default=1, ge=1, description="页码，从 1 开始，最小值为 1"
+    ),
+    page_size: int = Query(
+        default=1000, ge=1, le=1000,
+        description="每页数量，最大 1000，默认 1000，最小值为 1",
+    ),
 ):
-    result = await get_all_lottery(round_num)
+    result = await get_all_lottery(
+        created_at_preset=created_at_preset,
+        created_at_start=created_at_start,
+        created_at_end=created_at_end,
+        pub_time_preset=pub_time_preset,
+        pub_time_start=pub_time_start,
+        pub_time_end=pub_time_end,
+        page_num=page_num,
+        page_size=page_size,
+    )
     return CommonResponseModel(data=result)
 
 
@@ -354,7 +391,8 @@ async def api_Search(
     pagination: LotterySearchPaginationParams,
 ):
     # 转换为 offset-limit 形式传递给底层函数
-    offset = (pagination.page_num - 1) * pagination.page_size
+    # max(0, ...) 防止 page_num=0 时 offset 为负数导致 SQL 语法错误
+    offset = max(0, (pagination.page_num - 1) * pagination.page_size)
     result: List[Lotdata] = await search_lottery_text(
         pagination.keyword, limit=pagination.page_size, offset=offset
     )

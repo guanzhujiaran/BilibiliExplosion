@@ -141,11 +141,12 @@ class GetOthersLotDyn:
             time_limit=30 * 24 * 3600,
             order_by_ts_desc=False
         )
-        is_lot_list = await asyncio.to_thread(big_reserve_predict,
-                                              [' '.join(
-                                                  [x.first_prize_cmt, x.second_prize_cmt if x.second_prize_cmt else '',
-                                                   x.third_prize_cmt if x.third_prize_cmt else '']) for x
-                                                  in recent_official_lot_data])
+        is_lot_list = await big_reserve_predict(
+            [' '.join(
+                [x.first_prize_cmt, x.second_prize_cmt if x.second_prize_cmt else '',
+                 x.third_prize_cmt if x.third_prize_cmt else '']) for x
+                in recent_official_lot_data]
+        )
         ret_list = []
         for i in range(len(recent_official_lot_data)):
             if is_lot_list[i] == 1:
@@ -169,7 +170,7 @@ class GetOthersLotDyn:
         all_lot = await SqlHelper.getAllLotDynByTimeLimit()
         all_lot = [x for x in all_lot if is_need_lot(x, self.get_dyn_ts)]
         dyn_content_list = [x.dynContent for x in all_lot]
-        is_lot_list = await asyncio.to_thread(big_lot_predict, dyn_content_list)
+        is_lot_list = await big_lot_predict(dyn_content_list)
         ret_list = []
         for i in range(len(all_lot)):
             if is_lot_list[i] == 1:
@@ -186,7 +187,7 @@ class GetOthersLotDyn:
         recent_lots: list[TUpReserveRelationInfo] = [x for x in all_lots if
                                                      x.etime and x.etime - int(time.time()) < 2 * 3600 * 24]
         reserve_infos: list[str] = [x.text for x in recent_lots]
-        is_lot_list = await asyncio.to_thread(big_reserve_predict, reserve_infos)
+        is_lot_list = await big_reserve_predict(reserve_infos)
         ret_list = []
         ret_info_list = []
         for i in range(len(recent_lots)):
