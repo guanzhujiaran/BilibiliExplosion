@@ -3,7 +3,7 @@ name = "fastapiapp"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "aio-pika>=9.5.7",
     "aiodns>=3.5.0",
@@ -27,8 +27,8 @@ dependencies = [
     "fastapi[all]>=0.119.1",
     "faststream[rabbit]>=0.6.2",
     "google>=3.0.0",
-    "grpcio==1.75.1",
-    "grpcio-tools==1.75.1",
+    "grpcio==1.82.0rc2",
+    "grpcio-tools==1.82.0rc2",
     "httpx>=0.28.1",
     "jieba3>=1.0.2",
     "jsonlines>=4.0.0",
@@ -37,18 +37,18 @@ dependencies = [
     "modelscope>=1.38.0",
     "msgpack>=1.1.2",
     "opencc>=1.3.1",
-    "pandas>=2.3.3",
+    "pandas>=3.0.3",
     "patchright>=1.55.2",
     "pika>=1.3.2",
     "playwright>=1.55.0",
-    "protobuf==6.32.1",
+    "protobuf==7.35.1",
     "py-mini-racer>=0.6.0",
     "pydantic>=2.12.3",
     "pyexecjs2>=1.6.1",
     "pymilvus==3.0.0",
     "python-dotenv>=1.1.1",
     "python-socks>=2.7.2",
-    "redis>=6.4.0",
+    "redis>=8.0.0",
     "requests>=2.32.5",
     "scikit-learn==1.7.2",
     "socksio>=1.0.0",
@@ -57,14 +57,12 @@ dependencies = [
     "strawberry-graphql[fastapi]>=0.284.1",
     "strawberry-sqlalchemy-mapper>=0.7.0",
     "uvicorn[standard]>=0.38.0",
-    "vllm"
 ]
 [tool.uv]
 index-strategy = "unsafe-best-match"
 python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone/"
-prerelease = "allow"
 [tool.uv.sources]
-vllm = { index = "vllm-nightly-cpu" }
+vllm = { index = "vllm-cpu" }
 torch = { index = "pytorch-cpu" }
 [project.optional-dependencies]
 test = [
@@ -87,8 +85,8 @@ url = "https://mirrors.volces.com/pypi/simple/"
 name = "huaweicloud"
 url = "https://mirrors.huaweicloud.com/repository/pypi/simple/"
 [[tool.uv.index]]
-name = "vllm-nightly-cpu"
-url = "https://wheels.vllm.ai/nightly/cpu"
+name = "vllm-cpu"
+url = "https://wheels.vllm.ai/0.24.0/cpu"
 explicit = true
 [[tool.uv.index]]
 name = "pytorch-cpu"

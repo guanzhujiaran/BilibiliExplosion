@@ -56,7 +56,7 @@ class CookieWrapper:
     ck: BiliWebCookie
     ua: str
     expire_ts: int
-    times_352: bool = 0
+    times_352: int = 0
 
     @property
     def able(self) -> bool:

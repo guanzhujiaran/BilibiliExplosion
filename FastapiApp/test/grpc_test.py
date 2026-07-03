@@ -9,7 +9,7 @@ from bilibili.app.dynamic.v2.dynamic_pb2 import Config
 from bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from google.protobuf.json_format import MessageToDict
 from bilibili.app.dynamic.v2 import dynamic_pb2
-from Service.GrpcModule.Utils.metadata.makeMetaData import make_metadata
+from Utils.GrpcUtils.metadata.makeMetaData import make_metadata
 
 event_loop = asyncio.get_event_loop()
 uid = 2

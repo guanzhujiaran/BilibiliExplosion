@@ -14,8 +14,8 @@ from Service.BaseCrawler.plugin.statusPlugin import (
 )
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GrpcModule.Grpc.Bapi.BiliApi import reserve_relation_info, get_lot_notice
-from Utils.dynamic_id_caculate import dynamic_id_2_ts
-from Utils.PushMe import a_pushme
+from Utils.通用.dynamic_id_caculate import dynamic_id_2_ts
+from Utils.推送.PushMe import a_pushme
 from Utils.redisTool.RedisManager import RedisManagerBase
 
 BusinessIdType = Annotated[int, Field(gt=0)]  # 正整数

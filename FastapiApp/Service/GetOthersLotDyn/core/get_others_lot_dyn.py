@@ -14,7 +14,7 @@ from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
 from Service.opus新版官方抽奖.预约抽奖.db.models import TUpReserveRelationInfo
 from Service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper as mysq
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from Utils.代理.mdoel.RequestConf import RequestConf
 
 

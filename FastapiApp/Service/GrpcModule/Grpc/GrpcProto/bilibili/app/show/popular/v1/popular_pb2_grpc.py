@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.app.show.popular.v1 import popular_pb2 as bilibili_dot_app_dot_show_dot_popular_dot_v1_dot_popular__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/app/show/popular/v1/popular_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/app/show/popular/v1/popular_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class PopularStub(object):
+class PopularStub:
     """热门
     """
 
@@ -42,7 +42,7 @@ class PopularStub(object):
                 _registered_method=True)
 
 
-class PopularServicer(object):
+class PopularServicer:
     """热门
     """
 
@@ -69,7 +69,7 @@ def add_PopularServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Popular(object):
+class Popular:
     """热门
     """
 

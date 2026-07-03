@@ -1,7 +1,7 @@
 import random
 import re
 
-from Service.GrpcModule.Utils.CONST import ANDROID_VERSIONS
+from Utils.GrpcUtils.CONST import ANDROID_VERSIONS
 
 
 class UserAgentParser:

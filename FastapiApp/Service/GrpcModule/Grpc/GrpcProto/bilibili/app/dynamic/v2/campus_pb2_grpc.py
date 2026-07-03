@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.app.dynamic.v2 import campus_pb2 as bilibili_dot_app_dot_dynamic_dot_v2_dot_campus__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/app/dynamic/v2/campus_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/app/dynamic/v2/campus_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class CampusStub(object):
+class CampusStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -41,7 +41,7 @@ class CampusStub(object):
                 _registered_method=True)
 
 
-class CampusServicer(object):
+class CampusServicer:
     """Missing associated documentation comment in .proto file."""
 
     def WaterFlowRcmd(self, request, context):
@@ -67,7 +67,7 @@ def add_CampusServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Campus(object):
+class Campus:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod

@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.api.probe.v1 import probe_pb2 as bilibili_dot_api_dot_probe_dot_v1_dot_probe__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/api/probe/v1/probe_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/api/probe/v1/probe_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ProbeStub(object):
+class ProbeStub:
     """服务可用性探针
     """
 
@@ -57,7 +57,7 @@ class ProbeStub(object):
                 _registered_method=True)
 
 
-class ProbeServicer(object):
+class ProbeServicer:
     """服务可用性探针
     """
 
@@ -120,7 +120,7 @@ def add_ProbeServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Probe(object):
+class Probe:
     """服务可用性探针
     """
 
@@ -233,7 +233,7 @@ class Probe(object):
             _registered_method=True)
 
 
-class ProbeServiceStub(object):
+class ProbeServiceStub:
     """服务可用性探针
     """
 
@@ -270,7 +270,7 @@ class ProbeServiceStub(object):
                 _registered_method=True)
 
 
-class ProbeServiceServicer(object):
+class ProbeServiceServicer:
     """服务可用性探针
     """
 
@@ -345,7 +345,7 @@ def add_ProbeServiceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ProbeService(object):
+class ProbeService:
     """服务可用性探针
     """
 

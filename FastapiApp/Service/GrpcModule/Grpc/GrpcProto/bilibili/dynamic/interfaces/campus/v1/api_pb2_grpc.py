@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.dynamic.interfaces.campus.v1 import api_pb2 as bilibili_dot_dynamic_dot_interfaces_dot_campus_dot_v1_dot_api__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/dynamic/interfaces/campus/v1/api_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/dynamic/interfaces/campus/v1/api_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class CampusStub(object):
+class CampusStub:
     """
     """
 
@@ -42,7 +42,7 @@ class CampusStub(object):
                 _registered_method=True)
 
 
-class CampusServicer(object):
+class CampusServicer:
     """
     """
 
@@ -69,7 +69,7 @@ def add_CampusServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Campus(object):
+class Campus:
     """
     """
 

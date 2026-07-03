@@ -13,7 +13,7 @@ from Service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import t
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TClickAreaCard, TTopicCreator, TTopicItem, \
     TTrafficCard, \
     TFunctionalCard, TTopDetails, TTopic, TCapsule
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 
 
 class TopicParams(CustomBaseModelHashable):

@@ -22,7 +22,7 @@ from alembic.script import ScriptDirectory
 from CONFIG import settings, CONFIG
 from Service.LangChainCompo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from Utils.Common import GLOBAL_SCHEDULER, asyncio_gather
+from Utils.通用.Common import GLOBAL_SCHEDULER, asyncio_gather
 from controller.v1.background_service import BackgroundServiceController
 from log.base_log import myfastapi_logger
 

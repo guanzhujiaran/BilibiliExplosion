@@ -1,7 +1,7 @@
 from sqlalchemy import Executable
 from sqlalchemy.ext.asyncio import async_sessionmaker
-from Utils.Common import log_sql_retry_wrapper
-from Utils.SqlalchemyTool import sqlalchemy_session_factory
+from Utils.通用.Common import log_sql_retry_wrapper
+from Utils.数据库.SqlalchemyTool import sqlalchemy_session_factory
 from log.base_log import myfastapi_logger
 
 

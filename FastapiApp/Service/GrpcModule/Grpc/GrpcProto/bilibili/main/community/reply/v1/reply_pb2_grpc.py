@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.main.community.reply.v1 import reply_pb2 as bilibili_dot_main_dot_community_dot_reply_dot_v1_dot_reply__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/main/community/reply/v1/reply_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/main/community/reply/v1/reply_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ReplyStub(object):
+class ReplyStub:
     """评论区
     """
 
@@ -92,7 +92,7 @@ class ReplyStub(object):
                 _registered_method=True)
 
 
-class ReplyServicer(object):
+class ReplyServicer:
     """评论区
     """
 
@@ -239,7 +239,7 @@ def add_ReplyServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Reply(object):
+class Reply:
     """评论区
     """
 

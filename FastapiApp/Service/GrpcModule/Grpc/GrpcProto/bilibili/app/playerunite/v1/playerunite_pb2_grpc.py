@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.app.playerunite.v1 import playerunite_pb2 as bilibili_dot_app_dot_playerunite_dot_v1_dot_playerunite__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/app/playerunite/v1/playerunite_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/app/playerunite/v1/playerunite_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class PlayerStub(object):
+class PlayerStub:
     """统一视频url
     """
 
@@ -42,7 +42,7 @@ class PlayerStub(object):
                 _registered_method=True)
 
 
-class PlayerServicer(object):
+class PlayerServicer:
     """统一视频url
     """
 
@@ -69,7 +69,7 @@ def add_PlayerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Player(object):
+class Player:
     """统一视频url
     """
 

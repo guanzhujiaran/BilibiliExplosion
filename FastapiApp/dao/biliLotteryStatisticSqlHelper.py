@@ -10,7 +10,7 @@ from Models.lottery_database.bili.LotteryDataModels import (
     BiliUserInfoSimple,
 )
 from Service.GrpcModule.GrpcSrc.SQLObject.models import BiliUserInfo, BiliAtariInfo
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import official_lot_logger
 

@@ -23,9 +23,9 @@ from Service.GrpcModule.GrpcSrc.根据日期获取抽奖动态.getLotDynSortByDa
 )
 from Service.opus新版官方抽奖.Model.BaseLotModel import BaseSuccCounter, BaseStopCounter
 from Service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
-from Utils.Common import sem_gen, asyncio_gather
-from Utils.dynamic_id_caculate import dynamic_id_2_ts
-from Utils.PushMe import a_pushme
+from Utils.通用.Common import sem_gen, asyncio_gather
+from Utils.通用.dynamic_id_caculate import dynamic_id_2_ts
+from Utils.推送.PushMe import a_pushme
 
 
 class StopCounter(BaseStopCounter):

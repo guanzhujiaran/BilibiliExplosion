@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.api.ticket.v1 import ticket_pb2 as bilibili_dot_api_dot_ticket_dot_v1_dot_ticket__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/api/ticket/v1/ticket_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/api/ticket/v1/ticket_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class TicketStub(object):
+class TicketStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -46,7 +46,7 @@ class TicketStub(object):
                 _registered_method=True)
 
 
-class TicketServicer(object):
+class TicketServicer:
     """Missing associated documentation comment in .proto file."""
 
     def GetTicket(self, request, context):
@@ -84,7 +84,7 @@ def add_TicketServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Ticket(object):
+class Ticket:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod

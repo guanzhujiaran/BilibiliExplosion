@@ -6,13 +6,13 @@ import time
 from dataclasses import field, dataclass
 from typing import Dict, Tuple
 from log.base_log import toutiao_api_logger
-from Utils.CommMethods import methods as Bilimethods
+from Utils.通用.CommMethods import methods as Bilimethods
 from Service.toutiao.src.Tools.ApiTools.APIRespTool import FeedListApi, FeedData, CellType
 from Service.toutiao.src.Tools.Common.ZlibToos import strToBlob
 from Service.toutiao.src.Tools.ApiTools.API import ToutiaoAPI
 from Service.toutiao.src.db.SqlHelper import SqlHelperSpaceFeedDataDb
 from Service.toutiao.src.db.models import TFEEDDATA
-from Utils.Common import asyncio_gather
+from Utils.通用.Common import asyncio_gather
 
 current_dir = os.path.dirname(__file__)
 

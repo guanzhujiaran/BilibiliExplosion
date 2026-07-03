@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 import requests
 from loguru import logger
 
-import Utils.CommMethods
+import Utils.通用.CommMethods
 
 
 class Crypto:

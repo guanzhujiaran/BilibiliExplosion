@@ -2,7 +2,7 @@ import inspect
 from datetime import datetime
 from Service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin, CrawlerHealthStatus
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from log.base_log import pushme_logger
 
 

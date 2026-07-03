@@ -6,8 +6,8 @@ from typing import Any, AsyncGenerator, List
 from Service.BaseCrawler.base.core import BaseCrawler
 from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus, ParamsType
 from Service.BaseCrawler.plugin.base import CrawlerPlugin
-from Utils.Common import asyncio_gather
-from Utils.PushMe import a_pushme
+from Utils.通用.Common import asyncio_gather
+from Utils.推送.PushMe import a_pushme
 
 
 class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
@@ -275,7 +275,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         - 此时任务状态已设置为 pending
         - 修改 worker_model.params 会影响重试时的任务参数
         """
-        pass
+        worker_model.retry_count += 1
 
     async def on_worker_start(self, worker_model: WorkerModel):
         """
@@ -366,74 +366,76 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
         否则当 max_sem=1 时可能导致死锁。
         """
         while True:
-            # 先从队列获取任务（不受信号量限制）
             worker_model: WorkerModel | None = await self.task_queue.get()
-            
-            # 检查是否为哨兵值（None 表示退出信号）
             if worker_model is None:
+                self.log.debug(self.format_log("收到退出信号，退出任务处理。"))
                 self.task_queue.task_done()
                 return
-            
+
             should_requeue = False
 
             async with self.sem:
                 try:
+                    self.log.debug(self.format_log(f"开始处理任务: {worker_model.params}"))
                     await self.on_worker_start(worker_model)
-                    try:
-                        async with asyncio.timeout(self.worker_max_timeout):
-                            fetch_result = await self.handle_fetch(worker_model.params)
-                    except asyncio.TimeoutError:
-                        if self.log_timeout_error:
-                            self.log.exception(
-                                self.format_log(f"爬取超时：{self.worker_max_timeout}s")
-                            )
-                        fetch_result = WorkerStatus.timeoutError
-                    except Exception as e:
-                        if self.log_error:
-                            self.log.exception(self.format_log(f"爬取异常：{e}"))
-                            await a_pushme(title=f"爬取任务[{self.__class__.__name__}]异常", content=f'{worker_model}\n{e}')
-                        await asyncio.sleep(self.worker_error_delay)
-                        fetch_result = WorkerStatus.fail
-                    if not isinstance(fetch_result, WorkerStatus):
-                        worker_model.fetchStatus = WorkerStatus.complete
-                    else:
-                        worker_model.fetchStatus = fetch_result
-
-                    # 判断是否需要重试（检查重试次数限制）
-                    if worker_model.fetchStatus == WorkerStatus.fail and self.requeue_on_fetch_fail:
-                        if self.max_retries < 0 or worker_model.retry_count < self.max_retries:
-                            should_requeue = True
-                            worker_model.retry_count += 1
-                        else:
-                            self.log.warning(
-                                self.format_log(
-                                    f"任务已达到最大重试次数({self.max_retries})，不再重试：{worker_model.params}"
-                                )
-                            )
-                    elif worker_model.fetchStatus == WorkerStatus.timeoutError and self.requeue_on_timeout:
-                        if self.max_retries < 0 or worker_model.retry_count < self.max_retries:
-                            should_requeue = True
-                            worker_model.retry_count += 1
-                        else:
-                            self.log.warning(
-                                self.format_log(
-                                    f"任务已达到最大重试次数({self.max_retries})，不再重试：{worker_model.params}"
-                                )
-                            )
+                    worker_model.fetchStatus = await self._execute_fetch(worker_model)
+                    self.log.debug(self.format_log(f"完成任务状态: {worker_model.fetchStatus}"))
+                    should_requeue = self._should_requeue(worker_model)
                 finally:
-                    # 确保标记任务完成，即使发生未预期异常
                     self.task_queue.task_done()
 
-            # 在 sem 作用域外重新入队，避免死锁
             if should_requeue:
-                worker_model.fetchStatus = WorkerStatus.pending
-                # 调用 on_task_requeue 钩子，允许子类修改任务参数
-                await self.on_task_requeue(worker_model)
-                # 重新入队直接放入队列，不需要背压控制
-                # 因为这是已存在的任务重试，不是新生成的任务
-                await self.task_queue.put(worker_model)
+                self.log.debug(self.format_log(f"任务需要重试: {worker_model.params}"))
+                await self._handle_requeue(worker_model)
 
             await self.on_worker_end(worker_model)
+
+    async def _execute_fetch(self, worker_model: WorkerModel) -> WorkerStatus:
+        """执行 fetch 操作，处理超时和异常，返回任务状态。"""
+        try:
+            async with asyncio.timeout(self.worker_max_timeout):
+                fetch_result = await self.handle_fetch(worker_model.params)
+        except asyncio.TimeoutError:
+            if self.log_timeout_error:
+                self.log.exception(self.format_log(f"爬取超时：{self.worker_max_timeout}s"))
+            return WorkerStatus.timeoutError
+        except Exception as e:
+            if self.log_error:
+                self.log.exception(self.format_log(f"爬取异常：{e}"))
+                await a_pushme(title=f"爬取任务[{self.__class__.__name__}]异常", content=f'{worker_model}\n{e}')
+            await asyncio.sleep(self.worker_error_delay)
+            return WorkerStatus.fail
+
+        if not isinstance(fetch_result, WorkerStatus):
+            return WorkerStatus.complete
+        return fetch_result
+
+    def _should_requeue(self, worker_model: WorkerModel) -> bool:
+        """判断任务是否需要重试，检查状态和重试次数限制。"""
+        status = worker_model.fetchStatus
+        if status == WorkerStatus.fail and not self.requeue_on_fetch_fail:
+            return False
+        if status == WorkerStatus.timeoutError and not self.requeue_on_timeout:
+            return False
+        if status not in (WorkerStatus.fail, WorkerStatus.timeoutError):
+            return False
+
+        if self.max_retries < 0 or worker_model.retry_count < self.max_retries:
+            worker_model.retry_count += 1
+            return True
+
+        self.log.warning(
+            self.format_log(
+                f"任务已达到最大重试次数({self.max_retries})，不再重试：{worker_model.params}"
+            )
+        )
+        return False
+
+    async def _handle_requeue(self, worker_model: WorkerModel):
+        """将任务重新入队（在信号量作用域外执行，避免死锁）。"""
+        worker_model.fetchStatus = WorkerStatus.pending
+        await self.on_task_requeue(worker_model)
+        await self.task_queue.put(worker_model)
 
     async def run(self, init_params: ParamsType | None = None):
         """
@@ -494,7 +496,7 @@ class UnlimitedCrawler(BaseCrawler[ParamsType], Generic[ParamsType]):
             async for param in self.key_params_gen(init_params):
                 worker_model = WorkerModel(params=param, seqId=seqId)
                 seqId += 1
-
+                self.log.debug(self.format_log(f"生成任务: {param}"))
                 if await self.is_stop():
                     self.log.info(self.format_log("触发终止条件，停止生成新任务。"))
                     break

@@ -21,20 +21,20 @@ from httpx import ProxyError, RemoteProtocolError, ConnectError, ConnectTimeout,
 from python_socks._errors import ProxyConnectionError, ProxyTimeoutError, ProxyError as SocksProxyError
 from socksio import ProtocolError
 from CONFIG import CONFIG
-from Service.GrpcModule.Utils.GrpcMsgTools import raw_resp_content_2_dict
-from Utils.PushMe import a_pushme
+from Utils.GrpcUtils.GrpcMsgTools import raw_resp_content_2_dict
+from Utils.推送.PushMe import a_pushme
 from log.base_log import BiliGrpcApi_logger, Voucher352_logger
 from Service.GrpcModule.Models.CustomRequestErrorModel import Request352Error
 from Service.GrpcModule.Models.GrpcApiBaseModel import MetaDataWrapper
-from Service.GrpcModule.Utils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
-from Service.GrpcModule.Utils.极验.极验点击验证码 import geetest_v3_breaker
+from Utils.GrpcUtils.metadata.makeMetaData import make_metadata, is_useable_Dalvik, gen_trace_id
+from Utils.GrpcUtils.极验.极验点击验证码 import geetest_v3_breaker
 from Service.GrpcModule.Grpc.Bapi.BiliApi import get_latest_version_builds, resource_abtest_abserver
 from Service.GrpcModule.Grpc.Bapi.models import LatestVersionBuild
 from Service.GrpcModule.Grpc.GrpcProto.bilibili.app.archive.middleware.v1.preload_pb2 import PlayerArgs
 from Service.GrpcModule.Grpc.GrpcProto.bilibili.app.dynamic.v2.dynamic_pb2 import Config, DynDetailReq, \
     DynDetailReply, DynDetailsReq, DynSpaceReq, DynSpaceRsp
 from Service.GrpcModule.Grpc.GrpcProto.bilibili.app.dynamic.v2.dynamic_pb2_grpc import DynamicStub
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 from Utils.代理.SealedRequests import my_async_httpx
 from Utils.代理.数据库操作.ProxyCommOp import get_available_proxy
 from Utils.代理.数据库操作.ProxyEvent import handle_proxy_succ, handle_proxy_request_fail, handle_proxy_352, \
@@ -43,7 +43,6 @@ from Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from Utils.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from Utils.代理.数据库操作.comm import get_scheme_ip_port_form_proxy_dict
 
-current_file_path = os.path.abspath(os.path.dirname(__file__))
 ad_extra = "979CD936E441AD18D4DA41A86BACC8168EBE79AA118B33339F80B75C0CD4A1992D36232462A56F4CC7C7E93BFAE33C2EDEA22F19D1DB9C021604DAB304035F8FD09CC00070E1751C322FDA073FE81362163A60D48EF19F79929E98E56202A64E9CC418923EBCC72B8D676AA9423D243CBA9F7F544456356D3F20CC8EF065EB485098B21A7C39249AAA2944F0878CEB6400A58D841A31395E563CC9C9D0EC24F85A956FC3C0BEBBD28A04F20CA973344137F8583324E9EA32FE172917A0F5068F6C711E0EE360CB39DF943E09D7479CDA7584FB8AAECF4207C2AE5CCB652D1B0E445CCF13E1DAC3DFE45D86190945FECFBD82ED8DFE3BC7182313203A9DF1D93BDB0B32F3542EF35D78A806F29C5F1A66D94790E1B3077361C48F0F6C62202E21E7ACB125B18093EA08237831BB23E545610141CEEDC7D7D3F1B2D8AA4E305B91C22C112EF4E12C0C90034FFE36E32304A3926E7AD04BB7A23C3068DBF1DD757C6B43837275DF468FB0AFA297B71A8C9422175EB48877DA262EF6A41351614E89C05AB4E47292E4B405E49BE54E5F0D30D6FBCB8B441433444A8C0E4B37EDF281170B66BA8CDF704CFEBC6C9C8A8AFD9B35B55A716DEF754409DE4300E5F7A609D6EFC5FF10F253513971D6D8F09552184C7ECF6A62358BB3DBF2DA3B2FFFB77A2F8D34E8DADECDAA842A5A4966797C03"
 
 
@@ -125,8 +124,8 @@ class BiliGrpc:
         self.channel_list = ['master', '360',
                              'bili', 'xiaomi', 'google']  # 渠道包列表
         with open(os.path.join(
-                current_file_path,
-                '../Utils/user-agents_dalvik_application_2-1.json'
+                CONFIG.root_dir,
+                'Utils/GrpcUtils/user-agents_dalvik_application_2-1.json'
         ), 'r',
                 encoding='utf-8') as f:
             self.Dalvik_list = json.loads(f.read())
@@ -237,6 +236,7 @@ class BiliGrpc:
                             ticket=metadat_basic_info.ticket,
                             brand=metadat_basic_info.brand,
                         )
+                        self.grpc_api_any_log.debug(f'激活metadata成功！{md}')
                     except Exception:
                         self.grpc_api_any_log.exception('激活metadata失败！')
                     break
@@ -322,7 +322,7 @@ class BiliGrpc:
                 md: MetaDataWrapper = await self.metadata_productor(
                     {'proxy': {'http': self.my_proxy_addr, 'https': self.my_proxy_addr}})
             md_dict = dict(md.md)
-            headers.update(md_dict)
+            headers |= md_dict
             if not headers.get('x-bili-ticket'):
                 raise ValueError('headers中没有有效的x-bili-ticket！')
             new_headers = []
@@ -357,16 +357,21 @@ class BiliGrpc:
                 else:
                     data = b"\01" + \
                         len(proto_bytes).to_bytes(4, "big") + proto_bytes
-
-                resp = await my_async_httpx.request(method="post",
-                                                    url=url,
-                                                    data=data,
-                                                    headers=tuple(new_headers),
-                                                    # headers=dict(new_headers),
-                                                    timeout=self.timeout,
-                                                    proxies=proxy.proxy if not force_proxy else {
-                                                        'http': self.my_proxy_addr, 'https': self.my_proxy_addr},
-                                                    )
+                using_proxy = {
+                    'http': self.my_proxy_addr, 'https': self.my_proxy_addr} if force_proxy else proxy.proxy
+                self.grpc_api_any_log.debug(
+                    f'请求url：{url}\n请求body：{grpc_req_message}\n请求headers：{new_headers}\n请求代理：{using_proxy}')
+                resp = await my_async_httpx.request(
+                    method="post",
+                    url=url,
+                    data=data,
+                    headers=tuple(new_headers),
+                    # headers=dict(new_headers),
+                    timeout=self.timeout,
+                    proxies=using_proxy
+                )
+                self.grpc_api_any_log.debug(
+                    f'响应url：{url}\n响应body：{resp.text}\n响应headers：{resp.headers}')
                 resp.raise_for_status()
                 md.able(num_add=True)
                 if type(resp.headers.get('Grpc-status')) is not str and type(
@@ -430,13 +435,23 @@ class BiliGrpc:
                     curl_cffi.requests.exceptions.ProxyError, curl_cffi.requests.exceptions.SSLError,
                     curl_cffi.requests.exceptions.Timeout, curl_cffi.requests.exceptions.HTTPError,
                     TimeoutError
-            ):
+            ) as connect_error:
+                self.grpc_api_any_log.debug(
+                    f'请求url：{url}\n请求body：{grpc_req_message}\n请求headers：{new_headers}\n请求代理：{using_proxy}'
+                    f'连接错误：{connect_error}'
+                )
+                await asyncio.sleep(3)
                 if proxy_flag:
                     await handle_proxy_request_fail(proxy_tab=proxy, )
                     ipv6_proxy_weights += 1
                 else:
                     real_proxy_weights += 20
             except Request352Error as _352_err:
+                self.grpc_api_any_log.debug(
+                    f'请求url：{url}\n请求body：{grpc_req_message}\n请求headers：{new_headers}\n请求代理：{using_proxy}'
+                    f'352错误：{_352_err}'
+                )
+                await asyncio.sleep(3)
                 md.times_352 += 1  # -352报错就增加一次352次数，满了之后舍弃
                 ipv6_proxy_weights -= 10
                 if proxy:
@@ -453,6 +468,11 @@ class BiliGrpc:
                 else:
                     real_proxy_weights += 20
             except Exception as err:
+                self.grpc_api_any_log.debug(
+                    f'请求url：{url}\n请求body：{grpc_req_message}\n请求headers：{new_headers}\n请求代理：{using_proxy}'
+                    f'未知错误：{err}'
+                )
+                await asyncio.sleep(3)
                 if type(err) is DecodeError or type(err) is EncodeError:
                     self.grpc_api_any_log.error(
                         f'{func_name}\t'
@@ -545,13 +565,15 @@ class BiliGrpc:
     # endregion
 
     # region grpc请求接口
-    async def grpc_get_dynamic_detail_by_type_and_rid(self,
-                                                      rid: Union[int, str],
-                                                      dynamic_type: int = 2,
-                                                      force_proxy: bool = False) -> dict:
+    async def grpc_get_dynamic_detail_by_type_and_rid(
+            self,
+            rid: Union[int, str],
+            dynamic_type: int = 2,
+            force_proxy: bool = False
+    ) -> dict:
         """
         通过rid和动态类型特定获取一个动态详情
-        :param force_proxy:
+        :param force_proxy:是否强制使用代理
         :param dynamic_type:动态类型
         :param rid:动态rid
         :return:
@@ -650,9 +672,12 @@ bili_grpc = BiliGrpc()
 
 if __name__ == '__main__':
     async def _test():
-        # bili_grpc.my_proxy_addr = 'http://127.0.0.1:8080'  # mitm代理默认地址
-        result1 = await bili_grpc.grpc_get_dynamic_detail_by_type_and_rid(dynamic_type=2, rid=343543865,
-                                                                          force_proxy=True)
+        bili_grpc.my_proxy_addr = 'http://192.168.1.200:8080'  # mitm代理默认地址
+        result1 = await bili_grpc.grpc_get_dynamic_detail_by_type_and_rid(
+            dynamic_type=2,
+            rid=343543865,
+            force_proxy=True
+        )
         print(result1)
 
     asyncio.run(_test())

@@ -19,8 +19,8 @@ from CONFIG import CONFIG, database
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sql_log
 from Models.v1.background_service.background_service_model import ProxyStatusResp
-from Utils.Common import GLOBAL_SCHEDULER, log_sql_retry_wrapper, asyncio_gather
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.通用.Common import GLOBAL_SCHEDULER, log_sql_retry_wrapper, asyncio_gather
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 from Utils.redisTool.RedisManager import RedisManagerBase
 from Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, AvailableProxy
 from Utils.代理.数据库操作.available_proxy_sql_helper import sql_helper

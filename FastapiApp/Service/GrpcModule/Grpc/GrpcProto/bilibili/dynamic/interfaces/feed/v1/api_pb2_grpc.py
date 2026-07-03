@@ -6,7 +6,7 @@ import warnings
 from bilibili.dynamic.common import dynamic_pb2 as bilibili_dot_dynamic_dot_common_dot_dynamic__pb2
 from bilibili.dynamic.interfaces.feed.v1 import api_pb2 as bilibili_dot_dynamic_dot_interfaces_dot_feed_dot_v1_dot_api__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -19,14 +19,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/dynamic/interfaces/feed/v1/api_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/dynamic/interfaces/feed/v1/api_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class FeedStub(object):
+class FeedStub:
     """
     """
 
@@ -178,7 +178,7 @@ class FeedStub(object):
                 _registered_method=True)
 
 
-class FeedServicer(object):
+class FeedServicer:
     """
     """
 
@@ -529,7 +529,7 @@ def add_FeedServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Feed(object):
+class Feed:
     """
     """
 

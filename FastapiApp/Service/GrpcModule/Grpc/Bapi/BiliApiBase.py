@@ -4,7 +4,7 @@ import curl_cffi
 
 from Models.AntiRisk.Bili.WebCookie import BiliWebCookie
 from Service.GrpcModule.Models.ApiResponseModel import FrontendFingerSpiResp, BiliBaseResp
-from Service.GrpcModule.Utils.UserAgentParser import UserAgentParser
+from Utils.GrpcUtils.UserAgentParser import UserAgentParser
 from Service.GrpcModule.Grpc.Bapi.Constants import URL_FRONTEND_FINGER_SPI, URL_BILI_MAIN_PAGE, \
     URL_GEN_WEB_TICKET, URL_GAIA_EXCLIMB_WUZHI
 from Service.GrpcModule.Grpc.Bapi.Utils import request_wrapper

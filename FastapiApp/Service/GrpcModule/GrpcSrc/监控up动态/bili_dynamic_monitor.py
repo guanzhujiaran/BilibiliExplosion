@@ -7,8 +7,8 @@ import os
 import aiofiles
 
 from log.base_log import space_monitor_logger as log
-from Utils.Common import asyncio_gather
-from Utils.PushMe import async_pushme_try_catch_decorator, a_pushme
+from Utils.通用.Common import asyncio_gather
+from Utils.推送.PushMe import async_pushme_try_catch_decorator, a_pushme
 from Service.GrpcModule.Grpc.grpc_api import bili_grpc
 
 class BiliSpaceMonitor:

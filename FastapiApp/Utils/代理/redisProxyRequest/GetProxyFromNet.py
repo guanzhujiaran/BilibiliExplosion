@@ -18,7 +18,7 @@ from log.base_log import sql_log
 from Service.BaseCrawler.CrawlerType import UnlimitedCrawler
 from Service.BaseCrawler.model.base import WorkerStatus, CustomBaseModelHashable
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
-from Utils.Common import retry_wrapper, asyncio_gather
+from Utils.通用.Common import retry_wrapper, asyncio_gather
 from Utils.代理.SealedRequests import my_async_httpx
 from Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab
 from Utils.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
@@ -66,14 +66,21 @@ class GetProxyMethods(UnlimitedCrawler[ProxyParams]):
             return WorkerStatus.fail
 
     async def main(self, *args, **kwargs):
+        self.log.debug(f'{self.__class__.__name__}开始获取代理')
         await self.get_proxy()
+        self.log.debug(f'{self.__class__.__name__}获取代理完成')
+        self.log.debug(f'{self.__class__.__name__}开始检查代理')
         await self.run()
+        self.log.debug(f'{self.__class__.__name__}检查代理完成')
+        self.log.debug(f'{self.__class__.__name__}开始移除重复代理')
         await SQLHelper.remove_list_dict_data_by_proxy()
-        self.log.info(f'{self.__class__.__name__}移除重复代理')
+        self.log.debug(f'{self.__class__.__name__}移除重复代理完成')
+        self.log.debug(f'{self.__class__.__name__}开始检查redis数据')
         await SQLHelper.check_redis_data()
+        self.log.debug(f'{self.__class__.__name__}检查redis数据完成')
 
     def __init__(self):
-        self.proxy_list: list[ProxyParams] = []
+        self.proxy_list: list[ProxyParams | None] = []
         self._lock = asyncio.Lock()
         self.get_proxy_page = 10
         self.get_proxy_timestamp: int = 0

@@ -11,7 +11,7 @@ from Service.GrpcModule.GrpcSrc.获取取关对象.GetRmFollowingListV2 import g
 from Service.toutiao.src.FastApiReturns.SpaceFeedLotService.ToutiaoSpaceFeedLot import \
     toutiaoSpaceFeedLotService
 from Service.zhihu.获取知乎抽奖想法.根据用户空间获取想法.GetMomentsByUser import zhihu_lotScrapy
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 
 router = new_router()
 

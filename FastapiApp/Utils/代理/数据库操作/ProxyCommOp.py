@@ -66,11 +66,14 @@ async def get_available_proxy(
             # Found a proxy, exit the infinite loop and return it
             return proxy_tab, used_available_proxy
         else:
+            sql_log.debug(f"Attempt {attempt}: No usable proxy found, acquiring new ones...")
             try:
                 await get_proxy_methods.main()  # Fetch new proxies (likely puts into Redis)
+                sql_log.debug(f"Attempt {attempt}: New proxies acquired from the network.")
                 await SQLHelper.check_redis_data()
             except Exception as e:
                 sql_log.exception(f"Attempt {attempt}: Error during proxy acquisition process: {e}")
+            sql_log.debug(f"Attempt {attempt}: Waiting for {initial_retry_delay_seconds} seconds before retrying...")
             await asyncio.sleep(initial_retry_delay_seconds)
     proxy_tab = await SQLHelper.select_proxy("rand")
     return proxy_tab, used_available_proxy

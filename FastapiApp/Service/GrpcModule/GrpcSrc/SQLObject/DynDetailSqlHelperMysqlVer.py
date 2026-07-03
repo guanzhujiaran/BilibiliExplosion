@@ -33,8 +33,8 @@ from Models.lottery_database.bili.LotteryDataModels import (
     SortOrderEnum,
 )
 from Models.lottery_database.bili.comm import BiliLotDataStatusEnum, LotteryBusinessType
-from Utils.Common import log_sql_retry_wrapper
-from Utils.dynamic_id_caculate import ts_2_fake_dynamic_id
+from Utils.通用.Common import log_sql_retry_wrapper
+from Utils.通用.dynamic_id_caculate import ts_2_fake_dynamic_id
 from Service.GrpcModule.GrpcSrc.SQLObject.models import (
     Bilidyndetail,
     Lotdata,

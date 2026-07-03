@@ -68,7 +68,7 @@ from Service.lottery_database.bili_lotterty import (
 )
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
 
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from Models.rpc_models import RpcMethodName
 from Models.rpc_params import (
     GetReserveLotteryRpcParams,

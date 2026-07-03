@@ -10,7 +10,7 @@ from typing import Union
 import aiofiles
 
 from Service.opus新版官方抽奖.Model.GenerateCvModel import CvContent, OpusType
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from Utils.代理.SealedRequests import my_async_httpx
 from Utils.加密.wbi加密 import get_wbi_params
 

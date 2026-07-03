@@ -17,8 +17,8 @@ from Models.lottery_database.bili.LotteryDataModels import OfficialLotType
 from CONFIG import settings
 from Service.GetOthersLotDyn.Sql.models import TLotdyninfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
-from Utils.PushMe import a_pushme
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.推送.PushMe import a_pushme
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 
 
 def is_need_lot(lot_det: TLotdyninfo, get_dyn_ts: int) -> bool:

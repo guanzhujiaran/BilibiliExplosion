@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.app.interfaces.v1 import search_pb2 as bilibili_dot_app_dot_interfaces_dot_v1_dot_search__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/app/interfaces/v1/search_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/app/interfaces/v1/search_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class SearchStub(object):
+class SearchStub:
     """搜索
     """
 
@@ -47,7 +47,7 @@ class SearchStub(object):
                 _registered_method=True)
 
 
-class SearchServicer(object):
+class SearchServicer:
     """搜索
     """
 
@@ -86,7 +86,7 @@ def add_SearchServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Search(object):
+class Search:
     """搜索
     """
 
@@ -145,7 +145,7 @@ class Search(object):
             _registered_method=True)
 
 
-class SearchTestStub(object):
+class SearchTestStub:
     """
     """
 
@@ -162,7 +162,7 @@ class SearchTestStub(object):
                 _registered_method=True)
 
 
-class SearchTestServicer(object):
+class SearchTestServicer:
     """
     """
 
@@ -189,7 +189,7 @@ def add_SearchTestServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class SearchTest(object):
+class SearchTest:
     """
     """
 

@@ -27,7 +27,7 @@ from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GrpcModule.GrpcSrc.监控up动态.bili_dynamic_monitor import (
     bili_space_monitor,
 )
-from Utils.Common import GLOBAL_SCHEDULER
+from Utils.通用.Common import GLOBAL_SCHEDULER
 from Utils.代理.数据库操作.async_proxy_op_alchemy_mysql_ver import SQLHelper
 from ApiRoutes import RouterPaths, RouterNames
 from .base import new_router

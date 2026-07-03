@@ -1,6 +1,6 @@
 from CONFIG import CONFIG
 from Models.AntiRisk.Bili.WebCookie import BiliWebCookie
-from Service.GrpcModule.Utils.UserAgentParser import UserAgentParser
+from Utils.GrpcUtils.UserAgentParser import UserAgentParser
 from Service.GrpcModule.Grpc.Bapi.BiliCookie import get_bili_cookie, CookieWrapper
 from Utils.代理.mdoel.RequestConf import RequestConf
 

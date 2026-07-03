@@ -17,7 +17,7 @@ from Service.opus新版官方抽奖.预约抽奖.db.models import (
     TReserveRoundInfo,
     TUpReserveRelationInfo,
 )
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 
 lock = asyncio.Lock()
 

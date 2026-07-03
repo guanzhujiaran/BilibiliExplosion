@@ -11,7 +11,7 @@ import aiofiles
 import bs4
 import pandas as pd
 
-from Utils.CommMethods import methods
+from Utils.通用.CommMethods import methods
 from CONFIG import CONFIG
 from log.base_log import zhihu_api_logger
 from Service.PlayWright.Operator import PlaywrightOperator

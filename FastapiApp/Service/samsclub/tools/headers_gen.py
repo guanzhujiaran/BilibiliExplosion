@@ -9,7 +9,7 @@ from Models.v1.samsclub.samsclub_model import SamsClubHeadersModel, SamsClubEncr
 from Service.samsclub.tools.do_samsclub_encryptor import get_st, get_do_encrypt_result_str, \
     update_do_encrypt_key
 from Service.samsclub.tools.java_rand_gen import F65205aRandomIntGenerator
-from Utils.Common import retry_wrapper
+from Utils.通用.Common import retry_wrapper
 
 
 def sort_headers_with_missing_last(headers, desired_order: list[str] = None):

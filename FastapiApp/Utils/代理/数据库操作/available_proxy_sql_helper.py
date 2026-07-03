@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from CONFIG import CONFIG
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sql_log
-from Utils.Common import log_sql_retry_wrapper
+from Utils.通用.Common import log_sql_retry_wrapper
 from Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel import AvailableProxy, ProxyTab
 
 

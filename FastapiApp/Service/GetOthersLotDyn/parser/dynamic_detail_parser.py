@@ -9,7 +9,7 @@ from typing import Any
 
 from log.base_log import get_others_lot_logger as get_others_lot_log
 from Service.GetOthersLotDyn.parser.dynamic_detail_parsed import DynamicDetailParsed
-from Utils.dynamic_id_caculate import dynamic_id_2_ts
+from Utils.通用.dynamic_id_caculate import dynamic_id_2_ts
 
 
 def _safe_get(d: dict | None, *keys, default=None):

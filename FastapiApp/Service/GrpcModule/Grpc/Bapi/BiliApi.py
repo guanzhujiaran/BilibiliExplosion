@@ -8,7 +8,7 @@ from curl_cffi import requests
 from curl_cffi.requests import BrowserType
 
 from log.base_log import bapi_log
-from Service.GrpcModule.Utils.response.check_resp import check_reserve_relation_info
+from Utils.GrpcUtils.response.check_resp import check_reserve_relation_info
 from Service.GrpcModule.Grpc.Bapi.Constants import URL_GAIA_GET_AXE, URL_BILI_MAIN_PAGE, \
     URL_ABTEST_ABSERVER, URL_GET_WEB_AREA_LIST, \
     URL_DYNAMIC_DETAIL, URL_SPACE_DYNAMIC, URL_RESERVE_RELATION_INFO, URL_LOTTERY_NOTICE, URL_GET_WEB_TOPIC, \
@@ -16,7 +16,7 @@ from Service.GrpcModule.Grpc.Bapi.Constants import URL_GAIA_GET_AXE, URL_BILI_MA
 from Service.GrpcModule.Grpc.Bapi.RequestHandler import prepare_request_data
 from Service.GrpcModule.Grpc.Bapi.Utils import request_wrapper, appsign, gen_trace_id
 from Service.GrpcModule.Grpc.Bapi.models import LatestVersionBuild
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from Utils.代理.mdoel.RequestConf import RequestConf
 from Utils.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 from Utils.加密.wbi加密 import gen_dm_args, get_wbi_params
@@ -471,7 +471,7 @@ if __name__ == "__main__":
             hostuid=4237378,
             offset='',
             request_conf=RequestConf(
-                is_use_custom_proxy=True,
+                is_use_custom_proxy=False,
                 is_use_available_proxy=False,
                 is_use_cookie=True
             )
@@ -480,7 +480,12 @@ if __name__ == "__main__":
 
     async def _test_get_web_topic():
         resp = await get_web_topic(
-            1312441
+            1312441,
+            request_conf=RequestConf(
+                is_use_custom_proxy=False,
+                is_use_available_proxy=False,
+                is_use_cookie=True
+            )
         )
         print(resp)
         assert type(resp.get('code')) is int

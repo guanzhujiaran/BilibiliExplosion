@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.app.click.v1 import heartbeat_pb2 as bilibili_dot_app_dot_click_dot_v1_dot_heartbeat__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/app/click/v1/heartbeat_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/app/click/v1/heartbeat_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ClickStub(object):
+class ClickStub:
     """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
@@ -41,7 +41,7 @@ class ClickStub(object):
                 _registered_method=True)
 
 
-class ClickServicer(object):
+class ClickServicer:
     """Missing associated documentation comment in .proto file."""
 
     def HeartBeat(self, request, context):
@@ -67,7 +67,7 @@ def add_ClickServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Click(object):
+class Click:
     """Missing associated documentation comment in .proto file."""
 
     @staticmethod

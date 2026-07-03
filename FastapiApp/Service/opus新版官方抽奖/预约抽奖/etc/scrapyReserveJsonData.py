@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 import aiofiles
 import pandas
 
-from Utils.CommMethods import methods
+from Utils.通用.CommMethods import methods
 from dao.commStorageRedisObj import comm_storage_redis_obj
 from log.base_log import reserve_lot_logger
 from Models.base.custom_pydantic import CustomBaseModelHashable
@@ -26,7 +26,7 @@ from Service.opus新版官方抽奖.预约抽奖.db.models import (
     TUpReserveRelationInfo,
 )
 from Service.opus新版官方抽奖.预约抽奖.db.sqlHelper import bili_reserve_sqlhelper
-from Utils.Common import asyncio_gather
+from Utils.通用.Common import asyncio_gather
 
 BAPI = methods()
 

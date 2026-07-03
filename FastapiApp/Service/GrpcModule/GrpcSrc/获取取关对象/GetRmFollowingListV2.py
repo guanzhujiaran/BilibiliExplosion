@@ -11,8 +11,8 @@ from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.GetOthersLotDyn.Sql.models import TLotmaininfo, TLotdyninfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
 from Service.GetOthersLotDyn import BiliSpaceUserItem
-from Utils.Common import asyncio_gather
-from Utils.dynamic_id_caculate import dynamic_id_2_ts
+from Utils.通用.Common import asyncio_gather
+from Utils.通用.dynamic_id_caculate import dynamic_id_2_ts
 
 running_uids = set()
 

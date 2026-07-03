@@ -19,9 +19,9 @@ from Service.opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
 from Service.opus新版官方抽奖.Model.GenerateCvModel import CvContent
 from Service.opus新版官方抽奖.Model.OfficialLotModel import LotDetail
 from Service.opus新版官方抽奖.转发抽奖.生成专栏信息 import GenerateOfficialLotCv
-from Utils.Common import asyncio_gather
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
-from Utils.PushMe import a_pushme
+from Utils.通用.Common import asyncio_gather
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.推送.PushMe import a_pushme
 
 
 class ExtractOfficialLottery:

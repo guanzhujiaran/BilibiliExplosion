@@ -13,7 +13,7 @@ from sqlalchemy import select, and_, func, text
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.orm import selectinload
 from CONFIG import CONFIG
-from Utils.dynamic_id_caculate import ts_2_fake_dynamic_id
+from Utils.通用.dynamic_id_caculate import ts_2_fake_dynamic_id
 from Service.GetOthersLotDyn.Sql.models import (
     TLotmaininfo,
     TLotuserinfo,
@@ -23,7 +23,7 @@ from Service.GetOthersLotDyn.Sql.models import (
     TOthersLotInfo,
     TLotExtraInfo,
 )
-from Utils.Common import log_sql_retry_wrapper
+from Utils.通用.Common import log_sql_retry_wrapper
 from Utils.redisTool.RedisManager import RedisManagerBase
 from dao.base.sqlHelperBase import SqlHelperBase
 

@@ -30,8 +30,8 @@ if not settings.SHOW_LOG:
     logger.add(sink=sys.stdout, level="ERROR", colorize=True)
 
 from log.base_log import myfastapi_logger
-from Utils.PushMe import a_pushme
-from Utils.FastapiLifespan import life_span
+from Utils.推送.PushMe import a_pushme
+from Utils.FastAPI.FastapiLifespan import life_span
 from controller.damo import DamoML
 from controller.v1.ChatGpt3_5 import ReplySingle
 from controller.v1.lotttery_database.bili import LotteryData

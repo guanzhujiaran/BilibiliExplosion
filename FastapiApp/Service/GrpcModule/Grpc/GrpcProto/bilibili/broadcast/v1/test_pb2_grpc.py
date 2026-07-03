@@ -6,7 +6,7 @@ import warnings
 from bilibili.broadcast.v1 import test_pb2 as bilibili_dot_broadcast_dot_v1_dot_test__pb2
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -19,14 +19,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/broadcast/v1/test_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/broadcast/v1/test_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class TestStub(object):
+class TestStub:
     """服务端下发的测试专用消息，客户端debug/release包都会通过弹窗响应该消息
     后端平台 必须 限制该消息只能针对单个用户发送
 
@@ -46,7 +46,7 @@ class TestStub(object):
                 _registered_method=True)
 
 
-class TestServicer(object):
+class TestServicer:
     """服务端下发的测试专用消息，客户端debug/release包都会通过弹窗响应该消息
     后端平台 必须 限制该消息只能针对单个用户发送
 
@@ -76,7 +76,7 @@ def add_TestServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Test(object):
+class Test:
     """服务端下发的测试专用消息，客户端debug/release包都会通过弹窗响应该消息
     后端平台 必须 限制该消息只能针对单个用户发送
 
@@ -111,7 +111,7 @@ class Test(object):
             _registered_method=True)
 
 
-class Test2Stub(object):
+class Test2Stub:
     """
     """
 
@@ -128,7 +128,7 @@ class Test2Stub(object):
                 _registered_method=True)
 
 
-class Test2Servicer(object):
+class Test2Servicer:
     """
     """
 
@@ -155,7 +155,7 @@ def add_Test2Servicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Test2(object):
+class Test2:
     """
     """
 

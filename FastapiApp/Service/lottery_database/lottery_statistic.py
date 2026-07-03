@@ -5,8 +5,8 @@ from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticInfoR
     BiliLotStatisticRankTypeEnum, BiliLotStatisticLotTypeEnum, BiliLotStatisticLotteryResultResp, \
     BiliLotStatisticRankDateTypeEnum, BiliUserInfoSimple
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from Utils.Common import asyncio_gather
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.通用.Common import asyncio_gather
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 
 
 async def GetLotStatisticInfo(

@@ -64,9 +64,9 @@ from Service.lottery_database.bili_lotterty import (
     process_others_lot_dyn,
 )
 from Models.lottery_database.bili.comm import BiliLotDataStatusEnum, LotteryBusinessType
-from Utils.Common import asyncio_gather
-from Utils.PushMe import a_pushme
-from Utils.gateway_auth import require_gateway_login, GatewayUserInfo
+from Utils.通用.Common import asyncio_gather
+from Utils.推送.PushMe import a_pushme
+from Utils.网关.gateway_auth import require_gateway_login, GatewayUserInfo
 from ApiRoutes import RouterPaths, RouterNames
 from fastapi import BackgroundTasks
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper

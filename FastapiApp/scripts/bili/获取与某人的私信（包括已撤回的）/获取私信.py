@@ -1,7 +1,7 @@
 # noinspection PyUnresolvedReferences
 import json
 
-import Utils.CommMethods
+import Utils.通用.CommMethods
 
 mymethod = Utils.all_methods.methods()
 

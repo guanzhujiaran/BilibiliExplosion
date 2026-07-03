@@ -17,7 +17,7 @@ from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GetOthersLotDyn.Sql.models import TLotdyninfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
 from Service.GrpcModule.Grpc.Bapi.BiliApi import get_polymer_web_dynamic_detail
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from Utils.代理.mdoel.RequestConf import RequestConf
 
 _is_use_available_proxy = True

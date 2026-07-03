@@ -6,7 +6,7 @@ from typing import List
 from CONFIG import CONFIG
 from Models.lottery_database.bili.LotteryDataModels import BiliLotStatisticLotTypeEnum, \
     BiliLotStatisticRankTypeEnum, BiliUserInfoSimple, BiliLotStatisticRankDateTypeEnum
-from Utils.Common import asyncio_gather
+from Utils.通用.Common import asyncio_gather
 from Utils.redisTool.RedisManager import RedisManagerBase
 
 

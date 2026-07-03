@@ -5,7 +5,7 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import joinedload
 from CONFIG import CONFIG
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sams_club_logger
 from Service.samsclub.Sql.models import (
@@ -19,7 +19,7 @@ from Service.samsclub.Sql.models import (
     GroupingInfo,
     CrawlTaskProgress,
 )
-from Utils.Common import log_sql_retry_wrapper
+from Utils.通用.Common import log_sql_retry_wrapper
 
 
 class SQLHelper(SqlHelperBase):

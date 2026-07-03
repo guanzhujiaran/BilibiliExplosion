@@ -6,7 +6,7 @@ import warnings
 from bilibili.im.interfaces.v1 import im_pb2 as bilibili_dot_im_dot_interfaces_dot_v1_dot_im__pb2
 from bilibili.im.type import im_pb2 as bilibili_dot_im_dot_type_dot_im__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -19,14 +19,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/im/interfaces/v1/im_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/im/interfaces/v1/im_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ImInterfaceStub(object):
+class ImInterfaceStub:
     """私信
     """
 
@@ -168,7 +168,7 @@ class ImInterfaceStub(object):
                 _registered_method=True)
 
 
-class ImInterfaceServicer(object):
+class ImInterfaceServicer:
     """私信
     """
 
@@ -495,7 +495,7 @@ def add_ImInterfaceServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ImInterface(object):
+class ImInterface:
     """私信
     """
 

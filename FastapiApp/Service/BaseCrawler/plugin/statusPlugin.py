@@ -7,7 +7,7 @@ import numpy as np
 from Service.BaseCrawler.base.core import ParamsType, BaseCrawler
 from Service.BaseCrawler.model.base import WorkerModel, WorkerStatus
 from Service.BaseCrawler.plugin.base import CrawlerPlugin
-from Utils.Tool import ts_2_DateTime
+from Utils.通用.Tool import ts_2_DateTime
 
 
 class CrawlerHealthStatus(StrEnum):

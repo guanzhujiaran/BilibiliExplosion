@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.api.player.v1 import player_pb2 as bilibili_dot_api_dot_player_dot_v1_dot_player__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/api/player/v1/player_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/api/player/v1/player_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class HeartbeatStub(object):
+class HeartbeatStub:
     """心跳上报
     """
 
@@ -42,7 +42,7 @@ class HeartbeatStub(object):
                 _registered_method=True)
 
 
-class HeartbeatServicer(object):
+class HeartbeatServicer:
     """心跳上报
     """
 
@@ -69,7 +69,7 @@ def add_HeartbeatServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Heartbeat(object):
+class Heartbeat:
     """心跳上报
     """
 

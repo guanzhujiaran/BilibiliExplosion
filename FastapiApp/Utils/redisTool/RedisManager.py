@@ -11,7 +11,7 @@ from redis.exceptions import ConnectionError, BusyLoadingError
 from redis.typing import KeyT
 from CONFIG import CONFIG
 from log.base_log import redis_logger
-from Utils.Common import asyncio_gather, sem_gen
+from Utils.通用.Common import asyncio_gather, sem_gen
 
 _MAX_SEM_NUM = 4096
 _sem = sem_gen(_MAX_SEM_NUM)

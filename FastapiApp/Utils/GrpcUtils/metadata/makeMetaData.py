@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from CONFIG import CONFIG
 from log.base_log import BiliGrpcApi_logger
 from Service.GrpcModule.Models.GrpcApiBaseModel import MetaDataBasicInfo
-from Service.GrpcModule.Utils.CONST import (
+from Utils.GrpcUtils.CONST import (
     MemSizes,
     CPUFreqs,
     ProductDevices,

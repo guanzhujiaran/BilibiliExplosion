@@ -14,13 +14,13 @@ from Service.MQ.base.MQClient.base import BaseFastStreamMQ, official_reserve_cha
     upsert_milvus_bili_lot_data_prop, router, bili_voucher_prop, upsert_bili_atari_prop, test_mq_prop
 from Service.LangChainCompo.text_embed import lot_data_2_bili_lot_data_ls, save_bili_lot_data_embeddings
 from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
-from Service.GrpcModule.Utils.极验.极验点击验证码 import geetest_v3_breaker
+from Utils.GrpcUtils.极验.极验点击验证码 import geetest_v3_breaker
 from Service.GrpcModule.Grpc.Bapi.BiliApi import get_lot_notice
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
 from Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.robot import topic_robot
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 
 
 # 全局锁，确保所有 lottery_id 的处理串行化，避免死锁

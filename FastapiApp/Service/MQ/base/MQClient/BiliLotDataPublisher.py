@@ -10,7 +10,7 @@ from Service.MQ.base.MQClient.base import official_reserve_charge_lot_mq_prop, \
     upsert_milvus_bili_lot_data_prop, get_broker, bili_voucher_prop, upsert_bili_atari_prop, test_mq_prop
 from Service.GrpcModule.Models.RabbitmqModel import VoucherInfo
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Lotdata
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 from Service.MQ.utils.RabbitmqPubCacheRedis import redis_obj, CachedMessage
 from log.base_log import MQ_logger
 from hashlib import md5

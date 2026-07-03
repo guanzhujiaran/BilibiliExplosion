@@ -7,7 +7,7 @@ from pymilvus.milvus_client import IndexParams
 from CONFIG import settings
 from log.base_log import milvus_db_logger
 from Models.lottery_database.milvusModel.biliMilvusModel import BiliLotData
-from Utils.Common import lock_retry_wrapper
+from Utils.通用.Common import lock_retry_wrapper
 from pymilvus import (
     AsyncMilvusClient,
     DataType,

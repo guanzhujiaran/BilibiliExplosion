@@ -17,7 +17,7 @@ from Models.v1.samsclub.samsclub_model import SamsClubAppStorage, SamsClubGrayCo
     SamsClubGrayConfigStrategyDetails
 from Service.samsclub.exceptions.error import UnknownError
 from Service.samsclub.tools.headers_gen import SamsClubHeadersGen, sort_headers_with_missing_last
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from Utils.代理.SealedRequests import my_async_httpx
 
 StringNumber = NewType('StringNumber', str)

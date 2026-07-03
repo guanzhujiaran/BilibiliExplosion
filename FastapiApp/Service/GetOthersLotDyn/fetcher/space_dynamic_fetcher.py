@@ -22,11 +22,11 @@ from Models.get_other_lot_dyn.dyn_robot_model import BiliSpaceUserParamsType
 from Service.GetOthersLotDyn.Sql.models import TLotuserinfo, TLotuserspaceresp
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
 from Service.GrpcModule.Grpc.Bapi.BiliApi import get_space_dynamic_req_with_proxy
-from Utils.Common import asyncio_gather
-from Utils.PushMe import a_pushme
+from Utils.通用.Common import asyncio_gather
+from Utils.推送.PushMe import a_pushme
 from Utils.代理.mdoel.RequestConf import RequestConf
-from Utils.dynamic_id_caculate import dynamic_id_2_ts
-from Utils.CommMethods import methods
+from Utils.通用.dynamic_id_caculate import dynamic_id_2_ts
+from Utils.通用.CommMethods import methods
 
 if TYPE_CHECKING:
     from Service.GetOthersLotDyn.core.bili_dynamic_item import BiliDynamicItem

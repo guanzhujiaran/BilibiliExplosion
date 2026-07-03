@@ -20,7 +20,7 @@ from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import (
 )
 from Service.opus新版官方抽奖.转发抽奖.提交专栏信息 import ExtractOfficialLottery
 from Service.opus新版官方抽奖.预约抽奖.etc.scrapyReserveJsonData import reserve_robot
-from Utils.Common import asyncio_gather
+from Utils.通用.Common import asyncio_gather
 
 
 class RBDParamsType(CustomBaseModelHashable):

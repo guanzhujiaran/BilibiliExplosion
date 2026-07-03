@@ -8,7 +8,7 @@ import Service.LangChainCompo.lottery_data_vec_sql.sql_helper as sql_helper
 import Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
 import Service.GrpcModule.GrpcSrc.SQLObject.models as models
 from CONFIG import CONFIG
-from Utils.Common import log_max_count_retry_wrapper
+from Utils.通用.Common import log_max_count_retry_wrapper
 
 _client = AsyncOpenAI(base_url=f"{CONFIG.lm_studio_url}/v1", api_key="1", timeout=1)
 

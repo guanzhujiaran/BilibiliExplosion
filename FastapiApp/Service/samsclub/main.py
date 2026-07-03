@@ -14,7 +14,7 @@ from Service.BaseCrawler.model.base import WorkerStatus
 from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin
 from Service.samsclub.Sql.SqlHelper import sql_helper
 from Service.samsclub.api.samsclub_api import sams_club_api
-from Utils.SleepTimeGen import SleepTimeGenerator
+from Utils.通用.SleepTimeGen import SleepTimeGenerator
 
 
 class SamsClubCrawlerParams(CustomBaseModelHashable):

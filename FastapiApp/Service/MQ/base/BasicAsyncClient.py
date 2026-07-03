@@ -9,7 +9,7 @@ from pika.exchange_type import ExchangeType
 from CONFIG import CONFIG
 from log.base_log import MQ_logger
 from Models.MQ.BaseMQModel import QueueName, ExchangeName, RoutingKey
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 
 
 def _mq_retry_wrapper(max_retries: int = 5, delay: int = 30):

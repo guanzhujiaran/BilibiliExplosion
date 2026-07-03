@@ -4,7 +4,7 @@ from typing import Sequence
 from Service.GetOthersLotDyn.Sql.models import TLotuserspaceresp
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper,get_other_lot_redis_manager
 from Service.GetOthersLotDyn import BiliDynamicItem
-from Utils.Common import sem_gen, asyncio_gather
+from Utils.通用.Common import sem_gen, asyncio_gather
 
 _sem = sem_gen(100)
 

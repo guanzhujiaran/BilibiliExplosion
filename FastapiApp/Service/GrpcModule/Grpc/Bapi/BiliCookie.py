@@ -10,7 +10,7 @@ from Models.AntiRisk.Bili.WebCookie import BiliWebCookie, CookieWrapper
 from Service.GrpcModule.Grpc.Bapi.BiliApiBase import get_frontend_finger_spi, gen_web_ticket, \
     get_bili_main_page_raw_resp, gaia_gateway_ExClimbWuzhi, gaia_gateway_ExClimbCongling
 from Service.GrpcModule.Grpc.Bapi.Constants import BASE_COOKIE_KEYS, EXCLIMB_WUZHI_COOKIE_KEYS
-from Utils.Common import asyncio_gather
+from Utils.通用.Common import asyncio_gather
 from Utils.加密.utils import GenWebCookieParams
 from Utils.加密.utils import lsid
 

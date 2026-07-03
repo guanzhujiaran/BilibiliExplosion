@@ -6,7 +6,7 @@ import warnings
 from bilibili.polymer.contract.v1 import contract_pb2 as bilibili_dot_polymer_dot_contract_dot_v1_dot_contract__pb2
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -19,14 +19,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/polymer/contract/v1/contract_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/polymer/contract/v1/contract_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ContractStub(object):
+class ContractStub:
     """契约
     """
 
@@ -53,7 +53,7 @@ class ContractStub(object):
                 _registered_method=True)
 
 
-class ContractServicer(object):
+class ContractServicer:
     """契约
     """
 
@@ -104,7 +104,7 @@ def add_ContractServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Contract(object):
+class Contract:
     """契约
     """
 

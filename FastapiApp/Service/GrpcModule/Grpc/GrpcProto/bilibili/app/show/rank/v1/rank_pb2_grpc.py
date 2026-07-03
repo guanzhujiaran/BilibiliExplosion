@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.app.show.rank.v1 import rank_pb2 as bilibili_dot_app_dot_show_dot_rank_dot_v1_dot_rank__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/app/show/rank/v1/rank_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/app/show/rank/v1/rank_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class RankStub(object):
+class RankStub:
     """排行榜
     """
 
@@ -47,7 +47,7 @@ class RankStub(object):
                 _registered_method=True)
 
 
-class RankServicer(object):
+class RankServicer:
     """排行榜
     """
 
@@ -86,7 +86,7 @@ def add_RankServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Rank(object):
+class Rank:
     """排行榜
     """
 

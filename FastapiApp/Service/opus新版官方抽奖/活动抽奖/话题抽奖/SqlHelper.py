@@ -6,7 +6,7 @@ from sqlalchemy.sql.expression import text
 from sqlalchemy import select, update, func, and_, cast, DateTime
 from sqlalchemy.orm import joinedload
 
-from Utils.Common import log_sql_retry_wrapper
+from Utils.通用.Common import log_sql_retry_wrapper
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import topic_lot_logger
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import (

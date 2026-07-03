@@ -94,7 +94,7 @@ def require_gateway_login(request: Request) -> GatewayUserInfo:
 
     用法::
 
-        from Utils.gateway_auth import require_gateway_login, GatewayUserInfo
+        from Utils.网关.gateway_auth import require_gateway_login, GatewayUserInfo
         from fastapi import Depends
 
         @router.post("/xxx")

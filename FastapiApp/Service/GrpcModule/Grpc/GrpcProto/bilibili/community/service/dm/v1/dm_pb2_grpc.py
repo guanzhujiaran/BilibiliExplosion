@@ -5,7 +5,7 @@ import warnings
 
 from bilibili.community.service.dm.v1 import dm_pb2 as bilibili_dot_community_dot_service_dot_dm_dot_v1_dot_dm__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -18,14 +18,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/community/service/dm/v1/dm_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/community/service/dm/v1/dm_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class DMStub(object):
+class DMStub:
     """弹幕
     """
 
@@ -67,7 +67,7 @@ class DMStub(object):
                 _registered_method=True)
 
 
-class DMServicer(object):
+class DMServicer:
     """弹幕
     """
 
@@ -154,7 +154,7 @@ def add_DMServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class DM(object):
+class DM:
     """弹幕
     """
 

@@ -8,10 +8,10 @@ from Service.GrpcModule.GrpcSrc.SQLObject.models import Bilidyndetail
 import pandas as pd
 from log.base_log import myfastapi_logger
 from Service.GrpcModule.Models.getLotDynSortByDate import MainConf
-from Utils.CommMethods import methods
+from Utils.通用.CommMethods import methods
 from Service.GrpcModule.GrpcSrc.DynObjectClass import lotDynData
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 import os
 
 

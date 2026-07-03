@@ -19,10 +19,10 @@ from Service.opus新版官方抽奖.活动抽奖.model.EraBlackBoard import EraT
     H5ActivityLottery, H5ActivityLotteryGiftSource, MatchLotteryTask, MatchLottery, EvaContainerTruck
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.SqlHelper import topic_sqlhelper
 from Service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models import TTrafficCard
-from Utils.Common import asyncio_gather
-from Utils.PushMe import a_pushme
+from Utils.通用.Common import asyncio_gather
+from Utils.推送.PushMe import a_pushme
 from Utils.代理.SealedRequests import my_async_httpx
-from Utils.Common import log_max_count_retry_wrapper
+from Utils.通用.Common import log_max_count_retry_wrapper
 
 class GenerateTopicLotCv(GenerateCvBase):
 

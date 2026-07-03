@@ -2,8 +2,8 @@ import asyncio
 import os
 import bili_ticket_gt_python
 from log.base_log import Voucher352_logger
-from Service.GrpcModule.Utils.UserAgentParser import UserAgentParser
-from Service.GrpcModule.Utils.极验.models.captcha_models import GeetestSuccessTimeCalc
+from Utils.GrpcUtils.UserAgentParser import UserAgentParser
+from Utils.GrpcUtils.极验.models.captcha_models import GeetestSuccessTimeCalc
 from Service.GrpcModule.Grpc.Bapi.GeetestHandler import get_geetest_reg_info, validate_geetest
 
 

@@ -9,8 +9,8 @@ from CONFIG import settings
 from Service.GetOthersLotDyn.Sql.models import TLotmaininfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from Service.opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
-from Utils.Common import asyncio_gather
-from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
+from Utils.通用.Common import asyncio_gather
+from Utils.数据库.SqlalchemyTool import sqlalchemy_model_2_dict
 
 
 class GetOthersLotDynRobot:

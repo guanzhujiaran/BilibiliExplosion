@@ -5,7 +5,7 @@ from Utils.代理.mdoel.RequestConf import RequestConf
 from Utils.代理.redisProxyRequest.RedisRequestProxy import request_with_proxy_internal
 from Service.GrpcModule.Grpc.Bapi.Utils import appsign, gen_trace_id, request_wrapper
 from Service.GrpcModule.Grpc.Bapi.Constants import URL_REGISTER_GEETEST, URL_VALIDATE_GEETEST
-from Service.GrpcModule.Utils.极验.models.captcha_models import GeetestRegInfo
+from Utils.GrpcUtils.极验.models.captcha_models import GeetestRegInfo
 
 
 @request_wrapper

@@ -1,7 +1,7 @@
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper
 from Service.GrpcModule.GrpcSrc.根据日期获取抽奖动态.getLotDynSortByDate import LotDynSortByDate
 from Service.GrpcModule.Models.getLotDynSortByDate import MainConf
-from Utils.dynamic_id_caculate import dynamic_id_2_ts
+from Utils.通用.dynamic_id_caculate import dynamic_id_2_ts
 import asyncio
 
 

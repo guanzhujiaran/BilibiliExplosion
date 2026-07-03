@@ -2,7 +2,7 @@ import re
 import time
 
 import requests
-import Utils.CommMethods
+import Utils.通用.CommMethods
 
 Bapi = Utils.all_methods.methods()
 

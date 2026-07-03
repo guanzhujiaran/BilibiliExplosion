@@ -6,7 +6,7 @@ import warnings
 from bilibili.broadcast.v1 import mod_pb2 as bilibili_dot_broadcast_dot_v1_dot_mod__pb2
 from google.protobuf import empty_pb2 as google_dot_protobuf_dot_empty__pb2
 
-GRPC_GENERATED_VERSION = '1.75.1'
+GRPC_GENERATED_VERSION = '1.82.0rc2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -19,14 +19,14 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in bilibili/broadcast/v1/mod_pb2_grpc.py depends on'
+        + ' but the generated code in bilibili/broadcast/v1/mod_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class ModManagerStub(object):
+class ModManagerStub:
     """ModManager
     """
 
@@ -43,7 +43,7 @@ class ModManagerStub(object):
                 _registered_method=True)
 
 
-class ModManagerServicer(object):
+class ModManagerServicer:
     """ModManager
     """
 
@@ -70,7 +70,7 @@ def add_ModManagerServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class ModManager(object):
+class ModManager:
     """ModManager
     """
 

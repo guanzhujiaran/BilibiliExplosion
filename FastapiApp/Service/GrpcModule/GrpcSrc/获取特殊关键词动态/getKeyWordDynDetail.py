@@ -2,7 +2,7 @@
 import json
 import time
 import pandas as pd
-from Utils.CommMethods import methods
+from Utils.通用.CommMethods import methods
 from Service.GrpcModule.GrpcSrc.DynObjectClass import lotDynData
 from Service.GrpcModule.GrpcSrc.SQLObject.models import Bilidyndetail
 from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import grpc_sql_helper

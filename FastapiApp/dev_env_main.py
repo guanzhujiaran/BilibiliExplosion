@@ -2,7 +2,7 @@
 import asyncio
 import uvloop
 
-from Utils.FastapiLifespan import life_span
+from Utils.FastAPI.FastapiLifespan import life_span
 
 uvloop.install()
 import io
@@ -34,7 +34,7 @@ if sys.platform.startswith("windows"):
         asyncio.WindowsProactorEventLoopPolicy()  # type: ignore
     )  # 祖传代码不可删，windows必须替换掉selector，不然跑一半就停了
 from log.base_log import myfastapi_logger
-from Utils.PushMe import a_pushme
+from Utils.推送.PushMe import a_pushme
 from controller.damo import DamoML
 from controller.v1.ChatGpt3_5 import ReplySingle
 from controller.v1.lotttery_database.bili import LotteryData
