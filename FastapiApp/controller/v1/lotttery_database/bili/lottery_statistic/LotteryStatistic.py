@@ -46,8 +46,8 @@ async def get_lottery_result(
         uid: int | str = Query(...),
         lot_type: BiliLotStatisticLotTypeEnum = Query(...),
         rank_type: BiliLotStatisticRankTypeEnum = Query(...),
-        offset: Optional[int] = Query(0, ge=0),
-        limit: Optional[int] = Query(10, ge=10, le=50),
+        offset: int = Query(0, ge=0),
+        limit: int = Query(10, ge=10, le=50),
         date: BiliLotStatisticRankDateTypeEnum = BiliLotStatisticRankDateTypeEnum.total
 ):
     return CommonResponseModel(

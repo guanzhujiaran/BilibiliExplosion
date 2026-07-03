@@ -5,14 +5,12 @@ from log.base_log import get_others_lot_logger as get_others_lot_log
 from Models.get_other_lot_dyn.dyn_robot_model import RobotScrapyInfo
 from Service.GetOthersLotDyn.core.bili_dynamic_item import BiliDynamicItem
 from Service.GetOthersLotDyn.fetcher.space_dynamic_fetcher import BiliSpaceUserItem
+from CONFIG import settings
 from Service.GetOthersLotDyn.Sql.models import TLotmaininfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper, get_other_lot_redis_manager
 from Service.opus新版官方抽奖.Model.BaseLotModel import ProgressCounter
 from Utils.Common import asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
-
-SPACE_DYN_CONCURRENCY = 5  # 获取空间动态的并发数
-JUDGE_DYN_CONCURRENCY = 1  # 判断抽奖动态的并发数
 
 
 class GetOthersLotDynRobot:
@@ -25,7 +23,7 @@ class GetOthersLotDynRobot:
         self.nowRound: TLotmaininfo = TLotmaininfo()
         self.username = ''
         self.nonLotteryWords = ['分享视频', '分享动态']
-        self.SpareTime = 86400 * 5  # 多少时间以前的就不获取别人的动态了
+        self.SpareTime = settings.get_others_lot.spare_time  # 多少时间以前的就不获取别人的动态了
         self.bili_space_user_items_set: Set[BiliSpaceUserItem] = set()
         self.bili_dynamic_items_set: Set[BiliDynamicItem] = set()
         self.scrapy_info = RobotScrapyInfo()
@@ -51,7 +49,7 @@ class GetOthersLotDynRobot:
             isPubLotUser=False
     ):
         self.space_succ_counter.total_num = len(bili_space_user_items)
-        semaphore = asyncio.Semaphore(SPACE_DYN_CONCURRENCY)
+        semaphore = asyncio.Semaphore(settings.get_others_lot.space_dyn_concurrency)
 
         async def _sem_task(item: BiliSpaceUserItem):
             async with semaphore:
@@ -101,7 +99,7 @@ class GetOthersLotDynRobot:
             if redis_data := await get_other_lot_redis_manager.get_target_uid_list():
                 self.bili_space_user_items_set.update(
                     [BiliSpaceUserItem(
-                        uid=x, lot_round_id=self.nowRound.lotRound_id) for x in redis_data]
+                        uid=x.uid, lot_round_id=self.nowRound.lotRound_id) for x in redis_data]
                 )
             else:
                 get_others_lot_log.critical('从Redis获取抽奖用户列表失败，使用内置默认用户列表')
@@ -202,7 +200,7 @@ class GetOthersLotDynRobot:
         get_others_lot_log.critical(
             f'共{len(self.goto_check_dynamic_item_set)}条动态待判断是否为抽奖')
         self.dyn_succ_counter.total_num = len(self.goto_check_dynamic_item_set)
-        semaphore = asyncio.Semaphore(JUDGE_DYN_CONCURRENCY)
+        semaphore = asyncio.Semaphore(settings.get_others_lot.judge_dyn_concurrency)
 
         async def _sem_judge(item: BiliDynamicItem):
             async with semaphore:

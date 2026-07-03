@@ -23,6 +23,8 @@ from Models.lottery_database.bili.LotteryDataModels import (
     AddTopicLotteryReq,
     AddTopicLotteryResp,
     BulkAddDynamicLotteryReq,
+    BulkAddTopicLotteryReq,
+    BulkAddOthersLotDynReq,
     LotdataResp,
     SubmitFeedbackReq,
     OthersLotDynItem,
@@ -31,6 +33,7 @@ from Models.lottery_database.bili.LotteryDataModels import (
     TimePresetEnum,
     LotteryFilterParamsResp,
     OthersLotPrizeInfo,
+    LotExtraInfoResp,
 )
 from Models.lottery_database.bili.comm import (
     LotteryPaginationParams,
@@ -67,7 +70,7 @@ from Utils.gateway_auth import require_gateway_login, GatewayUserInfo
 from ApiRoutes import RouterPaths, RouterNames
 from fastapi import BackgroundTasks
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
-from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_names, extract_lottery_time
+
 from .base import new_router
 
 router = new_router()
@@ -351,6 +354,23 @@ async def api_AddTopicLottery(
 
 
 @router.post(
+    RouterPaths.BULK_ADD_TOPIC_LOTTERY,
+    name=RouterNames.BULK_ADD_TOPIC_LOTTERY,
+    summary="批量提交话题抽奖",
+    response_model=CommonResponseModel[list[AddTopicLotteryResp]],
+    response_model_exclude_none=True,
+)
+@cache(8 * 3600)
+async def api_BulkAddTopicLottery(
+    data: BulkAddTopicLotteryReq = Body(...),
+):
+    resp = await asyncio_gather(
+        *[add_topic_lottery(tid) for tid in data.topic_ids]
+    )
+    return CommonResponseModel(data=resp)
+
+
+@router.post(
     RouterPaths.ADD_OTHERS_LOT_DYN,
     name=RouterNames.ADD_OTHERS_LOT_DYN,
     summary="提交第三方抽奖动态，自动解析抽奖信息",
@@ -378,6 +398,37 @@ async def api_AddOthersLotDyn(
     if dynamic_id is not None and lot_round_id is not None:
         background_tasks.add_task(process_others_lot_dyn, dynamic_id, lot_round_id)
     return CommonResponseModel(data=resp)
+
+
+@router.post(
+    RouterPaths.BULK_ADD_OTHERS_LOT_DYN,
+    name=RouterNames.BULK_ADD_OTHERS_LOT_DYN,
+    summary="批量提交第三方抽奖动态，自动解析抽奖信息",
+    response_model=CommonResponseModel[list[AddDynamicLotteryResp]],
+    response_model_exclude_none=True,
+)
+async def api_BulkAddOthersLotDyn(
+    data: BulkAddOthersLotDynReq = Body(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    user: GatewayUserInfo = Depends(require_gateway_login),
+):
+    """批量提交第三方抽奖动态
+
+    需要登录态：通过网关注入的 ``x-bili-*`` 头校验用户有效登录状态，
+    未登录或校验失败则拒绝访问（HTTP 401）。
+
+    并行校验所有动态ID并查重，对通过校验的项通过后台任务获取动态详情、解析并入库
+    :param data: 包含 dynamic_id_or_urls 的请求体
+    :param background_tasks: FastAPI 后台任务
+    :param user: 网关鉴权解析出的登录用户信息
+    """
+    results = await asyncio_gather(
+        *[add_others_lot_dyn_by_dynamic_id(url) for url in data.dynamic_id_or_urls]
+    )
+    for resp, dynamic_id, lot_round_id in results:
+        if dynamic_id is not None and lot_round_id is not None:
+            background_tasks.add_task(process_others_lot_dyn, dynamic_id, lot_round_id)
+    return CommonResponseModel(data=[r[0] for r in results])
 
 
 @router.post(
@@ -486,18 +537,18 @@ def get_all_scrapy_status():
     response_model=CommonResponseModel[ResponsePaginationItems[OthersLotDynItem]],
     response_model_exclude_none=True,
 )
+@cache(expire=180)
 async def api_GetOthersLotDynList(
     pagination: LotteryPaginationParams,
     sort_by: OthersLotDynSortEnum = OthersLotDynSortEnum.created_at,
     sort_order: OthersLotDynSortOrderEnum = OthersLotDynSortOrderEnum.desc,
-    is_lot: bool | None = True,
+    is_lot: bool | None = None,
     created_at_preset: TimePresetEnum | None = None,
     pub_time_preset: TimePresetEnum | None = None,
     pub_time_start: int | None = None,
     pub_time_end: int | None = None,
     created_at_start: int | None = None,
     created_at_end: int | None = None,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     user: GatewayUserInfo = Depends(require_gateway_login),
 ):
     """获取第三方抽奖动态列表，支持分页、排序和时间筛选
@@ -517,15 +568,16 @@ async def api_GetOthersLotDynList(
     :param created_at_end: 数据库收录时间截止（Unix 时间戳，秒）
     :param user: 网关鉴权解析出的登录用户信息
     """
-    # 收录时间快捷筛选：优先级高于 created_at_start
+    # 时间快捷筛选处理
     if created_at_preset is not None:
         days = int(created_at_preset.value.replace("d", ""))
         created_at_start = int(time.time() - days * 86400)
-    # 发布时间快捷筛选：优先级高于 pub_time_start
     if pub_time_preset is not None:
         days = int(pub_time_preset.value.replace("d", ""))
         pub_time_start = int(time.time() - days * 86400)
-    items, total = await SqlHelper.getLotDynListPaginated(
+
+    # 单个 session 内完成主分页查询 + 奖品关联查询，减少数据库往返
+    items, total, cached_infos = await SqlHelper.getLotDynListPaginatedWithPrizes(
         page_num=pagination.page_num,
         page_size=pagination.page_size,
         sort_by=sort_by.value,
@@ -537,78 +589,21 @@ async def api_GetOthersLotDynList(
         created_at_end=created_at_end,
     )
 
-    # 批量获取已缓存的提取信息
-    dyn_ids = [item.dynId for item in items]
-    cached_infos = await SqlHelper.get_prizes_by_dyn_ids(dyn_ids)
-
-    # 找出需要提取的项（无缓存 + 有动态内容）
-    to_extract: list[tuple[int, str]] = []
-    # 找出需要补全开奖时间的项（有缓存但 lottery_time 缺失）
-    to_reextract_time: list[tuple[int, str]] = []
-    for item in items:
-        cached = cached_infos.get(item.dynId)
-        if cached is None and item.dynContent:
-            to_extract.append((item.dynId, item.dynContent))
-        elif cached is not None and not cached.lottery_time and item.dynContent:
-            to_reextract_time.append((item.dynId, item.dynContent))
-
-    # 同步提取信息（首次返回给前端）
-    freshly_extracted: dict[int, tuple[list[str], str | None]] = {}
-    if to_extract:
-        for dyn_id, content in to_extract:
-            prize_names = await extract_prize_names(content)
-            lottery_time = await extract_lottery_time(content)
-            freshly_extracted[dyn_id] = (prize_names, lottery_time)
-
-    # 补全缓存中缺失的开奖时间
-    reextracted_times: dict[int, str | None] = {}
-    if to_reextract_time:
-        for dyn_id, content in to_reextract_time:
-            lottery_time = await extract_lottery_time(content)
-            reextracted_times[dyn_id] = lottery_time
-
-    # 后台保存到数据库
-    async def _save_prizes():
-        for dyn_id, (prize_names, lottery_time) in freshly_extracted.items():
-            try:
-                await SqlHelper.save_prize(dyn_id, prize_names, lottery_time)
-            except Exception:
-                pass
-        # 补存缺失的开奖时间
-        for dyn_id, lottery_time in reextracted_times.items():
-            if lottery_time:
-                cached = cached_infos.get(dyn_id)
-                if cached:
-                    try:
-                        await SqlHelper.save_prize(
-                            dyn_id, cached.prize_names or [], lottery_time)
-                    except Exception:
-                        pass
-    if freshly_extracted or reextracted_times:
-        background_tasks.add_task(_save_prizes)
-
-    # 构建响应，附加 prize_info
+    # 构建响应，附加 prize_info 和 extra_info（仅使用已有缓存）
     result_items: list[OthersLotDynItem] = []
     for item in items:
         obj = OthersLotDynItem.model_validate(item)
         cached = cached_infos.get(item.dynId)
-        fresh = freshly_extracted.get(item.dynId)
-        reextracted_time = reextracted_times.get(item.dynId)
         if cached:
-            # 优先使用补全的开奖时间
-            lottery_time = reextracted_time or cached.lottery_time
             obj.prize_info = OthersLotPrizeInfo(
-                dynId=item.dynId,
                 prize_names=cached.prize_names or [],
-                lottery_time=lottery_time,
+                lottery_time=cached.lottery_time,
             )
-        elif fresh:
-            prize_names, lottery_time = fresh
-            if prize_names or lottery_time:
-                obj.prize_info = OthersLotPrizeInfo(
-                    dynId=item.dynId,
-                    prize_names=prize_names,
-                    lottery_time=lottery_time,
+            if cached.extra_info:
+                obj.extra_info = LotExtraInfoResp(
+                    is_grand_prize=bool(cached.extra_info.is_grand_prize),
+                    need_comment=bool(cached.extra_info.need_comment),
+                    need_repost=bool(cached.extra_info.need_repost),
                 )
         result_items.append(obj)
 

@@ -118,7 +118,22 @@ class _SqlHelper(SqlHelperBase):
             reserve_info.reserve_round_id = round_id
         if new_field:
             reserve_info.new_field = str(new_field)
-        return await self._add_reserve_info_by_resp_dict(reserve_info)
+        result = await self._add_reserve_info_by_resp_dict(reserve_info)
+        # LLM 大奖判断（入库后判断，不影响主流程，结果写入独立子表 t_lot_extra_info）
+        if result.text and result.ids:
+            try:
+                from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_info
+                from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
+                prize_result = await extract_prize_info(result.text)
+                if prize_result.is_grand_prize:
+                    await SqlHelper.save_extra_info(
+                        ref_id=result.ids,
+                        lot_type="reserve",
+                        is_grand_prize=1,
+                    )
+            except Exception:
+                pass
+        return result
 
     @lock_wrapper
     async def get_latest_reserve_round(self, readonly=False) -> TReserveRoundInfo:

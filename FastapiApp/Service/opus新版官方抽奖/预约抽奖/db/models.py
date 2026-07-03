@@ -3,7 +3,6 @@ from typing import List, Optional
 from sqlalchemy import BigInteger, Column, ForeignKeyConstraint, Index, Integer, JSON, Text
 from sqlalchemy.dialects.mysql import TINYINT
 from sqlalchemy.orm import Mapped, declarative_base, mapped_column, relationship
-from sqlalchemy.orm.base import Mapped
 
 Base = declarative_base()
 

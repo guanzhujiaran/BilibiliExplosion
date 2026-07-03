@@ -19,7 +19,7 @@ from CONFIG import CONFIG, database
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sql_log
 from Models.v1.background_service.background_service_model import ProxyStatusResp
-from Utils.Common import GLOBAL_SCHEDULER, sql_retry_wrapper, asyncio_gather
+from Utils.Common import GLOBAL_SCHEDULER, log_sql_retry_wrapper, asyncio_gather
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
 from Utils.redisTool.RedisManager import RedisManagerBase
 from Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel import ProxyTab, AvailableProxy
@@ -87,7 +87,7 @@ class SubRedisStore(RedisManagerBase):
         # return f'{self.RedisMap.bili_proxy.value}:{inner_key}'
         return self.RedisMap.bili_proxy_available_hm.value, inner_key
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def sync_2_redis(self, proxy_infos: List[ProxyTab]):
         """
         同步代理到redis
@@ -109,12 +109,12 @@ class SubRedisStore(RedisManagerBase):
                  proxy_infos}
             )
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def set_sync_ts(self):
         self.sync_ts = int(time.time())
         await self._set(self.RedisMap.bili_proxy_sync_ts.value, self.sync_ts)
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_sync_ts(self) -> int:
         if self.sync_ts:
             return self.sync_ts
@@ -230,7 +230,7 @@ class SubRedisStore(RedisManagerBase):
                 self.RedisMap.bili_proxy_zset.value,
                 {get_scheme_ip_port_form_proxy_dict(proxy_info_dict=redis_data.proxy): redis_data.score})
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def redis_clear_all_proxy(self):
         # await self._zdel_range(self.RedisMap.bili_proxy_zset.value, 0, -1)
         # await self._del_keys_with_prefix(self.RedisMap.bili_proxy.value)
@@ -261,7 +261,7 @@ class SQLHelperClass(SqlHelperBase):
         self.sub_redis_store = SubRedisStore()
         self.is_checking_redis_data = False
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def sync_2_database(self, chunk_size: int = DEFAULT_CHUNK_SIZE):
         """
         Fetches changed proxy info from Redis and bulk updates them in the database.
@@ -356,7 +356,7 @@ class SQLHelperClass(SqlHelperBase):
                         sql_log.debug(
                             f'上次同步时间：{datetime.datetime.fromtimestamp(self.sub_redis_store.sync_ts, tz=ZoneInfo("Asia/Shanghai"))}\n距离上次同步时间小于{self.sub_redis_store.sync_sep_ts}秒，无需同步')
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def clear_unusable_proxy(self):
         """
         清除数据库中的不可用的代理，根据score和success_times判断
@@ -388,7 +388,7 @@ class SQLHelperClass(SqlHelperBase):
             await session.commit()
             return res.rowcount
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def select_score_top_proxy(self) -> ProxyTab:
         if redis_data := await self.sub_redis_store.redis_select_score_top_proxy():
             return redis_data
@@ -398,7 +398,7 @@ class SQLHelperClass(SqlHelperBase):
         ret_list_dict = res.scalars().first()
         return ret_list_dict
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def select_proxy(self, mode: Literal["single", "all", "rand"] = 'single', channel='bili') -> ProxyTab | List[
         ProxyTab] | None:
         """
@@ -447,7 +447,7 @@ class SQLHelperClass(SqlHelperBase):
             else:
                 return None
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def is_exist_proxy_by_proxy(self, proxy: ProxyTab.proxy) -> int:
         '''
         查询是否存在这个代理
@@ -463,7 +463,7 @@ class SQLHelperClass(SqlHelperBase):
             exist_num = res.scalars().first()
         return exist_num or 0
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def remove_list_dict_data_by_proxy(self) -> bool:
         '''
         根据proxy列对数据库table去重
@@ -482,7 +482,7 @@ class SQLHelperClass(SqlHelperBase):
                     await session.delete(record)
         return True
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def update_to_proxy_list(self, proxy_tab: ProxyTab, change_score_num=10) -> bool:
         '''
         更新数据 update 最好只用update，upsert会导致主键增长异常
@@ -511,7 +511,7 @@ class SQLHelperClass(SqlHelperBase):
                 await session.execute(sql)
         return True
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def add_to_proxy_tab_database(self, proxy_tab: ProxyTab) -> bool:
         '''
         添加数据（带 MySQL ON DUPLICATE KEY UPDATE）
@@ -538,7 +538,7 @@ class SQLHelperClass(SqlHelperBase):
 
         return True
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def remove_proxy(self, proxy_tab: ProxyTab):
         """
         删除
@@ -555,7 +555,7 @@ class SQLHelperClass(SqlHelperBase):
                         # async with self.async_lock:
                         await session.delete(record)
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_412_proxy_num(self) -> int:
         sql = select(func.count(ProxyTab.proxy_id)).where(ProxyTab.status == -412)
         async with self.async_session() as session:
@@ -577,7 +577,7 @@ class SQLHelperClass(SqlHelperBase):
             sql_log.exception(e)
             return 0
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_all_proxy_nums(self) -> int:
         sql = select(func.count(ProxyTab.proxy_id))
         async with self.async_session() as session:
@@ -589,7 +589,7 @@ class SQLHelperClass(SqlHelperBase):
         else:
             return 0
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_available_proxy_nums(self):
         sql = select(func.count(ProxyTab.proxy_id)).where(and_(ProxyTab.score >= 0, ProxyTab.status != -412))
         async with self.async_session() as session:
@@ -602,7 +602,7 @@ class SQLHelperClass(SqlHelperBase):
             return 0
 
     # region 定时任务
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def refresh_proxy(self):
         start_ts = int(time.time())
         avaliable_score = -50
@@ -649,7 +649,7 @@ class SQLHelperClass(SqlHelperBase):
 
     # endregion
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_proxy_by_ip(self, ip: str) -> ProxyTab | None:
         """
 

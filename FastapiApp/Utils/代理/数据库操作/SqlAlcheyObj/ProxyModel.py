@@ -45,7 +45,7 @@ class AvailableProxy(Base):
     ip = mapped_column(String(1024))
     counter = mapped_column(Integer)
     max_counter_ts = mapped_column(TIMESTAMP)
-    resp_code = mapped_column(TINYINT)
+    resp_code = mapped_column(Integer)
     available = mapped_column(TINYINT(1))
     latest_352_ts = mapped_column(TIMESTAMP)
     latest_used_ts = mapped_column(TIMESTAMP)

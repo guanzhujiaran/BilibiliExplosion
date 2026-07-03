@@ -15,12 +15,16 @@ from Models.lottery_database.bili.LotteryDataModels import (
 
 # 时间快捷筛选的共享枚举值列表（前端显示中文 label）
 _TIME_PRESET_ENUM_VALUES = [
-    {"label": "最近1天",  "value": "1d"},
-    {"label": "最近3天",  "value": "3d"},
-    {"label": "最近5天",  "value": "5d"},
-    {"label": "最近7天",  "value": "7d"},
-    {"label": "最近14天", "value": "14d"},
-    {"label": "最近30天", "value": "30d"},
+    {"label": "最近1天",   "value": "1d"},
+    {"label": "最近3天",   "value": "3d"},
+    {"label": "最近5天",   "value": "5d"},
+    {"label": "最近7天",   "value": "7d"},
+    {"label": "最近14天",  "value": "14d"},
+    {"label": "最近30天",  "value": "30d"},
+    {"label": "最近60天",  "value": "60d"},
+    {"label": "最近90天",  "value": "90d"},
+    {"label": "最近180天", "value": "180d"},
+    {"label": "最近365天", "value": "365d"},
 ]
 _TIME_PRESET_JSON_EXTRA = {
     "filter_widget": "select",

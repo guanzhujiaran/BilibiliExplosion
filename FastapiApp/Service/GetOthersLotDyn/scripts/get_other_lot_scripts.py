@@ -11,9 +11,10 @@ _sem = sem_gen(100)
 async def get_other_lot_by_lot_round_id(lot_round_id):
     space_lots:Sequence[TLotuserspaceresp] = await SqlHelper.getSpaceRespByRoundId(lot_round_id)
     all_target_uid_list = await get_other_lot_redis_manager.get_target_uid_list()
+    all_target_uid_set = {item.uid for item in all_target_uid_list}
     all_dynamic_items = set()
     for x in space_lots:
-        if x.spaceUid not in all_target_uid_list:
+        if x.spaceUid not in all_target_uid_set:
             all_dynamic_items.add(
                 BiliDynamicItem(
                     dynamic_id=x.spaceOffset,

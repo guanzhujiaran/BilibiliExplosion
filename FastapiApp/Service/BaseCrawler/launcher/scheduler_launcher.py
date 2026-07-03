@@ -130,19 +130,19 @@ class BaseScheduler:
                 max_instances=1,  # 同时最多允许一个实例
                 misfire_grace_time=24 * 3600,  # 允许延迟最多 1 天
             )
-            self.logger.info(
+            self.logger.debug(
                 f"[{self.exec_info.info.crawler_name}] 已添加新任务，首次运行时间已设为现在，将立即尝试执行"
             )
 
     @async_pushme_try_catch_decorator
     async def run(self):
-        self.logger.info(
+        self.logger.debug(
             f"[{self.exec_info.info.crawler_name}] 定时任务被触发，正在检查是否需要执行..."
         )
 
         if await self.exec_info.is_need_to_execute():
             try:
-                self.logger.info(
+                self.logger.debug(
                     f"[{self.exec_info.info.crawler_name}] 开始执行爬虫任务..."
                 )
                 # 调用异步 main 函数

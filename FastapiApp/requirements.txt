@@ -4,6 +4,7 @@ fastapi-cache2
 faststream[rabbit]
 fastapi
 langchain_openai
+vllm
 redis
 apscheduler
 uvicorn[standard]

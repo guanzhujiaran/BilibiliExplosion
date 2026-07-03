@@ -73,8 +73,7 @@ class TLotdyninfo(Base):
     officialLotType = mapped_column(Text)
     officialLotId = mapped_column(Text)
     isOfficialAccount = mapped_column(TINYINT(1))
-    isManualReply = mapped_column(Text)
-    isFollowed = mapped_column(TINYINT(1))
+    isManualReply = mapped_column(TINYINT(1), default=0, comment='是否需要人工评论: 1-是, 0-否')
     isLot = mapped_column(TINYINT(1))
     hashTag = mapped_column(Text)
     dynLotRound_id = mapped_column(Integer)
@@ -104,18 +103,26 @@ class TLotuserspaceresp(Base):
 
 
 class TOthersLotInfo(Base):
-    """第三方抽奖动态的 ModelScope 提取结果缓存表"""
+    """第三方抽奖动态的 UIE 提取结果缓存表"""
     __tablename__ = 't_others_lot_info'
 
     dynId = mapped_column(BigInteger, primary_key=True, server_default=text('(0)'))
-    prize_names = mapped_column(JSON, comment='ModelScope 提取的奖品名称列表')
-    lottery_time = mapped_column(Text, comment='ModelScope 提取的开奖时间字符串')
+    prize_names = mapped_column(JSON, comment='UIE 提取的奖品名称列表')
+    lottery_time = mapped_column(Text, comment='UIE 提取的开奖时间字符串')
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
 
+    # 视图关系：关联 t_lot_extra_info 中 lot_type='common' 的记录
+    extra_info: Mapped[Optional['TLotExtraInfo']] = relationship(
+        'TLotExtraInfo',
+        primaryjoin="and_(TOthersLotInfo.dynId==foreign(TLotExtraInfo.ref_id), TLotExtraInfo.lot_type=='common')",
+        uselist=False,
+        viewonly=True,
+    )
 
-class TLotGrandPrizeFlag(Base):
-    """抽奖大奖SVM判断结果子表 — 独立于原有表，不破坏原有代码逻辑"""
-    __tablename__ = 't_lot_grand_prize_flag'
+
+class TLotExtraInfo(Base):
+    """抽奖附加信息表 — 存储大奖判断结果等额外信息，独立于原有表"""
+    __tablename__ = 't_lot_extra_info'
     __table_args__ = (
         Index('idx_ref_id_type', 'ref_id', 'lot_type', unique=True),
     )
@@ -123,6 +130,8 @@ class TLotGrandPrizeFlag(Base):
     id = mapped_column(Integer, primary_key=True, autoincrement=True)
     ref_id = mapped_column(BigInteger, nullable=False, comment='关联原始记录的ID (dynId/business_id/sid)')
     lot_type = mapped_column(String(32), nullable=False, comment='抽奖类型: common/reserve/official/charge')
-    is_grand_prize = mapped_column(TINYINT(1), nullable=False, comment='是否大奖: 1-是, 0-否')
+    is_grand_prize = mapped_column(TINYINT(1), nullable=False, default=0, comment='是否大奖: 1-是, 0-否')
+    need_comment = mapped_column(TINYINT(1), nullable=False, default=0, comment='是否需要评论: 1-是, 0-否')
+    need_repost = mapped_column(TINYINT(1), nullable=False, default=0, comment='是否需要转发: 1-是, 0-否')
     predicted_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), comment='SVM判断时间')
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))

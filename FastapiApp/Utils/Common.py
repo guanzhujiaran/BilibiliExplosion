@@ -3,8 +3,7 @@ import concurrent.futures
 from functools import wraps
 from typing import Callable, TypeVar, Awaitable, Any, Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy.exc import InternalError, TimeoutError
-from pymysql.err import OperationalError
+from sqlalchemy.exc import InternalError, TimeoutError, OperationalError
 from pymysql.constants import CR
 from log.base_log import myfastapi_logger, sql_log
 import random
@@ -110,7 +109,12 @@ async def run_in_executor(func, *args):
     return await future
 
 
-async def handle_sql_operational_error(func, log, err: OperationalError):
+async def handle_sql_operational_error(func, log, err: OperationalError)->bool:
+    """
+        返回是否需要继续重试
+    """
+    if '(pymysql.err.OperationalError) (1054,' in err.args[0]: # 数据操作错了
+        return False
     match err.args[0]:
         case 1129:
             log.error(f"{func} \t{err}")
@@ -128,6 +132,7 @@ async def handle_sql_operational_error(func, log, err: OperationalError):
             log.error(f"未知mysql错误代码：{func} \t{err}")
             await asyncio.sleep(120)
 
+    return True
 
 def sql_retry_wrapper(_func: FuncT) -> FuncT:
     @wraps(_func)
@@ -141,8 +146,9 @@ def sql_retry_wrapper(_func: FuncT) -> FuncT:
                 await asyncio.sleep(60)
                 continue
             except OperationalError as operational_error:
-                await handle_sql_operational_error(_func, sql_log, operational_error)
-                continue
+                    if await handle_sql_operational_error(_func, log, operational_error):
+                        continue
+                    break
             except TimeoutError as timeout_error:  # 这个是超时了，可能mysql负载太高卡了
                 await asyncio.sleep(60)
                 continue
@@ -169,8 +175,10 @@ def log_sql_retry_wrapper(log: "Logger" = myfastapi_logger):
                     await asyncio.sleep(60)
                     continue
                 except OperationalError as operational_error:
-                    await handle_sql_operational_error(_func, log, operational_error)
-                    continue
+                    if await handle_sql_operational_error(_func, log, operational_error):
+                        continue
+                    log.exception(operational_error)
+                    raise  # 无法恢复时抛出异常，避免返回 None 导致调用方出现误导性 TypeError
                 except Exception as e:
                     # 检查是否是死锁错误(已经在内层处理过重试)
                     error_str = str(e)

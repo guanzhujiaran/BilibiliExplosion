@@ -41,6 +41,7 @@ from Service.GrpcModule.GrpcSrc.SQLObject.models import (
     ArticlePubRecord,
     BiliUserInfo,
     BiliAtariInfo,
+    LotExtraInfo,
 )
 from dao.base.sqlHelperBase import SqlHelperBase
 from dao.biliLotteryStatisticSqlHelper import lottery_data_statistic_sql_helper
@@ -486,11 +487,20 @@ class SQLHelper(SqlHelperBase):
         if q.keyword is not None and q.keyword.strip():
             base_conditions.append(Lotdata.lottery_result.like(f"%{q.keyword.strip()}%"))
 
-        # 大奖筛选：is_grand_prize=True 只返回大奖，False 只返回非大奖，None 不过滤
+        # 大奖筛选：通过子表 t_lot_extra_info 过滤
         if q.is_grand_prize is True:
-            base_conditions.append(Lotdata.is_grand_prize == 1)
+            grand_subq = (
+                select(LotExtraInfo.lottery_id)
+                .where(LotExtraInfo.is_grand_prize == 1)
+            )
+            base_conditions.append(Lotdata.lottery_id.in_(grand_subq))
         elif q.is_grand_prize is False:
-            base_conditions.append(Lotdata.is_grand_prize == 0)
+            # 非大奖 = 子表中没有记录，或子表中 is_grand_prize=0
+            grand_subq = (
+                select(LotExtraInfo.lottery_id)
+                .where(LotExtraInfo.is_grand_prize == 1)
+            )
+            base_conditions.append(Lotdata.lottery_id.not_in(grand_subq))
 
         # 时间快捷筛选（优先级高于单独的 start_ts/end_ts）
         import datetime as dt
@@ -502,7 +512,7 @@ class SQLHelper(SqlHelperBase):
             days = int(q.pub_time_preset.value.replace("d", ""))
             base_conditions.append(Lotdata.ts >= (now_ts - days * 86400))
 
-        # 构建查询语句
+        # 构建查询语句（仅查主表 lotdata，extra_info 由调用方通过 get_extra_info_map 独立批量查询）
         stmt = (
             select(Lotdata)
             .where(and_(*base_conditions))
@@ -661,8 +671,8 @@ class SQLHelper(SqlHelperBase):
         :return:更新 返回{'mode':'update'}
                 插入 返回{'mode':'insert'}
         """
-        # 入库时进行 SVM 大奖判断，将结果写入 is_grand_prize 字段
-        from Service.GetOthersLotDyn.svmJudgeBigReserve.judgeReserveLot import big_reserve_predict
+        # 入库时进行 LLM 大奖判断
+        from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_info
 
         prize_cmts = [
             lot_data_dict.get("first_prize_cmt"),
@@ -672,14 +682,13 @@ class SQLHelper(SqlHelperBase):
         lottery_text = " ".join(filter(lambda a: a, prize_cmts)).strip()
         if lottery_text:
             try:
-                predictions = await big_reserve_predict([lottery_text])
-                is_grand_prize = int(predictions[0]) if predictions else 0
+                result = await extract_prize_info(lottery_text)
+                is_grand_prize = int(result.is_grand_prize)
             except Exception as e:
-                self.log.error(f"SVM 大奖判断失败，默认 0: {e}")
+                self.log.error(f"LLM 大奖判断失败，默认 0: {e}")
                 is_grand_prize = 0
         else:
             is_grand_prize = 0
-        lot_data_dict["is_grand_prize"] = is_grand_prize
 
         async with self.async_session() as session:
             lottery_id = lot_data_dict.get("lottery_id")
@@ -688,12 +697,85 @@ class SQLHelper(SqlHelperBase):
             )
             _exists = existing_record.scalars().first() is not None
 
-            await session.merge(self.process_resp_data_dict_2_lotdata(lot_data_dict))
+            # 使用 process_resp_data_dict_2_lotdata 过滤掉不属于 Lotdata 的字段（如 is_grand_prize）
+            lot_data_obj = self.process_resp_data_dict_2_lotdata(lot_data_dict)
+            await session.merge(lot_data_obj)
+            await session.flush()  # 确保 lotdata 父行先写入，否则 t_lot_extra_info 外键约束会失败
+
+            # 将 SVM 大奖判断结果写入独立子表 t_lot_extra_info
+            lottery_id = lot_data_dict.get("lottery_id")
+            if lottery_id is not None:
+                await self._upsert_extra_info(
+                    session=session,
+                    lottery_id=int(lottery_id),
+                    is_grand_prize=is_grand_prize,
+                )
 
             # 判断是插入还是更新
             mode = "insert" if _exists == 1 else "update"
             await session.commit()
             return {"mode": mode}
+
+    @staticmethod
+    async def _upsert_extra_info(session, lottery_id: int, is_grand_prize: int) -> None:
+        """原子 upsert：将 SVM 大奖判断结果写入 t_lot_extra_info"""
+        stmt = insert(LotExtraInfo).values(
+            lottery_id=lottery_id,
+            is_grand_prize=is_grand_prize,
+        )
+        stmt = stmt.on_duplicate_key_update(
+            is_grand_prize=stmt.inserted.is_grand_prize,
+            updated_at=text('CURRENT_TIMESTAMP'),
+        )
+        await session.execute(stmt)
+
+    @log_sql_retry_wrapper()
+    async def batch_check_existing_extra_info(
+        self, lottery_ids: list[int]
+    ) -> set[int]:
+        """批量查询已存在附加信息的 lottery_id 集合（用于手动回填脚本跳过已判记录）"""
+        if not lottery_ids:
+            return set()
+        async with self.async_session() as session:
+            stmt = (
+                select(LotExtraInfo.lottery_id)
+                .where(LotExtraInfo.lottery_id.in_(lottery_ids))
+            )
+            res = await session.execute(stmt)
+            return {row[0] for row in res.all()}
+
+    @log_sql_retry_wrapper()
+    async def batch_save_extra_info(
+        self, flags: dict[int, int]
+    ) -> None:
+        """批量保存附加信息到 t_lot_extra_info（key=lottery_id, value=is_grand_prize）"""
+        if not flags:
+            return
+        async with self.async_session() as session:
+            async with session.begin():
+                for lottery_id, is_grand_prize in flags.items():
+                    await self._upsert_extra_info(
+                        session=session,
+                        lottery_id=lottery_id,
+                        is_grand_prize=is_grand_prize,
+                    )
+
+    @log_sql_retry_wrapper()
+    async def get_extra_info_map(
+        self, lottery_ids: list[int]
+    ) -> dict[int, LotExtraInfo]:
+        """批量查询 extra_info，返回 {lottery_id: LotExtraInfo}。
+        与主表查询完全解耦，调用方先查 lotdata，再批量查 extra_info 自行合并。
+        """
+        if not lottery_ids:
+            return {}
+        async with self.async_session() as session:
+            stmt = select(LotExtraInfo).filter(
+                LotExtraInfo.lottery_id.in_(lottery_ids)
+            )
+            res = await session.execute(stmt)
+            rows = res.scalars().all()
+            return {row.lottery_id: row for row in rows}
 
     # endregion
     @log_sql_retry_wrapper()

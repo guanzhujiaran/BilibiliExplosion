@@ -12,7 +12,7 @@ from sqlalchemy.orm import selectinload
 from CONFIG import CONFIG
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sql_log
-from Utils.Common import sql_retry_wrapper
+from Utils.Common import log_sql_retry_wrapper
 from Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel import AvailableProxy, ProxyTab
 
 
@@ -27,7 +27,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
         self.log = sql_log
         self.use_good_proxy_flag: bool = False
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_num(self, is_available: bool = True) -> int:
         now = datetime.now()
         two_hours_ago = now - timedelta(hours=2)
@@ -56,7 +56,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
                 self.log.error(f"Error getting proxy count (available={is_available}): {e}")
                 return 0  # Return 0 or raise depending on desired behavior
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def del_by_ip(self, ip: str):
         # Be cautious with deleting by IP if IPs are not unique across different proxy_tab entries
         async with self.async_session() as session:
@@ -69,7 +69,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
                     await session.rollback()
                     raise  # Or handle differently
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_rand_available_proxy_sql(self) -> tuple[AvailableProxy | None, int]:
         """
         Attempts to get a random, available, and usable proxy from the database,
@@ -138,7 +138,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
         return None, available_num
 
     # --- Keep existing methods ---
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_available_proxy_by_proxy_id(self, proxy_tab_id: int) -> AvailableProxy | None:
         async with self.async_session() as session:
             result = await session.execute(
@@ -150,7 +150,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
             )
             return result.scalars().first()
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def update_proxy_counter_and_time(self, proxy_pk: int):
         # This method seems redundant if get_rand_available_proxy_sql handles updates
         # But keeping it if used elsewhere
@@ -177,7 +177,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
                     # Rollback handled by context manager
                     raise  # Or handle differently
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def delete_proxy_by_pk(self, proxy_pk: int):
         async with self.async_session() as session:
             async with session.begin():
@@ -192,7 +192,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
                     # Rollback handled by context manager
                     raise  # Or handle differently
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def update_proxy_resp_code(self, proxy_pk: int, resp_code: int):
         async with self.async_session() as session:
             async with session.begin():
@@ -219,7 +219,7 @@ class AvailableProxySqlHelper(SqlHelperBase):
                     # Rollback handled by context manager
                     raise  # Or handle differently
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def update_available_proxy_details(self, proxy_tab: ProxyTab, available: bool, resp_code: int):
         proxy_id = proxy_tab.proxy_id
         # 检查 proxy_id 是否存在于 proxy_tab 表中

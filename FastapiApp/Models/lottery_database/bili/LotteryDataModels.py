@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from enum import StrEnum, Enum, IntEnum
 from typing import Optional, Dict, Any, Union
-from pydantic import Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from pydantic import computed_field
 
 from Models.base.custom_pydantic import CustomBaseModel
@@ -171,8 +171,7 @@ class CommonLotteryResp(CustomBaseModel):
     officialLotType: OfficialLotType | None
     officialLotId: str = ""
     isOfficialAccount: int
-    isManualReply: str
-    isFollowed: int
+    isManualReply: bool = Field(default=False, description="是否需要人工评论")
     isLot: int
     hashTag: str
     isBigLot: int = Field(default=0, description="SVM 大奖判断结果: 1-大奖, 0-非大奖")
@@ -185,7 +184,7 @@ class CommonLotteryResp(CustomBaseModel):
             return None
         return v
 
-    @field_validator("officialLotId", "dynamicUrl", "authorName", "dynContent", "isManualReply", "hashTag", mode="before")
+    @field_validator("officialLotId", "dynamicUrl", "authorName", "dynContent", "hashTag", mode="before")
     @classmethod
     def _str_none_to_empty(cls, v):
         # 数据库中这些文本字段可能为 None，转为空字符串
@@ -193,7 +192,15 @@ class CommonLotteryResp(CustomBaseModel):
             return ""
         return v
 
-    @field_validator("isOfficialAccount", "isFollowed", "isLot", "up_uid", mode="before")
+    @field_validator("isManualReply", mode="before")
+    @classmethod
+    def _to_bool(cls, v):
+        # 兼容旧数据：'人工判断'/1/True -> True，''/0/None/False -> False
+        if isinstance(v, str):
+            return v == '人工判断'
+        return bool(v)
+
+    @field_validator("isOfficialAccount", "isLot", "up_uid", mode="before")
     @classmethod
     def _int_none_to_zero(cls, v):
         # 数据库中这些整数字段可能为 None，转为 0
@@ -210,6 +217,13 @@ class CommonLotteryResp(CustomBaseModel):
         return v
 
 
+class LotExtraInfoResp(CustomBaseModel):
+    """抽奖附加信息 — 对应数据库 t_lot_extra_info 表，方便后续扩展"""
+    is_grand_prize: bool = Field(default=False, description="大奖标志: true-大奖, false-非大奖")
+    need_comment: bool = Field(default=False, description="是否需要评论")
+    need_repost: bool = Field(default=False, description="是否需要转发")
+
+
 class OfficialLotteryResp(CustomBaseModel):
     @computed_field
     @property
@@ -223,6 +237,7 @@ class OfficialLotteryResp(CustomBaseModel):
     dynId: str
     sender_uid: str
     lottery_id: int
+    extra_info: LotExtraInfoResp | None = Field(default=None, description="抽奖附加信息")
     raw: LotdataResp
 
 
@@ -240,6 +255,7 @@ class ChargeLotteryResp(CustomBaseModel):
     sender_uid: str
     lottery_id: int
     upower_level_str: str
+    extra_info: LotExtraInfoResp | None = Field(default=None, description="抽奖附加信息")
     raw: LotdataResp
 
 
@@ -326,6 +342,14 @@ class BiliUserInfoSimple(CustomBaseModel):
 
 class AddTopicLotteryReq(CustomBaseModel):
     topic_id: int | str
+
+
+class BulkAddTopicLotteryReq(CustomBaseModel):
+    topic_ids: list[int | str]
+
+
+class BulkAddOthersLotDynReq(CustomBaseModel):
+    dynamic_id_or_urls: list[str]
 
 
 class SubmitFeedbackReq(CustomBaseModel):
@@ -499,20 +523,19 @@ class TimePresetEnum(StrEnum):
     last_7_days = "7d"
     last_14_days = "14d"
     last_30_days = "30d"
+    last_60_days = "60d"
+    last_90_days = "90d"
+    last_180_days = "180d"
+    last_365_days = "365d"
 
 
-class OthersLotPrizeInfo(CustomBaseModel):
-    """第三方抽奖动态的提取信息（ModelScope 提取）"""
-    dynId: int
+class OthersLotPrizeInfo(BaseModel):
+    """第三方抽奖动态的提取信息（UIE 提取）"""
+    model_config = ConfigDict(extra="forbid")
     prize_names: list[str] = Field(
         default_factory=list, description="提取到的奖品名称列表")
     lottery_time: str | None = Field(
         default=None, description="提取到的开奖时间字符串")
-
-    @computed_field
-    @property
-    def dynId_str(self) -> str:
-        return str(self.dynId)
 
 
 class OthersLotDynItem(CustomBaseModel):
@@ -539,13 +562,14 @@ class OthersLotDynItem(CustomBaseModel):
     likeCount: int | None
     officialLotType: OfficialLotType | None
     isOfficialAccount: int | None
-    isManualReply: str | None  # 是否需要人工评论
-    isFollowed: int | None     # 是否需要转发(关注)
+    isManualReply: bool | None = Field(default=None, description="是否需要人工评论")
     isLot: int | None
     hashTag: str | None
     created_at: datetime | None  # 数据库创建时间
     prize_info: OthersLotPrizeInfo | None = Field(
-        default=None, description="ModelScope 提取的奖品信息，首次提取后缓存")
+        default=None, description="UIE 提取的奖品信息，首次提取后缓存")
+    extra_info: LotExtraInfoResp | None = Field(
+        default=None, description="抽奖附加信息")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -556,6 +580,16 @@ class OthersLotDynItem(CustomBaseModel):
         if v == "" or v is None:
             return None
         return v
+
+    @field_validator("isManualReply", mode="before")
+    @classmethod
+    def _to_bool(cls, v):
+        # 兼容旧数据：'人工判断'/1/True -> True，''/0/None/False -> False
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return v == '人工判断'
+        return bool(v)
 
 
 class FilterParamTypeEnum(StrEnum):

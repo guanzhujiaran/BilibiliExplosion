@@ -14,13 +14,11 @@ from typing import Sequence
 
 from log.base_log import get_others_lot_logger as get_others_lot_log
 from Models.lottery_database.bili.LotteryDataModels import OfficialLotType
+from CONFIG import settings
 from Service.GetOthersLotDyn.Sql.models import TLotdyninfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
 from Utils.PushMe import a_pushme
 from Utils.SqlalchemyTool import sqlalchemy_model_2_dict
-
-# 默认时间限制：20天
-GET_LOT_DYN_TIME_LIMIT = 20 * 3600 * 24
 
 
 def is_need_lot(lot_det: TLotdyninfo, get_dyn_ts: int) -> bool:
@@ -118,9 +116,11 @@ async def push_lot_csv(title: str, content_list: list[TLotdyninfo]) -> None:
 
 
 async def solve_return_lot(
-        time_limit: int = GET_LOT_DYN_TIME_LIMIT,
+        time_limit: int | None = None,
         get_dyn_ts: int = 0
 ) -> list[dict]:
+    if time_limit is None:
+        time_limit = settings.get_others_lot.dyn_time_limit
     """解析并过滤抽奖，直接从数据库读取，按插入时间过滤，按动态发布时间排序
 
     从 GetOthersLotDyn.solve_return_lot 提取的独立函数。
@@ -134,16 +134,17 @@ async def solve_return_lot(
     filtered_list: list[TLotdyninfo] = list(
         filter(lambda x: is_need_lot(x, get_dyn_ts), all_lot_det))
     filtered_list.sort(key=lambda x: x.pubTime, reverse=True)
-    await push_lot_csv(
-        f"一般动态抽奖信息【{len(filtered_list)}】条",
-        filtered_list
-    )
+    # await push_lot_csv(
+    #     f"一般动态抽奖信息【{len(filtered_list)}】条",
+    #     filtered_list
+    # )
     get_others_lot_log.critical(f'第三方抽奖动态过滤完成，共{len(filtered_list)}条有效抽奖')
     ret_list = [sqlalchemy_model_2_dict(x) for x in filtered_list]
     if ret_list:
-        await a_pushme(
-            f"一般动态抽奖信息【{len(filtered_list)}】条", '\n'.join(
-                [str(x['dynId']) for x in ret_list]),
-            'text'
-        )
+        # await a_pushme(
+        #     f"一般动态抽奖信息【{len(filtered_list)}】条", '\n'.join(
+        #         [str(x['dynId']) for x in ret_list]),
+        #     'text'
+        # )
+        ...
     return ret_list

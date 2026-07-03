@@ -2,10 +2,42 @@ import os
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from fake_useragent import UserAgent
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import AsyncAdaptedQueuePool
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+class GetOthersLotDynConfig(BaseModel):
+    """第三方抽奖动态获取配置 —— 作为 Settings 的嵌套子模型，
+    部署时可整个对象填 JSON，也可逐字段用双下划线覆盖。
+    例如：get_others_lot='{"space_dyn_concurrency":3}'
+    或：  get_others_lot__space_dyn_concurrency=3
+    """
+    space_dyn_concurrency: int = 1     # 空间动态并发数
+    judge_dyn_concurrency: int = 1     # 抽奖判定并发数
+    spare_time: int = 86400 * 7            # 多久以前的动态不再获取(秒)，默认7天
+    get_dyn_interval: int = 86400 * 2      # 两次完整采集的最小间隔(秒)，默认2天
+    dyn_time_limit: int = 1728000      # 返回数据的时间范围(秒)，默认20天
+    max_user_list_size: int = 20       # 用户列表最大长度
+    remove_check_days: int = 14        # 剔除用户时检查最近N天内的抽奖数
+    min_valid_lot_threshold: int = 10  # 低于此阈值的用户将被剔除
+    hot_lot_dyn_count: int = 5        # 从评论区挖掘用户时选取的高互动动态数量
+    hot_lot_dyn_days: int = 7         # 高互动动态的时间范围(天)
+    # 用户列表为空且无法从评论区补充时使用的默认用户 uid 列表
+    default_user_uids: list[int] = [
+        319857159, 14017844, 1234306704, 31497476, 2147319744,
+        410550169, 646686238, 71583520, 279262754, 275744172,
+        332793152, 1397970246, 3493092200024392, 386051299, 381282283,
+        20958956, 1869690859, 1183157743, 4586734, 1741486871,
+        266223923, 646327721, 1803790683, 8544035, 1123570168,
+        3494361237031878, 223712517, 480906586, 1040677577, 471565816,
+        343104186, 2204166, 290089137, 1855888816, 691536906,
+        6477408, 1586295950, 1369967146, 40809204, 1992326018,
+        649407876, 256316789, 143412922, 1278208248, 499023056,
+        565064296, 693445761, 7538278,
+    ]
 
 
 class Settings(BaseSettings):
@@ -40,6 +72,9 @@ class Settings(BaseSettings):
     )
     SHOW_LOG: int = 0
     IS_DEV: int = 1  # 默认开发环境
+
+    # ===== 第三方抽奖动态获取 =====
+    get_others_lot: GetOthersLotDynConfig = GetOthersLotDynConfig()
 
 
 settings = Settings()

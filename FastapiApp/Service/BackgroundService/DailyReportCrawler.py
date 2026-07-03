@@ -1,124 +1,107 @@
+import inspect
 from datetime import datetime
-from typing import List, Dict, Any
-import httpx
-from log.base_log import pushme_logger
+from Service.BaseCrawler.launcher.scheduler_launcher import GenericCrawlerScheduler
+from Service.BaseCrawler.plugin.statusPlugin import StatsPlugin, CrawlerHealthStatus
 from Utils.PushMe import a_pushme
-from CONFIG import CONFIG
+from log.base_log import pushme_logger
 
 
-class DailyReportGenerator:
-    """每日报告生成器，用于收集后台服务状态并发送到PushMe"""
-    
-    def __init__(self):
-        self.api_base_url = f"http://localhost:{getattr(CONFIG, 'port', 23333)}"
-    
-    async def fetch_all_background_service_status(self) -> List[Dict[str, Any]]:
-        """获取所有后台服务的状态信息"""
+# 需要监控卡住状态的爬虫调度器名称（官方抽奖 + 第三方爬虫）
+_MONITORED_CRAWLER_NAMES = {
+    "GET_RESERVE_INFO",        # 预约抽奖
+    "GET_DYN",                 # 动态抽奖
+    "GET_TOPIC",               # 话题抽奖
+    "REFRESH_BILI_LOTDATA_DATABASE",  # 刷新B站抽奖数据库
+    "LOTTERY_API_ROBOT_DYN_SCHEDULER",    # 官方动态抽奖API
+    "LOTTERY_API_ROBOT_RESERVE_SCHEDULER",  # 官方预约抽奖API
+    "SAMSCCLUB_SCHEDULER",     # 山姆会员店（第三方）
+    "SAMSCCLUB_SPU_DETAIL_SCHEDULER",  # 山姆SPU详情（第三方）
+}
+
+# 记录上次推送时各爬虫的卡住状态，避免重复推送
+_last_stuck_state: dict[str, bool] = {}
+
+
+class CrawlerStuckChecker:
+    """爬虫卡住检测器，仅在目标爬虫卡住时推送通知"""
+
+    def _get_monitored_crawlers(self) -> dict[str, GenericCrawlerScheduler]:
+        """获取所有需要监控的爬虫调度器（惰性导入避免循环引用）"""
+        from Service.BackgroundService.CrawlerScheduler import background_service
+
+        result: dict[str, GenericCrawlerScheduler] = {}
+        members = inspect.getmembers(background_service)
+        for name, value in members:
+            if name in _MONITORED_CRAWLER_NAMES and isinstance(value, GenericCrawlerScheduler):
+                result[name] = value
+        return result
+
+    def _get_stats_plugin(self, scheduler: GenericCrawlerScheduler) -> StatsPlugin | None:
+        """从调度器中获取 StatsPlugin"""
+        for plugin in scheduler.crawler.plugins:
+            if isinstance(plugin, StatsPlugin):
+                return plugin
+        return None
+
+    async def check_and_report_stuck(self):
+        """检查所有目标爬虫的健康状态，仅在卡住时推送"""
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.api_base_url}/api/v1/background_service/BackgroundService/AllStat",
-                    timeout=30.0
-                )
-                response.raise_for_status()
-                result = response.json()
-                
-                if result.get('code') == 0:
-                    return result.get('data', [])
+            crawlers = self._get_monitored_crawlers()
+            stuck_list: list[str] = []
+            normal_list: list[str] = []
+
+            for name, scheduler in crawlers.items():
+                stats = self._get_stats_plugin(scheduler)
+                if stats is None:
+                    continue
+
+                health = stats.health_status
+                if health == CrawlerHealthStatus.STUCK:
+                    stuck_list.append(name)
                 else:
-                    pushme_logger.error(f"获取后台服务状态失败: {result.get('msg', '未知错误')}")
-                    return []
-        except Exception as e:
-            pushme_logger.exception(f"调用BackgroundService/AllStat API时出错: {e}")
-            return []
-    
-    def generate_summary_report(self, service_statuses: List[Dict[str, Any]]) -> str:
-        """根据服务状态生成摘要报告"""
-        if not service_statuses:
-            return "⚠️ 无法获取后台服务状态信息"
-        
-        report_lines = [
-            f"📊 B站抽奖系统每日报告 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "=" * 50,
-            ""
-        ]
-        
-        total_services = len(service_statuses)
-        active_services = 0
-        
-        for service_status in service_statuses:
-            for service_name, status_data in service_status.items():
-                report_lines.append(f"🔧 服务名称: {service_name}")
-                
-                # 提取统计插件信息
-                stats_plugin_info = status_data.get('StatsPlugin', {})
-                exec_info = status_data.get('exec_info', {})
-                
-                if stats_plugin_info:
-                    succ_count = stats_plugin_info.get('succ_count', 0)
-                    fail_count = stats_plugin_info.get('fail_count', 0)
-                    total_requests = stats_plugin_info.get('total_requests', 0)
-                    success_rate = (succ_count / total_requests * 100) if total_requests > 0 else 0
-                    
-                    report_lines.extend([
-                        f"   ✅ 成功次数: {succ_count}",
-                        f"   ❌ 失败次数: {fail_count}",
-                        f"   📈 总请求数: {total_requests}",
-                        f"   🎯 成功率: {success_rate:.2f}%"
-                    ])
-                    
-                    # 如果成功率较高，则标记为活跃服务
-                    if success_rate > 80:
-                        active_services += 1
-                
-                if exec_info:
-                    last_exec_time = exec_info.get('last_exec_time')
-                    if last_exec_time:
-                        # 将时间戳转换为可读格式
-                        try:
-                            dt = datetime.fromtimestamp(last_exec_time)
-                            formatted_time = dt.strftime('%Y-%m-%d %H:%M:%S')
-                            report_lines.append(f"   ⏰ 最后执行时间: {formatted_time}")
-                        except:
-                            report_lines.append(f"   ⏰ 最后执行时间: {last_exec_time}")
-                
-                report_lines.append("")  # 空行分隔不同服务
-        
-        # 添加总结信息
-        report_lines.extend([
-            "=" * 50,
-            f"📋 总计服务数: {total_services}",
-            f"✅ 活跃服务数: {active_services}",
-            f"📅 报告生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            ""
-        ])
-        
-        return "\n".join(report_lines)
-    
-    async def send_daily_report(self):
-        """发送每日报告到PushMe"""
-        try:
-            # 获取所有后台服务状态
-            service_statuses = await self.fetch_all_background_service_status()
-            
-            # 生成摘要报告
-            summary_report = self.generate_summary_report(service_statuses)
-            
-            # 发送到PushMe
-            title = f"B站抽奖系统每日报告 - {datetime.now().strftime('%Y-%m-%d')}"
-            await a_pushme(title=title, content=summary_report, push_type='markdown')
-            
-            pushme_logger.info("每日报告已成功发送到PushMe")
-            
-        except Exception as e:
-            error_msg = f"发送每日报告时出错: {str(e)}"
-            pushme_logger.exception(error_msg)
-            await a_pushme(
-                title="B站抽奖系统每日报告 - 发送失败",
-                content=f"❌ {error_msg}\n\n请检查系统日志以获取更多信息。",
-                push_type='text'
+                    normal_list.append(name)
+
+            # 更新状态并仅在状态变化时推送
+            new_stuck_names = set(stuck_list)
+            for name in _MONITORED_CRAWLER_NAMES:
+                was_stuck = _last_stuck_state.get(name, False)
+                is_stuck = name in new_stuck_names
+                if is_stuck and not was_stuck:
+                    # 新卡住的爬虫，推送通知
+                    _last_stuck_state[name] = True
+                    await self._push_stuck_notification([name])
+                elif not is_stuck and was_stuck:
+                    # 之前卡住现在恢复了
+                    _last_stuck_state[name] = False
+                    await a_pushme(
+                        title=f"爬虫恢复通知",
+                        content=f"✅ 爬虫 **{name}** 已恢复正常运行\n\n恢复时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                        push_type='markdown',
+                    )
+
+            pushme_logger.debug(
+                f"爬虫卡住检测完成: 卡住={stuck_list}, 正常={normal_list}"
             )
 
+        except Exception as e:
+            pushme_logger.exception(f"爬虫卡住检测出错: {e}")
 
-# 创建全局实例
-daily_report_generator = DailyReportGenerator()
+    async def _push_stuck_notification(self, stuck_names: list[str]):
+        """推送爬虫卡住通知"""
+        names_str = "、".join(stuck_names)
+        content = (
+            f"⚠️ 以下爬虫可能已卡住，请及时检查：\n\n"
+            f"**卡住爬虫**: {names_str}\n\n"
+            f"检测时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"可能原因：\n"
+            f"- 爬虫进程无响应超过10分钟\n"
+            f"- 运行中的任务超过1天未更新"
+        )
+        await a_pushme(
+            title=f"爬虫卡住告警 - {names_str}",
+            content=content,
+            push_type='markdown',
+        )
+
+
+crawler_stuck_checker = CrawlerStuckChecker()

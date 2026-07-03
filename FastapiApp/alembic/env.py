@@ -3,7 +3,7 @@ Alembic 多数据库版本管理 env.py
 
 通过 -x db=xxx 参数指定目标数据库:
     alembic -x db=biliopusdb  upgrade head
-    alembic -x db=biliopusdb  revision --autogenerate -m "add grand_prize_flag"
+    alembic -x db=biliopusdb  revision --autogenerate -m "add extra_info"
     alembic -x db=bilidb      upgrade head
     alembic -x db=bilidb      revision --autogenerate -m "xxx"
     alembic -x db=bili_reserve upgrade head
@@ -42,7 +42,7 @@ DATABASE_CONFIGS = {
         "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.get_other_lot_URI),
         "base_import": "Service.GetOthersLotDyn.Sql.models",
         "version_dir": "biliopusdb",
-        "description": "普通抽奖动态库 (t_lotdyninfo / t_lot_grand_prize_flag 等)",
+        "description": "普通抽奖动态库 (t_lotdyninfo / t_lot_extra_info 等)",
     },
     "bilidb": {
         "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.bili_db_URI),
@@ -112,7 +112,7 @@ config.set_main_option("version_locations", _version_path)
 target_metadata = _import_base(_db_config["base_import"]).metadata
 
 print(f"[alembic] 目标数据库: {_db_name} ({_db_config['description']})")
-print(f"[alembic] URL: {_db_config['url'][:_db_config['url'].find('@')]}@***")
+print(f"[alembic] URL: {_db_config}")
 print(f"[alembic] 版本目录: versions/{_db_version_dir}/")
 
 
@@ -134,10 +134,11 @@ def run_migrations_offline() -> None:
 
 
 def _include_object(object, name, type_, reflected, compare_to):
-    """排除旧的 alembic_version 表（无后缀），避免 autogenerate 误将其
-    检测为 "数据库中多余的表" 而生成 DROP TABLE 语句。
+    """排除所有 alembic_version 系列表（包括带后缀的如 alembic_version_dyndetail），
+    避免 autogenerate 误将其检测为 "数据库中多余的表" 而生成 DROP TABLE 语句，
+    导致整个迁移被标记为含破坏性操作而被跳过。
     """
-    if type_ == "table" and name == "alembic_version":
+    if type_ == "table" and name.startswith("alembic_version"):
         return False
     return True
 

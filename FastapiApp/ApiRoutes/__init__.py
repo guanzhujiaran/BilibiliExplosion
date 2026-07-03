@@ -107,7 +107,9 @@ class RouterPaths(StrEnum):
     ADD_DYNAMIC_LOTTERY = "/AddDynamicLottery"  # 提交抽奖动态
     BULK_ADD_DYNAMIC_LOTTERY = "/BulkAddDynamicLottery"  # 批量提交抽奖动态
     ADD_TOPIC_LOTTERY = "/AddTopicLottery"  # 提交话题抽奖
+    BULK_ADD_TOPIC_LOTTERY = "/BulkAddTopicLottery"  # 批量提交话题抽奖
     ADD_OTHERS_LOT_DYN = "/AddOthersLotDyn"  # 提交第三方抽奖动态
+    BULK_ADD_OTHERS_LOT_DYN = "/BulkAddOthersLotDyn"  # 批量提交第三方抽奖动态
     SUBMIT_FEEDBACK = "/SubmitFeedback"  # 提交反馈
     SEARCH_LOTTERY_BY_KEYWORD = "/SearchLotteryByKeyword"  # 关键词搜索
     
@@ -207,7 +209,9 @@ class RouterNames(StrEnum):
     ADD_DYNAMIC_LOTTERY = "add_dynamic_lottery"  # 提交抽奖动态
     BULK_ADD_DYNAMIC_LOTTERY = "bulk_add_dynamic_lottery"  # 批量提交抽奖动态
     ADD_TOPIC_LOTTERY = "add_topic_lottery"  # 提交话题抽奖
+    BULK_ADD_TOPIC_LOTTERY = "bulk_add_topic_lottery"  # 批量提交话题抽奖
     ADD_OTHERS_LOT_DYN = "add_others_lot_dyn"  # 提交第三方抽奖动态
+    BULK_ADD_OTHERS_LOT_DYN = "bulk_add_others_lot_dyn"  # 批量提交第三方抽奖动态
     SUBMIT_FEEDBACK = "submit_feedback"  # 提交反馈
     SEARCH_LOTTERY_BY_KEYWORD = "search_lottery_by_keyword"  # 关键词搜索
     

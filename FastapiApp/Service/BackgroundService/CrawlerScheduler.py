@@ -16,12 +16,12 @@ from Service.GrpcModule.GrpcSrc.getDynDetail import dyn_detail_scrapy
 from Service.opus新版官方抽奖.bili_lottery_api.refresh_bili_lot_database import (
     refresh_bili_lot_database_crawler,
 )
-from Service.BackgroundService.DailyReportCrawler import daily_report_generator
+from Service.BackgroundService.DailyReportCrawler import crawler_stuck_checker
 from Models.v1.background_service.background_service_model import BackgroundServiceName
 
 
 class BackgroundService:
-    DAILY_REPORT_SCHEDULER: BaseScheduler | None = None
+    STUCK_CHECK_SCHEDULER: BaseScheduler | None = None
     DYN_DETAIL_DATABASE_CLEANER: BaseScheduler | None = None
     GET_PROXY_METHODS_SCHEDULER: GenericCrawlerScheduler | None = None
     SAMSCCLUB_SCHEDULER: GenericCrawlerScheduler | None = None
@@ -35,11 +35,11 @@ class BackgroundService:
     GMFLV2_SCHEDULER: GenericCrawlerScheduler | None = None
 
     def __init__(self):
-        self.DAILY_REPORT_SCHEDULER = BaseScheduler(
-            func=daily_report_generator.send_daily_report,
-            cron_expr="0 8 * * *",  # 每天早上8点执行
-            default_interval_seconds=24 * 3600,  # 24小时间隔
-            crawler_name=BackgroundServiceName.DYN_DETAIL_DATABASE_CLEANER.value
+        self.STUCK_CHECK_SCHEDULER = BaseScheduler(
+            func=crawler_stuck_checker.check_and_report_stuck,
+            cron_expr="*/10 * * * *",  # 每10分钟检查一次爬虫是否卡住
+            default_interval_seconds=600,  # 10分钟间隔
+            crawler_name=BackgroundServiceName.STUCK_CHECK_SCHEDULER.value
         )
         self.DYN_DETAIL_DATABASE_CLEANER = BaseScheduler(
             func=cleaner.do_clean,

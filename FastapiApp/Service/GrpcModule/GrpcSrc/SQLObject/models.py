@@ -27,7 +27,13 @@ class Lotdata(Base):
         Index('UQ_business_id', 'business_id', unique=True),
         Index('idx_lottery_id', 'lottery_id', 'business_id', 'lottery_time', 'sender_uid', 'business_type', 'status'),
         Index('lottery_time', 'lottery_time'),
-        Index('sender_uid', 'sender_uid')
+        Index('sender_uid', 'sender_uid'),
+        # 排序字段复合索引（业务类型在前，避免 filesort）
+        Index('idx_bt_lottery_time', 'business_type', 'lottery_time'),
+        Index('idx_bt_participants', 'business_type', 'participants'),
+        Index('idx_bt_first_prize', 'business_type', 'first_prize'),
+        Index('idx_bt_created_at', 'business_type', 'created_at'),
+        Index('idx_bt_status_lottery_time', 'business_type', 'status', 'lottery_time'),
     )
 
     lottery_id = mapped_column(BigInteger, primary_key=True)
@@ -64,13 +70,32 @@ class Lotdata(Base):
     followed = mapped_column(BigInteger)
     reposted = mapped_column(BigInteger)
     custom_extra_key = mapped_column(TEXT)
-    is_grand_prize = mapped_column(TINYINT(1), nullable=False, server_default=text('0'), comment='SVM 大奖判断结果: 1-大奖, 0-非大奖')
     created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
     updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
 
     article_pub_record: Mapped[List['ArticlePubRecord']] = relationship('ArticlePubRecord', uselist=True, back_populates='lot_data_business')
     bili_atari_info: Mapped[List['BiliAtariInfo']] = relationship('BiliAtariInfo', uselist=True, back_populates='atari_lot')
     bilidyndetail: Mapped[List['Bilidyndetail']] = relationship('Bilidyndetail', uselist=True, back_populates='lot')
+    extra_info: Mapped[Optional['LotExtraInfo']] = relationship('LotExtraInfo', uselist=False, back_populates='lotdata')
+
+
+class LotExtraInfo(Base):
+    """抽奖附加信息表 — 存储大奖判断结果等额外信息，独立于Lotdata"""
+    __tablename__ = 't_lot_extra_info'
+    __table_args__ = (
+        ForeignKeyConstraint(['lottery_id'], ['lotdata.lottery_id'], name='FK_lot_extra_info_lotdata'),
+        Index('idx_lottery_id', 'lottery_id', unique=True),
+    )
+
+    id = mapped_column(Integer, primary_key=True, autoincrement=True)
+    lottery_id = mapped_column(BigInteger, nullable=False, comment='关联lotdata.lottery_id')
+    is_grand_prize = mapped_column(TINYINT(1), nullable=False, server_default=text('0'), comment='是否大奖: 1-是, 0-否')
+    need_comment = mapped_column(TINYINT(1), nullable=False, server_default=text('0'), comment='是否需要评论: 1-是, 0-否')
+    need_repost = mapped_column(TINYINT(1), nullable=False, server_default=text('0'), comment='是否需要转发: 1-是, 0-否')
+    created_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP'))
+    updated_at = mapped_column(TIMESTAMP, server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
+
+    lotdata: Mapped['Lotdata'] = relationship('Lotdata', back_populates='extra_info')
 
 
 class ArticlePubRecord(Base):

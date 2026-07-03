@@ -41,12 +41,9 @@ RPC handler 注册方式：在 mq_controller.py 末尾导入 lottery_data 模块
     async def handle_get_reserve_lottery(params: GetReserveLotteryRpcParams) -> CommonResponseModel:
         ...
 """
-
 import asyncio
-
 from faststream import AckPolicy
 from pydantic import BaseModel
-
 from Service.MQ.base.MQClient.base import router
 from log.base_log import MQ_logger as logger
 from Models.rpc_models import RpcMethodName, ROUTING_KEY_PREFIX

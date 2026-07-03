@@ -24,18 +24,19 @@ from Utils.加密.wbi加密 import gen_dm_args, get_wbi_params
 
 def get_latest_version_builds() -> list[LatestVersionBuild]:
     url = "https://app.bilibili.com/x/v2/version"
-    resp = requests.get(url, impersonate=random.choice(list(BrowserType)).value)
+    resp = requests.get(
+        url, impersonate=random.choice(list(BrowserType)).value)
     resp_dict = resp.json()
     return [LatestVersionBuild(**item) for item in resp_dict["data"]]
 
 
 @request_wrapper
 async def get_reply_main(
-        dynamic_id,
-        rid,
-        pn,
-        _type,
-        mode,
+        dynamic_id: int | None,
+        rid: int | None,
+        pn: int,
+        _type: int | None,
+        mode: int,
         request_conf: RequestConf = RequestConf(
             is_use_custom_proxy=True,
             is_use_available_proxy=False,
@@ -49,14 +50,10 @@ async def get_reply_main(
            :param rid:
            :param pn:
            :param _type:
-           :param mode:
+           :param mode: 2=按时间排序, 3=热门评论
            :param request_conf:
            :return:
            """
-    if mode:
-        mode = mode[0]
-    else:
-        mode = 2
     ctype = 17
     if str(_type) == "8":
         ctype = 1
@@ -167,7 +164,8 @@ async def get_lot_notice(
         if resp.get("code") != 0:
             if resp.get("code") == -9999:
                 return resp  # 只允许code为-9999的或者是0的响应返回！其余的都是有可能代理服务器的响应而非b站自己的响应
-            bapi_log.critical(f"get_lot_notice响应代码错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}")
+            bapi_log.critical(
+                f"get_lot_notice响应代码错误:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}")
             await a_pushme("get_lot_notice响应代码错误！",
                            f"https://api.vc.bilibili.com/lottery_svr/v1/lottery_svr/lottery_notice?business_type="
                            f"{business_type}&business_id={business_id}\nget_lot_notice Error:\t{resp}\t{params}\torigin_dynamic_id:{origin_dynamic_id}")
@@ -221,7 +219,7 @@ async def reserve_relation_info(
     check_reserve_relation_info(req_dict, ids=ids, params=params)
     return req_dict
 
-
+__BILI_DYN_SPM_IDS = ["333.1368","333.1387"]
 @request_wrapper
 async def get_space_dynamic_req_with_proxy(
         hostuid: int | str,
@@ -240,6 +238,7 @@ async def get_space_dynamic_req_with_proxy(
     :param request_conf:
     :return:
     """
+    spm_id = random.choice(__BILI_DYN_SPM_IDS)
     offset = offset if offset else ""
     url = URL_SPACE_DYNAMIC
     cookie_data, headers = await prepare_request_data(
@@ -265,12 +264,13 @@ async def get_space_dynamic_req_with_proxy(
         "timezone_offset": -480,
         "platform": "web",
         "features": "itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,forwardListHidden,decorationCard,commentsNewVersion,onlyfansAssetsV2,ugcDelete,onlyfansQaCard",
-        "web_location": "333.1387",
+        "web_location": spm_id,
     }
-    dongtaidata = gen_dm_args(dongtaidata, gen_bili_web_cookie_params=cookie_data.ck.gen_web_cookie_params)  # 先加dm参数
+    dongtaidata = gen_dm_args(
+        dongtaidata, gen_bili_web_cookie_params=cookie_data.ck.gen_web_cookie_params)  # 先加dm参数
     dongtaidata.update({
         "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(",", ":")),
-        "x-bili-web-req-json": json.dumps({"spm_id": "333.1387"}, separators=(",", ":"))
+        "x-bili-web-req-json": json.dumps({"spm_id": spm_id}, separators=(",", ":"))
     })
     wbi_sign = await get_wbi_params(dongtaidata)
     dongtaidata.update({
@@ -342,7 +342,7 @@ async def get_polymer_web_dynamic_detail(
             "platform": "web",
             "gaia_source": "main_web",
             "id": dynamic_id,
-            "features": "itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible,avatarAutoTheme",
+            "features": "itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible,avatarAutoTheme,sunflowerStyle,cardsEnhance,eva3CardOpus,eva3CardVideo,eva3CardComment,eva3CardVote,eva3CardUser",
             "web_location": "333.1368",
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(",", ":")),
             "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(",", ":"))
@@ -354,7 +354,7 @@ async def get_polymer_web_dynamic_detail(
             "gaia_source": "main_web",
             "rid": rid,
             "type": dynamic_type,
-            "features": "itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible,avatarAutoTheme",
+            "features": "itemOpusStyle,opusBigCover,onlyfansVote,endFooterHidden,decorationCard,onlyfansAssetsV2,ugcDelete,onlyfansQaCard,editable,opusPrivateVisible,avatarAutoTheme,sunflowerStyle,cardsEnhance,eva3CardOpus,eva3CardVideo,eva3CardComment,eva3CardVote,eva3CardUser",
             "web_location": "333.1368",
             "x-bili-device-req-json": json.dumps({"platform": "web", "device": "pc"}, separators=(",", ":")),
             "x-bili-web-req-json": json.dumps({"spm_id": "333.1368"}, separators=(",", ":"))
@@ -478,13 +478,11 @@ if __name__ == "__main__":
         )
         print(resp)
 
-
     async def _test_get_web_topic():
         resp = await get_web_topic(
             1312441
         )
         print(resp)
         assert type(resp.get('code')) is int
-
 
     asyncio.run(_test_get_web_topic())

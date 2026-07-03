@@ -122,7 +122,7 @@ class TActivityMatchTask(Base):
 
     pk = mapped_column(Integer, primary_key=True)
     traffic_card_id = mapped_column(Integer, nullable=False)
-    task_desc = mapped_column(VARCHAR(50))
+    task_desc = mapped_column(VARCHAR(255))
     interact_type = mapped_column(JSON)
     task_group_id = mapped_column(JSON)
     task_name = mapped_column(String(50))
@@ -254,9 +254,9 @@ class TCapsule(Base):
 
     pk = mapped_column(Integer, primary_key=True)
     functional_card_id = mapped_column(Integer, nullable=False)
-    name = mapped_column(String(50), nullable=False)
-    jump_url = mapped_column(String(255), nullable=False)
-    icon_url = mapped_column(String(255), nullable=False)
+    name = mapped_column(String(50))
+    jump_url = mapped_column(String(255))
+    icon_url = mapped_column(String(255))
 
     functional_card: Mapped['TFunctionalCard'] = relationship('TFunctionalCard', back_populates='t_capsule')
 

@@ -12,11 +12,7 @@ from Models.lottery_database.bili.LotteryDataModels import OfficialLotType
 from Service.GetOthersLotDyn.parser.dynamic_detail_parsed import DynamicDetailParsed
 from Service.GetOthersLotDyn.parser.dynamic_detail_parser import parse_dynamic_item
 from Service.GetOthersLotDyn.filter.manual_reply_judge import manual_reply_judge
-from Service.GetOthersLotDyn.parser.prize_extractor import (
-    extract_is_lot,
-    extract_need_repost,
-    extract_need_topic,
-)
+from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_info
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
 from Service.GetOthersLotDyn.Sql.models import TLotdyninfo
 from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
@@ -320,19 +316,25 @@ class BiliDynamicItem:
                     get_others_lot_log.info(
                         f'动态内容为空，无法提取抽奖信息，动态链接=https://t.bilibili.com/{dynamic_detail_dynamic_id}?type={self.dynamic_type}')
                     deadline = None
-                premsg = await extract_need_topic(dynamic_content)
-                need_repost = await extract_need_repost(dynamic_content)
+                prize_result = await extract_prize_info(dynamic_content)
+                premsg = prize_result.need_topic
+                need_repost = prize_result.need_repost
                 ret_url = f'https://t.bilibili.com/{dynamic_detail_dynamic_id}'
                 if need_repost:
                     ret_url += '?tab=2'
-                manual_judge = ''
+                manual_judge = False
                 if await asyncio.to_thread(manual_reply_judge.call, 'manual_reply_judge', dynamic_content):
-                    manual_judge = '人工判断'
+                    manual_judge = True
                 if re.match(r'.*//@.*', str(dynamic_content), re.DOTALL) is not None:
                     dynamic_content = re.findall(
                         r'(.*?)//@', dynamic_content, re.DOTALL)[0]
-                if not self.is_lot_orig:
-                    if not await extract_is_lot(dynamic_content):
+                # is_lot 逻辑：官方抽奖=1，预约/充电=0，其他用 extract_prize_info
+                if is_official_lot:
+                    is_lot = True
+                elif is_reserve_lot or is_charge_lot:
+                    is_lot = False
+                elif not self.is_lot_orig:
+                    if not prize_result.is_lot:
                         if comment_count > 2000 or forward_count > 1000:  # 评论或转发超多的就算不是抽奖动态也要加进去凑个数
                             pass
                         else:
@@ -354,8 +356,7 @@ class BiliDynamicItem:
                                           officialLotId=str(lot_rid),
                                           isOfficialAccount=int(
                                               official_verify_type if official_verify_type else 0),
-                                          isManualReply=manual_judge,
-                                          isFollowed=int(need_repost),
+                                          isManualReply=int(manual_judge),
                                           isLot=int(is_lot),
                                           hashTag=str(int(premsg)),
                                           dynLotRound_id=lotRound_id,
@@ -381,7 +382,7 @@ class BiliDynamicItem:
                     orig_ret_url = f'https://t.bilibili.com/{orig_dynamic_id}'
                     if 'tab=2' in ret_url:
                         orig_ret_url += '?tab=2'
-                    elif orig_dynamic_content and await extract_need_repost(orig_dynamic_content):
+                    elif orig_dynamic_content and (await extract_prize_info(orig_dynamic_content)).need_repost:
                         orig_ret_url += '?tab=2'
                     orig_dynamic = TLotdyninfo(
                         dynId=orig_dynamic_id,
@@ -398,8 +399,7 @@ class BiliDynamicItem:
                         officialLotId=None,
                         isOfficialAccount=orig_official_verify if type(
                             orig_official_verify) is int else 0,
-                        isManualReply=manual_judge,
-                        isFollowed=int(need_repost),
+                        isManualReply=int(manual_judge),
                         isLot=int(is_lot),
                         hashTag=str(int(premsg)),
                         dynLotRound_id=lotRound_id,
@@ -444,8 +444,7 @@ class BiliDynamicItem:
                     officialLotType=None,
                     officialLotId=None,
                     isOfficialAccount=-1,
-                    isManualReply='',
-                    isFollowed=-1,
+                    isManualReply=0,
                     isLot=-1,
                     hashTag='',
                     dynLotRound_id=lotRound_id,

@@ -71,20 +71,17 @@ def _extract_dynamic_content(module_dynamic: dict) -> str:
     return ''.join(parts)
 
 
-def _extract_stats(modules: dict) -> tuple[int, int, int]:
-    """从 modules.module_stat 中提取评论数、转发数、点赞数
+def _extract_stats(module_stat: dict) -> tuple[int, int, int]:
+    """从 module_stat 中提取评论数、转发数、点赞数
 
-    :return: (comment_count, forward_count, like_count)，失败返回 (-2, -2, -2)
+    :return: (comment_count, forward_count, like_count)，失败返回 (-1, -1, -1)
     """
-    try:
-        stat = modules.get('module_stat')
-        comment_count = stat.get('comment').get('count')
-        forward_count = stat.get('forward').get('count')
-        like_count = stat.get('like').get('count')
-        return comment_count, forward_count, like_count
-    except Exception as e:
-        get_others_lot_log.error(f'解析动态互动数据（评论/转发/点赞数）失败，error={e}\nmodules={modules}')
-        return -2, -2, -2
+    if not module_stat:
+        return -1, -1, -1
+    comment_count = _safe_get(module_stat, 'comment', 'count', default=-1)
+    forward_count = _safe_get(module_stat, 'forward', 'count', default=-1)
+    like_count = _safe_get(module_stat, 'like', 'count', default=-1)
+    return comment_count, forward_count, like_count
 
 
 def _extract_official_verify(module_author: dict) -> int:
@@ -132,8 +129,12 @@ def _parse_orig_dynamic(orig_item: dict | None) -> dict:
     modules = orig_item.get('modules') or {}
     module_author = modules.get('module_author') or {}
     module_dynamic = modules.get('module_dynamic') or {}
+    module_stat = modules.get('module_stat') or {}
 
     orig_dynamic_content = _extract_dynamic_content(module_dynamic)
+
+    # 原动态互动数据（评论/转发/点赞）
+    orig_comment_count, orig_forward_count, orig_like_count = _extract_stats(module_stat)
 
     orig_official_verify = -1
     ov = module_author.get('official_verify')
@@ -152,9 +153,9 @@ def _parse_orig_dynamic(orig_item: dict | None) -> dict:
         'orig_name': module_author.get('name'),
         'orig_pub_ts': module_author.get('pub_ts'),
         'orig_official_verify': orig_official_verify,
-        'orig_comment_count': None,
-        'orig_forward_count': None,
-        'orig_like_count': None,
+        'orig_comment_count': orig_comment_count,
+        'orig_forward_count': orig_forward_count,
+        'orig_like_count': orig_like_count,
         'orig_dynamic_content': orig_dynamic_content,
         'orig_relation': orig_relation,
         'orig_desc': module_dynamic.get('desc'),
@@ -220,16 +221,11 @@ def parse_dynamic_item(dynamic_id: str | int, dynamic_detail_resp: dict) -> Dyna
     official_verify_type = _extract_official_verify(module_author)
 
     # ---- 互动数据 ----
-    comment_count, forward_count, like_count = _extract_stats(modules)
+    comment_count, forward_count, like_count = _extract_stats(module_stat)
 
     # ---- 正文内容 ----
     dynamic_content = _extract_dynamic_content(module_dynamic)
     desc = module_dynamic.get('desc')
-
-    if relation != 1:
-        get_others_lot_log.debug(
-            f'当前账号未关注该动态作者，作者主页：https://space.bilibili.com/{author_uid}，动态链接：https://t.bilibili.com/{dynamic_data_dynamic_id}')
-
     # ---- 置顶判断 ----
     top_dynamic = None
     if module_tag:

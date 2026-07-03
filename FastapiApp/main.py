@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import time
 import asyncio
 import uvloop
 import sys
@@ -65,15 +66,18 @@ FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
 @app.middleware("http")
 async def global_middleware(request: Request, call_next):
     request_ip = request.client.host if request.client else "unknown"
+    start_ts = time.time()
     try:
         response = await call_next(request)
         # 可选：仅在调试模式下返回错误堆栈
         if hasattr(app, "debug"):
+            end_ts = time.time()
             response_body = b""
             async for chunk in response.body_iterator:
                 response_body += chunk
             myfastapi_logger.info(
-                f"请求IP: {request_ip}\n"
+                f"请求耗时: {end_ts - start_ts:.4f}秒\n"
+                               f"请求IP: {request_ip}\n"
                 f"请求方法: {request.method}\n"
                 f"请求路径: {request.url.path}\n"
                 f"响应状态码: {response.status_code}\n"

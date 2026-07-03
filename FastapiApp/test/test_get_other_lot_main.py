@@ -22,9 +22,9 @@ from Service.GetOthersLotDyn import (
     BiliDynamicItem,
     BiliSpaceUserItem,
     OfficialLotType,
-    GET_LOT_DYN_TIME_LIMIT,
     manual_reply_judge,
 )
+from CONFIG import settings
 from Service.GetOthersLotDyn.Sql.models import TLotdyninfo
 from Service.GetOthersLotDyn.parser.dynamic_detail_parsed import DynamicDetailParsed
 from Service.GetOthersLotDyn.filter.lottery_filter import is_need_lot
@@ -115,7 +115,6 @@ def _make_lot_dyn_info(**kwargs) -> TLotdyninfo:
         "officialLotId": None,
         "isOfficialAccount": 0,
         "isManualReply": "",
-        "isFollowed": 0,
         "isLot": 1,
         "hashTag": "",
         "dynLotRound_id": 1,
@@ -745,22 +744,19 @@ class TestConstants:
 
     def test_max_user_list_size(self):
         """用户列表最大长度应为正数"""
-        from Service.GetOthersLotDyn import MAX_USER_LIST_SIZE
-        assert MAX_USER_LIST_SIZE > 0
+        assert settings.get_others_lot.max_user_list_size > 0
 
     def test_min_valid_lot_threshold(self):
         """有效抽奖阈值应为正数"""
-        from Service.GetOthersLotDyn import MIN_VALID_LOT_THRESHOLD
-        assert MIN_VALID_LOT_THRESHOLD > 0
+        assert settings.get_others_lot.min_valid_lot_threshold > 0
 
     def test_get_lot_dyn_time_limit(self):
         """抽奖动态时间限制应为正数"""
-        assert GET_LOT_DYN_TIME_LIMIT > 0
+        assert settings.get_others_lot.dyn_time_limit > 0
 
     def test_space_dyn_concurrency(self):
         """空间动态并发数应为正数"""
-        from Service.GetOthersLotDyn import SPACE_DYN_CONCURRENCY
-        assert SPACE_DYN_CONCURRENCY > 0
+        assert settings.get_others_lot.space_dyn_concurrency > 0
 
 
 # ============================================================================

@@ -44,8 +44,10 @@ def request_wrapper(func: Callable):
             except (RequestKnownError, Request412Error, Request352Error, RequestProxyResponseError) as e:
                 # 已知可忽略的错误，直接重试
                 continue
+            except TypeError as type_err:
+                raise e from type_err
             except Exception as e:
-                bapi_log.error(f"方法：【{func.__name__}】 请求失败！\n{e}")
+                bapi_log.exception(f"方法：【{func.__name__}】 请求失败！\n{e}\n{type(e)}")
                 await asyncio.sleep(10)
 
     return wrapper

@@ -22,6 +22,7 @@ from Models.lottery_database.bili.LotteryDataModels import (
     LotdataResp,
     AddTopicLotteryResp,
     TimePresetEnum,
+    LotExtraInfoResp,
 )
 from Models.lottery_database.redisModel.biliRedisModel import bili_live_lottery_redis
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
@@ -39,6 +40,7 @@ from Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer import (
 )
 import asyncio
 from fastapi import BackgroundTasks
+from Service.GetOthersLotDyn.core.bili_dynamic_item import BiliDynamicItem
 
 bds = bili_dynamic_sqlhelper  # 获取普通抽奖（主要是非官方的
 brs = bili_reserve_sqlhelper
@@ -73,7 +75,6 @@ async def get_common_lottery(
             officialLotId=x.officialLotId,
             isOfficialAccount=x.isOfficialAccount,
             isManualReply=x.isManualReply,
-            isFollowed=x.isFollowed,
             isLot=x.isLot,
             hashTag=x.hashTag,
         )
@@ -143,8 +144,11 @@ async def get_reserve_lottery(
 async def get_official_lottery(
     q: BiliLotDataQueryModel,
 ) -> tuple[list[OfficialLotteryResp], int]:
-    # SVM 必抽判断已迁移至入库时写入 is_grand_prize 字段，查询通过 SQL 过滤
+    # 先查主表 lotdata，再通过独立批量查询获取 extra_info，与主表解耦
     all_lots, total_num = await bos.query_official_lottery_by_timelimit_page_offset(q)
+    extra_map = await bos.get_extra_info_map(
+        [x.lottery_id for x in all_lots]
+    )
     ret_list = [
         OfficialLotteryResp(
             dynId=(
@@ -163,6 +167,15 @@ async def get_official_lottery(
             ).strip(),
             jump_url=f"https://www.bilibili.com/opus/{str(x.business_id)}",
             app_sche=f"bilibili://opus/detail/{str(x.business_id)}",
+            extra_info=LotExtraInfoResp(
+                is_grand_prize=bool(extra_map[x.lottery_id].is_grand_prize),
+                need_comment=False,
+                need_repost=True,
+            ) if x.lottery_id in extra_map else LotExtraInfoResp(
+                is_grand_prize=False,
+                need_comment=False,
+                need_repost=True,
+            ),
             raw=LotdataResp.model_validate(x),
         )
         for x in all_lots
@@ -173,8 +186,11 @@ async def get_official_lottery(
 async def get_charge_lottery(
     q: BiliLotDataQueryModel,
 ) -> tuple[list[ChargeLotteryResp], int]:
-    # SVM 必抽判断已迁移至入库时写入 is_grand_prize 字段，查询通过 SQL 过滤
+    # 先查主表 lotdata，再通过独立批量查询获取 extra_info，与主表解耦
     all_lots, total_num = await bos.query_charge_lottery_by_timelimit_page_offset(q)
+    extra_map = await bos.get_extra_info_map(
+        [x.lottery_id for x in all_lots]
+    )
     ret_list = []
     for x in all_lots:
         try:
@@ -200,6 +216,11 @@ async def get_charge_lottery(
                     )
                 ).strip(),
                 upower_level_str=upower_level_str,
+                extra_info=LotExtraInfoResp(
+                    is_grand_prize=bool(extra_map[x.lottery_id].is_grand_prize),
+                    need_comment=bool(extra_map[x.lottery_id].need_comment),
+                    need_repost=bool(extra_map[x.lottery_id].need_repost),
+                ) if x.lottery_id in extra_map else None,
                 jump_url=f"https://www.bilibili.com/opus/{str(x.business_id)}",
                 app_sche=f"bilibili://opus/detail/{str(x.business_id)}",
                 raw=LotdataResp.model_validate(x),
@@ -374,7 +395,6 @@ async def get_all_lottery(
             officialLotId=x.officialLotId,
             isOfficialAccount=x.isOfficialAccount,
             isManualReply=x.isManualReply,
-            isFollowed=x.isFollowed,
             isLot=x.isLot,
             hashTag=x.hashTag,
         )
@@ -394,7 +414,7 @@ async def get_all_lottery(
 
     # 直接从数据库大奖 flag 子表读取（仅查询当前页，减少查询量）
     dyn_ids = [int(x.dynId) for x in paged_common_lottery]
-    grand_prize_flags = await bds.get_grand_prize_flags_by_ref_ids(dyn_ids, "common")
+    grand_prize_flags = await bds.get_extra_info_by_ref_ids(dyn_ids, "common")
     must_join_common_lottery = []
     for x in paged_common_lottery:
         x.isBigLot = grand_prize_flags.get(int(x.dynId), 0)
@@ -570,7 +590,6 @@ async def process_others_lot_dyn(dynamic_id: str, lot_round_id: int) -> None:
     :param dynamic_id: 动态ID
     :param lot_round_id: 抽奖轮次ID
     """
-    from Service.GetOthersLotDyn.core.bili_dynamic_item import BiliDynamicItem
 
     item = BiliDynamicItem(dynamic_id=dynamic_id)
     await item.judge_lottery(lotRound_id=lot_round_id)

@@ -19,7 +19,7 @@ from Service.samsclub.Sql.models import (
     GroupingInfo,
     CrawlTaskProgress,
 )
-from Utils.Common import sql_retry_wrapper
+from Utils.Common import log_sql_retry_wrapper
 
 
 class SQLHelper(SqlHelperBase):
@@ -118,7 +118,7 @@ class SQLHelper(SqlHelperBase):
                 )
                 await db.flush()
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def delete_spu_info(self, spu_id: str):
         async with self.async_session() as db:
             spu = await db.get(SpuInfo, spu_id)
@@ -126,12 +126,12 @@ class SQLHelper(SqlHelperBase):
                 await db.delete(spu)
                 await db.commit()
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_spu_info_by_id(self, spu_id: str) -> Optional[SpuInfo]:
         async with self.async_session() as db:
             return await db.get(SpuInfo, spu_id)
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def bulk_upsert_spu_info(self, spu_data_list: List[Dict[str, Any]]):
         """
         批量 Upsert SpuInfo 及其关联数据（一对多、一对一）
@@ -156,7 +156,7 @@ class SQLHelper(SqlHelperBase):
         # 子表处理
         await self._handle_relationships_upsert(spu_id, spu_data, db)
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def bulk_upsert_grouping_info(self, data_list):
         """
         接收完整响应数据，提取 data.dataList 并 Upsert 到 grouping_info 表
@@ -200,7 +200,7 @@ class SQLHelper(SqlHelperBase):
         # 执行
         await db.execute(stmt)
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def reset_all_tasks(self):
         """
         将 crawl_task_progress 表中所有任务重置为初始状态：
@@ -215,7 +215,7 @@ class SQLHelper(SqlHelperBase):
             await db.commit()
             print("✅ 已重置所有抓取任务进度，准备重新开始抓取")
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def reset_completed_tasks(self):
         """
         仅重置已完成的任务（is_finished=1）：
@@ -231,7 +231,7 @@ class SQLHelper(SqlHelperBase):
             await db.commit()
             print("✅ 已重置所有已完成的抓取任务")
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_unfinished_tasks(self) -> List[Dict[str, Any]]:
         """
         查询所有未完成的任务（is_finished != 1）
@@ -248,7 +248,7 @@ class SQLHelper(SqlHelperBase):
                 for row in rows
             ]
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_grouping_info_by_category_id(self, category_id) -> GroupingInfo | None:
         """
         查询所有未完成的任务（is_finished != 1）
@@ -263,7 +263,7 @@ class SQLHelper(SqlHelperBase):
             res = result.scalars().first()
         return res
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_grouping_infos_by_parent_grouping_id(self, paren_grouping_id: int | str) -> Sequence[GroupingInfo]:
         async with self.async_session() as db:
             result = await db.execute(
@@ -273,7 +273,7 @@ class SQLHelper(SqlHelperBase):
             res = result.scalars().all()
         return res
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_grouping_infos_by_level(self, level: int) -> Sequence[GroupingInfo]:
         """
         查询所有未完成的任务（is_finished != 1）
@@ -287,7 +287,7 @@ class SQLHelper(SqlHelperBase):
             res = result.scalars().all()
         return res
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def clear_all_task_progress(self):
         """
         清空 crawl_task_progress 表（慎用）
@@ -297,7 +297,7 @@ class SQLHelper(SqlHelperBase):
             await db.commit()
             print("✅ 已清空所有抓取任务进度记录")
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def update_task_progress(
             self,
             first_category_id: int,
@@ -323,7 +323,7 @@ class SQLHelper(SqlHelperBase):
             if result.rowcount == 0:
                 print(f"⚠️ 更新失败：任务 ({first_category_id}, {second_category_id}) 不存在")
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_or_create_task_progress(self, first_category_id, second_category_id) -> CrawlTaskProgress:
         async with self.async_session() as session:
             result = await session.execute(
@@ -361,7 +361,7 @@ class SQLHelper(SqlHelperBase):
                                                                      second_grouping_info.children])
         return frontCategoryIds
 
-    @sql_retry_wrapper
+    @log_sql_retry_wrapper()
     async def get_full_spu_info_by_spu_id(self, spu_id) -> SpuInfo | None:
         """
         查询所有未完成的任务（is_finished != 1）

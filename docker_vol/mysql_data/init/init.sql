@@ -347,7 +347,6 @@ CREATE TABLE IF NOT EXISTS `t_lotdyninfo` (
   `officialLotId` text,
   `isOfficialAccount` tinyint(1) DEFAULT NULL,
   `isManualReply` text,
-  `isFollowed` tinyint(1) DEFAULT NULL,
   `isLot` tinyint(1) DEFAULT NULL,
   `hashTag` text,
   `dynLotRound_id` int DEFAULT NULL,
