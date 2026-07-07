@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
 """Schema 一致性校验：启动时检查 DB 表结构是否与 ORM 模型一致，不一致则拒绝启动。"""
 
+import asyncio
 import importlib
 import re
+import sys
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config as AlembicConfig
 from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -11,9 +16,37 @@ from CONFIG import CONFIG
 from log.base_log import myfastapi_logger
 
 
+# 项目根目录（alembic.ini 所在位置），确保运行 alembic 命令时能正确导入 Service / CONFIG
+_project_root = Path(__file__).resolve().parent.parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
+
 # ================================================================
 # 公开入口
 # ================================================================
+
+async def run_alembic_upgrade_head() -> bool:
+    """对所有数据库执行一次 alembic upgrade head（增量迁移），全部成功返回 True"""
+    myfastapi_logger.critical("===== 开始执行 alembic upgrade head =====")
+    success = True
+    alembic_ini = _project_root / "alembic.ini"
+    for db_name in _DB_URL_MAP:
+        try:
+            cfg = AlembicConfig(str(alembic_ini), ini_section=db_name)
+            myfastapi_logger.info(f"[{db_name}] 正在执行 alembic upgrade head...")
+            # env.py 内部会 asyncio.run，需在独立线程中执行以避免与当前事件循环冲突
+            await asyncio.to_thread(command.upgrade, cfg, "head")
+            myfastapi_logger.info(f"[{db_name}] alembic upgrade head 完成")
+        except Exception as e:
+            myfastapi_logger.error(f"[{db_name}] alembic upgrade head 失败: {e}")
+            success = False
+    if success:
+        myfastapi_logger.critical("===== alembic upgrade head 全部执行完成 =====")
+    else:
+        myfastapi_logger.error("===== 部分数据库 alembic upgrade head 执行失败 =====")
+    return success
+
 
 async def check_schemas() -> bool:
     """检查所有数据库的 Schema 是否与模型一致，不一致返回 False"""

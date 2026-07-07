@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from CONFIG import settings, CONFIG
 from Service.LangChainCompo.lottery_data_vec_sql.sql_helper import milvus_sql_helper
 from Service.MQ.base.MQClient.BiliLotDataPublisher import BiliLotDataPublisher
-from Utils.FastAPI.alembic_manager import check_schemas
+from Utils.FastAPI.alembic_manager import check_schemas, run_alembic_upgrade_head
 from Utils.通用.Common import GLOBAL_SCHEDULER, asyncio_gather
 from controller.v1.background_service import BackgroundServiceController
 from log.base_log import myfastapi_logger
@@ -26,6 +26,10 @@ async def life_span(app: FastAPI):
         raise SystemExit(1)
     # 测试各个服务的端口和 host 连通性
     await test_service_ports_and_hosts()
+
+    # ---- 启动期自动执行 alembic upgrade head 增量迁移 ----
+    if not await run_alembic_upgrade_head():
+        raise RuntimeError("alembic upgrade head 执行失败，请检查数据库连接与迁移脚本")
 
     # ---- Schema 一致性校验：不一致则拒绝启动 ----
     if not await check_schemas():
