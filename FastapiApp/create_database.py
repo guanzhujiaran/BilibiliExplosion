@@ -15,6 +15,7 @@
     python create_database.py --db dyndetail         # 仅对 dyndetail 执行 create_all
 """
 import argparse
+import asyncio
 import importlib
 import os
 import sys
@@ -25,8 +26,8 @@ _project_root = Path(__file__).resolve().parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
-from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.engine import Engine
+from sqlalchemy import inspect
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import command
 from alembic.config import Config as AlembicConfig
@@ -35,13 +36,8 @@ from CONFIG import CONFIG as APP_CONFIG
 
 
 # ---------------------------------------------------------------------------
-# 数据库配置：与 alembic/env.py 的 DATABASE_CONFIGS 保持一致
+# 数据库配置：与 alembic/env.py 保持一致（异步 aiomysql）
 # ---------------------------------------------------------------------------
-
-def _aiomysql_to_pymysql(url: str) -> str:
-    """将 aiomysql 驱动 URL 转为 pymysql，供同步 create_all / stamp 使用。"""
-    return url.replace("mysql+aiomysql://", "mysql+pymysql://")
-
 
 def _import_metadata(import_path: str):
     """动态导入指定模块路径中的 Base.metadata 对象。"""
@@ -51,37 +47,37 @@ def _import_metadata(import_path: str):
 
 DATABASE_CONFIGS: dict[str, dict] = {
     "biliopusdb": {
-        "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.get_other_lot_URI),
+        "url": APP_CONFIG.database.MYSQL.get_other_lot_URI,
         "base_import": "Service.GetOthersLotDyn.Sql.models",
         "version_dir": "biliopusdb",
         "description": "普通抽奖动态库 (t_lotdyninfo / t_lot_extra_info 等)",
     },
     "bilidb": {
-        "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.bili_db_URI),
+        "url": APP_CONFIG.database.MYSQL.bili_db_URI,
         "base_import": "Service.opus新版官方抽奖.活动抽奖.话题抽奖.db.models",
         "version_dir": "bilidb",
         "description": "话题抽奖库 (t_topic / t_traffic_card 等)",
     },
     "bili_reserve": {
-        "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.bili_reserve_URI),
+        "url": APP_CONFIG.database.MYSQL.bili_reserve_URI,
         "base_import": "Service.opus新版官方抽奖.预约抽奖.db.models",
         "version_dir": "bili_reserve",
         "description": "预约抽奖库 (t_up_reserve_relation_info 等)",
     },
     "dyndetail": {
-        "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.dyn_detail_URI),
+        "url": APP_CONFIG.database.MYSQL.dyn_detail_URI,
         "base_import": "Service.GrpcModule.GrpcSrc.SQLObject.models",
         "version_dir": "dyndetail",
         "description": "动态详情库 (bilidyndetail / lotdata 等)",
     },
     "proxy_db": {
-        "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.proxy_db_URI),
+        "url": APP_CONFIG.database.MYSQL.proxy_db_URI,
         "base_import": "Utils.代理.数据库操作.SqlAlcheyObj.ProxyModel",
         "version_dir": "proxy_db",
         "description": "代理数据库 (proxy_tab / available_proxy)",
     },
     "samsclub": {
-        "url": _aiomysql_to_pymysql(APP_CONFIG.database.MYSQL.sams_club_URI),
+        "url": APP_CONFIG.database.MYSQL.sams_club_URI,
         "base_import": "Service.samsclub.Sql.models",
         "version_dir": "samsclub",
         "description": "山姆会员店数据库 (spu_info 等)",
@@ -94,24 +90,26 @@ DATABASE_CONFIGS: dict[str, dict] = {
 # ---------------------------------------------------------------------------
 
 def _get_alembic_config(db_name: str, version_dir: str) -> AlembicConfig:
-    """获取指定数据库的 Alembic Config，设置好 version_locations 和 -x db=xxx。"""
+    """获取指定数据库的 Alembic Config，使用 -n <section> 方式指定数据库。"""
     alembic_ini = _project_root / "alembic.ini"
-    cfg = AlembicConfig(str(alembic_ini))
+    cfg = AlembicConfig(str(alembic_ini), ini_section=db_name)
 
-    # 设置每个数据库独立的 version_locations
-    version_path = str(_project_root / "alembic" / "versions" / version_dir)
-    cfg.set_main_option("version_locations", version_path)
-
-    # 通过 -x db=xxx 传递给 env.py
-    from argparse import Namespace
-    cfg.cmd_opts = Namespace(x=[f"db={db_name}"])
+    # 每个数据库有自己的 env.py，script_location 通过 alembic.ini 的 section 配置
+    # 不需要手动设置 version_locations，env.py 会自动处理
 
     return cfg
 
 
-def _create_or_drop_all(
+def _stamp_head(db_name: str, version_dir: str):
+    """stamp alembic head: 将 alembic_version 表标记为当前 migrations 目录的最新 revision"""
+    cfg = _get_alembic_config(db_name, version_dir)
+    command.stamp(cfg, "head")
+    print(f"  [{db_name}] alembic stamp head 完成")
+
+
+async def _create_or_drop_all(
     db_name: str,
-    engine: Engine,
+    engine_url: str,
     metadata,
     rebuild: bool,
 ) -> None:
@@ -120,59 +118,55 @@ def _create_or_drop_all(
 
     Args:
         db_name: 数据库名称（仅用于日志）
-        engine: SQLAlchemy 同步 Engine
+        engine_url: 异步数据库 URL（aiomysql）
         metadata: SQLAlchemy MetaData 对象
         rebuild: 是否先 drop_all 再 create_all
     """
-    inspector = inspect(engine)
-    existing_tables = inspector.get_table_names()
-    model_tables = metadata.tables.keys()
+    engine = create_async_engine(engine_url)
+    try:
+        async with engine.connect() as connection:
 
-    if rebuild:
-        if existing_tables:
-            print(f"  [{db_name}] ⚠ 正在删除 {len(existing_tables)} 张表...")
-            metadata.drop_all(engine)
-            print(f"  [{db_name}] 已删除所有表")
-        else:
-            print(f"  [{db_name}] 数据库为空，跳过 drop_all")
+            def _sync_inspect(sync_conn):
+                return inspect(sync_conn).get_table_names()
 
-    # create_all：只创建不存在的表，不会修改已有表的结构
-    print(f"  [{db_name}] 正在根据 ORM 模型创建表...")
-    metadata.create_all(engine)
+            existing_tables = await connection.run_sync(_sync_inspect)
 
-    # 验证并报告
-    inspector = inspect(engine)
-    after_tables = inspector.get_table_names()
-    print(f"  [{db_name}] 完成！当前共 {len(after_tables)} 张表:")
-    for t in sorted(after_tables):
-        cols = [c["name"] for c in inspector.get_columns(t)]
-        print(f"    - {t} ({len(cols)} 列: {', '.join(cols[:8])}"
-              f"{'...' if len(cols) > 8 else ''})")
+            if rebuild:
+                if existing_tables:
+                    print(f"  [{db_name}] ⚠ 正在删除 {len(existing_tables)} 张表...")
 
+                    def _drop(sync_conn):
+                        metadata.drop_all(sync_conn)
 
-def _stamp_head(db_name: str, version_dir: str) -> None:
-    """
-    对指定数据库执行 alembic stamp head，将 version_table 标记为最新版本。
+                    await connection.run_sync(_drop)
+                    print(f"  [{db_name}] 已删除所有表")
+                else:
+                    print(f"  [{db_name}] 数据库为空，跳过 drop_all")
 
-    前提：该数据库的 versions/{db_name}/ 目录中已有迁移文件（至少一个 revision）。
-    """
-    alembic_cfg = _get_alembic_config(db_name, version_dir)
+            # create_all：只创建不存在的表，不会修改已有表的结构
+            print(f"  [{db_name}] 正在根据 ORM 模型创建表...")
 
-    # 验证是否有可用的 revision
-    from alembic.script import ScriptDirectory
-    script = ScriptDirectory.from_config(alembic_cfg)
-    head_rev = script.get_current_head()
+            def _create(sync_conn):
+                metadata.create_all(sync_conn)
 
-    if head_rev is None:
-        print(f"  [{db_name}] ⚠ 没有迁移文件，跳过 stamp（不影响 create_all 结果）")
-        return
+            await connection.run_sync(_create)
 
-    print(f"  [{db_name}] stamp head -> {head_rev}")
-    command.stamp(alembic_cfg, "head")
-    print(f"  [{db_name}] stamp 完成")
+            # 验证并报告
+            after_tables = await connection.run_sync(_sync_inspect)
+            print(f"  [{db_name}] 完成！当前共 {len(after_tables)} 张表:")
+            for t in sorted(after_tables):
+
+                def _get_cols(sync_conn, table=t):
+                    return [c["name"] for c in inspect(sync_conn).get_columns(table)]
+
+                cols = await connection.run_sync(_get_cols)
+                print(f"    - {t} ({len(cols)} 列: {', '.join(cols[:8])}"
+                      f"{'...' if len(cols) > 8 else ''})")
+    finally:
+        await engine.dispose()
 
 
-def process_database(db_name: str, db_config: dict, rebuild: bool) -> None:
+async def process_database(db_name: str, db_config: dict, rebuild: bool) -> None:
     """处理单个数据库：create_all + stamp head。"""
     print(f"\n{'=' * 60}")
     print(f"处理数据库: {db_name} ({db_config['description']})")
@@ -187,22 +181,41 @@ def process_database(db_name: str, db_config: dict, rebuild: bool) -> None:
         # 1. 导入模型的 metadata
         metadata = _import_metadata(db_config["base_import"])
 
-        # 2. 创建同步引擎
-        engine = create_engine(url, echo=False)
+        # 2. create_all（或 drop_all + create_all）（异步）
+        await _create_or_drop_all(db_name, url, metadata, rebuild=rebuild)
 
-        try:
-            # 3. create_all（或 drop_all + create_all）
-            _create_or_drop_all(db_name, engine, metadata, rebuild=rebuild)
-
-            # 4. stamp head
-            _stamp_head(db_name, db_config["version_dir"])
-        finally:
-            engine.dispose()
+        # 3. stamp head
+        _stamp_head(db_name, db_config["version_dir"])
 
         print(f"  [{db_name}] ✅ 处理完成")
     except Exception as e:
         print(f"  [{db_name}] ❌ 处理失败: {e}")
         raise
+
+
+async def async_main(args_db: str | None, rebuild: bool):
+    db_names = [args_db] if args_db else list(DATABASE_CONFIGS.keys())
+    failed: list[str] = []
+
+    for db_name in db_names:
+        try:
+            await process_database(db_name, DATABASE_CONFIGS[db_name], rebuild=rebuild)
+        except Exception:
+            failed.append(db_name)
+
+    print(f"\n{'=' * 60}")
+    if failed:
+        print(f"❌ 以下数据库处理失败: {', '.join(failed)}")
+        sys.exit(1)
+    else:
+        print("✅ 所有数据库处理完成！")
+        print()
+        print("提示:")
+        print("  - 全新数据库已通过 create_all() 创建完毕")
+        print("  - alembic_version 表已 stamp head")
+        print("  - 后续修改模型后，使用 make alembic-auto DB=<section> MSG='描述' 生成增量迁移")
+        print("  - 或手动：alembic -c alembic.ini -n <section> revision --autogenerate -m '描述'")
+        print("  - lifespan 启动时会自动执行 upgrade head 和 schema 一致性校验")
 
 
 def main():
@@ -244,28 +257,4 @@ def main():
                 print("  已取消")
                 return
 
-    db_names = [args.db] if args.db else list(DATABASE_CONFIGS.keys())
-    failed: list[str] = []
-
-    for db_name in db_names:
-        try:
-            process_database(db_name, DATABASE_CONFIGS[db_name], rebuild=args.rebuild)
-        except Exception:
-            failed.append(db_name)
-
-    print(f"\n{'=' * 60}")
-    if failed:
-        print(f"❌ 以下数据库处理失败: {', '.join(failed)}")
-        sys.exit(1)
-    else:
-        print("✅ 所有数据库处理完成！")
-        print()
-        print("提示:")
-        print("  - 全新数据库已通过 create_all() 创建完毕")
-        print("  - alembic_version 表已 stamp head")
-        print("  - 后续修改模型后，使用 alembic -x db=xxx revision --autogenerate 生成增量迁移")
-        print("  - lifespan 启动时会自动执行 upgrade head 和 autogenerate 检测")
-
-
-if __name__ == "__main__":
-    main()
+    asyncio.run(async_main(args.db, args.rebuild))

@@ -1,0 +1,66 @@
+[mysqld]
+# ---------------------------------------------------------
+# 1. 关闭 Binlog 与日志 (节省磁盘与内存开销)
+# ---------------------------------------------------------
+skip-log-bin
+general_log = 0
+slow_query_log = 0
+log_error_verbosity = 1
+log-output = NONE
+
+# ---------------------------------------------------------
+# 2. 连接与超时优化
+# ---------------------------------------------------------
+# 8G内存建议并发连接数控制在 1000 以内，避免线程调度耗尽CPU
+max_connections = 100
+thread_cache_size = 50
+back_log = 100
+
+# 超时设置 - 允许超长时间查询
+wait_timeout = 28800
+interactive_timeout = 28800
+net_read_timeout = 600
+net_write_timeout = 600
+connect_timeout = 30
+
+# ---------------------------------------------------------
+# 3. 包大小限制
+# ---------------------------------------------------------
+max_allowed_packet = 500M
+
+# ---------------------------------------------------------
+# 4. ⚠️ 核心修复：缓冲区尺寸优化 (防止OOM)
+# ---------------------------------------------------------
+
+# 【高危参数修复】以下参数为每个连接独立分配，必须调小！
+# 建议控制在 1M-4M，复杂查询可在会话级别临时调大
+bulk_insert_buffer_size = 4M
+join_buffer_size = 128K
+sort_buffer_size = 128K
+read_buffer_size = 128K
+read_rnd_buffer_size = 256K
+group_concat_max_len = 1048576
+
+# ---------------------------------------------------------
+# 5. InnoDB 引擎优化 (8G服务器黄金配置)
+# ---------------------------------------------------------
+innodb_buffer_pool_size = 256M
+innodb_buffer_pool_instances = 1
+
+innodb_redo_log_capacity = 128M
+innodb_log_buffer_size = 8M
+innodb_flush_log_at_trx_commit = 2
+innodb_sort_buffer_size = 1M
+innodb_read_io_threads = 4
+innodb_write_io_threads = 4
+innodb_thread_concurrency = 0
+innodb_lock_wait_timeout = 300
+
+# ---------------------------------------------------------
+# 6. 监控与缓存裁剪 (关键！)
+# ---------------------------------------------------------
+# 关闭性能监控，省下 100MB+ 内存
+performance_schema = OFF
+# 降低打开表的缓存数量
+table_open_cache = 32
+table_definition_cache = 32

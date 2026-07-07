@@ -40,6 +40,17 @@ class GetOthersLotDynConfig(BaseModel):
     ]
 
 
+class LLMApiConfig(BaseModel):
+    """OpenAI 兼容 API 配置 —— 作为 Settings 的嵌套子模型列表元素，
+    部署时可整个列表填 JSON，也可逐字段用双下划线覆盖。
+    例如：llm_apis='[{"base_url":"https://...","model_name":"gpt-3.5","token":"sk-xxx"}]'
+    或：  llm_apis__0__base_url=https://...  llm_apis__0__model_name=gpt-3.5
+    """
+    base_url: str = ""
+    model_name: str = ""
+    token: str = ""
+
+
 class Settings(BaseSettings):
     MYSQL_HOST: str
     MYSQL_PORT: str
@@ -76,6 +87,11 @@ class Settings(BaseSettings):
     # ===== 第三方抽奖动态获取 =====
     get_others_lot: GetOthersLotDynConfig = GetOthersLotDynConfig()
 
+    OLLAMA_ENDPOINT: str = "http://ollama:11434"
+
+    # 外部 LLM API 列表（按顺序优先使用，全部失败后回退到本地 Ollama）
+    llm_apis: list[LLMApiConfig] = []
+
 
 settings = Settings()
 
@@ -86,13 +102,6 @@ class PlaywrightUserDir(StrEnum):
     """
 
     zhihu = "zhihu"
-
-
-@dataclass
-class ChatGptSettings:
-    baseurl: str = "https://api.chatanywhere.tech/v1"
-    open_ai_api_key: str = "sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS"
-    model_name: str = "gpt-3.5-turbo"
 
 
 # region 基本配置
@@ -135,7 +144,7 @@ class pushnotify:
         return self._pushplus
 
 
-class database:
+class DataBaseConfig:
     @dataclass
     class _MYSQL:
         _base_url: str = f"{settings.MYSQL_HOST}:{settings.MYSQL_PORT}"
@@ -145,7 +154,8 @@ class database:
             f"mysql+aiomysql://{_user}:{_pwd}@{_base_url}/proxy_db?charset=utf8mb4&autocommit=true"
         )
         bili_db_URI: str = (
-            f"mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bilidb?charset=utf8mb4&autocommit=true"  # 话题抽奖
+            # 话题抽奖
+            f"mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bilidb?charset=utf8mb4&autocommit=true"
         )
         bili_reserve_URI: str = (
             f"mysql+aiomysql://{_user}:{_pwd}@{_base_url}/bili_reserve?charset=utf8mb4&autocommit=true"
@@ -226,12 +236,6 @@ class RabbitMQConfig:
     broker_url = f"{protocol}://{user}:{pwd}@{host}:{port}/?heartbeat=180"
 
 
-class _SeleniumConfig:
-    edge_path = "C:/WebDriver/bin/msedgedriver.exe"
-    linux_edge_path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "webDriver/linux/msedgedriver"
-    )
-
 
 # endregion
 
@@ -241,43 +245,10 @@ class _CONFIG:
     V2ray_proxy = f"http://{settings.V2RAY_HOST}:{settings.V2RAY_PORT}"
     lm_studio_url = f"http://{settings.LMSTUDIO_HOST}:{settings.LMSTUDIO_PORT}"
     pushnotify = pushnotify()  # 推送设置
-    database = database()
-    local_llm_setting = ChatGptSettings(
-        baseurl=f"{lm_studio_url}/v1",
-        open_ai_api_key="114514",
-        model_name="google/gemma-2-9b",
-    )
-    chat_gpt_configs = [
-        ChatGptSettings(
-            baseurl="https://api.chatanywhere.tech/v1",
-            open_ai_api_key="sk-mZDs5CvKYABSjV2QSOEHy8m5tSZh00uUEjXozezF8dNQHDpS",
-        ),
-        ChatGptSettings(
-            baseurl="https://api.chatanywhere.tech/v1",
-            open_ai_api_key="sk-15uefwaxlC3ik3Rzc6olDUUJ9pzDl8fFiesHJvTEXdz66Gba",
-        ),
-        ChatGptSettings(
-            baseurl="https://happyapi.org/v1",
-            open_ai_api_key="sk-B0JwJwpkzqhlwh3qC2638d73De5042C3Aa02951313Bd1e39",
-        ),
-        ChatGptSettings(
-            baseurl="https://happyapi.org/v1",
-            open_ai_api_key="sk-rooVNOUA9Xs2AqtpE9445cC879F3467b9f6a97B6De2219C1",
-        ),
-        ChatGptSettings(
-            baseurl="https://api.openai-hk.com/v1",
-            open_ai_api_key="hk-reurs910000380223c324e435ac8ef84f5d0a75f22a4e6c0",
-        ),
-        ChatGptSettings(
-            baseurl="https://api.openai-hk.com/v1",
-            open_ai_api_key="hk-wb59m7100003926553e7b82535bb9ea57b67d97626838c25",
-        ),
-        local_llm_setting,
-    ]
+    database = DataBaseConfig()
     my_ipv6_addr = settings.PROXY_SERVER
     unidbg_addr = f"http://{settings.UNIDBG_HOST}:{settings.UNIDBG_PORT}"
     RabbitMQConfig = RabbitMQConfig()
-    selenium_config = _SeleniumConfig()
     sql_alchemy_config = SqlAlchemyConfig()
     crawler_sql_alchemy_config = CrawlerSqlAlchemyConfig()
     playwright_user_dir = PlaywrightUserDir

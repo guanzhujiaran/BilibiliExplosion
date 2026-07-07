@@ -52,16 +52,22 @@ alembic -x db=biliopusdb history
 cd FastapiApp
 
 # 预演模式（查看有多少条待判断，不实际写入）
-uv run python scripts/judge_all_grand_prize_flags.py --dry-run
+uv run python -m scripts.judge_grand_prize --dry-run
 
 # 正式执行（默认每批200条，仅判断未标记的记录）
-uv run python scripts/judge_all_grand_prize_flags.py
+uv run python -m scripts.judge_grand_prize
 
 # 自定义批次大小
-python3 scripts/judge_all_grand_prize_flags.py --batch-size 500
+uv run python -m scripts.judge_grand_prize --batch-size 500
 
 # 强制重新判断所有记录（覆盖已有结果）
-python3 scripts/judge_all_grand_prize_flags.py --force-update
+uv run python -m scripts.judge_grand_prize --force-update
+
+# 使用本地的gpu ollama 进行判断，保存到服务器端数据库
+uv run python -m scripts.judge_grand_prize --force-update --llm-base-url http://localhost:11434/v1 --llm-token ollama --llm-model "modelscope.cn/unsloth/Qwen3.5-4B-GGUF" --db-host 192.168.81.172 --db-port 10000 --db-user root --db-password 114514
+
+## 使用本地的gpu ollama 进行判断，保存到本地数据库
+uv run python -m scripts.judge_grand_prize --force-update --llm-base-url http://localhost:11434/v1 --llm-token ollama --llm-model "modelscope.cn/unsloth/Qwen3.5-4B-GGUF" --db-host localhost --db-port 10000 --db-user root --db-password 114514
 ```
 
 ## rawJsonStr 数据回填脚本
@@ -82,6 +88,9 @@ uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --limit
 
 # 回填全部
 uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill
+
+uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --force-update --llm-base-url http://localhost:11434/v1 --llm-token ollama --llm-model "modelscope.cn/unsloth/Qwen3.5-4B-GGUF" --db-host 192.168.81.172 --db-port 10000 --db-user root --db-password 114514
+
 ```
 
 回填字段包括：

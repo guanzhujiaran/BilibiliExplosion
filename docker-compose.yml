@@ -71,7 +71,6 @@ services:
     volumes:
       - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d # 配置文件目录
       - ./docker_vol/mysql_data/data:/var/lib/mysql  # 数据文件目录
-      - ./docker_vol/mysql_data/init/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
     restart: unless-stopped
@@ -205,6 +204,7 @@ services:
       - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
       - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI}
       - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
+      - OLLAMA_ENDPOINT=http://ollama:10013
       - TZ=${ENV_TZ}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -254,6 +254,22 @@ services:
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       - TZ=${ENV_TZ}
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  ollama:
+    container_name: ollama_container
+    image: ollama/ollama:latest
+    restart: always
+    volumes:
+      - ./docker_vol/ollama/data:/root/.ollama
+    ports:
+      - "${Ollama_PORT}:11434"
+    environment:
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_KV_CACHE_TYPE=q4_0
+      - HF_ENDPOINT=https://hf-mirror.com
+      - TZ=${ENV_TZ}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 volumes:

@@ -15,7 +15,7 @@ from sqlalchemy import select, func, update, and_, or_, delete
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
-from CONFIG import CONFIG, database
+from CONFIG import CONFIG
 from dao.base.sqlHelperBase import SqlHelperBase
 from log.base_log import sql_log
 from Models.v1.background_service.background_service_model import ProxyStatusResp
@@ -30,7 +30,7 @@ MIN_REFRESH_SUCCESS_TIME = -3  # 最低允许刷新状态的代理获取请求�
 MIN_REFRESH_SCORE = 0  # 最低允许刷新状态的代理分数
 DEFAULT_CHUNK_SIZE = 1000  # Adjust as needed
 
-
+database = CONFIG.database
 class SubRedisStore(RedisManagerBase):
     class RedisMap(StrEnum):
         bili_proxy_available_hm = 'bili_proxy_available_hm'  # 存放可用代理的hash表（虽说是可用，但是还没确认

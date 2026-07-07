@@ -74,8 +74,6 @@ def app():
     app.debug = True
 
     # 注册所有路由（跳过需要 broker 连接的 faststream MQ 路由）
-    from controller.damo import DamoML
-    from controller.v1.ChatGpt3_5 import ReplySingle
     from controller.v1.lotttery_database.bili import LotteryData
     from controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
     from controller.v1.ip_info import get_ip_info as ip_info_module
@@ -86,8 +84,6 @@ def app():
     from controller.v1.captcha import captchaController
     from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
-    app.include_router(DamoML.router)
-    app.include_router(ReplySingle.router)
     app.include_router(LotteryData.router)
     app.include_router(LotteryStatistic.router)
     app.include_router(ip_info_module.router)

@@ -440,17 +440,14 @@ class __SqlHelper(SqlHelperBase):
                 await session.commit()
 
         if DynInfo.dynContent and DynInfo.dynId:
-            extract_result = await extract_prize_info(DynInfo.dynContent)
-            if extract_result.prize_names or extract_result.lottery_time:
-                await self.save_prize(DynInfo.dynId, extract_result.prize_names, extract_result.lottery_time)
-
-        if DynInfo.dynContent and DynInfo.dynId:
-            extract_result = await extract_prize_info(DynInfo.dynContent)
-            if extract_result.is_grand_prize:
+            extract_result = await extract_prize_info(dyn_content=DynInfo.dynContent)
+            if extract_result.result.prize_names or extract_result.result.lottery_time:
+                await self.save_prize(DynInfo.dynId, extract_result.result.prize_names, extract_result.result.lottery_time)
+            if extract_result.result.is_grand_prize:
                 await self.save_extra_info(
                     ref_id=DynInfo.dynId,
                     lot_type="common",
-                    is_grand_prize=int(extract_result.is_grand_prize),
+                    is_grand_prize=int(extract_result.result.is_grand_prize),
                     need_comment=int(DynInfo.isManualReply) if DynInfo.isManualReply is not None else 0,
                     need_repost=0,
                 )

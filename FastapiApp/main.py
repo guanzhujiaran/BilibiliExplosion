@@ -32,8 +32,6 @@ if not settings.SHOW_LOG:
 from log.base_log import myfastapi_logger
 from Utils.推送.PushMe import a_pushme
 from Utils.FastAPI.FastapiLifespan import life_span
-from controller.damo import DamoML
-from controller.v1.ChatGpt3_5 import ReplySingle
 from controller.v1.lotttery_database.bili import LotteryData
 from controller.v1.lotttery_database.bili.lottery_statistic import LotteryStatistic
 from controller.v1.ip_info import get_ip_info
@@ -48,8 +46,6 @@ from controller.v1.lotttery_database.bili.zhuanlan import zhuanlanController
 
 app = FastAPI(lifespan=life_span)
 fastapi_cdn_host.patch_docs(app)
-app.include_router(DamoML.router)
-app.include_router(ReplySingle.router)
 app.include_router(LotteryData.router)
 app.include_router(LotteryStatistic.router)
 app.include_router(get_ip_info.router)

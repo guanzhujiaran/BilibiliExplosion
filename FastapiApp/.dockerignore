@@ -29,3 +29,4 @@ scripts/log
 !requirements.txt
 !Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
 __pycache__/
+test/

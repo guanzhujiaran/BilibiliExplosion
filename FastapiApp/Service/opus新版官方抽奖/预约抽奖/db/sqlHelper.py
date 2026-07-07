@@ -18,7 +18,8 @@ from Service.opus新版官方抽奖.预约抽奖.db.models import (
     TUpReserveRelationInfo,
 )
 from Utils.推送.PushMe import a_pushme
-
+from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_info
+from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
 lock = asyncio.Lock()
 
 
@@ -122,24 +123,23 @@ class _SqlHelper(SqlHelperBase):
         # LLM 大奖判断（入库后判断，不影响主流程，结果写入独立子表 t_lot_extra_info）
         if result.text and result.ids:
             try:
-                from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_info
-                from Service.GetOthersLotDyn.Sql.sql_helper import SqlHelper
-                prize_result = await extract_prize_info(result.text)
-                if prize_result.is_grand_prize:
+                prize_result = await extract_prize_info(dyn_content=result.text)
+                if prize_result.result.is_grand_prize:
                     await SqlHelper.save_extra_info(
                         ref_id=result.ids,
                         lot_type="reserve",
                         is_grand_prize=1,
                     )
-            except Exception:
-                pass
-        return result
+            except Exception as e:
+                self.log.exception(f"判断预约抽奖{result.ids}是否为大奖失败")
+            return result
 
     @lock_wrapper
     async def get_latest_reserve_round(self, readonly=False) -> TReserveRoundInfo:
         async with self.async_session() as session:
             sql = (
-                select(TReserveRoundInfo).order_by(TReserveRoundInfo.id.desc()).limit(1)
+                select(TReserveRoundInfo).order_by(
+                    TReserveRoundInfo.id.desc()).limit(1)
             )
             if readonly:
                 sql = sql.where(TReserveRoundInfo.is_finished == True)
@@ -181,8 +181,9 @@ class _SqlHelper(SqlHelperBase):
             result = await session.execute(sql)
             result = result.scalars().first()
             return result
+
     @lock_wrapper
-    async def get_reserve_by_ids_bulk(self, ids_list:list[int|str]) -> list[TUpReserveRelationInfo]:
+    async def get_reserve_by_ids_bulk(self, ids_list: list[int | str]) -> list[TUpReserveRelationInfo]:
         async with self.async_session() as session:
             # 使用 in_ 方法进行批量查询
             sql = (
@@ -192,7 +193,7 @@ class _SqlHelper(SqlHelperBase):
             )
             result = await session.execute(sql)
             return result.scalars().all()
-        
+
     @lock_wrapper
     async def get_reserve_by_dynamic_id(
         self, dynamic_id
@@ -309,7 +310,8 @@ class _SqlHelper(SqlHelperBase):
                 .filter(
                     and_(
                         TUpReserveRelationInfo.lotteryType == 1,
-                        TUpReserveRelationInfo.state.notin_([-100, -300, -110, 150]),
+                        TUpReserveRelationInfo.state.notin_(
+                            [-100, -300, -110, 150]),
                     )
                 )
                 .order_by(TUpReserveRelationInfo.etime.asc())
@@ -334,7 +336,8 @@ class _SqlHelper(SqlHelperBase):
                     and_(
                         TUpReserveRelationInfo.lotteryType == 1,
                         TUpReserveRelationInfo.etime >= int(time.time()),
-                        TUpReserveRelationInfo.state.notin_([-100, -300, -110, 150]),
+                        TUpReserveRelationInfo.state.notin_(
+                            [-100, -300, -110, 150]),
                     )
                 )
                 .order_by(TUpReserveRelationInfo.etime.asc())
@@ -380,7 +383,8 @@ class _SqlHelper(SqlHelperBase):
         else:
             # 未给分页参数时默认 limit 1000，避免全量返回
             sql = sql.limit(1000)
-        count_sql = select(func.count(TUpReserveRelationInfo.ids)).filter(and_clause)
+        count_sql = select(func.count(
+            TUpReserveRelationInfo.ids)).filter(and_clause)
         async with self.async_session() as session:
             result = await session.execute(sql)
             count_result = await session.execute(count_sql)

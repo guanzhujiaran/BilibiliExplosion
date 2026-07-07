@@ -23,6 +23,7 @@ sqlacodegen-v2  # 仅开发时用，生产可不装
 sqlmodel
 aiosqlite
 aiomysql
+alembic
 loguru
 pydantic
 python-dotenv

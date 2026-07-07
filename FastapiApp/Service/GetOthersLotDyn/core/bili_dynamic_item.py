@@ -316,9 +316,9 @@ class BiliDynamicItem:
                     get_others_lot_log.info(
                         f'动态内容为空，无法提取抽奖信息，动态链接=https://t.bilibili.com/{dynamic_detail_dynamic_id}?type={self.dynamic_type}')
                     deadline = None
-                prize_result = await extract_prize_info(dynamic_content)
-                premsg = prize_result.need_topic
-                need_repost = prize_result.need_repost
+                prize_result = await extract_prize_info(dyn_content=dynamic_content)
+                premsg = prize_result.result.required_topic_text
+                need_repost = prize_result.result.need_repost
                 ret_url = f'https://t.bilibili.com/{dynamic_detail_dynamic_id}'
                 if need_repost:
                     ret_url += '?tab=2'
@@ -334,7 +334,7 @@ class BiliDynamicItem:
                 elif is_reserve_lot or is_charge_lot:
                     is_lot = False
                 elif not self.is_lot_orig:
-                    if not prize_result.is_lot:
+                    if not prize_result.result.is_lot:
                         if comment_count > 2000 or forward_count > 1000:  # 评论或转发超多的就算不是抽奖动态也要加进去凑个数
                             pass
                         else:
@@ -358,7 +358,7 @@ class BiliDynamicItem:
                                               official_verify_type if official_verify_type else 0),
                                           isManualReply=int(manual_judge),
                                           isLot=int(is_lot),
-                                          hashTag=str(int(premsg)),
+                                          hashTag=premsg,
                                           dynLotRound_id=lotRound_id,
                                           rawJsonStr=rawJSON)
                 await SqlHelper.addDynInfo(
@@ -382,7 +382,7 @@ class BiliDynamicItem:
                     orig_ret_url = f'https://t.bilibili.com/{orig_dynamic_id}'
                     if 'tab=2' in ret_url:
                         orig_ret_url += '?tab=2'
-                    elif orig_dynamic_content and (await extract_prize_info(orig_dynamic_content)).need_repost:
+                    elif orig_dynamic_content and (await extract_prize_info(dyn_content=orig_dynamic_content)).result.need_repost:
                         orig_ret_url += '?tab=2'
                     orig_dynamic = TLotdyninfo(
                         dynId=orig_dynamic_id,
@@ -401,7 +401,7 @@ class BiliDynamicItem:
                             orig_official_verify) is int else 0,
                         isManualReply=int(manual_judge),
                         isLot=int(is_lot),
-                        hashTag=str(int(premsg)),
+                        hashTag=premsg,
                         dynLotRound_id=lotRound_id,
                         rawJsonStr=dynamic_orig
                     )

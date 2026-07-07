@@ -10,10 +10,22 @@
   - t_lot_extra_info：need_comment / need_repost
 
 用法:
-  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill          # 更新全部
-  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --limit 500  # 只处理 500 条
-  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --dry-run    # 预览不写入
-  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --count      # 统计可回填记录数
+  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill                          # 使用 .env 默认配置
+  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --limit 500              # 限制条数
+
+  指定大模型:
+  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill \\
+      --llm-base-url https://api.openai.com/v1 \\
+      --llm-token sk-xxx \\
+      --llm-model gpt-4o
+
+  指定目标数据库:
+  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill \\
+      --db-host 192.168.1.200 --db-port 10000 --db-user root --db-password 114514
+
+  仅统计 / 预览:
+  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --count
+  uv run python -m scripts.database.backfill_dyninfo_from_rawjson.backfill --dry-run
 """
 
 import argparse
@@ -198,8 +210,8 @@ async def _process_and_build_full_updates(dyn: TLotdyninfo) -> BackfillResult | 
         )
 
         # prize extract result (一次模型调用提取全部信息)
-        prize_result = await extract_prize_info(dynamic_content) if dynamic_content else None
-        need_repost = prize_result.need_repost if prize_result else False
+        prize_result = await extract_prize_info(dyn_content=dynamic_content) if dynamic_content else None
+        need_repost = prize_result.result.need_repost if prize_result else False
 
         # manual_judge (need_comment)
         manual_judge = False
@@ -215,7 +227,7 @@ async def _process_and_build_full_updates(dyn: TLotdyninfo) -> BackfillResult | 
         elif is_reserve_lot or is_charge_lot:
             is_lot = False
         elif prize_result:
-            is_lot = prize_result.is_lot
+            is_lot = prize_result.result.is_lot
             # 评论或转发超多的也算抽奖
             if not is_lot:
                 comment_count = parsed.comment_count or 0
@@ -390,7 +402,13 @@ async def main():
         '--count', action='store_true',
         help='仅统计可回填的记录总数，不做处理'
     )
+
+    from _cli_utils import add_llm_args, add_db_args, apply_cli_overrides
+    add_llm_args(parser)
+    add_db_args(parser)
+
     args = parser.parse_args()
+    apply_cli_overrides(args)
 
     if args.count:
         total = await count_has_rawjson()

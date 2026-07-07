@@ -671,8 +671,8 @@ class SQLHelper(SqlHelperBase):
         :return:更新 返回{'mode':'update'}
                 插入 返回{'mode':'insert'}
         """
-        # 入库时进行 LLM 大奖判断
-        from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_info
+        # 入库时进行 LLM 大奖判断（dyndetail 专用）
+        from Service.GetOthersLotDyn.parser.prize_extractor import extract_prize_info_for_dyndetail
 
         prize_cmts = [
             lot_data_dict.get("first_prize_cmt"),
@@ -682,8 +682,8 @@ class SQLHelper(SqlHelperBase):
         lottery_text = " ".join(filter(lambda a: a, prize_cmts)).strip()
         if lottery_text:
             try:
-                result = await extract_prize_info(lottery_text)
-                is_grand_prize = int(result.is_grand_prize)
+                result = await extract_prize_info_for_dyndetail(dyn_content=lottery_text)
+                is_grand_prize = int(result.result.is_grand_prize)
             except Exception as e:
                 self.log.error(f"LLM 大奖判断失败，默认 0: {e}")
                 is_grand_prize = 0
