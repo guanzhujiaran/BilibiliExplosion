@@ -4,7 +4,6 @@ samsclub (山姆会员店) Alembic 异步环境配置
 """
 import asyncio
 import sys
-from logging.config import fileConfig
 from pathlib import Path
 
 from alembic import context
@@ -28,8 +27,7 @@ _DB_URL: str = CONFIG.database.MYSQL.sams_club_URI
 
 config = context.config
 config.set_main_option("sqlalchemy.url", _DB_URL)
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+
 
 
 def do_run_migrations(connection):

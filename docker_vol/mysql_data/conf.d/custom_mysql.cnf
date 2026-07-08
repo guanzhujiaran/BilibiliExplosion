@@ -17,7 +17,7 @@ thread_cache_size = 50
 back_log = 100
 
 # 超时设置 - 允许超长时间查询
-wait_timeout = 28800
+wait_timeout = 600
 interactive_timeout = 28800
 net_read_timeout = 600
 net_write_timeout = 600
@@ -47,7 +47,7 @@ group_concat_max_len = 1048576
 innodb_buffer_pool_size = 256M
 innodb_buffer_pool_instances = 1
 
-innodb_redo_log_capacity = 128M
+innodb_redo_log_capacity = 1G
 innodb_log_buffer_size = 8M
 innodb_flush_log_at_trx_commit = 2
 innodb_sort_buffer_size = 1M
@@ -62,5 +62,5 @@ innodb_lock_wait_timeout = 300
 # 关闭性能监控，省下 100MB+ 内存
 performance_schema = OFF
 # 降低打开表的缓存数量
-table_open_cache = 32
-table_definition_cache = 32
+table_open_cache = 2000
+table_definition_cache = 2000
