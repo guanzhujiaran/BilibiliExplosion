@@ -126,8 +126,6 @@ services:
       - rabbitmq
       - unidbg
       - lm-studio
-    env_file:
-      - ./FastapiApp/.env.fastapi.prod
     environment:
       - MYSQL_HOST=mysql
       - REDIS_HOST=redis
@@ -145,6 +143,7 @@ services:
       - TZ=${ENV_TZ}
       - SHOW_LOG=${FASTAPI_SHOW_LOG}
       - IS_DEV=${IS_DEV}
+      - llm_apis=${llm_apis}
     build:
       context: ./FastapiApp
     volumes:
