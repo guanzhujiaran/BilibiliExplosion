@@ -159,7 +159,7 @@ services:
     container_name: postgres
     image: postgres:alpine3.22
     volumes:
-      - /var/lib/postgresql
+      - ./docker_vol/postgres/data:/var/lib/postgresql
       - ./docker_vol/postgres/init:/docker-entrypoint-initdb.d
     environment:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
