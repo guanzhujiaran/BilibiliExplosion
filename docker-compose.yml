@@ -246,14 +246,13 @@ services:
     container_name: llama_cpp
     volumes:
       - ./docker_vol/llama/models.ini:/models.ini
-      - ./docker_vol/llama_model/models:/models
+      - ./docker_vol/llama_model/cache:/root/.cache
     ports:
       - ${LLAMA_PORT}:8080
     restart: unless-stopped
     environment:
       - LLAMA_ARG_MODELS_PRESET=/models.ini
       - LLAMA_ARG_MODELS_MAX=1
-      - LLAMA_ARG_MODELS_DIR=/models
       - HF_ENDPOINT=https://hf-mirror.com
     extra_hosts:
       - "host.docker.internal:host-gateway"
