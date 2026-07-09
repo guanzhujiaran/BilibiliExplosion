@@ -120,7 +120,7 @@ def get_llm(force_local: bool = False, **kwargs: Any):
     logger.info(f"获取LLM实例，has_free_api={has_free_api}, kwargs={kwargs}")
 
     if force_local:
-        logger.info("强制使用本地LM Studio")
+        logger.info("强制使用本地llama.cpp")
         if not kwargs:
             return _local_llm
         return _local_llm.bind(**kwargs)
