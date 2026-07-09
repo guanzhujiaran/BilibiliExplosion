@@ -1,34 +1,33 @@
 import asyncio
 from typing import List
 
-from openai import AsyncOpenAI
+from langchain_openai import OpenAIEmbeddings
 
 import Models.lottery_database.milvusModel.biliMilvusModel as biliMilvusModel
 import Service.LangChainCompo.lottery_data_vec_sql.sql_helper as sql_helper
 import Service.GrpcModule.GrpcSrc.SQLObject.DynDetailSqlHelperMysqlVer as DynDetailSqlHelperMysqlVer
 import Service.GrpcModule.GrpcSrc.SQLObject.models as models
-from CONFIG import CONFIG
+from CONFIG import CONFIG, ModelName
 from Utils.通用.Common import log_max_count_retry_wrapper
 
-_client = AsyncOpenAI(base_url=f"{CONFIG.lm_studio_url}/v1", api_key="1", timeout=1)
-
-_model_name = "text-embedding-multilingual-e5-base"
+_embeddings = OpenAIEmbeddings(
+    model=ModelName.TEXT_EMBEDDING_MULTILINGUAL_E5_BASE,
+    openai_api_base=CONFIG.llama_url,
+    openai_api_key="1",
+)
 
 _embedding_lock = asyncio.Lock()  # 防止并发请求，服务器性能太弱了
 
 
 async def _create_embedding(
-    text: str | None, model: str = _model_name
+    text: str | None,
 ) -> list[float] | None:
     async with _embedding_lock:
         if type(text) is not str:
             return None
         if not text.strip():
             return None
-        resp = await _client.embeddings.create(input=text, model=model)
-        if resp.data:
-            return resp.data[0].embedding
-        return None
+        return await _embeddings.aembed_query(text)
 
 
 @log_max_count_retry_wrapper()
@@ -114,3 +113,6 @@ async def get_lottery_entity_num() -> int:
     if res := await sql_helper.milvus_sql_helper.get_bili_lot_data_collection_stats():
         return res.get("row_count") or 0
     return 0
+
+if __name__ == "__main__":
+    asyncio.run(search_lottery_text("你好"))

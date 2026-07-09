@@ -69,8 +69,8 @@ class Settings(BaseSettings):
     UNIDBG_PORT: str
     V2RAY_HOST: str
     V2RAY_PORT: str
-    LMSTUDIO_HOST: str  # lm studio 开个网络服务
-    LMSTUDIO_PORT: str
+    LLAMA_HOST: str  # llama 开个网络服务
+    LLAMA_PORT: str
     PROXY_SERVER: str
     MILVUS_HOST: str
     MILVUS_PORT: str
@@ -87,13 +87,18 @@ class Settings(BaseSettings):
     # ===== 第三方抽奖动态获取 =====
     get_others_lot: GetOthersLotDynConfig = GetOthersLotDynConfig()
 
-    OLLAMA_ENDPOINT: str = "http://ollama:11434"
-
-    # 外部 LLM API 列表（按顺序优先使用，全部失败后回退到本地 Ollama）
+    # 外部 LLM API 列表（按顺序优先使用，全部失败后回退到本地 lmstuidio）
     llm_apis: list[LLMApiConfig] = []
 
 
 settings = Settings()
+
+
+class ModelName(StrEnum):
+    """模型名称枚举，集中管理所有使用的 LLM / 嵌入模型名"""
+
+    TEXT_EMBEDDING_MULTILINGUAL_E5_BASE = "text-embedding-multilingual-e5-base"
+    QWEN3_5_0_8_Q4_K_M_GGUF = "Qwen3.5-0.8B-SpectralQuant-Q4_K_M"
 
 
 class PlaywrightUserDir(StrEnum):
@@ -243,7 +248,7 @@ class RabbitMQConfig:
 class _CONFIG:
     root_dir = os.path.dirname(os.path.abspath(__file__))  # 代码的根目录
     V2ray_proxy = f"http://{settings.V2RAY_HOST}:{settings.V2RAY_PORT}"
-    lm_studio_url = f"http://{settings.LMSTUDIO_HOST}:{settings.LMSTUDIO_PORT}"
+    llama_url = f"http://{settings.LLAMA_HOST}:{settings.LLAMA_PORT}/v1"
     pushnotify = pushnotify()  # 推送设置
     database = DataBaseConfig()
     my_ipv6_addr = settings.PROXY_SERVER
@@ -254,7 +259,7 @@ class _CONFIG:
     playwright_user_dir = PlaywrightUserDir
     _pc_ua = UserAgent(platforms=["desktop", "tablet"])
     _mobile_ua = UserAgent(platforms=["mobile"])
-
+    
     @property
     def rand_ua(self):
         return self._pc_ua.random

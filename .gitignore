@@ -36,9 +36,10 @@ docker_vol/postgres/data/
 !docker_vol/nginx/
 docker_vol/nginx/logs/
 !docker_vol/goaccess/
-!docker_vol/lm_studio
-!docker_vol/lm_studio/init.sh
-!docker_vol/lm_studio/Dockerfile
+!docker_vol/llama
+!docker_vol/llama/entrypoint.sh
+!docker_vol/llama/Dockerfile
+docker_vol/llama/models/
 !FastapiApp/requirements.txt
 !FastapiApp/Service/GrpcModule/Utils/user-agents_dalvik_application_2-1.json
 .env.dev
@@ -47,4 +48,3 @@ venv/
 .lh
 .history
 .env
-/volumes

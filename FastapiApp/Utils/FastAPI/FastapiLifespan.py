@@ -151,7 +151,7 @@ async def test_service_ports_and_hosts():
         ("RabbitMQ", settings.RABBITMQ_HOST, int(settings.RABBITMQ_PORT)),
         ("Unidbg", None, int(settings.UNIDBG_PORT), settings.UNIDBG_HOST),
         ("V2Ray", settings.V2RAY_HOST, int(settings.V2RAY_PORT)),
-        ("LM Studio", None, int(settings.LMSTUDIO_PORT), settings.LMSTUDIO_HOST),
+        ("LM Studio", None, int(settings.LLAMA_PORT), settings.LLAMA_HOST),
         ("Milvus", settings.MILVUS_HOST, int(settings.MILVUS_PORT)),
     ]
 
