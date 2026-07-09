@@ -115,4 +115,5 @@ async def get_lottery_entity_num() -> int:
     return 0
 
 if __name__ == "__main__":
-    asyncio.run(search_lottery_text("你好"))
+    result = asyncio.run(_create_embedding("你好"))
+    print(result)
