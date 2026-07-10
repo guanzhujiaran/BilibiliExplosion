@@ -9,7 +9,7 @@
 
 ## 安装
 
-本项目使用 git submodule 管理全部微服务：`be-fastapi-backend`、`be-message-service`、`go-proxy-ipv6-pool-auto`、`unidbgSpringBoot`、`puppeteer_Bili`、`RPA-Browser`。
+本项目使用 git submodule 管理全部微服务：`be-bilibili-crawler`、`be-message-service`、`go-proxy-ipv6-pool-auto`、`unidbgSpringBoot`、`puppeteer_Bili`、`RPA-Browser`。
 
 克隆时请带上 `--recurse-submodules`，或克隆后初始化：
 
@@ -24,9 +24,9 @@ git clone --recurse-submodules https://github.com/guanzhujiaran/BilibiliExplosio
 git pull && git submodule update --remote --recursive
 ```
 
-1. 安装 FastAPI 后端依赖（`be-fastapi-backend`）：
+1. 安装 FastAPI 后端依赖（`be-bilibili-crawler`）：
    ```bash
-   cd ./be-fastapi-backend
+   cd ./be-bilibili-crawler
    pip install -r requirements.txt
    npm install
    ```

@@ -1,7 +1,3 @@
-[submodule "be-fastapi-backend"]
-	path = be-fastapi-backend
-	url = https://github.com/guanzhujiaran/be-fastapi-backend.git
-	branch = main
 [submodule "be-message-service"]
 	path = be-message-service
 	url = https://github.com/guanzhujiaran/be-message-service.git
@@ -22,3 +18,7 @@
 	path = RPA-Browser
 	url = https://github.com/guanzhujiaran/RPA-Browser.git
 	branch = master
+[submodule "be-bilibili-crawler"]
+	path = be-bilibili-crawler
+	url = https://github.com/guanzhujiaran/be-bilibili-crawler.git
+	branch = main

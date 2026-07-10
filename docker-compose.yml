@@ -144,9 +144,9 @@ services:
       - IS_DEV=${IS_DEV}
       - llm_apis=${llm_apis}
     build:
-      context: ./be-fastapi-backend
+      context: ./be-bilibili-crawler
     volumes:
-      - ./be-fastapi-backend:/app
+      - ./be-bilibili-crawler:/app
       - /app/node_modules # 保护容器内node_modules
       - ./docker_vol/fastapi/log:/app/scripts/log
     ports:
@@ -238,7 +238,7 @@ services:
       - controller_base_path=/api/v1/rpa
       - proxy_server_url=http://host.docker.internal:10809
       - GEMINI_API_KEY=1234-2234-3234-4234
-      # RabbitMQ RPC 调用 be-fastapi-backend（auto_attach_auth 模式依赖）
+      # RabbitMQ RPC 调用 be-bilibili-crawler（auto_attach_auth 模式依赖）
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
       # 与 message-service / fastapi 共用同一份推送渠道配置（JSON），作为无 per-user 配置时的全局兜底
       - MESSAGE_CONFIG=${MESSAGE_CONFIG}
