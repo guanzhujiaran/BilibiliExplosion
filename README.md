@@ -9,23 +9,37 @@
 
 ## 安装
 
-1. 克隆仓库：
-   ```bash
-   git clone https://github.com/guanzhujiaran/BilibiliExplosion.git
-   ```
+本项目使用 git submodule 管理全部微服务：`be-fastapi-backend`、`be-message-service`、`go-proxy-ipv6-pool-auto`、`unidbgSpringBoot`、`puppeteer_Bili`、`RPA-Browser`。
 
-2. 安装依赖：
+克隆时请带上 `--recurse-submodules`，或克隆后初始化：
+
+```bash
+git clone --recurse-submodules https://github.com/guanzhujiaran/BilibiliExplosion.git
+# 若已克隆：git submodule update --init --recursive
+```
+
+一键更新所有微服务到远端最新（等同于 `make update`）：
+
+```bash
+git pull && git submodule update --remote --recursive
+```
+
+1. 安装 FastAPI 后端依赖（`be-fastapi-backend`）：
    ```bash
-   cd ./FastapiApp
+   cd ./be-fastapi-backend
    pip install -r requirements.txt
    npm install
    ```
 
-3. 安装ipv6代理池
+2. 安装消息推送服务（`be-message-service`）：
    ```bash
-   git clone https://github.com/guanzhujiaran/go-proxy-ipv6-pool-auto.git
-   cd go-proxy-ipv6-pool-auto
-   cd go-proxy-ipv6-pool
+   cd ./be-message-service
+   pip install -r requirements.txt
+   ```
+
+3. 安装 ipv6 代理池（`go-proxy-ipv6-pool-auto`）：
+   ```bash
+   cd ./go-proxy-ipv6-pool-auto/go-proxy-ipv6-pool
    go mod download
    go build -o proxy-pool
    ```
@@ -36,20 +50,19 @@
    sysctl net.ipv6.ip_nonlocal_bind=1
    ```
 
-4. 安装unidbg-springboot后端
+4. 安装 unidbg-springboot 后端（`unidbgSpringBoot`）：
    ```bash
-   git clone https://github.com/guanzhujiaran/unidbgSpringBoot
-   cd unidbgSpringBoot
+   cd ./unidbgSpringBoot
    mvn clean spring-boot:build
    ```
 
-5. 安装nodejs后端
+5. 安装 nodejs 后端（`puppeteer_Bili`）：
    ```bash
-   git clone https://github.com/guanzhujiaran/puppeteer_Bili.git
-   cd puppeteer_Bili
+   cd ./puppeteer_Bili
    npm install
    ```
-6. 安装ollama
+
+6. 安装 ollama
 
 
 ## 使用方法

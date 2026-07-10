@@ -11,7 +11,7 @@ services:
       - ./docker_vol/milvus/etcd:/etcd
     command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
+      test: [ "CMD", "etcdctl", "endpoint", "health" ]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -30,7 +30,7 @@ services:
       - ./docker_vol/milvus/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -39,9 +39,9 @@ services:
   standalone:
     container_name: milvus-standalone
     image: milvusdb/milvus:v3.0-beta
-    command: ["milvus", "run", "standalone"]
+    command: [ "milvus", "run", "standalone" ]
     security_opt:
-    - seccomp:unconfined
+      - seccomp:unconfined
     environment:
       ETCD_ENDPOINTS: etcd:2379
       MINIO_ADDRESS: minio:9000
@@ -49,7 +49,7 @@ services:
     volumes:
       - ./docker_vol/milvus/data:/var/lib/milvus
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      test: [ "CMD", "curl", "-f", "http://localhost:9091/healthz" ]
       interval: 30s
       start_period: 90s
       timeout: 20s
@@ -70,7 +70,7 @@ services:
       - TZ=${ENV_TZ}
     volumes:
       - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d # 配置文件目录
-      - ./docker_vol/mysql_data/data:/var/lib/mysql  # 数据文件目录
+      - ./docker_vol/mysql_data/data:/var/lib/mysql # 数据文件目录
     ports:
       - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
     restart: unless-stopped
@@ -131,11 +131,12 @@ services:
       - RABBITMQ_HOST=rabbitmq
       - UNIDBG_HOST=unidbg
       - MILVUS_HOST=standalone
+      - MESSAGE_SERVICE_HOST=message-service
+      - MESSAGE_SERVICE_PORT=18739
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - RABBITMQ_USER=${RABBITMQ_USER}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
-      - PUSHME_TOKEN=${PUSHME_TOKEN}
-      - PUSHPLUS_TOKEN=${PUSHPLUS_TOKEN}
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
       - PROXY_SERVER=${PROXY_SERVER}
       - V2RAY_HOST=${V2RAY_HOST}
       - TZ=${ENV_TZ}
@@ -143,9 +144,9 @@ services:
       - IS_DEV=${IS_DEV}
       - llm_apis=${llm_apis}
     build:
-      context: ./FastapiApp
+      context: ./be-fastapi-backend
     volumes:
-      - ./FastapiApp:/app
+      - ./be-fastapi-backend:/app
       - /app/node_modules # 保护容器内node_modules
       - ./docker_vol/fastapi/log:/app/scripts/log
     ports:
@@ -193,6 +194,8 @@ services:
       - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
       - FASTAPI_RPA_URI=http://fastapi-rpa-browser:8000
       - FASTAPI_RPA_DEV_URI=http://fastapi-rpa-browser:8000
+      # message-service 反向代理目标（前端 / 其它微服务统一经 nodejs-pptr 转发到 be-message-service）
+      - MESSAGE_SERVICE_URI=http://message-service:18739
       - CASDOOR_ENABLED=true
       - CASDOOR_ENDPOINT=http://casdoor:8000
       - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
@@ -235,8 +238,29 @@ services:
       - controller_base_path=/api/v1/rpa
       - proxy_server_url=http://host.docker.internal:10809
       - GEMINI_API_KEY=1234-2234-3234-4234
-      # RabbitMQ RPC 调用 FastapiApp（auto_attach_auth 模式依赖）
+      # RabbitMQ RPC 调用 be-fastapi-backend（auto_attach_auth 模式依赖）
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      # 与 message-service / fastapi 共用同一份推送渠道配置（JSON），作为无 per-user 配置时的全局兜底
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+      - TZ=${ENV_TZ}
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  message-service:
+    container_name: fastapi-message-service
+    build:
+      context: ./be-message-service
+    volumes:
+      - ./be-message-service/app:/fastapi/app
+    ports:
+      - "${MESSAGE_SERVICE_PORT}:18739"
+    depends_on:
+      - rabbitmq
+    environment:
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/?heartbeat=180
+      # 与 fastapi / rpa-browser 共用同一份推送渠道配置（JSON）
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+      - PROXY_SERVER=${PROXY_SERVER}
       - TZ=${ENV_TZ}
     restart: unless-stopped
     extra_hosts:
@@ -265,7 +289,7 @@ services:
           devices:
             - driver: nvidia
               count: all
-              capabilities: [gpu]
+              capabilities: [ gpu ]
     volumes:
       - ./docker_vol/llama_gpu_model/cache:/root/.cache
     environment:
@@ -273,10 +297,11 @@ services:
       - LLAMA_ARG_PORT=12000
       - LLAMA_ARG_MODEL=HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive:Q4_K_M
       - LLAMA_ARG_MODEL_URL=https://hf-mirror.com/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true
-    ports: 
+    ports:
       - "12000:12000"
 volumes:
   puppeteer_Bili_node_modules:
+  uv-cache:
 networks:
   default:
     enable_ipv6: true

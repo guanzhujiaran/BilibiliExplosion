@@ -1,0 +1,24 @@
+[submodule "be-fastapi-backend"]
+	path = be-fastapi-backend
+	url = https://github.com/guanzhujiaran/be-fastapi-backend.git
+	branch = main
+[submodule "be-message-service"]
+	path = be-message-service
+	url = https://github.com/guanzhujiaran/be-message-service.git
+	branch = main
+[submodule "go-proxy-ipv6-pool-auto"]
+	path = go-proxy-ipv6-pool-auto
+	url = https://github.com/guanzhujiaran/go-proxy-ipv6-pool-auto.git
+	branch = main
+[submodule "unidbgSpringBoot"]
+	path = unidbgSpringBoot
+	url = https://github.com/guanzhujiaran/unidbgSpringBoot
+	branch = master
+[submodule "puppeteer_Bili"]
+	path = puppeteer_Bili
+	url = https://github.com/guanzhujiaran/puppeteer_Bili.git
+	branch = Dev
+[submodule "RPA-Browser"]
+	path = RPA-Browser
+	url = https://github.com/guanzhujiaran/RPA-Browser.git
+	branch = master

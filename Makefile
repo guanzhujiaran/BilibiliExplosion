@@ -1,4 +1,4 @@
-.PHONY: help all start start-excluding-fastapi stop restart restart-excluding-fastapi logs ps down clean
+.PHONY: help all start start-excluding-fastapi stop restart restart-excluding-fastapi logs ps down clean update submodule-init
 
 # 默认目标
 help:
@@ -14,6 +14,8 @@ help:
 	@echo "  make ps                       - 查看所有容器状态"
 	@echo "  make down                     - 停止并删除所有容器"
 	@echo "  make clean                    - 清理所有容器、网络和卷"
+	@echo "  make submodule-init           - 首次克隆后初始化所有 submodule"
+	@echo "  make update                   - 拉取根仓库并同步所有 submodule 到远端最新"
 
 # 启动所有服务
 all: start
@@ -57,3 +59,12 @@ down:
 clean:
 	docker-compose down -v
 	@echo "已清理所有容器、网络和卷"
+
+# 首次克隆后初始化所有 submodule
+submodule-init:
+	git submodule update --init --recursive
+
+# 拉取根仓库并同步所有 submodule 到远端最新
+update:
+	git pull
+	git submodule update --remote --recursive --init
