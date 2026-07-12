@@ -1,309 +1,312 @@
 services:
-  etcd:
-    container_name: milvus-etcd
-    image: quay.io/coreos/etcd:v3.5.25
-    environment:
-      - ETCD_AUTO_COMPACTION_MODE=revision
-      - ETCD_AUTO_COMPACTION_RETENTION=1000
-      - ETCD_QUOTA_BACKEND_BYTES=4294967296
-      - ETCD_SNAPSHOT_COUNT=50000
-    volumes:
-      - ./docker_vol/milvus/etcd:/etcd
-    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
-    healthcheck:
-      test: [ "CMD", "etcdctl", "endpoint", "health" ]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  minio:
-    container_name: milvus-minio
-    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
-    environment:
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin
-    ports:
-      - "9001:9001"
-      - "9000:9000"
-    volumes:
-      - ./docker_vol/milvus/minio:/minio_data
-    command: minio server /minio_data --console-address ":9001"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  standalone:
-    container_name: milvus-standalone
-    image: milvusdb/milvus:v3.0-beta
-    command: [ "milvus", "run", "standalone" ]
-    security_opt:
-      - seccomp:unconfined
-    environment:
-      ETCD_ENDPOINTS: etcd:2379
-      MINIO_ADDRESS: minio:9000
-      MQ_TYPE: woodpecker
-    volumes:
-      - ./docker_vol/milvus/data:/var/lib/milvus
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9091/healthz" ]
-      interval: 30s
-      start_period: 90s
-      timeout: 20s
-      retries: 3
-    ports:
-      - "${MILVUS_PORT}:19530"
-      - "9091:9091"
-    depends_on:
-      - "etcd"
-      - "minio"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  mysql:
-    container_name: fastapi-mysql
-    image: mysql:lts
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
-      - TZ=${ENV_TZ}
-    volumes:
-      - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d # 配置文件目录
-      - ./docker_vol/mysql_data/data:/var/lib/mysql # 数据文件目录
-    ports:
-      - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  redis:
-    container_name: fastapi-redis
-    image: redis:latest
-    environment:
-      - TZ=${ENV_TZ}
-    volumes:
-      - ./docker_vol/redis/data:/data
-    ports:
-      - "${REDIS_PORT}:6379"
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  rabbitmq:
-    container_name: fastapi-rabbitmq
-    image: rabbitmq:management
-    ports:
-      - "${RABBITMQ_PORT}:5672"
-      - "${RABBITMQ_WEBUI_PORT}:15672"
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
-      - TZ=${ENV_TZ}
-    volumes:
-      - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
-      - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  unidbg:
-    container_name: fastapi-unidbg
-    image: unidbg-springboot-samsclub
-    environment:
-      - TZ=${ENV_TZ}
-    ports:
-      - "${UNIDBG_PORT}:23335"
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  fastapi:
-    deploy:
-      resources:
-        limits:
-          memory: 5G
-    container_name: fastapi-bili-explosion
-    depends_on:
-      - mysql
-      - redis
-      - rabbitmq
-      - unidbg
-    environment:
-      - MYSQL_HOST=mysql
-      - REDIS_HOST=redis
-      - RABBITMQ_HOST=rabbitmq
-      - UNIDBG_HOST=unidbg
-      - MILVUS_HOST=standalone
-      - MESSAGE_SERVICE_HOST=message-service
-      - MESSAGE_SERVICE_PORT=18739
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
-      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
-      - PROXY_SERVER=${PROXY_SERVER}
-      - V2RAY_HOST=${V2RAY_HOST}
-      - TZ=${ENV_TZ}
-      - SHOW_LOG=${FASTAPI_SHOW_LOG}
-      - IS_DEV=${IS_DEV}
-      - llm_apis=${llm_apis}
-    build:
-      context: ./be-bilibili-crawler
-    volumes:
-      - ./be-bilibili-crawler:/app
-      - /app/node_modules # 保护容器内node_modules
-      - ./docker_vol/fastapi/log:/app/scripts/log
-    ports:
-      - "${FASTAPI_PORT}:23333"
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  postgres:
-    container_name: postgres
-    image: postgres:alpine3.22
-    volumes:
-      - ./docker_vol/postgres/data:/var/lib/postgresql
-      - ./docker_vol/postgres/init:/docker-entrypoint-initdb.d
-    environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - TZ=${ENV_TZ}
-    ports:
-      - "${POSTGRES_PORT}:5432"
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  nodejs-pptr:
-    container_name: nodejs-pptr
-    depends_on:
-      - postgres
-      - redis
-      - casdoor
-    build:
-      context: ./puppeteer_Bili
-      target: prod
-    volumes:
-      - puppeteer_Bili_node_modules:/app/node_modules # 使用命名卷保存 node_modules
-      - ./puppeteer_Bili:/app
-    ports:
-      - "${NODEJS_PPTR_PORT}:9923"
-    restart: unless-stopped
-    environment:
-      - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/PPTR_Bili_Lot
-      - DEV_DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/DEV_PPTR_Bili_Lot
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PWD=
-      - FASTAPI_URI=http://fastapi-bili-explosion:23333
-      - FASTAPI_DEV_URI=http://fastapi-bili-explosion:23333
-      - FASTAPI_RPA_URI=http://fastapi-rpa-browser:8000
-      - FASTAPI_RPA_DEV_URI=http://fastapi-rpa-browser:8000
-      # message-service 反向代理目标（前端 / 其它微服务统一经 nodejs-pptr 转发到 be-message-service）
-      - MESSAGE_SERVICE_URI=http://message-service:18739
-      - CASDOOR_ENABLED=true
-      - CASDOOR_ENDPOINT=http://casdoor:8000
-      - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
-      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
-      - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
-      - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
-      - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI}
-      - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
-      - OLLAMA_ENDPOINT=http://ollama:10013
-      - TZ=${ENV_TZ}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  casdoor:
-    container_name: fastapi-casdoor
-    image: casbin/casdoor:latest
-    restart: unless-stopped
-    ports:
-      - "${CASDOOR_PORT}:8000"
-    volumes:
-      - ./docker_vol/casdoor/conf/app.conf:/conf/app.conf
-    environment:
-      - TZ=${ENV_TZ}
-    depends_on:
-      - postgres
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  rpa-browser:
-    container_name: fastapi-rpa-browser
-    build:
-      context: ./RPA-Browser
-    depends_on:
-      - postgres
-      - redis
-      - rabbitmq
-      - casdoor
-    ports:
-      - "${RPA_BROWSER_PORT}:8000"
-    environment:
-      - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD}
-      - controller_base_path=/api/v1/rpa
-      - proxy_server_url=http://host.docker.internal:10809
-      - GEMINI_API_KEY=1234-2234-3234-4234
-      # RabbitMQ RPC 调用 be-bilibili-crawler（auto_attach_auth 模式依赖）
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
-      # 与 message-service / fastapi 共用同一份推送渠道配置（JSON），作为无 per-user 配置时的全局兜底
-      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
-      - TZ=${ENV_TZ}
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  message-service:
-    container_name: fastapi-message-service
-    build:
-      context: ./be-message-service
-    volumes:
-      - ./be-message-service/app:/fastapi/app
-    ports:
-      - "${MESSAGE_SERVICE_PORT}:18739"
-    depends_on:
-      - rabbitmq
-    environment:
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/?heartbeat=180
-      # 与 fastapi / rpa-browser 共用同一份推送渠道配置（JSON）
-      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
-      - PROXY_SERVER=${PROXY_SERVER}
-      - TZ=${ENV_TZ}
-    restart: unless-stopped
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  llama_cpp:
-    image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server
-    container_name: llama_cpp
-    volumes:
-      - ./docker_vol/llama/models.ini:/models.ini
-      - ./docker_vol/llama_model/cache:/root/.cache
-    ports:
-      - ${LLAMA_PORT}:8080
-    restart: unless-stopped
-    environment:
-      - LLAMA_ARG_MODELS_PRESET=/models.ini
-      - LLAMA_ARG_MODELS_MAX=1
-      - HF_ENDPOINT=https://hf-mirror.com
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-  llama_cpp_gpu_cuda:
-    image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server-cuda13
-    container_name: llama_cpp_gpu_cuda
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
-    volumes:
-      - ./docker_vol/llama_gpu_model/cache:/root/.cache
-    environment:
-      - LLAMA_ARG_HOST=0.0.0.0
-      - LLAMA_ARG_PORT=12000
-      - LLAMA_ARG_MODEL=HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive:Q4_K_M
-      - LLAMA_ARG_MODEL_URL=https://hf-mirror.com/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true
-    ports:
-      - "12000:12000"
+    etcd:
+        container_name: milvus-etcd
+        image: quay.io/coreos/etcd:v3.5.25
+        environment:
+            - ETCD_AUTO_COMPACTION_MODE=revision
+            - ETCD_AUTO_COMPACTION_RETENTION=1000
+            - ETCD_QUOTA_BACKEND_BYTES=4294967296
+            - ETCD_SNAPSHOT_COUNT=50000
+        volumes:
+            - ./docker_vol/milvus/etcd:/etcd
+        command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+        healthcheck:
+            test: ["CMD", "etcdctl", "endpoint", "health"]
+            interval: 30s
+            timeout: 20s
+            retries: 3
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    minio:
+        container_name: milvus-minio
+        image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+        environment:
+            MINIO_ACCESS_KEY: minioadmin
+            MINIO_SECRET_KEY: minioadmin
+        ports:
+            - "9001:9001"
+            - "9000:9000"
+        volumes:
+            - ./docker_vol/milvus/minio:/minio_data
+        command: minio server /minio_data --console-address ":9001"
+        healthcheck:
+            test:
+                ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+            interval: 30s
+            timeout: 20s
+            retries: 3
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    standalone:
+        container_name: milvus-standalone
+        image: milvusdb/milvus:v3.0-beta
+        command: ["milvus", "run", "standalone"]
+        security_opt:
+            - seccomp:unconfined
+        environment:
+            ETCD_ENDPOINTS: etcd:2379
+            MINIO_ADDRESS: minio:9000
+            MQ_TYPE: woodpecker
+        volumes:
+            - ./docker_vol/milvus/data:/var/lib/milvus
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+            interval: 30s
+            start_period: 90s
+            timeout: 20s
+            retries: 3
+        ports:
+            - "${MILVUS_PORT}:19530"
+            - "9091:9091"
+        depends_on:
+            - "etcd"
+            - "minio"
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    mysql:
+        container_name: fastapi-mysql
+        image: mysql:lts
+        environment:
+            - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+            - TZ=${ENV_TZ}
+        volumes:
+            - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d # 配置文件目录
+            - ./docker_vol/mysql_data/data:/var/lib/mysql # 数据文件目录
+        ports:
+            - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    redis:
+        container_name: fastapi-redis
+        image: redis:latest
+        environment:
+            - TZ=${ENV_TZ}
+        volumes:
+            - ./docker_vol/redis/data:/data
+        ports:
+            - "${REDIS_PORT}:6379"
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    rabbitmq:
+        container_name: fastapi-rabbitmq
+        image: rabbitmq:management
+        ports:
+            - "${RABBITMQ_PORT}:5672"
+            - "${RABBITMQ_WEBUI_PORT}:15672"
+        environment:
+            - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+            - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+            - TZ=${ENV_TZ}
+        volumes:
+            - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
+            - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    unidbg:
+        container_name: fastapi-unidbg
+        image: unidbg-springboot-samsclub
+        environment:
+            - TZ=${ENV_TZ}
+        ports:
+            - "${UNIDBG_PORT}:23335"
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    be-bilibili-crawler:
+        deploy:
+            resources:
+                limits:
+                    memory: 5G
+        container_name: be-bilibili-crawler
+        depends_on:
+            - mysql
+            - redis
+            - rabbitmq
+            - unidbg
+        environment:
+            - MYSQL_HOST=mysql
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+            - RABBITMQ_HOST=rabbitmq
+            - UNIDBG_HOST=unidbg
+            - MILVUS_HOST=standalone
+            - MESSAGE_SERVICE_HOST=be-message-service
+            - MESSAGE_SERVICE_PORT=18739
+            - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+            - RABBITMQ_USER=${RABBITMQ_USER}
+            - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+            - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+            - SERVER_NAME=${SERVER_NAME}
+            - SERVER_ADDRESS=${SERVER_ADDRESS}
+            - PROXY_SERVER=${PROXY_SERVER}
+            - V2RAY_HOST=${V2RAY_HOST}
+            - TZ=${ENV_TZ}
+            - SHOW_LOG=${FASTAPI_SHOW_LOG}
+            - IS_DEV=${IS_DEV}
+            - llm_apis=${llm_apis}
+        build:
+            context: ./be-bilibili-crawler
+        volumes:
+            - ./be-bilibili-crawler:/app
+            - /app/node_modules # 保护容器内node_modules
+            - ./docker_vol/fastapi/log:/app/scripts/log
+        ports:
+            - "${FASTAPI_PORT}:23333"
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    postgres:
+        container_name: postgres
+        image: postgres:alpine3.22
+        volumes:
+            - ./docker_vol/postgres/data:/var/lib/postgresql
+        environment:
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - TZ=${ENV_TZ}
+        ports:
+            - "${POSTGRES_PORT}:5432"
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    gateway:
+        container_name: gateway
+        depends_on:
+            - postgres
+            - redis
+            - casdoor
+        build:
+            context: ./puppeteer_Bili
+            target: prod
+        volumes:
+            - puppeteer_Bili_node_modules:/app/node_modules # 使用命名卷保存 node_modules
+            - ./puppeteer_Bili:/app
+        ports:
+            - "${NODEJS_PPTR_PORT}:9923"
+        restart: unless-stopped
+        environment:
+            - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTRES_PORT}/PPTR_Bili_Lot
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+            - REDIS_PWD=
+            - FASTAPI_URI=${FASTAPI_URI}
+            - FASTAPI_DEV_URI=${FASTAPI_DEV_URI}
+            - FASTAPI_RPA_URI=${FASTAPI_RPA_URI}
+            - FASTAPI_RPA_DEV_URI=${FASTAPI_RPA_DEV_URI}
+            - MESSAGE_SERVICE_URI=${MESSAGE_SERVICE_URI}
+            - OLLAMA_ENDPOINT=${OLLAMA_ENDPOINT}
+            - CASDOOR_ENABLED=true
+            - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
+            - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
+            - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
+            - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
+            - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
+            - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI}
+            - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
+            - TZ=${ENV_TZ}
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    casdoor:
+        container_name: fastapi-casdoor
+        image: casbin/casdoor:latest
+        restart: unless-stopped
+        ports:
+            - "${CASDOOR_PORT}:8000"
+        volumes:
+            - ./docker_vol/casdoor/conf/app.conf:/conf/app.conf
+        environment:
+            - TZ=${ENV_TZ}
+        depends_on:
+            - postgres
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    rpa-browser:
+        container_name: fastapi-rpa-browser
+        build:
+            context: ./RPA-Browser
+        depends_on:
+            - postgres
+            - redis
+            - rabbitmq
+            - casdoor
+        ports:
+            - "${RPA_BROWSER_PORT}:8000"
+        environment:
+            - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD}
+            - controller_base_path=/api/v1/rpa
+            - proxy_server_url=http://host.docker.internal:10809
+            - GEMINI_API_KEY=1234-2234-3234-4234
+            # RabbitMQ RPC 调用 be-bilibili-crawler（auto_attach_auth 模式依赖）
+            - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+            # 与 be-message-service / be-bilibili-crawler 共用同一份推送渠道配置（JSON），作为无 per-user 配置时的全局兜底
+            - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+            - SERVER_NAME=${SERVER_NAME}
+            - SERVER_ADDRESS=${SERVER_ADDRESS}
+            - TZ=${ENV_TZ}
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    be-message-service:
+        container_name: be-message-service
+        build:
+            context: ./be-message-service
+        volumes:
+            - ./be-message-service/app:/fastapi/app
+        ports:
+            - "${MESSAGE_SERVICE_PORT}:18739"
+        depends_on:
+            - rabbitmq
+        environment:
+            - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/?heartbeat=180
+            # 与 be-bilibili-crawler / rpa-browser 共用同一份推送渠道配置（JSON）
+            - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+            - PROXY_SERVER=${PROXY_SERVER}
+            - TZ=${ENV_TZ}
+        restart: unless-stopped
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    llama_cpp:
+        image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server
+        container_name: llama_cpp
+        volumes:
+            - ./docker_vol/llama/models.ini:/models.ini
+            - ./docker_vol/llama_model/cache:/root/.cache
+        ports:
+            - ${LLAMA_PORT}:8080
+        restart: unless-stopped
+        environment:
+            - LLAMA_ARG_MODELS_PRESET=/models.ini
+            - LLAMA_ARG_MODELS_MAX=1
+            - HF_ENDPOINT=https://hf-mirror.com
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+    llama_cpp_gpu_cuda:
+        image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server-cuda13
+        container_name: llama_cpp_gpu_cuda
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: all
+                          capabilities: [gpu]
+        volumes:
+            - ./docker_vol/llama_gpu_model/cache:/root/.cache
+        environment:
+            - LLAMA_ARG_HOST=0.0.0.0
+            - LLAMA_ARG_PORT=12000
+            - LLAMA_ARG_MODEL=HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive:Q4_K_M
+            - LLAMA_ARG_MODEL_URL=https://hf-mirror.com/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true
+        ports:
+            - "12000:12000"
 volumes:
-  puppeteer_Bili_node_modules:
-  uv-cache:
+    puppeteer_Bili_node_modules:
+    uv-cache:
 networks:
-  default:
-    enable_ipv6: true
-    name: fastapi
-    driver: bridge
+    default:
+        enable_ipv6: true
+        name: fastapi
+        driver: bridge
