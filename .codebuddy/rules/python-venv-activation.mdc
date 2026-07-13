@@ -1,46 +1,9 @@
 ---
 description: 
-alwaysApply: false
+alwaysApply: true
 enabled: true
-updatedAt: 2026-04-11T07:08:45.332Z
+updatedAt: 2026-07-13T06:07:28.269Z
 provider: 
 ---
 
-# Python 虚拟环境激活规则
-
-## 规则说明
-在终端中使用 Python 之前，必须先激活项目的虚拟环境 (.venv)。
-
-## 激活命令
-
-### Windows (CMD)
-```cmd
-.venv\Scripts\activate.bat
-```
-
-### Windows (PowerShell)
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-### Linux / macOS (Bash/Zsh)
-```bash
-source .venv/bin/activate
-```
-
-## 验证激活
-激活后，命令行提示符前会显示 `(.venv)`，表示虚拟环境已激活：
-```
-(.venv) C:\project>
-```
-
-## 使用场景
-- 运行 Python 脚本前
-- 安装/卸载包 (pip install/uninstall)
-- 执行 pytest 等工具
-- 启动开发服务器
-
-## 注意事项
-1. 每个项目都有自己的 .venv，不要混用
-2. 完成工作后可以通过 `deactivate` 命令退出虚拟环境
-3. 如果 .venv 不存在，需要先创建：`python -m venv .venv`
+全都用uv管理环境，uv来运行需要运行的代码
