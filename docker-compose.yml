@@ -188,14 +188,13 @@ services:
             - "${NODEJS_PPTR_PORT}:9923"
         restart: unless-stopped
         environment:
-            - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTRES_PORT}/PPTR_Bili_Lot
+            - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/PPTR_Bili_Lot
             - REDIS_HOST=redis
             - REDIS_PORT=6379
             - REDIS_PWD=
             - BILI_CRAWLER_URI=${BILI_CRAWLER_URI}
             - RPA_SERVICE_URI=${RPA_SERVICE_URI}
             - MESSAGE_SERVICE_URI=${MESSAGE_SERVICE_URI}
-            - OLLAMA_ENDPOINT=${OLLAMA_ENDPOINT}
             - CASDOOR_ENABLED=true
             - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
             - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
@@ -231,7 +230,7 @@ services:
             - rabbitmq
             - casdoor
         ports:
-            - "${RPA_BROWSER_PORT}:8000"
+            - "${RPA_BROWSER_PORT}:28000"
         environment:
             - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD}
             - controller_base_path=/api/v1/rpa
