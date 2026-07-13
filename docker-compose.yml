@@ -193,9 +193,7 @@ services:
             - REDIS_PORT=6379
             - REDIS_PWD=
             - FASTAPI_URI=${FASTAPI_URI}
-            - FASTAPI_DEV_URI=${FASTAPI_DEV_URI}
             - FASTAPI_RPA_URI=${FASTAPI_RPA_URI}
-            - FASTAPI_RPA_DEV_URI=${FASTAPI_RPA_DEV_URI}
             - MESSAGE_SERVICE_URI=${MESSAGE_SERVICE_URI}
             - OLLAMA_ENDPOINT=${OLLAMA_ENDPOINT}
             - CASDOOR_ENABLED=true
