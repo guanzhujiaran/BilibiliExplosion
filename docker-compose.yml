@@ -260,7 +260,6 @@ services:
             - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/?heartbeat=180
             # 与 be-bilibili-crawler / rpa-browser 共用同一份推送渠道配置（JSON）
             - MESSAGE_CONFIG=${MESSAGE_CONFIG}
-            - PROXY_SERVER=${PROXY_SERVER}
             - TZ=${ENV_TZ}
         restart: unless-stopped
         extra_hosts:
