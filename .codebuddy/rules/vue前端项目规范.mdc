@@ -1,0 +1,52 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-07-28T03:00:07.832Z
+provider: 
+---
+
+# Vue + Tailwind CSS 样式与主题规范
+
+## 1. 样式作用域强制规范
+- **禁止 `<style>` 块**：除非遇到极端复杂的动画或伪类嵌套，否则严禁在 `.vue` 文件中使用 `<style>` 标签。所有视觉样式必须通过 Tailwind CSS 的原子类写在 `class` 属性中。
+- **禁止内联样式**：严禁使用 `:style` 绑定样式，所有视觉表现必须由 class 控制。
+
+## 2. 主题与颜色使用规范
+- **统一主题配置源**：所有的主题尺寸、颜色等变量必须定义在 `src/assets/theme.css` 中，严禁在组件中硬编码颜色值或尺寸。
+- **使用语义化 Tailwind Class**：在模板中必须直接使用 Tailwind 封装好的语义化类名（如 `text-info-light-3`、`bg-primary`）。
+- **禁止直接使用底层 CSS 变量**：严禁在模板或样式中使用 `var(--el-color-primary-light-3)` 等底层基础变量。如果 `theme.css` 中定义了 `--color-primary-light-3: var(--el-color-primary-light-3);`，必须将其视为独立变量，直接使用对应的 Tailwind class（如 `text-primary-light-3`）。
+- **禁止在模板中手写 `var()`**：严禁写出类似 `text-[var(--color-info-light-3)]` 的写法，必须转换为对应的 Tailwind 预设类名。
+- **优先使用element plus组件**：例如使用el-text代替传统的p标签，使用el-button代替传统的button标签等。
+- **禁止使用small尺寸**：所有elementplus组件尺寸必须使用large/default尺寸，此外的组件可以使用自定义主题里面的尺寸，尽量选择大号的尺寸。
+
+## 3. 元素命名与标识规范
+- **功能级命名**：每个具有具体业务功能的元素，必须带有带有明确功能名称的标识。
+- **命名方式**：优先使用带有业务语义的 `class`（推荐 BEM 命名规范，如 `user-profile__avatar`），或在需要被测试/脚本精确查找时使用 `id`。
+- **禁止纯样式命名**：禁止使用纯 Tailwind 工具类组合来作为元素的唯一标识（例如不要只写 `class="flex items-center"`，应补充 `class="flex items-center header-nav"`）。
+
+## 4. 代码示例
+
+###  正确示范：
+<template>
+  <!-- 带有功能名称 class，使用语义化 Tailwind 主题类 -->
+  <div class="user-card flex p-4 bg-primary-light-3 text-info-light-3">
+    <img class="user-card__avatar w-10 h-10 rounded-full" src="..." alt="avatar" />
+    <span class="user-card__name text-lg font-bold">{{ userName }}</span>
+  </div>
+</template>
+<!-- 无 <style> 块 -->
+
+###  错误示范：
+<template>
+  <!-- 错误1: 直接使用了底层变量 -->
+  <div class="flex p-4" style="background-color: var(--el-color-primary-light-3)">
+    <!-- 错误2: 使用了 text-[var(...)] 写法 -->
+    <span class="text-[var(--color-info-light-3)]">{{ userName }}</span>
+    <!-- 错误3: 缺少功能名称标识，只有纯样式类 -->
+    <img class="w-10 h-10 rounded-full" src="..." />
+  </div>
+</template>
+<style scoped>
+.user-card { color: red; }
+</style>
