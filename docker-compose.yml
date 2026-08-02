@@ -148,7 +148,9 @@ services:
             - IS_DEV=${IS_DEV}
             - llm_apis=${llm_apis}
         build:
-            context: ./be-bilibili-crawler
+            context: .
+            dockerfile: ./Dockerfile.mono
+            target: crawler
         volumes:
             - ./be-bilibili-crawler:/app
             - /app/node_modules # 保护容器内node_modules
@@ -223,7 +225,9 @@ services:
     rpa-browser:
         container_name: fastapi-rpa-browser
         build:
-            context: ./RPA-Browser
+            context: .
+            dockerfile: ./Dockerfile.mono
+            target: rpa
         depends_on:
             - postgres
             - redis
@@ -249,9 +253,11 @@ services:
     be-message-service:
         container_name: be-message-service
         build:
-            context: ./be-message-service
+            context: .
+            dockerfile: ./Dockerfile.mono
+            target: message
         volumes:
-            - ./be-message-service/app:/fastapi/app
+            - ./be-message-service/app:/app/app
         ports:
             - "${MESSAGE_SERVICE_PORT}:18739"
         depends_on:
@@ -300,7 +306,6 @@ services:
             - "12000:12000"
 volumes:
     puppeteer_Bili_node_modules:
-    uv-cache:
 networks:
     default:
         enable_ipv6: true

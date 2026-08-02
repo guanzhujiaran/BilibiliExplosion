@@ -25,6 +25,7 @@ venv/
 .env
 .env.dev
 docker_vol/*
+docker_vol/uv_cache/ # uv 构建/运行时缓存，绝不纳入版本库
 !docker_vol/mysql_data/
 !docker_vol/mysql_data/init/
 docker_vol/mysql_data/data

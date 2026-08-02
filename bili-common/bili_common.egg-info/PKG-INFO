@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: bili-common
+Version: 0.1.0
+Summary: Bilibili 公共认证与统一响应模型包（基于 sqlmodel，可被多个微服务复用）
+Requires-Python: >=3.11
+Requires-Dist: sqlmodel>=0.0.27
+Requires-Dist: fastapi>=0.110.0
+Requires-Dist: pydantic>=2.7.0

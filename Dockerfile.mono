@@ -1,0 +1,145 @@
+# ============================ 共享 base ============================
+FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-bookworm-slim AS base
+
+# 标准 uv Docker 最佳实践环境变量
+ENV PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_CACHE_DIR=/cache/uv \
+    UV_NO_DEV=1 \
+    UV_NO_EDITABLE=1 \
+    UV_TOOL_BIN_DIR=/usr/local/bin \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    # 三个服务各自的源码根目录，统一加入 PYTHONPATH，让控制台脚本 `uvicorn` 能找到本地包
+    # （main / app）。各 target 镜像里只存在自己的源码目录，其余路径不存在会被 Python 自动忽略，无冲突。
+    PYTHONPATH=/app \
+    RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
+    RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+
+# 配置 Debian 阿里云镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# 三个服务公共的系统依赖（crawler 的构建工具 + Node.js；rpa 的 OpenCV 运行库；message 的构建工具）。
+# 全部放 base，作为共享层，三个 target 继承后无需各自再 apt-get。
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ \
+    gcc \
+    make \
+    nodejs \
+    npm \
+    curl \
+    pkg-config \
+    libssl-dev \
+    git \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================ crawler target ============================
+FROM base AS crawler
+WORKDIR /app
+
+# Node 依赖仅 crawler 需要
+COPY be-bilibili-crawler/package.json ./package.json
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install
+
+# bili-common 作为路径依赖，解析 ../bili-common → /bili-common（解析阶段需存在）
+COPY bili-common /bili-common
+
+# 仅安装依赖（不装项目本体）：lock + pyproject 通过 bind 挂载，源码变动不会使该层缓存失效
+RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    --mount=type=bind,source=be-bilibili-crawler/uv.lock,target=uv.lock \
+    --mount=type=bind,source=be-bilibili-crawler/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=be-bilibili-crawler/.python-version,target=.python-version \
+    uv sync --locked --no-install-project
+
+# 安装 Playwright chromium（仅 crawler 运行期需要，写入共享目录）
+RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    uv run playwright install chromium
+
+# 拷贝源码（含 pyproject.toml / uv.lock，供最终 uv sync 使用）
+COPY be-bilibili-crawler/ .
+
+# 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
+RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    uv sync --locked
+
+# 把虚拟环境可执行文件放到 PATH 最前（PYTHONPATH 继承自 base，已是统一值）
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 23333
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "23333"]
+
+# ============================ rpa target ============================
+FROM base AS rpa
+WORKDIR /app
+
+# bili-common 作为路径依赖，解析 ../bili-common → /bili-common（解析阶段需存在）
+COPY bili-common /bili-common
+
+# RPA 暂未提交 uv.lock：先 bind pyproject 生成 lock，再安装依赖（同一层，缓存仅依赖 pyproject）。
+# 若后续提交 RPA-Browser/uv.lock，可改为与 crawler/message 一致的两阶段 --locked 写法。
+RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    --mount=type=bind,source=RPA-Browser/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=RPA-Browser/.python-version,target=.python-version \
+    uv lock && \
+    uv sync --locked --no-install-project
+
+# 复制项目文件（含生成的 uv.lock，供最终 uv sync 使用）
+COPY RPA-Browser/ .
+
+# 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
+RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    uv sync --locked
+
+# 把虚拟环境可执行文件放到 PATH 最前（PYTHONPATH 继承自 base，已是统一值）
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 28000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "28000", "--log-level", "info"]
+
+# ============================ message target ============================
+FROM base AS message
+WORKDIR /app
+
+# bili-common 作为路径依赖，解析 ../bili-common → /bili-common（解析阶段需存在）
+COPY bili-common /bili-common
+
+# 仅安装依赖（不装项目本体）：lock + pyproject 通过 bind 挂载，源码变动不会使该层缓存失效
+RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    --mount=type=bind,source=be-message-service/uv.lock,target=uv.lock \
+    --mount=type=bind,source=be-message-service/pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
+
+# 拷贝源码与清单（pyproject.toml / uv.lock 供最终 uv sync 使用）
+COPY be-message-service/pyproject.toml ./pyproject.toml
+COPY be-message-service/uv.lock ./uv.lock
+COPY be-message-service/app ./
+
+# 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
+RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    uv sync --locked
+
+# 把虚拟环境可执行文件放到 PATH 最前（PYTHONPATH 继承自 base，已是统一值）
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 18739
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "18739"]
+
+# ============================ default (meta-target) ============================
+# docker-compose 总是通过 --target 构建具体服务（crawler / rpa / message）。
+# 本阶段仅用于建立构建依赖图，消除 "unreachable stage" 警告；
+# 实际运行镜像由各 --target 独立产出，本阶段不会被 docker-compose 使用。
+FROM base AS default
+COPY --from=crawler /usr/local/bin/uv /tmp/.dep-crawler
+COPY --from=rpa /usr/local/bin/uv /tmp/.dep-rpa
+COPY --from=message /usr/local/bin/uv /tmp/.dep-message
+RUN rm -rf /tmp/.dep-*
+CMD ["echo", "Use: docker compose up <service>  (--target is set automatically)"]

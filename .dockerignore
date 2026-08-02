@@ -1,0 +1,18 @@
+# 根上下文构建时排除无关大目录，减小 build context 体积
+puppeteer_Bili/
+unidbgSpringBoot/
+go-proxy-ipv6-pool-auto/
+docker_vol/
+dev_init_chmod.bash
+pm2.app.js
+Makefile
+README.md
+
+# Python 缓存 / 虚拟环境 / 本地依赖产物
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/node_modules/
+**/.git/

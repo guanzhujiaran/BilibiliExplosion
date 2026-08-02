@@ -1,0 +1,18 @@
+[project]
+name = "bili-common"
+version = "0.1.0"
+description = "Bilibili 公共认证与统一响应模型包（基于 sqlmodel，可被多个微服务复用）"
+requires-python = ">=3.11"
+dependencies = [
+    "sqlmodel>=0.0.27",
+    "fastapi>=0.110.0",
+    "pydantic>=2.7.0",
+]
+
+[tool.uv]
+python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone/"
+
+[[tool.uv.index]]
+name = "aliyun"
+url = "https://mirrors.aliyun.com/pypi/simple/"
+default = true

@@ -170,9 +170,12 @@ services:
     be-message-service:
         container_name: be-message-service
         build:
-            context: ./be-message-service
+            context: .
+            dockerfile: ./Dockerfile.mono
+            target: message
         volumes:
             - ./be-message-service/app:/fastapi/app
+            - ./docker_vol/uv_cache:/root/.cache/uv # uv 运行时缓存（主机持久化，构建期走 BuildKit cache mount）
         ports:
             - "${MESSAGE_SERVICE_PORT}:18739"
         depends_on:
@@ -202,7 +205,6 @@ services:
             - "host.docker.internal:host-gateway"
 volumes:
     puppeteer_Bili_node_modules:
-    uv-cache:
 networks:
     default:
         enable_ipv6: true
