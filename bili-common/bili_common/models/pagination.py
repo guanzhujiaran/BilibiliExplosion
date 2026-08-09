@@ -5,7 +5,7 @@
 避免各项目重复定义导致字段/校验不一致。
 """
 
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from sqlmodel import SQLModel, Field
 
@@ -45,7 +45,7 @@ class RequestPaginationParams(SQLModel):
 class RequestCursorParams(SQLModel):
     """基于游标的分页请求参数"""
 
-    cursor: Optional[str] = Field(
+    cursor: str | None = Field(
         default=None, description="游标值，用于定位下一页起始位置"
     )  # 游标值，用于定位下一页起始位置
     size: int = Field(
@@ -53,8 +53,8 @@ class RequestCursorParams(SQLModel):
     )  # 每页数量，默认 20 条，最小值为 1
 
 
-class RequestOffsetLimitParams(SQLModel):
-    """基于偏移量的分页请求参数"""
+class RequestOffsetLimitParams(SQLModel, Generic[T]):
+    """基于偏移量的分页请求参数（泛型，可携带额外的过滤条件类型 T）"""
 
     offset: int = Field(
         default=0, ge=0, description="偏移量，最小值为 0"

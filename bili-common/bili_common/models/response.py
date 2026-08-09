@@ -3,13 +3,13 @@ Response 模块 - 统一响应模型和辅助函数（使用 sqlmodel 替代 pyd
 """
 
 from typing import Any, Generic, TypeVar
-from sqlmodel import SQLModel
+from pydantic import BaseModel
 from bili_common.models.response_code import ResponseCode
 
 DataT = TypeVar("DataT")
 
 
-class StandardResponse(SQLModel, Generic[DataT]):
+class StandardResponse(BaseModel, Generic[DataT]):
     """统一响应格式"""
 
     code: int = 0

@@ -126,11 +126,11 @@ services:
             - redis
             - casdoor
         build:
-            context: ./puppeteer_Bili
+            context: ./be-gateway
             target: prod
         volumes:
-            - puppeteer_Bili_node_modules:/app/node_modules # 使用命名卷保存 node_modules
-            - ./puppeteer_Bili:/app
+            - be-gateway_node_modules:/app/node_modules # 使用命名卷保存 node_modules
+            - ./be-gateway:/app
         ports:
             - "${NODEJS_PPTR_PORT}:9923"
         restart: unless-stopped
@@ -204,7 +204,7 @@ services:
         extra_hosts:
             - "host.docker.internal:host-gateway"
 volumes:
-    puppeteer_Bili_node_modules:
+    be-gateway_node_modules:
 networks:
     default:
         enable_ipv6: true

@@ -12,6 +12,11 @@ class ResponseCode(IntEnum):
     # 成功
     SUCCESS = 0
 
+    # 未登录：采用 B 站官方约定业务码 -101（注意不是 HTTP 401）。
+    # 所有对外 HTTP 响应状态码恒为 200，业务状态通过 body 中的 `code` 表达，
+    # 前端据此判断未登录并跳转登录页。详见 docs/response-code-design.md。
+    NOT_LOGGED_IN = -101
+
     # 通用错误码
     BAD_REQUEST = 400
     UNAUTHORIZED = 401
@@ -59,6 +64,13 @@ class ResponseCode(IntEnum):
     # 浏览器/页面相关错误码
     GET_BROWSER_INFO_FAILED = 2010
     PAGE_NAVIGATION_FAILED = 2011
+
+    # Casdoor OAuth 相关错误码
+    CASDOOR_OAUTH_ERROR = 3001       # Casdoor 返回错误（如 code 过期、invalid_grant）
+    CASDOOR_ENDPOINT_NOT_CONFIGURED = 3002  # Casdoor endpoint 未配置
+    CASDOOR_TOKEN_PARSE_FAILED = 3003  # JWT 解析失败
+    CASDOOR_USER_NOT_FOUND = 3004     # Casdoor 用户不存在
+    CASDOOR_CREATE_USER_FAILED = 3005  # 创建本地用户失败
 
 
 __all__ = ["ResponseCode"]

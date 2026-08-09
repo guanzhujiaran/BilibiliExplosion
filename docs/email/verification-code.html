@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BilibiliExplosion // 验证码</title>
+<style>
+    /* ===== Cyberpunk base ===== */
+    body {
+        margin: 0;
+        padding: 0;
+        background-color: #05060d;
+        font-family: 'Courier New', Consolas, 'Lucida Console', monospace;
+        color: #c8f7ff;
+    }
+    .scanlines {
+        background-image: repeating-linear-gradient(
+            to bottom,
+            rgba(0, 255, 247, 0.04) 0px,
+            rgba(0, 255, 247, 0.04) 1px,
+            transparent 1px,
+            transparent 3px
+        );
+    }
+    .neon-cyan { color: #00fff7; text-shadow: 0 0 6px rgba(0,255,247,0.8), 0 0 14px rgba(0,255,247,0.4); }
+    .neon-magenta { color: #ff2bd6; text-shadow: 0 0 6px rgba(255,43,214,0.8), 0 0 14px rgba(255,43,214,0.4); }
+    .glow-box {
+        border: 1px solid #00fff7;
+        box-shadow: 0 0 10px rgba(0,255,247,0.5), inset 0 0 14px rgba(0,255,247,0.15);
+    }
+    .code-glow {
+        letter-spacing: 10px;
+        color: #faff00;
+        text-shadow: 0 0 8px rgba(250,255,0,0.9), 0 0 18px rgba(250,255,0,0.5);
+        animation: flicker 2.4s infinite;
+    }
+    @keyframes flicker {
+        0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% { opacity: 1; }
+        20%, 24%, 55% { opacity: 0.55; }
+    }
+    a { color: #00fff7; text-decoration: none; border-bottom: 1px dashed #ff2bd6; }
+    a:hover { color: #ff2bd6; }
+    .divider {
+        height: 1px;
+        background: linear-gradient(to right, transparent, #00fff7, #ff2bd6, transparent);
+    }
+    .tag {
+        display: inline-block;
+        border: 1px solid #ff2bd6;
+        color: #ff2bd6;
+        padding: 2px 8px;
+        font-size: 11px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        box-shadow: 0 0 6px rgba(255,43,214,0.4);
+    }
+</style>
+</head>
+<body class="scanlines">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#05060d;">
+  <tr>
+    <td align="center" style="padding:32px 12px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
+             class="glow-box" style="background-color:#0a0d1a;border:1px solid #00fff7;max-width:600px;">
+
+        <!-- ===== Header / Brand ===== -->
+        <tr>
+          <td align="center" style="padding:28px 24px 12px;">
+            <div class="tag">// ACCESS TERMINAL</div>
+            <h1 class="neon-cyan" style="margin:14px 0 4px;font-size:26px;letter-spacing:3px;">
+              BILIBILI<span class="neon-magenta">EXPLOSION</span>
+            </h1>
+            <p style="margin:0;font-size:12px;color:#6f7b9c;letter-spacing:4px;">
+              自建 B 站数据采集 / 自动化中枢
+            </p>
+          </td>
+        </tr>
+
+        <tr><td style="padding:0 24px;"><div class="divider"></div></td></tr>
+
+        <!-- ===== Body ===== -->
+        <tr>
+          <td style="padding:24px 28px 8px;font-size:15px;line-height:1.7;">
+            <p style="margin:0 0 8px;">
+              <strong class="neon-magenta">%{user.friendlyName}</strong>，身份验证请求已发起 ▸
+            </p>
+            <p style="margin:0 0 4px;color:#c8f7ff;">
+              以下是你的访问授权验证码（VERIFICATION CODE）：
+            </p>
+            <p style="margin:0;font-size:12px;color:#6f7b9c;">
+              ⚠ 该密钥将在 <span class="neon-cyan">5 分钟</span> 后自动失效，请勿泄露给任何人。
+            </p>
+          </td>
+        </tr>
+
+        <!-- ===== Code block ===== -->
+        <tr>
+          <td align="center" style="padding:18px 28px 6px;">
+            <div class="glow-box" style="display:inline-block;padding:16px 34px;background-color:#0d1224;border:1px solid #faff00;box-shadow:0 0 12px rgba(250,255,0,0.4);">
+              <span class="code-glow" style="font-size:30px;font-weight:bold;">%s</span>
+            </div>
+          </td>
+        </tr>
+
+        <!-- ===== Reset link ===== -->
+        <tr>
+          <td style="padding:14px 28px 8px;font-size:14px;">
+            <p style="margin:0;">
+              或直接点击此 <a href="%link">LINK ▸ 重置入口</a> 进入授权通道。
+            </p>
+          </td>
+        </tr>
+
+        <tr><td style="padding:0 24px;"><div class="divider"></div></td></tr>
+
+        <!-- ===== Footer ===== -->
+        <tr>
+          <td align="center" style="padding:20px 24px 28px;font-size:11px;color:#6f7b9c;line-height:1.6;">
+            <p style="margin:0 0 6px;" class="neon-cyan">// END OF TRANSMISSION</p>
+            <p style="margin:0;">
+              BilibiliExplosion 由 Casbin 组织旗下 Casdoor 提供统一鉴权。
+            </p>
+            <p style="margin:6px 0 0;">
+              了解更多：<a href="https://github.com/guanzhujiaran/BilibiliExplosion">github.com/guanzhujiaran/BilibiliExplosion</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

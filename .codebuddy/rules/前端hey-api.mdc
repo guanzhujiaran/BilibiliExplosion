@@ -1,0 +1,9 @@
+---
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-08-07T04:07:19.519Z
+provider: 
+---
+
+前端生成的sdk不要直接修改,需要修改的时候停下,等我改好了再继续
