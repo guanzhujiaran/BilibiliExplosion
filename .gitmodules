@@ -10,10 +10,10 @@
 	path = unidbgSpringBoot
 	url = https://github.com/guanzhujiaran/unidbgSpringBoot
 	branch = master
-[submodule "puppeteer_Bili"]
-	path = puppeteer_Bili
-	url = https://github.com/guanzhujiaran/puppeteer_Bili.git
-	branch = Dev
+[submodule "be-gateway"]
+	path = be-gateway
+	url = https://github.com/guanzhujiaran/be-gateway.git
+        branch = Dev
 [submodule "RPA-Browser"]
 	path = RPA-Browser
 	url = https://github.com/guanzhujiaran/RPA-Browser.git
