@@ -11,6 +11,8 @@ BilibiliExplosion 后端各微服务共享的**公共依赖库**。把统一响�
 - Playwright 无头 Chromium 浏览器管理（`BrowserManager`）
 - 代理管理（`ProxyManager` / `ProxyRule`）
 - 消息推送客户端（`MessageServiceClient`，对接 `be-message-service`）
+- RPC 公共设施与契约（`bili_common.rpc`）：`rpc_safe` 装饰器、`RpcClient` 通用客户端、按系统分模块的 RPC 契约（抽奖 / pptr 用户 / 站外推送）
+- 站外推送 MQ 公共发布函数（`bili_common.core.message_pub`）：fire-and-forget 把推送请求发布到 `message.push` 队列，不需要管返回
 - 日志、网页抓取辅助（`get_cookies` / `get_headers` / `get_html`）
 
 ## 技术栈
@@ -37,12 +39,21 @@ bili-common/
     │   ├── config.py          # Settings（mysql / redis / rabbitmq / baseUrl）
     │   ├── database.py        # engine / Base / AsyncSessionLocal / get_db / get_session
     │   ├── redis.py           # get_redis
-    │   ├── browser.py         # BrowserManager
+    │       ├── browser.py         # BrowserManager
     │   ├── proxy.py           # ProxyManager / ProxyRule
     │   ├── message.py         # MessageServiceClient
+    │   ├── message_pub.py     # publish_push_message（站外推送 MQ 公共发布，fire-and-forget，需 faststream）
     │   └── request.py         # get_cookies / get_headers / get_html
     ├── deps/
     │   └── auth.py            # CurrentUser（JWT 依赖）
+    ├── rpc/                   # RPC 公共设施（按系统/模块分文件夹）
+    │   ├── __init__.py        # 统一导出（顶层只导出纯契约，safe/client 按需子模块）
+    │   ├── base.py            # RpcMethodName / 路由键前缀 / 白名单
+    │   ├── safe.py            # rpc_safe 装饰器（RPC 服务端异常转回包，需 loguru）
+    │   ├── client.py          # RpcClient 通用客户端（FastStream Direct Reply-To，需 faststream）
+    │   ├── lottery.py         # 抽奖 RPC 契约（crawler 服务端 ↔ RPA-Browser 客户端）
+    │   ├── pptr_user.py       # pptr 用户 RPC 契约（be-message 服务端 ↔ be-gateway 客户端）
+    │   └── push.py            # 站外推送 RPC 契约（be-message 服务端 ↔ 其它系统客户端）
     └── models/
         ├── response.py        # 响应模型与辅助函数
         ├── response_code.py   # ResponseCodeEnum
@@ -50,6 +61,31 @@ bili-common/
         ├── pagination.py      # PaginationParams / PageModel
         └── depends.py         # CommonDepends（缓存/分页/验证码/限流）
 ```
+
+> 注：`models/` 下的 `rpc.py` / `rpc_params.py` / `pptr_user_rpc.py` / `push_rpc.py`
+> 现为**兼容转发层**（re-export 自 `bili_common.rpc.*`），保证存量引用零改动。
+> `rpc/safe.py` 依赖 `loguru`、`rpc/client.py` 与 `core/message_pub.py` 依赖 `faststream`，
+> 均按需导入，不进入顶层导出。
+
+### 站外推送 MQ 公共发布（fire-and-forget）
+
+任何系统只需把推送请求丢进 `message.push` 队列即可，**不需要管返回**：
+
+```python
+from bili_common.core.message_pub import publish_push_message
+
+# 发布到 message_exchange / message.push（队列绑定由 be-message-service 维护）
+await publish_push_message(
+    title="[w] 任务失败",
+    content="某个工作流执行失败，请检查",
+    push_type="text",
+    config={"push_plus_token": "xxx"},  # 或直接传 PushChannelConfig / None（回落全局配置）
+    amqp_url="amqp://guest:guest@rabbitmq:5672/",  # 缺省从环境变量 RABBITMQ_URL 读取
+)
+```
+
+与 RPC 方式（`message.push.rpc.*`，同步等返回）互补；与 HTTP `POST /api/v1/message/push`
+（面向终端用户）并存，本函数面向服务端系统调用。
 
 ## 安装与启动
 

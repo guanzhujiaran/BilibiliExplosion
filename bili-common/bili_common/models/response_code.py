@@ -19,6 +19,7 @@ class ResponseCode(IntEnum):
 
     # 通用错误码
     BAD_REQUEST = 400
+    INVALID_PARAM = 400  # 请求参数非法（与 BAD_REQUEST 同值，语义区分）
     UNAUTHORIZED = 401
     FORBIDDEN = 403
     NOT_FOUND = 404
@@ -44,6 +45,7 @@ class ResponseCode(IntEnum):
     BROWSER_ID_NOT_FOUND = 1005
     SESSION_NOT_FOUND = 1006
     BROWSER_NOT_STARTED = 1007
+    USER_NOT_FOUND = 1008  # 目标用户不存在（空间资料等单用户读接口返回，替代空列表/0/404 兜底）
 
     # WebRTC 相关错误码
     WEBRTC_OFFER_FAILED = 2001

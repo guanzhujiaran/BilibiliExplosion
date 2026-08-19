@@ -6,3 +6,5 @@ Requires-Python: >=3.11
 Requires-Dist: sqlmodel>=0.0.27
 Requires-Dist: fastapi>=0.110.0
 Requires-Dist: pydantic>=2.7.0
+Requires-Dist: fastapi-i18n>=0.12.0
+Requires-Dist: python-dotenv>=1.0.0

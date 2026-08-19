@@ -1,0 +1,24 @@
+---
+description: 设计社区互动的接口和模型时，参考 be-bilibili-crawler 的 bilibili GrpcProto 目录下的 proto 定义
+alwaysApply: true
+enabled: true
+provider: 
+updatedAt: 2026-08-17T00:00:00.000Z
+---
+
+# 社区互动接口/模型设计参考 bilibili Proto
+
+## 强制约束
+
+1. **设计社区互动的接口与模型时，优先参考 `be-bilibili-crawler/Service/GrpcModule/Grpc/GrpcProto/bilibili` 目录下的 proto 定义**（对齐 B 站动态/社区数据结构），例如：
+
+   - `dynamic/common/dynamic.proto` — Moment 通用模型（`CreateContent` / `CreateCommonAttachCard` / `CreateScene` / `ContentType` 等）
+   - `dynamic/gw/gateway.proto` — Moment 网关模型（`DynamicItem`、`Module`、`MdlDyn*` 系列）
+   - `dynamic/interfaces/feed/v1/api.proto` — Moment Feed 接口（`CreateDyn`、`DynamicRepost`、`DynamicThumb` 等）
+   - `app/dynamic/v2/dynamic.proto` — V2 Moment 服务（`Module` / `ModuleAdditional` / `DynModuleType` / `AdditionalType` 等）
+
+2. **模块化渲染对齐 `DynModuleType`**：动态卡片由多个模块组成（`module_author` / `module_desc` / `module_dynamic` / `module_forward` / `module_extend` / `module_additional` / `module_stat` / `module_interaction`），前端按模块顺序渲染；引用外部资源的**附加卡**应作为独立 `module_additional` 模块（渲染于正文下方），不得塞进正文 desc。
+
+3. **attach 卡只存 `bizType` + `bizId`**（对标 `CreateCommonAttachCard { type, biz_id }` / `ModuleAdditional { type, rid }`），读取时经 RPC 实时获取资源详情，禁止冗余保存 name/cover/jumpUrl 快照。
+
+4. **新建接口/模型前先查 proto**：若 proto 中已有对应概念，须先对齐其字段命名、层级与语义；缺失时才自定义，并在计划书中说明差异。

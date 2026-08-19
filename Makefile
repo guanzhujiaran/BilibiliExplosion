@@ -25,7 +25,7 @@ start:
 
 # 启动除 fastapi 以外的所有服务
 start-excluding-fastapi:
-	docker-compose up -d nginx goaccess standalone mysql redis rabbitmq unidbg postgres gateway lm-studio casdoor rpa-browser
+	docker-compose up -d nginx standalone mysql redis rabbitmq unidbg postgres gateway casdoor rpa-browser
 
 # 停止所有服务
 stop:
@@ -37,7 +37,7 @@ restart:
 
 # 重启除 fastapi 以外的所有服务
 restart-excluding-fastapi:
-	docker-compose restart nginx goaccess standalone mysql redis rabbitmq unidbg postgres gateway lm-studio casdoor rpa-browser
+	docker-compose restart nginx standalone mysql redis rabbitmq unidbg postgres gateway casdoor rpa-browser
 
 # 查看日志
 logs:

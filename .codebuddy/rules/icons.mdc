@@ -1,0 +1,35 @@
+---
+description: 图标统一使用 src/assets 下的 SVG 资源，禁止使用 Element Plus 图标；缺失时暂停等待补充
+alwaysApply: true
+enabled: true
+provider: 
+updatedAt: 2026-08-16T00:00:00.000Z
+---
+
+# 图标统一使用 assets 下的 SVG 资源
+
+## 强制约束
+
+1. **所有界面图标一律使用 `src/assets/svgs/` 目录下的 SVG 资源**，禁止直接使用 Element Plus 图标（如 `ThumbUp`、`Star`、`Comment` 等）作为业务图标。
+
+2. **SVG 图标引用方式**：`import icon from '@/assets/svgs/xxx.svg?component'` 后以 `<component :is="icon">` 渲染；需区分激活/未激活态时使用 `xxx.svg` / `xxx_active.svg` 成对资源。
+
+3. **SVG 资源必须支持外部控制大小与颜色**：
+   - SVG 根节点用 `width="100%" height="100%"`（**禁止内联固定数值**，如 `width="16"`），让外部 `class="w-* h-*"` 控制大小；
+   - SVG 根节点加 `fill="currentColor"`（`<path>` 等不显式 fill，继承 currentColor），让外部 `class="text-*"` 控制颜色；
+   - 使用时通过 `class="w-6 h-6 text-text-primary"` 等外部类控制尺寸与颜色。
+
+4. **缺少所需图标时，必须暂停并请用户补充资源**，不得擅自改用 Element Plus 图标或手写内联 SVG 凑数。等用户提供 `src/assets/svgs/` 下的 SVG 文件后再继续接入。
+
+## 现有 SVG 资源（src/assets/svgs/）
+
+- `like.svg` / `like_active.svg`：点赞（未激活 / 激活）
+- `dislike.svg` / `dislike_active.svg`：点踩（未激活 / 激活）
+- `svgs/dynamic/detail/side_toolbar/comment.svg`：评论
+- `svgs/dynamic/detail/side_toolbar/favorite.svg`：收藏
+- `svgs/dynamic/detail/side_toolbar/forward.svg`：转发
+- `svgs/dynamic/detail/side_toolbar/like.svg`：点赞
+- `svgs/more.svg`、`svgs/setting.svg`：更多 / 设置
+- `svgs/login_tip_*.svg`：登录引导图
+
+> 新增业务图标时，若以上资源不覆盖，先确认 `src/assets/svgs/` 下是否已有；没有则**暂停**请用户补充。

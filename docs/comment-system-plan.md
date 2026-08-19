@@ -358,7 +358,8 @@ app/utils/ip_mask.py           ← IP 提取与打码（D3）
 
 ### 5.1 评论审核
 
-- [x] **5.1** DFA Trie 敏感词匹配（词库进程内热加载，`reload_words()`），**同步拦截**：命中高危直接 `rejected`，疑似置 `auditing`（当前对外不可见，作者可见性待前端配合）
+- [x] **5.1** DFA Trie 敏感词匹配（词库进程内热加载，`reload_words()`），**同步拦截**：命中高危直接 `rejected`，疑似置 `auditing`
+- [x] **5.1a** **作者可见审核中评论**：`GET /comment/main` 在登录态下额外返回**当前作者本人** `state=auditing` 的一级评论（置顶后、普通列表前，`item.state='auditing'` 天然携带特殊标识）；`GET /comment/reply` 与楼中楼预览同样对作者本人展示其 `auditing` 子评论。计数（`total` / `all_count` / `rcount`）仍只统计 `NORMAL`，审核中评论不计入。前端 `LotteryCommentItem` 对 `state==='auditing'` 渲染「审核中」标签。
 - [ ] **5.2** 可选：接 compose 内已有的 `llama_cpp` 做异步 AI 复审（弱依赖，超时兜底放行 + 告警）— *本轮未实施（可选）*
 - [x] **5.3** 管理端 `/api/v1/comment/admin/audit`：人工审核队列、通过 / 驳回、下架、明文 IP 查看；`/admin/stats` 全局统计
 

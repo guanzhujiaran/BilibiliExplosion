@@ -41,14 +41,20 @@ class PptrUserNavData(SQLModel):
 class PptrUserInfoUpdateParams(SQLModel):
     """`POST /api/v1/user/user_info/update` 的请求体。
 
-    校验规则对齐 pptr 旧 express-validator：昵称 2~24 字、签名 ≤70 字、
+    各字段均为可选（只传要修改的字段），空串表示该字段不修改。
+    校验规则对齐 pptr 旧 express-validator：昵称 2~24 字（有值时）、签名 ≤70 字、
     性别限定枚举；生日为 ISO 日期字符串。
     """
 
-    uname: str = Field(min_length=2, max_length=24, description="昵称（2-24 个字）")
+    uname: str = Field(default="", max_length=24, description="昵称（空串=不修改；非空时 2-24 字，接口层校验最短 2 字）")
     usersign: str = Field(default="", max_length=70, description="个性签名（最多 70 字）")
     sex: str = Field(default="保密", description="性别：男 / 女 / 保密 / 武装直升机 / 永雏塔菲")
     birthday: str = Field(default="", description="生日（ISO 日期字符串）")
+    avatar: str = Field(
+        default="",
+        max_length=1024,
+        description="头像图片 URL（http/https，2.16.0 新增；后端下载校验：1s 内下载完成且 ≤1MB；空串表示不修改）",
+    )
 
 
 class PptrUserInfoUpdateResult(SQLModel):
@@ -58,6 +64,10 @@ class PptrUserInfoUpdateResult(SQLModel):
     updated: bool = Field(default=False, description="是否更新成功")
     uname_recorded: bool = Field(
         default=False, description="昵称发生变更并已写入昵称历史表 TUserNameRecord"
+    )
+    avatar_status: str | None = Field(
+        default=None,
+        description="头像字段处理结果：'pending'（已提交审核，未即时生效）/ 'none'（本次未修改头像）",
     )
 
 

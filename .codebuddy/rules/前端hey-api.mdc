@@ -2,8 +2,12 @@
 description: 
 alwaysApply: true
 enabled: true
-updatedAt: 2026-08-07T04:07:19.519Z
+updatedAt: 2026-08-10T12:02:29.548Z
 provider: 
 ---
 
-前端生成的sdk不要直接修改,需要修改的时候停下,等我改好了再继续
+前端 hey-api 生成的 SDK（位于 `src/api/**/hey-api/` 目录下的 `*.gen.ts` / `sdk.gen.ts` / `types.gen.ts` / `client.gen.ts` 等）属于自动生成代码，受以下约束：
+
+1. **不要直接修改生成的 SDK 文件**：任何业务封装、类型引用都只在 `moment-api.ts` 等薄封装层进行，禁止手写改动 `hey-api/` 下的生成文件。
+2. **需要修改/更新（重新生成）SDK 时，必须停下，不要自行触发生成**：当后端新增/变更接口、需要 `npx @hey-api/openapi-ts` 或 vite build 重新拉取 `openapi.json` 生成 SDK 时，先明确告知用户「需要更新 SDK（原因 + 涉及改动）」，然后**停止等待**，由用户手动执行同步更新（重新生成 / 拉取），待用户确认完成后再继续后续的前端接入工作。
+3. 在等待期间，如果需要先编写依赖新接口的封装层/视图代码，可在本地草稿中标注待生成的符号，但不得假设 SDK 已包含该符号而直接提交会报错的实现。

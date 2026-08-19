@@ -14,6 +14,7 @@ from bili_common.exceptions import (
     InvalidUIDException,
     InvalidMidFormatException,
 )
+from bili_common.i18n import _
 
 
 class UserRole(str, Enum):
@@ -182,7 +183,7 @@ def get_admin_user(
     """
     if auth.role != UserRole.ROOT.value:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员可执行该操作"
+            status_code=status.HTTP_403_FORBIDDEN, detail=_("仅管理员可执行该操作")
         )
     return auth
 
@@ -202,7 +203,7 @@ def require_root(
     if not auth.is_root:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="仅 root 管理员可执行该操作",
+            detail=_("仅 root 管理员可执行该操作"),
         )
     return auth
 
@@ -218,7 +219,7 @@ def require_admin(
         return auth
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="需要管理员权限",
+        detail=_("需要管理员权限"),
     )
 
 
@@ -236,7 +237,7 @@ def require_permission(*perms: str):
             return auth
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="权限不足",
+            detail=_("权限不足"),
         )
 
     return _dep

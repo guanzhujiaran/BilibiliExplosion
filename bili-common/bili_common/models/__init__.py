@@ -56,6 +56,12 @@ from bili_common.models.rpc_params import (
     RPC_METHOD_PARAMS_MODEL_MAP,
     RPC_METHOD_PARAMS_FIELD_MAP,
 )
+# 内部校验契约（be-message 客户端 → be-bilibili-crawler，2.20.0）
+from bili_common.rpc.lottery import (
+    CheckLotteryExistRpcParams,
+    CheckLotteryExistRpcResult,
+    LotteryDetailItem,
+)
 from bili_common.models.user_search import (
     UserSearchParams,
     PptrUserRoleInfo,
@@ -99,7 +105,24 @@ from bili_common.models.pptr_user_rpc import (
     PptrGetUserNavParams,
     PPTR_USER_RPC_CONTRACT,
 )
+from bili_common.models.push import (
+    PushChannelConfig,
+    PushMessagePayload,
+)
+from bili_common.models.push_rpc import (
+    PUSH_RPC_CONTRACT,
+    PUSH_RPC_ROUTING_KEY_PREFIX,
+    PushRpcMethodName,
+    PushRpcSendNowParams,
+    PushRpcSendNowResult,
+    PushRpcSendParams,
+    PushRpcSendResult,
+    push_rpc_routing_key_for,
+)
 from bili_common.models.admin_status import AdminStatusResponse
+from bili_common.models.interaction import InteractionBizTypeEnum
+from bili_common.models.interaction_stat import InteractionStatBase
+from bili_common.models.db_types import str_enum_type
 
 
 __all__ = [
@@ -147,6 +170,9 @@ __all__ = [
     "GetOthersLotDynListRpcParams",
     "RPC_METHOD_PARAMS_MODEL_MAP",
     "RPC_METHOD_PARAMS_FIELD_MAP",
+    "CheckLotteryExistRpcParams",
+    "CheckLotteryExistRpcResult",
+    "LotteryDetailItem",
     "UserSearchParams",
     "PptrUserRoleInfo",
     "PptrUserLevelInfo",
@@ -184,5 +210,19 @@ __all__ = [
     "PptrAddUsernameRecordResult",
     "PptrGetUserNavParams",
     "PPTR_USER_RPC_CONTRACT",
+    "PUSH_RPC_CONTRACT",
+    "PUSH_RPC_ROUTING_KEY_PREFIX",
+    "PushChannelConfig",
+    "PushMessagePayload",
+    "PushRpcMethodName",
+    "PushRpcSendNowParams",
+    "PushRpcSendNowResult",
+    "PushRpcSendParams",
+    "PushRpcSendResult",
+    "push_rpc_routing_key_for",
     "AdminStatusResponse",
+    # 社区互动（2.18.0）
+    "InteractionBizTypeEnum",
+    "InteractionStatBase",
+    "str_enum_type",
 ]

@@ -265,6 +265,8 @@ services:
       - ./be-message-service/app:/app/app
       # 迁移脚本随源码挂载，容器启动时自动 alembic upgrade head
       - ./be-message-service/alembic:/app/alembic
+      # GeoIP 属地库（GeoLite2 mmdb），统一放 docker_vol 底下
+      - ./docker_vol/geoip/mmdb:/app/mmdb
     ports:
       - "${MESSAGE_SERVICE_PORT}:18739"
     depends_on:
@@ -288,6 +290,14 @@ services:
       - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
       - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
       - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
+      # Casdoor 管理员账号（查询用户信息用，password grant 换 admin token）
+      # 管理员走内置 application「app-built-in」，clientId/clientSecret 与普通登录应用不同
+      - CASDOOR_ADMIN_NAME=${CASDOOR_ADMIN_NAME}
+      - CASDOOR_ADMIN_PASSWORD=${CASDOOR_ADMIN_PASSWORD}
+      - CASDOOR_ADMIN_CLIENT_ID=${CASDOOR_ADMIN_CLIENT_ID}
+      - CASDOOR_ADMIN_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET}
+      # GeoIP 属地库目录（与挂载点一致）
+      - GEOIP_MMDB_DIR=/app/mmdb
       - TZ=${ENV_TZ}
     restart: unless-stopped
     extra_hosts:
@@ -339,6 +349,21 @@ services:
       - LLAMA_ARG_MODEL_URL=https://hf-mirror.com/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true
     ports:
       - "12000:12000"
+  nginx:
+    container_name: fastapi-nginx
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - ./docker_vol/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker_vol/nginx/cert:/etc/nginx/cert:ro
+      - ./docker_vol/nginx/html:/usr/share/nginx/html
+      - ./docker_vol/nginx/logs:/var/log/nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 volumes:
   be-gateway_node_modules:
   rpa_browser_chrome:

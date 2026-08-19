@@ -1,0 +1,138 @@
+# English translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-08-12 11:03+0800\n"
+"PO-Revision-Date: 2026-08-12 11:04+0800\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: bili_common/exceptions.py:94
+#, python-brace-format
+msgid "uid 格式非法: {uid}"
+msgstr "Invalid uid format: {uid}"
+
+#: bili_common/exceptions.py:94
+msgid "uid 格式非法"
+msgstr "Invalid uid format"
+
+#: bili_common/exceptions.py:104
+#, python-brace-format
+msgid "mid 格式非法: {mid}"
+msgstr "Invalid mid format: {mid}"
+
+#: bili_common/exceptions.py:104
+msgid "mid 格式非法"
+msgstr "Invalid mid format"
+
+#: bili_common/exceptions.py:168
+msgid "请求参数校验失败"
+msgstr "Request parameter validation failed"
+
+#: bili_common/exceptions.py:210
+#, python-brace-format
+msgid "服务器内部错误 (错误ID: {error_id})"
+msgstr "Internal server error (Error ID: {error_id})"
+
+#: bili_common/deps/auth.py:186
+msgid "仅管理员可执行该操作"
+msgstr "Only administrators can perform this operation"
+
+#: bili_common/deps/auth.py:206
+msgid "仅 root 管理员可执行该操作"
+msgstr "Only root administrators can perform this operation"
+
+#: bili_common/deps/auth.py:222
+msgid "需要管理员权限"
+msgstr "Administrator permission required"
+
+#: bili_common/deps/auth.py:240
+msgid "权限不足"
+msgstr "Insufficient permissions"
+
+#: bili_common/models/response_msg.py:63
+msgid "浏览器通知配置不存在"
+msgstr "Browser notification configuration does not exist"
+
+#: bili_common/models/response_msg.py:64
+msgid "浏览器ID不能为空~"
+msgstr "Browser ID cannot be empty~"
+
+#: bili_common/models/response_msg.py:65
+#, python-brace-format
+msgid "浏览器ID {browser_id} 不属于当前用户或不存在"
+msgstr "Browser ID {browser_id} does not belong to the current user or does not exist"
+
+#: bili_common/models/response_msg.py:66
+msgid "未登录，请提供有效的x-bili-mid请求头"
+msgstr "Not logged in, please provide a valid x-bili-mid header"
+
+#: bili_common/models/response_msg.py:67
+msgid "无效的用户ID，请重新登录"
+msgstr "Invalid user ID, please log in again"
+
+#: bili_common/models/response_msg.py:68
+msgid "Invalid mid format in x-bili-mid header"
+msgstr "Invalid mid format in x-bili-mid header"
+
+#: bili_common/models/response_msg.py:69
+msgid "插件ID不能为空"
+msgstr "Plugin ID cannot be empty"
+
+#: bili_common/models/response_msg.py:70
+#, python-brace-format
+msgid "插件ID {plugin_id} 不属于当前用户或不存在"
+msgstr "Plugin ID {plugin_id} does not belong to the current user or does not exist"
+
+#: bili_common/models/response_msg.py:71
+msgid "浏览器未启动或已停止"
+msgstr "Browser not started or already stopped"
+
+#: bili_common/models/response_msg.py:72
+#, python-brace-format
+msgid "页面索引 {page_index} 无效"
+msgstr "Page index {page_index} is invalid"
+
+#: bili_common/models/response_msg.py:73
+#, python-brace-format
+msgid "视频流初始化失败: {error}"
+msgstr "Video stream initialization failed: {error}"
+
+#: bili_common/models/response_msg.py:74
+#, python-brace-format
+msgid "获取浏览器会话失败: {error}"
+msgstr "Failed to get browser session: {error}"
+
+#: bili_common/models/response_msg.py:75
+#, python-brace-format
+msgid "获取浏览器信息失败: {error}"
+msgstr "Failed to get browser info: {error}"
+
+#: bili_common/models/response_msg.py:76
+msgid "WebRTC 流未激活"
+msgstr "WebRTC stream not active"
+
+#: bili_common/models/response_msg.py:77
+msgid "B站登录失败"
+msgstr "Bilibili login failed"
+
+#: bili_common/models/response_msg.py:78
+msgid "浏览器指纹不存在"
+msgstr "Browser fingerprint does not exist"
+
+#: bili_common/models/response_msg.py:79
+#, python-brace-format
+msgid "已达到最大指纹数量限制，当前等级最多可创建 {max} 个指纹"
+msgstr "Maximum fingerprint limit reached, current level allows at most {max} fingerprints"
+

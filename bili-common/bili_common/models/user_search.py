@@ -62,7 +62,7 @@ class PptrUserLevelInfo(_IntStrMixin):
     current_level: int = Field(default=0, description="当前等级")
     current_exp: int = Field(default=0, description="当前累积经验")
     current_min: int = Field(default=0, description="当前等级起始经验")
-    next_exp: int = Field(default=0, description="下一等级所需经验")
+    next_exp: int = Field(default=0, description="距下一级还需经验（下一级门槛经验 - 当前累积经验），满级为 0")
     updated_at: str = Field(default="", description="TUserLevel.updatedAt（ISO），用于每日经验幂等判断")
 
 

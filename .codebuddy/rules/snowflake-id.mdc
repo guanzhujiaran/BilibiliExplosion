@@ -1,0 +1,45 @@
+---
+description: 对外发布 ID 统一使用雪花 ID（禁止自增主键对外暴露），生成器收敛在 bili-common
+alwaysApply: true
+enabled: true
+provider: 
+updatedAt: 2026-08-16T00:00:00.000Z
+---
+
+# 对外发布 ID 统一使用雪花 ID
+
+## 强制约束
+
+1. **任何对外发布的业务主键（uid、moment_id、topic_id、以及后续新增的对外实体 ID）一律使用雪花 ID**，禁止使用数据库自增主键对外暴露。自增主键仅允许作为内部物理主键，且不得直接作为对外 ID 返回/入参。
+
+2. **雪花 ID 生成器统一收敛在 `bili-common/bili_common/core/snowflake.py`**（通用、自包含、不依赖具体业务项目）。各业务服务通过 `bili_common.core.snowflake` 提供的生成器类实例化自己的独立配置（`worker_id` + `epoch`），使不同实体落在不同数值空间，避免跨实体碰撞。
+
+3. **雪花 ID 位布局（短 ID，分钟步进）**：`| 31 bits 时间戳(分钟, 相对 epoch) | 4 bits worker_id | 4 bits 序列号 |`，共 39 bits，保证正数且初始为 7~8 位十进制。同一 worker 每分钟最多 16 个。
+
+4. **新增对外实体时**，必须在 `bili-common` 的雪花生成器基础上，新增该实体的独立生成器（配置独立的 `worker_id` / `epoch`），并在 be-message-service 侧提供 `generate_<entity>_id()` 兼容封装。禁止直接复用其他实体的生成器实例，避免数值空间碰撞。
+
+5. **数据库模型**：对外实体主键列类型用 `BIGINT`，`autoincrement=False`，由应用层生成雪花 ID 后写入；禁止 `autoincrement=True` 自增。
+
+## 使用示例（新增 topic_id）
+
+```python
+# bili-common/bili_common/core/snowflake.py（通用生成器）
+from bili_common.core.snowflake import MinuteSnowflakeIdGenerator
+
+# be-message-service/app/core/sharding.py（各实体独立实例化）
+from bili_common.core.snowflake import MinuteSnowflakeIdGenerator
+
+_g_topic = MinuteSnowflakeIdGenerator(
+    worker_id=settings.topic_id_worker_id,
+    epoch_sec=settings.topic_id_epoch_sec,
+)
+
+def generate_topic_id() -> int:
+    return _g_topic.next()
+```
+
+## 现有实现位置
+
+- 通用生成器：`bili-common/bili_common/core/snowflake.py`（`MinuteSnowflakeIdGenerator`）
+- 业务封装：`be-message-service/app/core/sharding.py`（`generate_uid` / `generate_moment_id` / `generate_topic_id` / `generate_msgkey`）
+- 对外实体：`TUserDetail.mid`（uid）、`TMoment.dynId`（moment_id）、`TMomentTopic.topicId`（topic_id）
