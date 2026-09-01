@@ -10,12 +10,14 @@
 | `lottery` | 抽奖 RPC 契约（be-bilibili-crawler 服务端 ↔ RPA-Browser 客户端） | `bili_common/models/rpc_params.py` |
 | `pptr_user` | pptr 用户 RPC 契约（be-message 服务端 ↔ be-gateway 客户端） | `bili_common/models/pptr_user_rpc.py` 等 |
 | `push` | 站外推送 RPC 契约（be-message 服务端 ↔ 其它系统客户端） | `bili_common/models/push_rpc.py` |
+| `notify` | 系统通知 RPC 契约（be-message 服务端 ↔ 其它系统客户端，2.48.0） | 新增 |
 
 约定：
 - 服务端返回统一 `StandardResponse{code, msg, data}`；异常在 RPC 边界由 `rpc_safe` 翻译成
   `error_response` 回包（不静默、不吞错）。
 - 客户端使用 FastStream Direct Reply-To（`amq.rabbitmq.reply-to`）同步等待响应。
-- 路由键前缀：`FastapiApp.rpc`（抽奖）/ `message.pptr.rpc`（pptr 用户）/ `message.push.rpc`（推送）。
+- 路由键前缀：`FastapiApp.rpc`（抽奖）/ `message.pptr.rpc`（pptr 用户）/ `message.push.rpc`（推送）/
+  `message.notify.rpc`（系统通知，2.48.0）。
 
 注意（依赖边界）：
 - 本包顶层**只导出纯 SQLModel / Pydantic 契约**（`base` / `lottery` / `pptr_user` / `push`），
@@ -27,6 +29,7 @@
 
 from bili_common.rpc.base import (
     ALLOWED_RPC_METHODS,
+    NOTIFY_RPC_ROUTING_KEY_PREFIX,
     PPTR_RPC_ROUTING_KEY_PREFIX,
     PUSH_RPC_ROUTING_KEY_PREFIX,
     ROUTING_KEY_PREFIX,
@@ -35,10 +38,17 @@ from bili_common.rpc.base import (
     RpcMethodName,
     build_method_responses,
     get_allowed_method_names,
+    notify_rpc_routing_key_for,
     pptr_routing_key_for,
     push_rpc_routing_key_for,
     routing_key_for,
     validate_rpc_method,
+)
+from bili_common.rpc.notify import (
+    NOTIFY_RPC_CONTRACT,
+    NotifyRpcMethodName,
+    PublishNotifyParams,
+    PublishNotifyResult,
 )
 from bili_common.rpc.lottery import (
     BaseLotteryRpcParams,
@@ -99,9 +109,11 @@ __all__ = [
     "ROUTING_KEY_PREFIX",
     "PPTR_RPC_ROUTING_KEY_PREFIX",
     "PUSH_RPC_ROUTING_KEY_PREFIX",
+    "NOTIFY_RPC_ROUTING_KEY_PREFIX",
     "routing_key_for",
     "pptr_routing_key_for",
     "push_rpc_routing_key_for",
+    "notify_rpc_routing_key_for",
     "RpcMethodInfo",
     "RpcMethodInfoResponse",
     "ALLOWED_RPC_METHODS",
@@ -150,6 +162,11 @@ __all__ = [
     "PushRpcSendResult",
     "PushRpcSendNowResult",
     "PUSH_RPC_CONTRACT",
+    # notify
+    "NotifyRpcMethodName",
+    "PublishNotifyParams",
+    "PublishNotifyResult",
+    "NOTIFY_RPC_CONTRACT",
     # rpa
     "RpaRpcMethodName",
     "GetResourceDetailParams",

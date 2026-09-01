@@ -2,10 +2,10 @@
 Response Message 模块 - 响应消息字符串枚举（单一来源）
 """
 
-from enum import StrEnum
+from bili_common.core import StrEnumAutoDoc
 
 
-class ResponseMsg(StrEnum):
+class ResponseMsg(StrEnumAutoDoc):
     """响应消息字符串枚举"""
 
     exception_browser_notify_conf_not_found = "浏览器通知配置不存在"
@@ -35,7 +35,9 @@ class ResponseMsg(StrEnum):
 
     exception_browser_fingerprint_not_found = "浏览器指纹不存在"
 
-    exception_fingerprint_limit_exceeded = "已达到最大指纹数量限制，当前等级最多可创建 {max} 个指纹"
+    exception_fingerprint_limit_exceeded = (
+        "已达到最大指纹数量限制，当前等级最多可创建 {max} 个指纹"
+    )
 
 
 __all__ = ["ResponseMsg"]

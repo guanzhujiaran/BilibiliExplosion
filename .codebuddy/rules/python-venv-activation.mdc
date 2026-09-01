@@ -1,9 +1,7 @@
 ---
-description: 
-alwaysApply: true
-enabled: true
-updatedAt: 2026-07-13T06:07:28.269Z
-provider: 
+description: 缺少依赖或者python interpreter
+globs:
+alwaysApply: false
 ---
 
 全都用uv管理环境，uv来运行需要运行的代码

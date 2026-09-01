@@ -140,13 +140,26 @@ def _http_exception_handler(
     # HTTP 请求类异常：HTTP 状态码 = 原异常的 status_code（必须非 200），
     # 仅 body 包装为统一 {code, msg, data} 契约。
     code = getattr(exc, "code", None) or exc.status_code
-    # 5xx 属服务器错误，打印日志便于排查；4xx 为客户端错误，warning 级提示
+    # 4xx/5xx 统一打印 error 日志（含 method + path）。
+    # 404 属于常见客户端错误（如探测根路径 /），无排查价值，仅打印一行日志、不打堆栈；
+    # 其余 5xx 才打印堆栈。
+    # 注意：loguru 的 sink 默认 format 不含 {exception}，传 exc_info 也不会打印堆栈，
+    # 因此这里手动 format_exception 拼进 message（对所有服务生效，不依赖日志配置）。
+    status_code = 200
     if exc.status_code >= 500:
-        logger.error(f"HTTP {exc.status_code} error: {exc.detail}")
+        status_code = exc.status_code
+    if exc.status_code == 404:
+        logger.warning(
+            f"HTTP 404 error: {exc.detail} [{_req.method} {_req.url.path}]"
+        )
     else:
-        logger.warning(f"HTTP {exc.status_code} error: {exc.detail}")
+        tb_text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        logger.error(
+            f"HTTP {exc.status_code} error: {exc.detail} "
+            f"[{_req.method} {_req.url.path}]\n{tb_text}"
+        )
     return JSONResponse(
-        status_code=exc.status_code,
+        status_code=status_code,
         content={"code": code, "msg": _(str(exc.detail)), "data": None},
     )
 
@@ -180,8 +193,14 @@ def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONRespon
     - DEV 环境把错误详情放入 `data` 便于本地排查，生产仅返回 error_id。
     """
     error_id = str(uuid.uuid4())
-    tb = traceback.format_exc()
-    logger.error(f"Unhandled error (ID: {error_id}) {type(exc).__name__}: {exc}\n{tb}")
+    # 注意：不能用 traceback.format_exc()（依赖 sys.exc_info()）——在 Starlette/FastAPI 中
+    # 异常跨 await 边界传播到处理器时 sys.exc_info() 已为空，会打印出 "NoneType: None" 丢堆栈；
+    # 必须基于异常对象自身的 __traceback__ 显式构造。
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    logger.error(
+        f"Unhandled error (ID: {error_id}) {type(exc).__name__}: {exc} "
+        f"route={getattr(request, 'method', '')} {getattr(request, 'url', '')}\n{tb}"
+    )
 
     # 尽力带上路由信息（异常上下文拿不到时可缺省）
     path = getattr(request, "url", None)

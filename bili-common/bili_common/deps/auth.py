@@ -2,12 +2,15 @@
 Mid 相关依赖注入函数（公共认证入口，自包含）
 """
 
+from bili_common.models import StrEnumAutoDoc
 import json
-from enum import Enum, IntEnum
+
+from bili_common.models import IntEnumAutoDoc
 from typing import Annotated, List
 from fastapi import Depends, Header, HTTPException, status
 from sqlmodel import SQLModel
 
+from bili_common.deps.permissions import UserPermission
 from bili_common.models.depends import AuthInfo
 from bili_common.exceptions import (
     NotLoggedInException,
@@ -17,14 +20,14 @@ from bili_common.exceptions import (
 from bili_common.i18n import _
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnumAutoDoc):
     """用户角色枚举"""
 
     ROOT = "root"
     NORMAL = "normal"
 
 
-class UserLevel(IntEnum):
+class UserLevel(IntEnumAutoDoc):
     """用户等级枚举"""
 
     LEVEL_0 = 0
@@ -50,7 +53,7 @@ class UserLevel(IntEnum):
         return level_map.get(level_str.lower(), cls.LEVEL_0)  # 默认为最低等级
 
 
-class Permission(IntEnum):
+class Permission(IntEnumAutoDoc):
     """权限枚举"""
 
     PERMISSION_0 = 0
@@ -76,22 +79,16 @@ class LevelPermissions:
     @staticmethod
     def get_permissions(level: int) -> List[int]:
         """获取指定等级的权限列表"""
-        if level == 0:
-            return LevelPermissions.LEVEL_0
-        elif level == 1:
-            return LevelPermissions.LEVEL_1
-        elif level == 2:
-            return LevelPermissions.LEVEL_2
-        elif level == 3:
-            return LevelPermissions.LEVEL_3
-        elif level == 4:
-            return LevelPermissions.LEVEL_4
-        elif level == 5:
-            return LevelPermissions.LEVEL_5
-        elif level == 6:
-            return LevelPermissions.LEVEL_6
-        else:
-            return LevelPermissions.LEVEL_0  # 默认最低权限
+        mp = {
+            0: LevelPermissions.LEVEL_0,
+            1: LevelPermissions.LEVEL_1,
+            2: LevelPermissions.LEVEL_2,
+            3: LevelPermissions.LEVEL_3,
+            4: LevelPermissions.LEVEL_4,
+            5: LevelPermissions.LEVEL_5,
+            6: LevelPermissions.LEVEL_6,
+        }
+        return mp.get(level, LevelPermissions.LEVEL_0)
 
 
 def get_auth_info_from_header(
@@ -223,7 +220,7 @@ def require_admin(
     )
 
 
-def require_permission(*perms: str):
+def require_permission(*perms: "str | UserPermission"):
     """细粒度权限依赖工厂：当前用户需拥有 perms 中至少一个权限（root 恒通过）。
 
     用法：

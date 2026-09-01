@@ -1,9 +1,7 @@
 ---
-description: 
-alwaysApply: true
-enabled: true
-updatedAt: 2026-07-28T03:00:07.832Z
-provider: 
+description: 修改vue和ts代码
+globs:
+alwaysApply: false
 ---
 
 # Vue + Tailwind CSS 样式与主题规范

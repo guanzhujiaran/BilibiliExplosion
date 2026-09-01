@@ -12,7 +12,7 @@ log-output = NONE
 # 2. 连接与超时优化
 # ---------------------------------------------------------
 # 8G内存建议并发连接数控制在 1000 以内，避免线程调度耗尽CPU
-max_connections = 100
+max_connections = 500
 thread_cache_size = 50
 back_log = 100
 

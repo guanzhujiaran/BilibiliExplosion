@@ -11,18 +11,20 @@ browser / plugin）的详情，随互动状态一并返回前端。
 - 请求 / 响应模型统一用 SQLModel，保证两端契约一致。
 """
 
-from enum import StrEnum
+from bili_common.models import StrEnumAutoDoc
 
 from sqlmodel import SQLModel, Field
 
 
-class RpaRpcMethodName(StrEnum):
+class RpaRpcMethodName(StrEnumAutoDoc):
     """RPA 资源 RPC 业务方法名枚举。
 
     枚举值即 method_name，routing_key 自动生成为 `message.rpa.rpc.<method_name>`。
     """
 
     GET_RESOURCE_DETAIL = "get_resource_detail"
+    # 2.39.0：举报处置——归属服务按 bizType 内部路由（lottery→crawler、rpa_*→本地）
+    HIDE_RESOURCE = "hide_resource"
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +37,26 @@ class GetResourceDetailParams(SQLModel):
 
     bizType: str = Field(description="资源类型：rpa_action / rpa_workflow / rpa_browser / rpa_plugin")
     bizId: int = Field(description="资源 id：action_id / workflow_id / browser_id / plugin_id")
+
+
+class HideResourceParams(SQLModel):
+    """举报处置请求（hide_resource，2.39.0）。
+
+    归属服务（RPA-Browser）按 ``bizType`` 内部路由：
+    lottery → be-bilibili-crawler；rpa_* → 本地下架/停用。
+    """
+
+    bizType: str = Field(description="资源类型：lottery / rpa_action / rpa_workflow / rpa_browser / rpa_plugin")
+    bizId: int = Field(description="资源 id")
+    operatorMid: int = Field(description="处置审核员 mid")
+    reason: str = Field(default="", description="处置原因（可选）")
+
+
+class HideResourceResult(SQLModel):
+    """hide_resource 返回结果。"""
+
+    success: bool = Field(default=False, description="是否成功处置")
+    message: str | None = Field(default=None, description="失败原因 / 补充说明（可选）")
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +85,7 @@ class GetResourceDetailResult(SQLModel):
 # 方法名 -> (请求模型, 响应模型) 契约映射（文档 / 校验参考）
 RPA_RPC_CONTRACT: dict[str, tuple[type[SQLModel], type[SQLModel]]] = {
     RpaRpcMethodName.GET_RESOURCE_DETAIL: (GetResourceDetailParams, GetResourceDetailResult),
+    RpaRpcMethodName.HIDE_RESOURCE: (HideResourceParams, HideResourceResult),
 }
 
 
@@ -70,6 +93,8 @@ __all__ = [
     "RpaRpcMethodName",
     "GetResourceDetailParams",
     "GetResourceDetailResult",
+    "HideResourceParams",
+    "HideResourceResult",
     "ResourceDetail",
     "RPA_RPC_CONTRACT",
 ]

@@ -2,10 +2,10 @@
 Response Code 模块 - 统一响应码定义（单一来源）
 """
 
-from enum import IntEnum
+from bili_common.models import IntEnumAutoDoc
 
 
-class ResponseCode(IntEnum):
+class ResponseCode(IntEnumAutoDoc):
     """
     统一响应码枚举类
     """

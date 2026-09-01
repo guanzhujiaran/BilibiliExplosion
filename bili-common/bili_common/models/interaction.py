@@ -1,9 +1,9 @@
 """社区互动通用枚举（收藏 / 点赞等跨服务互动，供各业务系统统一读取）。"""
 
-from enum import IntEnum
+from bili_common.models import IntEnumAutoDoc
 
 
-class InteractionBizTypeEnum(IntEnum):
+class InteractionBizTypeEnum(IntEnumAutoDoc):
     """互动资源类型（be-message 统一管理收藏/点赞，按该类型区分资源归属）。
 
     **存储**：数据库以 int 存储（值 1~6），减小存储空间、利于索引；

@@ -1,9 +1,7 @@
 ---
-description: 对外发布 ID 统一使用雪花 ID（禁止自增主键对外暴露），生成器收敛在 bili-common
-alwaysApply: true
-enabled: true
-provider: 
-updatedAt: 2026-08-16T00:00:00.000Z
+description: 
+globs:
+alwaysApply: false
 ---
 
 # 对外发布 ID 统一使用雪花 ID
@@ -14,7 +12,7 @@ updatedAt: 2026-08-16T00:00:00.000Z
 
 2. **雪花 ID 生成器统一收敛在 `bili-common/bili_common/core/snowflake.py`**（通用、自包含、不依赖具体业务项目）。各业务服务通过 `bili_common.core.snowflake` 提供的生成器类实例化自己的独立配置（`worker_id` + `epoch`），使不同实体落在不同数值空间，避免跨实体碰撞。
 
-3. **雪花 ID 位布局（短 ID，分钟步进）**：`| 31 bits 时间戳(分钟, 相对 epoch) | 4 bits worker_id | 4 bits 序列号 |`，共 39 bits，保证正数且初始为 7~8 位十进制。同一 worker 每分钟最多 16 个。
+3. **雪花 ID 位布局（短 ID，分钟步进）**：`| 时间戳(分钟, 相对 epoch) | 4 bits worker_id | N bits 序列号 |`，总位数恒为 39 bits，保证正数且初始为 7~8 位十进制。默认 `sequence_bits=4`（时间戳 31 bits），同一 worker 每分钟最多 16 个；`sequence_bits` 可通过环境变量放宽（`UID_SEQUENCE_BITS` / `MOMENT_ID_SEQUENCE_BITS` / `TOPIC_ID_SEQUENCE_BITS`，默认 4，范围 4~15），时间戳位宽相应缩减为 `31-(sequence_bits-4)`。**注意：变更序列号位宽会改变对外 ID 数值空间，与变更前已发布的 ID 可能重叠，仅允许在清库重建（无历史 ID）的开发/测试环境启用；生产环境必须保持默认 4。**
 
 4. **新增对外实体时**，必须在 `bili-common` 的雪花生成器基础上，新增该实体的独立生成器（配置独立的 `worker_id` / `epoch`），并在 be-message-service 侧提供 `generate_<entity>_id()` 兼容封装。禁止直接复用其他实体的生成器实例，避免数值空间碰撞。
 
@@ -43,3 +41,45 @@ def generate_topic_id() -> int:
 - 通用生成器：`bili-common/bili_common/core/snowflake.py`（`MinuteSnowflakeIdGenerator`）
 - 业务封装：`be-message-service/app/core/sharding.py`（`generate_uid` / `generate_moment_id` / `generate_topic_id` / `generate_msgkey`）
 - 对外实体：`TUserDetail.mid`（uid）、`TMoment.dynId`（moment_id）、`TMomentTopic.topicId`（topic_id）
+
+## 传输层与前后端契约：雪花 ID 一律用 string
+
+雪花 ID 实际为 19 位十进制（minute 步进布局虽初始 7~8 位，但历史数据/跨实体空间会到 19 位），**超过 JS `Number` 安全整数 `2^53-1`**，前端以 number 传递/存储会**静默丢精度**（如 `134236897319` 尾数被截断）。因此：
+
+1. **前端存储与传递一律 string**：所有业务 ID（`mid`/`uid`/`dynId`/`rpid`/`oid`/`commentId`/`topicId`/`actionId`/`workflowId`/`bizId`/`lotteryId` 等）在组件 `ref`/`props`、API 封装函数参数、路由参数中一律声明 `string`；**禁止用 `Number()` 把 ID 转成数字**。
+2. **后端返回必须同时提供 str 版本**：对外 DTO 中凡是雪花 ID 字段，必须额外提供字符串字段（如已有的 `dynIdStr`），命名规则为原字段名 + `Str`（`mid`→`midStr`、`oid`→`oidStr`、`rpid`→`rpidStr`、`topicId`→`topicIdStr` …）。前端只消费 str 版本，禁止消费 number 版 ID。
+
+   **实现机制（推荐，全自动 + 文档可见）**：使用 `app/models/schemas/base.py` 的 `AutoStrMixin` 基类，响应模型改为 `class X(SQLModel, AutoStrMixin)` 即可。基类会在类定义时通过 Pydantic V2 的 `computed_field` 自动为雪花 ID 数值字段注入 `<field>Str` 计算属性：
+
+   - 自动序列化（`model_dump()` 自动带上 `*Str`，无需手写赋值）；
+   - 自动出现在 FastAPI 的 OpenAPI 响应 schema 中（Swagger 文档可见）；
+   - 判定哪些字段是「雪花 ID」：标记类型 `SnowflakeInt` > 子类 `_auto_str` 白名单 > 默认按命名模式（命中 `mid/uid/oid/rpid/id/msgkey/dialog` 等后缀，且排除 `count/total/timestamp/level/.../pk/id/notify_id` 等非 ID 数值）。非 ID 数值字段不会误生成 `*Str`（规则 #4）。
+
+   ```python
+   from app.models.schemas.base import AutoStrMixin, SnowflakeInt
+
+   class FollowOpResp(SQLModel, AutoStrMixin):
+       mid: SnowflakeInt          # 标记 -> 自动生成 midStr
+       target_mid: int            # 命中 mid 后缀 -> 自动生成 target_midStr
+       like_count: int            # 非 ID -> 不生成
+   ```
+
+   已手动声明过的 `*Str` 字段（如 `dynIdStr`）不重复生成，可保留也可改由基类托管。
+3. **后端接收 ID 用统一的 `StrInt` 类型**：在 `be-message-service/app/models/str_int.py` 定义 `StrInt = Annotated[int | str, BeforeValidator(_coerce_snowflake)]`，接收 `str` 或 `int` 并**自动归一为 `int`**（Python `int` 任意精度无损），router / service 层无需再手写 `int(...)`。所有请求模型（pydantic/SQLModel）与 router 的 query/path 入参中接收 ID 的字段一律用 `StrInt`；禁止要求前端传 `number`。OpenAPI 据此生成 `anyOf[number, string]`，hey-api 生成的前端 SDK 参数类型为 `number | string`，前端封装层可直接声明 `string` 传参。
+4. **例外**：计数、时间戳、等级、经验等非 ID 数值（`likeCount`、`timestamp`、`level`、`exp`、`total` 等）保持 number，不受本规则约束。
+
+### 反例（禁止）
+```ts
+// ❌ 前端把 ID 转 number，19 位雪花精度丢失
+blockUser(Number(props.item.mid))
+const topicId = Number(route.params.topicId)
+reportByBiz(Number(item.dynIdStr))
+```
+
+### 正例
+```ts
+// ✅ 直接用后端返回的 str
+blockUser(props.item.mid)
+const topicId = String(route.params.topicId)
+reportByBiz(item.dynIdStr)
+```

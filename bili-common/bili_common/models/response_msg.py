@@ -6,12 +6,12 @@ i18n 约定：枚举值存「原文」（中文），对外返回时需调用 `.
 动态占位符：`.t(browser_id=...)` 会用 `.format()` 填充。
 """
 
-from enum import StrEnum
+from bili_common.models import StrEnumAutoDoc
 
 from bili_common.i18n import _
 
 
-class ResponseMsg(StrEnum):
+class ResponseMsg(StrEnumAutoDoc):
     """响应消息字符串枚举（值=原文，调用 `.t()` 取翻译）"""
 
     exception_browser_notify_conf_not_found = "浏览器通知配置不存在"

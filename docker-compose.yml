@@ -10,6 +10,7 @@ services:
     volumes:
       - ./docker_vol/milvus/etcd:/etcd
     command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 30s
@@ -29,6 +30,7 @@ services:
     volumes:
       - ./docker_vol/milvus/minio:/minio_data
     command: minio server /minio_data --console-address ":9001"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
@@ -48,6 +50,7 @@ services:
       MQ_TYPE: woodpecker
     volumes:
       - ./docker_vol/milvus/data:/var/lib/milvus
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
@@ -275,6 +278,8 @@ services:
       - casdoor
     environment:
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/?heartbeat=180
+      # 业务日志等级（loguru，只输出 stderr、不写文件；生产默认 WARNING 只打印告警，开发可设 DEBUG）
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       # 消息系统主库（元数据库）：系统通知 / 事件提醒 / 私信索引与会话 / 消息设置
       # 私信「内容」不在此库，而是按月分库 bili_msg_content_YYYYMM + 库内 100 张分表
       - MYSQL_MESSAGE_URL=mysql+aiomysql://root:${MYSQL_PASSWORD}@mysql:3306/BiliMessageDB?charset=utf8mb4

@@ -6,8 +6,10 @@
   dynamic 等本系统资源由业务系统注册校验器；未注册的跨服务类型默认放行。
 """
 
+from datetime import datetime
 from typing import Awaitable, Callable
 
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlmodel import col, select, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -99,11 +101,43 @@ class InteractionStatService:
     async def _ensure_row(
         cls, session: AsyncSession, biz_type: InteractionBizTypeEnum | str | int, biz_id: int
     ) -> None:
-        """确保存在计数行（惰性创建，首次交互时建行）。"""
-        row = await cls._get_row(session, biz_type, biz_id)
-        if row is None:
-            session.add(cls.model(bizType=cls._coerce(biz_type), bizId=biz_id))
-            await session.flush()
+        """确保存在计数行（惰性创建，首次交互时建行）。
+
+        采用 MySQL 原子 upsert（``INSERT ... ON DUPLICATE KEY UPDATE`` 空更新）：
+        消除并发首交互「先查后插」竞态 —— 多事务同时插入同一 ``(bizType, bizId)``
+        行时，后提交者的 ``flush`` 会报 1062 主键冲突（Duplicate entry），
+        upsert 幂等后不报错（已存在则按插入值空更新，不触发真实写入）。
+        """
+        bt = cls._coerce(biz_type)
+        now = datetime.now()
+        # Core insert 不走 ORM：`Field(default=0)` 的 Python 默认不生效，
+        # 必须显式给计数列初始值 0，否则编译为 NULL（依赖 SQL_MODE，且 NULL+1=NULL
+        # 会让计数永不增长）。用 _COUNT_FIELDS 白名单保证与子类列集一致。
+        values: dict = {
+            "bizType": bt,
+            "bizId": biz_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+        for f in cls._COUNT_FIELDS:
+            values[f] = 0
+        stmt = mysql_insert(cls.model).values(**values)
+        stmt = stmt.on_duplicate_key_update(bizType=stmt.inserted.bizType)
+        await session.exec(stmt)
+
+    #: 2.36.0：通用计数列白名单（动态与非动态资源统一）
+    _COUNT_FIELDS = frozenset(
+        {
+            "likeCount",
+            "favoriteCount",
+            "viewCount",
+            "commentCount",
+            "repostCount",
+            "shareCount",
+            "dislikeCount",
+            "coinCount",
+        }
+    )
 
     @classmethod
     async def incr(
@@ -114,10 +148,10 @@ class InteractionStatService:
         field: str,
         delta: int,
     ) -> None:
-        """对非动态资源计数原子 ±delta（field ∈ {likeCount, favoriteCount, viewCount}）。"""
+        """对资源计数原子 ±delta（field ∈ 通用计数列白名单，2.36.0 全资源统一）。"""
         await cls._ensure_row(session, biz_type, biz_id)
         column = getattr(cls.model, field, None)
-        if column is None or field not in {"likeCount", "favoriteCount", "viewCount"}:
+        if column is None or field not in cls._COUNT_FIELDS:
             raise ValueError(f"不支持的计数列: {field}")
         await session.exec(
             update(cls.model)
@@ -138,10 +172,10 @@ class InteractionStatService:
         *,
         floor_zero: bool = True,
     ) -> None:
-        """对非动态资源计数 -1（默认 floor_zero 防负数）。"""
+        """对资源计数 -1（默认 floor_zero 防负数）。"""
         await cls._ensure_row(session, biz_type, biz_id)
         column = getattr(cls.model, field, None)
-        if column is None or field not in {"likeCount", "favoriteCount"}:
+        if column is None or field not in cls._COUNT_FIELDS:
             raise ValueError(f"不支持的计数列: {field}")
         stmt = (
             update(cls.model)
@@ -162,9 +196,23 @@ class InteractionStatService:
         biz_type: InteractionBizTypeEnum | str | int,
         biz_ids: list[int],
     ) -> dict[int, dict[str, int]]:
-        """批量读取某类型资源计数（biz_id → {likeCount, favoriteCount, viewCount}，缺省 0）。"""
+        """批量读取某类型资源计数（biz_id → 全计数字段 dict，缺省 0）。
+
+        字段：likeCount / favoriteCount / viewCount / commentCount / repostCount /
+        shareCount / dislikeCount / coinCount（2.36.0 全资源统一）。
+        """
         result: dict[int, dict[str, int]] = {
-            b: {"likeCount": 0, "favoriteCount": 0, "viewCount": 0} for b in biz_ids
+            b: {
+                "likeCount": 0,
+                "favoriteCount": 0,
+                "viewCount": 0,
+                "commentCount": 0,
+                "repostCount": 0,
+                "shareCount": 0,
+                "dislikeCount": 0,
+                "coinCount": 0,
+            }
+            for b in biz_ids
         }
         if not biz_ids:
             return result
@@ -182,6 +230,11 @@ class InteractionStatService:
                 "likeCount": int(row.likeCount),
                 "favoriteCount": int(row.favoriteCount),
                 "viewCount": int(row.viewCount),
+                "commentCount": int(row.commentCount),
+                "repostCount": int(row.repostCount),
+                "shareCount": int(row.shareCount),
+                "dislikeCount": int(row.dislikeCount),
+                "coinCount": int(row.coinCount),
             }
         return result
 
@@ -192,39 +245,60 @@ class InteractionStatService:
         biz_type: InteractionBizTypeEnum | str | int,
         biz_id: int,
         mid: int,
-        ref_date: str,
     ) -> bool:
-        """浏览去重上报（非动态资源）：仅首次（bizType+bizId+mid+refDate 无明细）时给 viewCount +1。
+        """浏览去重上报（非动态资源）：每用户每资源一行，跨自然日再次访问才给 viewCount +1。
 
-        完全对标 `MomentStatService.report_view`（动态）：「明细表唯一约束幂等 + 计数原子 ±1」——
-        先查 `TInteractionViewLog`，已存在当日明细只累加明细行 viewCount（返回 False）；
-        不存在则插入明细（viewCount=1）并原子 +1 `TInteractionStat.viewCount`（返回 True）。
-        调用方负责 `session.commit()`。
+        2.42.0：明细表唯一约束 ``(bizType, bizId, mid)``（无按天行）——
+        先查明细行，已存在且 ``lastViewAt`` 与当前时间同一自然日（同日重复访问）只累加
+        明细行 viewCount + 刷新 lastViewAt（返回 False）；否则（首次访问 / 跨天再次访问）
+        更新明细并原子 +1 ``TInteractionStat.viewCount``（返回 True）。
+        调用方负责 ``session.commit()``。
 
         Returns:
-            True=首次浏览（Stat.viewCount +1）；False=当日重复浏览（仅累加明细行）。
+            True=新计一次浏览量（Stat.viewCount +1）；False=同日重复浏览（仅累加明细行）。
         """
         bt = cls._coerce(biz_type)
         if cls.view_log_model is None:
             raise NotImplementedError("view_log_model 未绑定，无法上报浏览")
+        now = datetime.now()
         exists = (
             await session.exec(
                 select(cls.view_log_model).where(
                     col(cls.view_log_model.bizType) == bt,
                     col(cls.view_log_model.bizId) == biz_id,
                     col(cls.view_log_model.mid) == mid,
-                    col(cls.view_log_model.refDate) == ref_date,
                 )
             )
         ).one_or_none()
         if exists is not None:
+            # 同日重复访问：仅累加明细行计数 + 刷新最后访问时间，不累加 Stat
+            if exists.lastViewAt is not None and exists.lastViewAt.date() == now.date():
+                await session.exec(
+                    update(cls.view_log_model)
+                    .where(col(cls.view_log_model.pk) == exists.pk)
+                    .values(
+                        viewCount=col(cls.view_log_model.viewCount) + 1,
+                        lastViewAt=now,
+                    )
+                )
+                return False
+            # 跨天再次访问：新计一次浏览量
             await session.exec(
                 update(cls.view_log_model)
                 .where(col(cls.view_log_model.pk) == exists.pk)
-                .values(viewCount=col(cls.view_log_model.viewCount) + 1)
+                .values(
+                    viewCount=col(cls.view_log_model.viewCount) + 1,
+                    lastViewAt=now,
+                )
             )
-            return False
-        session.add(cls.view_log_model(bizType=bt, bizId=biz_id, mid=mid, refDate=ref_date, viewCount=1))
+            await cls._ensure_row(session, bt, biz_id)
+            await cls.incr(session, bt, biz_id, "viewCount", 1)
+            return True
+        session.add(
+            cls.view_log_model(
+                bizType=bt, bizId=biz_id, mid=mid, viewCount=1, lastViewAt=now
+            )
+        )
         await session.flush()
         await cls._ensure_row(session, bt, biz_id)
         await cls.incr(session, bt, biz_id, "viewCount", 1)

@@ -1,9 +1,7 @@
 ---
-description: 图标统一使用 src/assets 下的 SVG 资源，禁止使用 Element Plus 图标；缺失时暂停等待补充
-alwaysApply: true
-enabled: true
-provider: 
-updatedAt: 2026-08-16T00:00:00.000Z
+description: 修改前端vue和ts代码
+globs:
+alwaysApply: false
 ---
 
 # 图标统一使用 assets 下的 SVG 资源

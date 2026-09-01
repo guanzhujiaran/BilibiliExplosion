@@ -11,19 +11,17 @@
 - 查询：LotteryAdvancedQueryParams / OthersLotDynListFilterMetadata
 """
 
-from enum import StrEnum
-
+from bili_common.models import StrEnumAutoDoc
 
 from pydantic import ConfigDict, Field
 from sqlmodel import SQLModel
-
 from bili_common.models.pagination import RequestPaginationParams
 
 
 # ============ 共享枚举 ============
 
 
-class LotteryDataSortEnum(StrEnum):
+class LotteryDataSortEnum(StrEnumAutoDoc):
     """抽奖数据排序字段枚举（用于预约/官方/充电/话题抽奖）"""
 
     lottery_time = "lottery_time"  # 开奖时间
@@ -32,28 +30,28 @@ class LotteryDataSortEnum(StrEnum):
     created_at = "created_at"  # 收录时间
 
 
-class SortOrderEnum(StrEnum):
+class SortOrderEnum(StrEnumAutoDoc):
     """通用排序方向枚举"""
 
     asc = "asc"
     desc = "desc"
 
 
-class OthersLotDynSortEnum(StrEnum):
+class OthersLotDynSortEnum(StrEnumAutoDoc):
     """第三方抽奖动态排序字段枚举"""
 
     pub_time = "pubTime"
     created_at = "created_at"
 
 
-class OthersLotDynSortOrderEnum(StrEnum):
+class OthersLotDynSortOrderEnum(StrEnumAutoDoc):
     """第三方抽奖动态排序方向枚举"""
 
     asc = "asc"
     desc = "desc"
 
 
-class TimePresetEnum(StrEnum):
+class TimePresetEnum(StrEnumAutoDoc):
     """时间快捷筛选枚举（值如 '1d'/'3d' 等，handler 会转为时间戳）"""
 
     last_1_day = "1d"
@@ -68,7 +66,7 @@ class TimePresetEnum(StrEnum):
     last_365_days = "365d"
 
 
-class LotteryStatusEnum(StrEnum):
+class LotteryStatusEnum(StrEnumAutoDoc):
     """抽奖状态枚举（字符串值与 FastapiApp _parse_status 的 key 一致）"""
 
     unfinished = "unfinished"

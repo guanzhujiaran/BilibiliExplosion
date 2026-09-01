@@ -16,7 +16,7 @@ be-message-service（RPC 服务端）与 be-gateway（RPC 客户端）统一复�
 - RPA-Browser/app/models/execution/system_services.py
 """
 
-from enum import StrEnum
+from bili_common.models import StrEnumAutoDoc
 
 from pydantic import BaseModel, Field
 
@@ -35,8 +35,12 @@ PUSH_RPC_ROUTING_KEY_PREFIX = "message.push.rpc"
 # 与 message.pptr.rpc / message.push.rpc / FastapiApp.rpc 隔离，互不冲突。
 RPA_RPC_ROUTING_KEY_PREFIX = "message.rpa.rpc"
 
+# 系统通知 RPC 路由键前缀（be-message 为服务端，其它系统为客户端，2.48.0）。
+# 与 message.pptr.rpc / message.push.rpc / message.rpa.rpc 隔离，互不冲突。
+NOTIFY_RPC_ROUTING_KEY_PREFIX = "message.notify.rpc"
 
-class RpcMethodName(StrEnum):
+
+class RpcMethodName(StrEnumAutoDoc):
     """RPC 业务方法名枚举
 
     枚举值即 method_name（snake_case），routing_key 自动生成为
@@ -73,6 +77,8 @@ class RpcMethodName(StrEnum):
 
     # RPA 资源相关（RPA-Browser 服务端 / be-message 客户端，2.18.0）
     GET_RESOURCE_DETAIL = "get_resource_detail"
+    # 2.39.0：举报处置（归属服务按 bizType 内部路由）
+    HIDE_RESOURCE = "hide_resource"
 
 
 def routing_key_for(method_name: str) -> str:
@@ -100,6 +106,11 @@ def push_rpc_routing_key_for(method_name: str) -> str:
 def rpa_rpc_routing_key_for(method_name: str) -> str:
     """根据 RPA 资源 RPC 方法名生成 routing_key（前缀 message.rpa.rpc，2.18.0）"""
     return f"{RPA_RPC_ROUTING_KEY_PREFIX}.{method_name}"
+
+
+def notify_rpc_routing_key_for(method_name: str) -> str:
+    """根据系统通知 RPC 方法名生成 routing_key（前缀 message.notify.rpc，2.48.0）"""
+    return f"{NOTIFY_RPC_ROUTING_KEY_PREFIX}.{method_name}"
 
 
 class RpcMethodInfo(BaseModel):
@@ -199,10 +210,12 @@ __all__ = [
     "PPTR_RPC_ROUTING_KEY_PREFIX",
     "PUSH_RPC_ROUTING_KEY_PREFIX",
     "RPA_RPC_ROUTING_KEY_PREFIX",
+    "NOTIFY_RPC_ROUTING_KEY_PREFIX",
     "routing_key_for",
     "pptr_routing_key_for",
     "push_rpc_routing_key_for",
     "rpa_rpc_routing_key_for",
+    "notify_rpc_routing_key_for",
     "RpcMethodInfo",
     "RpcMethodInfoResponse",
     "ALLOWED_RPC_METHODS",

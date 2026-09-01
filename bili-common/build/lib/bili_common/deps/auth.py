@@ -2,7 +2,8 @@
 Mid 相关依赖注入函数（公共认证入口，自包含）
 """
 
-from enum import Enum, IntEnum
+from bili_common.models import StrEnumAutoDoc, IntEnumAutoDoc
+
 from typing import List
 from fastapi import Header
 from sqlmodel import SQLModel
@@ -15,14 +16,14 @@ from bili_common.exceptions import (
 )
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnumAutoDoc):
     """用户角色枚举"""
 
     ROOT = "root"
     NORMAL = "normal"
 
 
-class UserLevel(IntEnum):
+class UserLevel(IntEnumAutoDoc):
     """用户等级枚举"""
 
     LEVEL_0 = 0
@@ -33,22 +34,22 @@ class UserLevel(IntEnum):
     LEVEL_5 = 5
     LEVEL_6 = 6
 
-    @classmethod
+    @staticmethod
     def from_string(cls, level_str: str) -> "UserLevel":
         """从字符串解析等级"""
-        level_map = {
-            "0": cls.LEVEL_0,
-            "1": cls.LEVEL_1,
-            "2": cls.LEVEL_2,
-            "3": cls.LEVEL_3,
-            "4": cls.LEVEL_4,
-            "5": cls.LEVEL_5,
-            "6": cls.LEVEL_6,
+        mp: dict[str, UserLevel] = {
+            "0": UserLevel.LEVEL_0,
+            "1": UserLevel.LEVEL_1,
+            "2": UserLevel.LEVEL_2,
+            "3": UserLevel.LEVEL_3,
+            "4": UserLevel.LEVEL_4,
+            "5": UserLevel.LEVEL_5,
+            "6": UserLevel.LEVEL_6,
         }
-        return level_map.get(level_str.lower(), cls.LEVEL_0)  # 默认为最低等级
+        return mp.get(level_str.lower(), UserLevel.LEVEL_0)  # 默认为最低等级
 
 
-class Permission(IntEnum):
+class Permission(IntEnumAutoDoc):
     """权限枚举"""
 
     PERMISSION_0 = 0
@@ -74,22 +75,16 @@ class LevelPermissions:
     @staticmethod
     def get_permissions(level: int) -> List[int]:
         """获取指定等级的权限列表"""
-        if level == 0:
-            return LevelPermissions.LEVEL_0
-        elif level == 1:
-            return LevelPermissions.LEVEL_1
-        elif level == 2:
-            return LevelPermissions.LEVEL_2
-        elif level == 3:
-            return LevelPermissions.LEVEL_3
-        elif level == 4:
-            return LevelPermissions.LEVEL_4
-        elif level == 5:
-            return LevelPermissions.LEVEL_5
-        elif level == 6:
-            return LevelPermissions.LEVEL_6
-        else:
-            return LevelPermissions.LEVEL_0  # 默认最低权限
+        mp = {
+            0: LevelPermissions.LEVEL_0,
+            1: LevelPermissions.LEVEL_1,
+            2: LevelPermissions.LEVEL_2,
+            3: LevelPermissions.LEVEL_3,
+            4: LevelPermissions.LEVEL_4,
+            5: LevelPermissions.LEVEL_5,
+            6: LevelPermissions.LEVEL_6,
+        }
+        return mp.get(level, LevelPermissions.LEVEL_0)
 
 
 def get_auth_info_from_header(

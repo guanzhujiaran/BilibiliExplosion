@@ -1,5 +1,11 @@
 """models: 公共响应码、响应消息、响应模型与认证模型（统一使用 sqlmodel）"""
 
+# 必须在导入子模块之前暴露 IntEnumAutoDoc / StrEnumAutoDoc：
+# 子模块（response_code / interaction / report / response_msg / rpc ...）会
+# `from bili_common.models import IntEnumAutoDoc` / `StrEnumAutoDoc`，
+# 若放在子模块导入之后会因 models 包尚未完成初始化而触发 circular import。
+from bili_common.core.enums import IntEnumAutoDoc, StrEnumAutoDoc
+
 from bili_common.models.response_code import ResponseCode
 from bili_common.models.response_msg import ResponseMsg
 from bili_common.models.response import (
@@ -119,10 +125,21 @@ from bili_common.models.push_rpc import (
     PushRpcSendResult,
     push_rpc_routing_key_for,
 )
+from bili_common.models.notify_rpc import (
+    NOTIFY_RPC_CONTRACT,
+    NOTIFY_RPC_ROUTING_KEY_PREFIX,
+    NotifyRpcMethodName,
+    NotifyLevelEnum,
+    NotifyTargetTypeEnum,
+    PublishNotifyParams,
+    PublishNotifyResult,
+    notify_rpc_routing_key_for,
+)
 from bili_common.models.admin_status import AdminStatusResponse
 from bili_common.models.interaction import InteractionBizTypeEnum
 from bili_common.models.interaction_stat import InteractionStatBase
-from bili_common.models.db_types import str_enum_type
+
+from bili_common.models.auto_str import AutoStrMixin, SnowflakeInt
 
 
 __all__ = [
@@ -220,9 +237,21 @@ __all__ = [
     "PushRpcSendParams",
     "PushRpcSendResult",
     "push_rpc_routing_key_for",
+    "NOTIFY_RPC_CONTRACT",
+    "NOTIFY_RPC_ROUTING_KEY_PREFIX",
+    "NotifyRpcMethodName",
+    "NotifyLevelEnum",
+    "NotifyTargetTypeEnum",
+    "PublishNotifyParams",
+    "PublishNotifyResult",
+    "notify_rpc_routing_key_for",
     "AdminStatusResponse",
     # 社区互动（2.18.0）
     "InteractionBizTypeEnum",
     "InteractionStatBase",
-    "str_enum_type",
+    # 通用 IntEnum / StrEnum 基类（自动生成 OpenAPI 枚举选项文档）
+    "IntEnumAutoDoc",
+    "StrEnumAutoDoc",
+    "AutoStrMixin",
+    "SnowflakeInt",
 ]

@@ -17,14 +17,14 @@ HTTP `/api/v1/message/push` 与 RPC 并存：HTTP 面向终端用户 / 浏览器
 RPC 面向服务端系统，二者都落到同一套 `PushMessageService` 执行体。
 """
 
-from enum import StrEnum
+from bili_common.models import StrEnumAutoDoc
 
 from sqlmodel import SQLModel, Field
 
 from bili_common.models.push import PushChannelConfig
 
 
-class PushRpcMethodName(StrEnum):
+class PushRpcMethodName(StrEnumAutoDoc):
     """站外推送 RPC 业务方法名枚举。
 
     枚举值即 method_name，routing_key 自动生成为 `message.push.rpc.<method_name>`。

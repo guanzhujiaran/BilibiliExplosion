@@ -8,7 +8,11 @@ AuthInfo 为 pptr 转发 x-bili-* 请求头的统一模型（各微服务共用�
 from sqlmodel import SQLModel, Field
 from pydantic import field_validator
 from bili_common.core.browser import BaseBrowserId, BaseUserMid
-from bili_common.deps.permissions import ROOT_ONLY_PERMISSIONS
+from bili_common.deps.permissions import (
+    ROOT_ONLY_PERMISSIONS,
+    UserPermission,
+    resolve_permission_value,
+)
 
 
 class AuthInfo(SQLModel):
@@ -57,23 +61,31 @@ class AuthInfo(SQLModel):
         """是否为 root 管理员（role=root）。"""
         return self.role == "root"
 
-    def has_permission(self, perm: str) -> bool:
+    def has_permission(self, perm: "str | int | UserPermission") -> bool:
         """是否拥有某权限。
 
         - root 恒拥有全部权限；
         - root 专属权限（`ROOT_ONLY_PERMISSIONS`）即使持有 `*` 也只对 root 放行；
         - 其余按 `permissions` 列表判断（`*` 通配）。
+
+        `perm` 支持三种形式：线令牌字符串（如 ``"comment:audit"``）、
+        ``UserPermission`` 枚举成员、或整数枚举值（如 ``3``）；统一经
+        ``resolve_permission_value`` 归一为整数值再比对。
         """
         if self.is_root:
             return True
-        if perm in ROOT_ONLY_PERMISSIONS:
+        value = resolve_permission_value(perm)
+        if value is None:
+            return False
+        if value in ROOT_ONLY_PERMISSIONS:
             return False
         perms = self.permissions or []
         if "*" in perms:
             return True
-        return perm in perms
+        granted = {resolve_permission_value(p) for p in perms}
+        return value in granted
 
-    def has_any_permission(self, *perms: str) -> bool:
+    def has_any_permission(self, *perms: "str | int | UserPermission") -> bool:
         return any(self.has_permission(p) for p in perms)
 
 

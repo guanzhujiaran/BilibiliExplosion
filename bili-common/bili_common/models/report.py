@@ -15,22 +15,28 @@
 """
 
 from datetime import datetime
-from enum import IntEnum, StrEnum
+from bili_common.models import IntEnumAutoDoc
 
 from sqlalchemy import BIGINT
 from sqlmodel import Field, SQLModel
 
 
-class ReportBizTypeEnum(StrEnum):
-    """举报来源类型。"""
+class ReportBizTypeEnum(IntEnumAutoDoc):
+    """举报来源类型（落 INT）。
 
-    DYNAMIC = "dynamic"  # 动态举报（bizId = dynId）
-    COMMENT = "comment"  # 评论举报（bizId = rpid）
-    USER = "user"  # 用户空间举报（bizId = mid）
+    注意：值已改为整数编码，原字符串值（dynamic/comment/user/resource）不再使用，
+    既有数据需配套迁移（bizType 列 VARCHAR -> BIGINT/INT，旧字符串值改写为对应编码）。
+    """
+
+    DYNAMIC = 1  # 动态举报（bizId = dynId）
+    COMMENT = 2  # 评论举报（bizId = rpid）
+    USER = 3  # 用户空间举报（bizId = mid）
+    # 2.39.0：通用资源举报（bizId = 资源 id；resourceType 标识具体资源类型：lottery/rpa_*）
+    RESOURCE = 4
 
 
-class ReportReasonEnum(IntEnum):
-    """统一举报原因类型（对齐 B 站举报弹窗）。
+class ReportReasonEnum(IntEnumAutoDoc):
+    """统一举报原因类型（对齐 B 站举报弹窗，落 INT）。
 
     1-6 与既有 `MomentReportReasonEnum` 取值一致（跨表迁移不丢值）。
     """
@@ -47,19 +53,19 @@ class ReportReasonEnum(IntEnum):
     ILLEGAL_LINK = 10  # 违法信息外链
 
 
-class ReportAuditStatusEnum(StrEnum):
-    """统一举报审核状态。"""
+class ReportAuditStatusEnum(IntEnumAutoDoc):
+    """统一举报审核状态（落 INT）。"""
 
-    PENDING = "pending"
-    RESOLVED = "resolved"
-    REJECTED = "rejected"
+    PENDING = 1
+    RESOLVED = 2
+    REJECTED = 3
 
 
-class ReportReviewDecisionEnum(StrEnum):
-    """统一举报管理端处置动作。"""
+class ReportReviewDecisionEnum(IntEnumAutoDoc):
+    """统一举报管理端处置动作（落 INT）。"""
 
-    RESOLVE = "resolve"  # 属实，已处理
-    REJECT = "reject"  # 不属实，驳回
+    RESOLVE = 1  # 属实，已处理
+    REJECT = 2  # 不属实，驳回
 
 
 class ReportBase(SQLModel):
@@ -77,14 +83,23 @@ class ReportBase(SQLModel):
     pk: int | None = Field(
         default=None, primary_key=True, sa_type=BIGINT, sa_column_kwargs={"autoincrement": True}
     )
-    bizType: str = Field(default=None, index=True, description="举报来源类型：dynamic/comment/user")
+    bizType: int = Field(default=None, index=True, description="举报来源类型（ReportBizTypeEnum 值）：1=dynamic,2=comment,3=user,4=resource")
     bizId: int = Field(default=None, index=True, sa_type=BIGINT, description="被举报对象 id：dynamic→dynId，comment→rpid，user→mid")
+    # 2.37.0：被举报对象所属资源类型（InteractionBizTypeEnum 值落 INT）。
+    # dynamic 举报自动填充 1；lottery/rpa_* 等资源举报显式传入；None = 仅来源类型。
+    # 供通用 EdgeRank 举报数降权按 resourceType+bizId 统计（全资源通用）。
+    resourceType: int | None = Field(
+        default=None,
+        index=True,
+        sa_type=BIGINT,
+        description="被举报对象所属资源类型（InteractionBizTypeEnum 值）：dynamic=1，lottery/rpa_* 显式传；可空",
+    )
     accusedMid: int = Field(default=None, sa_type=BIGINT, description="被举报用户 mid")
     reportMid: int = Field(default=None, index=True, sa_type=BIGINT, description="举报人 mid")
-    reasonType: int = Field(default=None, description="统一举报原因（ReportReasonEnum 值）")
+    reasonType: int = Field(default=None, description="统一举报原因（ReportReasonEnum 值）：1-10")
     reasonDesc: str | None = Field(default=None, max_length=500, description="补充描述（选填）")
     pics: str | None = Field(default=None, description="举报证据图片 URL 列表（JSON 数组字符串，最多 3 张，http(s)）")
-    auditStatus: str = Field(default=ReportAuditStatusEnum.PENDING, description="pending/resolved/rejected")
+    auditStatus: int = Field(default=ReportAuditStatusEnum.PENDING, description="举报审核状态（ReportAuditStatusEnum 值）：1=pending,2=resolved,3=rejected")
     auditRemark: str | None = Field(default=None, max_length=500, description="审核处理备注")
     auditAdminMid: int | None = Field(default=None, sa_type=BIGINT, description="处理管理员 MID")
     created_at: datetime | None = Field(default_factory=datetime.now, description="创建时间")

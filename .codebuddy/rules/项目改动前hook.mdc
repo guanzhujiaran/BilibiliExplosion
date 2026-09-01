@@ -1,9 +1,7 @@
 ---
-description: 
-alwaysApply: true
-enabled: true
-updatedAt: 2026-08-10T13:26:04.469Z
-provider: 
+description: 修改后端python代码
+globs:
+alwaysApply: false
 ---
 
 1.新增或修改功能的时候需要优先查找项目的计划书目录,先修改计划书再修改代码.

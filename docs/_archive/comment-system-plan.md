@@ -32,6 +32,7 @@
 | **D3** | IP 处理 | **只存原始 IPv4 / IPv6，不做属地解析**；出参**打码**保护隐私；前端**优先显示 IPv6** | 不引入 ip2region 等离线库；新增打码工具函数与管理员明文查看权限 |
 | **D4** | 路由前缀 | **`/api/v1/comment/*`**（独立业务域，非 `/api/v1/message` 下） | 便于后续把评论拆成独立微服务 |
 | **D5** | 评论 `type` 白名单 | **后端为唯一真相源**。`CommentTypeEnum` 定义全部合法 type；前端只消费、不发明；传入枚举外的值，后端**必须 422 拒绝**（FastAPI `Query` / Pydantic 模型已强制）。**严禁「前端自定义 type、后端再补」的反向耦合** | 前后端协作一律以该枚举为准，新增 type 必须「先改后端枚举 → 同步前端常量 → 再使用」 |
+| **D6** | 审核过程性通知 | **审核中 / 审核通过不通知；互动通知仅对可见评论投递，可见后补发**。评论审核的过程性状态变化（进入审核 `auditing`、审核通过 / 恢复 `normal`）**不向作者发送系统通知**——用户发评后前端即展示「审核中」标识，通过后评论自然对外可见，无需系统通知打扰；仅 **驳回（`rejected`） / 下架（`hidden`）** 等负面结果向作者发送系统通知（含处理原因与原文摘要）。**互动通知（回复 / @，走 `EventService`）仅对 `NORMAL` 可见评论投递**：`auditing`（审核中，暂不可见）与 `rejected` / `hidden`（未通过 / 下架）的评论一律**不投递**回复 / @ 通知，避免接收方点开看到「评论不可见」；**审核通过 / 恢复（`auditing|rejected|hidden → normal`）补发**已跳过的互动通知（回复 / @），走 `msg_comment_at.notified` 补偿通道：仅补发 `notified=False` 的 @ 记录（投递成功置 `True`），回复通知按 `reply_to_mid` 补发。点赞通知不受影响（点赞对象必然是可见评论） | `CommentService.add`：回复 / @ 通知包在 `audit_state == NORMAL` 分支内投递（非 NORMAL 一律不投递），NORMAL 投递后置 `msg_comment_at.notified=True`（补偿通道标记）；保留 `notify_audit_rejected` / `_notify_hidden`；`CommentAdminService.set_state`：状态由非 `NORMAL` 翻转为 `NORMAL`（审核通过 / 恢复）时，弱依赖补发未投递的回复 / @ 通知 |
 
 ---
 
@@ -41,7 +42,7 @@
 | --- | --- | --- |
 | 分层约定 | `app/api`（Controller）→ `app/services`（Service，兼数据访问）→ `app/models/db`（表）/ `app/models/schemas`（DTO）；**无独立 Repository 层** | 评论模块沿用，不新增分层 |
 | ID 生成 | `app/core/sharding.py` 已有雪花 ID（`msgkey`），并约定 **64 位 ID 一律以字符串出参**（避免 JS `Number.MAX_SAFE_INTEGER` 精度丢失） | `rpid` 复用同一生成器，全链路字符串出参 |
-| 枚举落库 | `app/models/db/base.py` 提供 `str_enum_type()`（VARCHAR 存 value）、`int_enum_type()`（INTEGER 存 value）；**禁用 MySQL 原生 ENUM**，有回归测试 `tests/test_phase_e_enums.py` 守约 | 评论所有枚举遵守，并补充对应回归用例 |
+| 枚举落库 | `app/models/db/base.py` 提供 `StrEnum()`（VARCHAR 存 value）、`IntEnum()`（INTEGER 存 value）；**禁用 MySQL 原生 ENUM**，有回归测试 `tests/test_phase_e_enums.py` 守约 | 评论所有枚举遵守，并补充对应回归用例 |
 | 通知能力 | `EventService.report()` 已实现 like / reply / at 三类提醒的完整链路：消息设置闸门 → 自赞过滤 → `dedup_key` 幂等 → 活跃度分流（实时 / 批量）→ 推送；`SourceTypeEnum` **已含 `COMMENT`**；`EventReportReq.biz_id` 注释即写着「如评论 id」 | **Phase 3 的通知部分 80% 已存在**，评论侧同进程直接调用 Service，不走 HTTP |
 | 鉴权 | `RequiredUser` / `AdminUser`（`bili_common.deps.auth`），身份来自网关注入的 `x-bili-*` 头，微服务互信、不校验 JWT；`AuthInfo` 含 `mid / uname / level / role / vip_status`，**无头像字段** | 直接复用；头像等展示字段需靠「用户快照表」补齐 |
 | 响应体 | 统一 `StandardResponse[T]{code, data, msg}` | 沿用 |
@@ -181,7 +182,7 @@ app/utils/ip_mask.py           ← IP 提取与打码（D3）
 
 ### 3.2 枚举扩展（`app/models/enums.py`）
 
-严格遵守既有落库约定（`str_enum_type` / `int_enum_type`，禁用原生 ENUM）：
+严格遵守既有落库约定（`StrEnum` / `IntEnum`，禁用原生 ENUM）：
 
 - `CommentTypeEnum(StrEnum)`：`dynamic` / `article` / `lottery` / `feedback` / `other`
 - `CommentStateEnum(StrEnum)`：`normal` / `auditing` / `rejected` / `hidden` / `deleted`
@@ -284,6 +285,9 @@ app/utils/ip_mask.py           ← IP 提取与打码（D3）
   - 被 @ → `event_type=at`
   - 统一 `source_type=SourceTypeEnum.COMMENT`、`source_id=oid`、**`biz_id=rpid`**
     （`biz_id` 保证：多条回复各记一条；反复点赞取消只记一条）
+  - **`biz_id` 持久化并出参**（详见 `docs/消息系统实现计划书.md` Phase J）：`msg_event` 落库保存 `biz_id`，
+    明细 / 聚合 / msgfeed 出参均携带，前端以 `source_type(bizType) + biz_id` 唯一定位原评论并跳转（如评论详情锚点），
+    `biz_id` 为空时回落 `jump_url` 兜底
   - 通知走**独立会话**投递，失败只告警、绝不污染发评/点赞主事务
 - [x] **3.4 排序切换**：`hot_score = like_count - hate_count * 1.5 + rcount * 0.5 + 时间衰减`；写时增量更新 + 定时任务批量重算（`comment_hot_score_job`）
 - [x] **3.5 置顶**：内容作者（`subject.up_mid`）或 `AdminUser` 可置顶；写 `subject.top_rpid` + `index.attr |= TOP`，同评论区互斥单条；取消置顶同步清位
