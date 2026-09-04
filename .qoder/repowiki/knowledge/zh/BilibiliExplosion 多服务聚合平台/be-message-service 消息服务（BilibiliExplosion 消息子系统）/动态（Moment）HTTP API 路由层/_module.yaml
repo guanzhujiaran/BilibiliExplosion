@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: message_service/api_moment
+title: 动态（Moment）HTTP API 路由层
+scope:
+    - be-message-service/app/api/moment.py
+    - be-message-service/app/api/moment_audit.py
+    - be-message-service/app/api/moment_feed.py
+    - be-message-service/app/api/moment_topic_audit.py
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/services_moment
+    - path: vue_frontend/moment_feed

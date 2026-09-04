@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: rpa_browser/app_core/browser_control
+title: 浏览器控制与 WebRTC 流管理
+scope:
+    - RPA-Browser/app/controller/v1/browser_control/
+    - RPA-Browser/app/services/RPA_browser/session/
+    - RPA-Browser/app/services/RPA_browser/webrtc/
+source_files: []
+depends_on: []
+related_to:
+    - path: rpa_browser/app_core/execution_engine
+    - path: rpa_browser/app_core/workflow
+    - path: vue_frontend/rpa_browser_editor

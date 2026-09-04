@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: vue_frontend/message_system
+title: 消息与私信系统（通知/互动/私信/管理后台）
+scope:
+    - Vue3FrontEndDemoExercise/src/views/message/
+    - Vue3FrontEndDemoExercise/src/components/message/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/api_comment_dm

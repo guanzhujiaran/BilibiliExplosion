@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: bilibili_crawler/scripts
+title: B站爬虫运维脚本集
+scope:
+    - be-bilibili-crawler/scripts/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers

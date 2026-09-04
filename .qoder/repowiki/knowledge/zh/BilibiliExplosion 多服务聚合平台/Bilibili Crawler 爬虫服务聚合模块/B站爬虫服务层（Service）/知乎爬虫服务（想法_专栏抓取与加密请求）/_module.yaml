@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/zhihu_crawler
+title: 知乎爬虫服务（想法/专栏抓取与加密请求）
+scope:
+    - be-bilibili-crawler/Service/zhihu/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/mq_layer

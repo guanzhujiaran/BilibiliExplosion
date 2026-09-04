@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: vue_frontend/lottery_data
+title: B站抽奖数据展示与运营模块
+scope:
+    - Vue3FrontEndDemoExercise/src/components/lottery_data/
+    - Vue3FrontEndDemoExercise/src/api/lottery_data/
+    - Vue3FrontEndDemoExercise/src/api/do_lottery/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/controller_api

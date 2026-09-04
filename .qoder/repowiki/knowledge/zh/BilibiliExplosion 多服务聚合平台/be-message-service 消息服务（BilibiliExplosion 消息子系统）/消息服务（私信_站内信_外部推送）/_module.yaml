@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: message_service/services_message_dm_insite
+title: 消息服务（私信/站内信/外部推送）
+scope:
+    - be-message-service/app/services/message/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/api_external_push_msg_feed
+    - path: message_service/mq_and_consumers

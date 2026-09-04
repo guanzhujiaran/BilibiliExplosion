@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/langchain_compo
+title: LangChain 组件与抽奖向量检索服务
+scope:
+    - be-bilibili-crawler/Service/LangChainCompo/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/llm_service

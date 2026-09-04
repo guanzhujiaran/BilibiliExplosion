@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: rpa_browser/botright
+title: Botright 反检测浏览器自动化框架
+scope:
+    - RPA-Browser/botright/
+source_files: []
+depends_on: []
+related_to:
+    - path: rpa_browser/app_core/shared_infrastructure

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: vue_frontend/moment_feed
+title: 动态（Moment）信息流与详情页
+scope:
+    - Vue3FrontEndDemoExercise/src/views/moment/
+    - Vue3FrontEndDemoExercise/src/components/moment/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/api_moment

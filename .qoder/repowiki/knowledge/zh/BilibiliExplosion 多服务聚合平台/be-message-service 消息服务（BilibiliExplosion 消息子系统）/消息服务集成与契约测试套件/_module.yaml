@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: message_service/tests
+title: 消息服务集成与契约测试套件
+scope:
+    - be-message-service/tests/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/api_comment_dm
+    - path: message_service/mq_and_consumers

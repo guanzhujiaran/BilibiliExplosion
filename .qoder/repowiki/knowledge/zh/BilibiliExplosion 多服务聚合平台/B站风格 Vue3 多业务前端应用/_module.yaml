@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: vue_frontend
+title: B站风格 Vue3 多业务前端应用
+scope:
+    - Vue3FrontEndDemoExercise/
+source_files: []
+depends_on: []
+related_to: []

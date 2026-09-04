@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/llm_service
+title: 云端 LLM 服务（OpenAI 兼容实例池与调用统计）
+scope:
+    - be-bilibili-crawler/Service/llm_service/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/langchain_compo

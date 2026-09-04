@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: rpa_browser/app_core/workflow
+title: 工作流与复合操作 CRUD 数据访问层
+scope:
+    - RPA-Browser/app/services/execution/crud_service/
+    - RPA-Browser/app/models/workflow/
+source_files: []
+depends_on: []
+related_to:
+    - path: rpa_browser/app_core/browser_control
+    - path: rpa_browser/app_core/execution_engine

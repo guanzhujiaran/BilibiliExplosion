@@ -1,0 +1,24 @@
+schema_version: 1
+module_path: ""
+title: BilibiliExplosion 多服务聚合平台
+scope:
+    - README.md
+    - Makefile
+    - Dockerfile.mono
+    - docker-compose.yml
+    - dc-dev.yml
+    - pm2.app.js
+    - .gitignore
+    - .github/
+    - .trunk/
+    - .codebuddy/
+    - docs/
+    - docker_vol/
+    - .dockerignore
+    - .env.example
+    - .gitmodules
+    - .sourcery.yaml
+    - dev_init_chmod.bash
+source_files: []
+depends_on: []
+related_to: []

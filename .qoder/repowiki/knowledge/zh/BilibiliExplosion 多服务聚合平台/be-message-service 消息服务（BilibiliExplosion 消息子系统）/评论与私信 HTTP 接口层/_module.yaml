@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: message_service/api_comment_dm
+title: 评论与私信 HTTP 接口层
+scope:
+    - be-message-service/app/api/comment.py
+    - be-message-service/app/api/comment_admin.py
+    - be-message-service/app/api/dm.py
+    - be-message-service/app/api/dm_admin.py
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/services_comment
+    - path: message_service/tests
+    - path: vue_frontend/message_system

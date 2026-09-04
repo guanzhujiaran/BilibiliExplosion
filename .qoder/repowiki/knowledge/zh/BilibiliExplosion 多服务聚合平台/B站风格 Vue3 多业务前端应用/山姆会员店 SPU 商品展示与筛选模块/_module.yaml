@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: vue_frontend/samsclub
+title: 山姆会员店 SPU 商品展示与筛选模块
+scope:
+    - Vue3FrontEndDemoExercise/src/components/SamsClubCompo/
+    - Vue3FrontEndDemoExercise/src/gql/samsclub/
+    - Vue3FrontEndDemoExercise/src/api/samsclub/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/samsclub_crawler

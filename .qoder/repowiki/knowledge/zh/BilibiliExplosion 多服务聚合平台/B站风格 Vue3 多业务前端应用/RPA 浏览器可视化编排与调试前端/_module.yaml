@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: vue_frontend/rpa_browser_editor
+title: RPA 浏览器可视化编排与调试前端
+scope:
+    - Vue3FrontEndDemoExercise/src/views/rpa-browser/
+    - Vue3FrontEndDemoExercise/src/components/rpa-browser/
+    - Vue3FrontEndDemoExercise/src/models/rpa_browser/
+source_files: []
+depends_on: []
+related_to:
+    - path: rpa_browser/app_core/browser_control

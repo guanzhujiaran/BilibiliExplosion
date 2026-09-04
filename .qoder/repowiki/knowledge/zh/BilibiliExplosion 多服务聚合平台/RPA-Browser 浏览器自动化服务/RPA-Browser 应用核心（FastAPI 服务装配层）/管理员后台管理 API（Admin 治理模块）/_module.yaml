@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: rpa_browser/app_core/admin
+title: 管理员后台管理 API（Admin 治理模块）
+scope:
+    - RPA-Browser/app/controller/v1/admin/
+    - RPA-Browser/app/models/system/
+    - RPA-Browser/app/services/admin_audit.py
+source_files: []
+depends_on: []
+related_to:
+    - path: rpa_browser/app_core/shared_infrastructure
+    - path: vue_frontend/admin_dashboard

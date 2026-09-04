@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: message_service/models_schemas
+title: 消息服务数据模型与 Schema 层
+scope:
+    - be-message-service/app/models/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/alembic_migrations

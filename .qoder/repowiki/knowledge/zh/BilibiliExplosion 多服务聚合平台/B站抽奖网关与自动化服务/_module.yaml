@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: gateway
+title: B站抽奖网关与自动化服务
+scope:
+    - be-gateway/
+source_files: []
+depends_on: []
+related_to: []

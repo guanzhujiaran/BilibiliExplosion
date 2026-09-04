@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: message_service/services_user_account
+title: 用户账号与关系服务（pptr 主数据 + Casdoor 认证 + 关注/封禁/头像审核）
+scope:
+    - be-message-service/app/services/user/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/api_user_follow_favorite

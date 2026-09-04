@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/toutiao_crawler
+title: 头条用户空间爬虫与抽奖数据服务
+scope:
+    - be-bilibili-crawler/Service/toutiao/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/mq_layer

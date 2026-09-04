@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: message_service/app_core_infra
+title: 应用核心基础设施（配置/数据库/消息队列/分片/依赖注入/工具）
+scope:
+    - be-message-service/app/core/
+    - be-message-service/app/dependencies/
+    - be-message-service/app/utils/
+source_files: []
+depends_on: []
+related_to: []

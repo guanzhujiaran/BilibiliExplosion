@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/mq_layer
+title: RabbitMQ 消息队列层（FastStream/Blocking 双实现）
+scope:
+    - be-bilibili-crawler/Service/MQ/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/opus_official_lottery
+    - path: bilibili_crawler/service_crawlers/others_lottery_dynamic
+    - path: bilibili_crawler/service_crawlers/toutiao_crawler
+    - path: bilibili_crawler/service_crawlers/zhihu_crawler
+    - path: message_service/mq_and_consumers

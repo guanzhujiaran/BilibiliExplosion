@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: bilibili_crawler/controller_api
+title: B站爬虫 FastAPI 控制器层
+scope:
+    - be-bilibili-crawler/controller/
+source_files: []
+depends_on: []
+related_to:
+    - path: bili_common
+    - path: bilibili_crawler/dao_layer
+    - path: bilibili_crawler/service_crawlers
+    - path: bilibili_crawler/tests
+    - path: vue_frontend/lottery_data

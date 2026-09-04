@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers
+title: B站爬虫服务层（Service）
+scope:
+    - be-bilibili-crawler/Service/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/controller_api
+    - path: bilibili_crawler/scripts
+    - path: message_service/services_interaction_actions

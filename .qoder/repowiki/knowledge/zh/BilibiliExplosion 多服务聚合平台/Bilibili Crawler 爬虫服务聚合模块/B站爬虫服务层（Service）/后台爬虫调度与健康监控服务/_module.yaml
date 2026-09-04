@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/auth_and_background_services
+title: 后台爬虫调度与健康监控服务
+scope:
+    - be-bilibili-crawler/Service/BackgroundService/
+    - be-bilibili-crawler/Service/BackgroundServiceStatus/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/base_crawler_framework

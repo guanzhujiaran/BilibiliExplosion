@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: message_service/services_interaction_actions
+title: 互动操作资源业务层（Interaction Actions）
+scope:
+    - be-message-service/app/services/interaction_actions/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers
+    - path: message_service/services_comment
+    - path: message_service/services_moment

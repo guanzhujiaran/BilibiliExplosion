@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: rpa_browser/tests
+title: RPA-Browser 测试套件
+scope:
+    - RPA-Browser/test/
+source_files: []
+depends_on: []
+related_to:
+    - path: rpa_browser/app_core

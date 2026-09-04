@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: bilibili_crawler/dao_layer
+title: B站爬虫数据访问层（DAO）
+scope:
+    - be-bilibili-crawler/dao/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/alembic_migrations
+    - path: bilibili_crawler/controller_api

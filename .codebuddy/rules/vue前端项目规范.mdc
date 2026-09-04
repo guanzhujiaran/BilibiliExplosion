@@ -48,3 +48,44 @@ alwaysApply: false
 <style scoped>
 .user-card { color: red; }
 </style>
+```
+
+## 5. 跳转链接统一 no-referrer 规范
+
+- **覆盖范围**：所有会产生文档请求的跳转都必须设置 no-referrer —— `<a href>`、`el-link` 的 `href`、`window.open`、`window.location.href`（含第三方 OAuth 跳转）、以及任何打开站外页面的入口。目的：不把当前页地址（可能带 query / token）通过 `Referer` 头泄露给站外，同时满足 B 站等防盗链资源的访问要求。
+- **统一入口，禁止手写字符串**：一律使用 `src/utils/PageOpen/linkPolicy.ts` 导出的常量与工具函数，禁止在组件里自行拼写 `rel` / `referrerpolicy` / windowFeatures 字面量：
+  - `<a>` / `el-link`：`:rel="LINK_REL" :referrerpolicy="LINK_REFERRER_POLICY"`
+  - 打开外链：`openExternalLink(url)`，禁止裸调 `window.open(url, '_blank')`
+  - 当前页跳转：`navigateNoReferrer(url)`，禁止裸写 `window.location.href = url`（location 无法附带 referrer policy）
+- **例外**：站内 SPA 跳转（`router.push` / `router-link` / 仅 `@click` 的 `el-link`）不产生文档请求，无需加 referrer 相关属性。
+- **全局兜底**：入口 `index.html` 必须保留 `<meta name="referrer" content="no-referrer" />`，任何新增的页面跳转入口都依赖它兜底。
+
+### 正确示范：
+
+<template>
+  <el-link :href="jumpUrl" target="_blank" :rel="LINK_REL" :referrerpolicy="LINK_REFERRER_POLICY">查看链接</el-link>
+</template>
+
+<script setup lang="ts">
+import { LINK_REL, LINK_REFERRER_POLICY, openExternalLink } from '@/utils/PageOpen/linkPolicy'
+
+function onJump(url: string) {
+  openExternalLink(url)
+}
+</script>
+
+### 错误示范：
+
+<template>
+  <!-- 错误1：手写 rel，且漏了 referrerpolicy -->
+  <el-link :href="jumpUrl" target="_blank" rel="noopener">查看链接</el-link>
+</template>
+
+<script setup lang="ts">
+// 错误2：裸调 window.open，不带 noopener / noreferrer
+function onJump(url: string) {
+  window.open(url, '_blank')
+  // 错误3：location.href 无法附带 referrer policy
+  window.location.href = url
+}
+</script>

@@ -136,7 +136,7 @@ from bili_common.models.notify_rpc import (
     notify_rpc_routing_key_for,
 )
 from bili_common.models.admin_status import AdminStatusResponse
-from bili_common.models.interaction import InteractionBizTypeEnum
+from bili_common.models.interaction import InteractionBizTypeEnum, InteractionActionTypeEnum
 from bili_common.models.interaction_stat import InteractionStatBase
 
 from bili_common.models.auto_str import AutoStrMixin, SnowflakeInt
@@ -248,6 +248,7 @@ __all__ = [
     "AdminStatusResponse",
     # 社区互动（2.18.0）
     "InteractionBizTypeEnum",
+    "InteractionActionTypeEnum",
     "InteractionStatBase",
     # 通用 IntEnum / StrEnum 基类（自动生成 OpenAPI 枚举选项文档）
     "IntEnumAutoDoc",

@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: message_service/services_interaction_actions/comment_dynamic
+title: 评论与动态互动行为实现
+scope:
+    - be-message-service/app/services/interaction_actions/comment/
+    - be-message-service/app/services/interaction_actions/dynamic/
+source_files: []
+depends_on: []
+related_to: []

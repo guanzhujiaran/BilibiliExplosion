@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: message_service/services_interaction_actions/rpa_actions
+title: RPA 资源业务类（Action/Browser/Plugin/Workflow）
+scope:
+    - be-message-service/app/services/interaction_actions/rpa_action/
+    - be-message-service/app/services/interaction_actions/rpa_browser/
+    - be-message-service/app/services/interaction_actions/rpa_plugin/
+    - be-message-service/app/services/interaction_actions/rpa_workflow/
+source_files: []
+depends_on: []
+related_to: []

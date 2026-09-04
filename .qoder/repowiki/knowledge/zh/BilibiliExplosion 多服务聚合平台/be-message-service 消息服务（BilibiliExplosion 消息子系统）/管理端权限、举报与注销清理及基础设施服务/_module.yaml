@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: message_service/services_admin_cleanup_infrastructure
+title: 管理端权限、举报与注销清理及基础设施服务
+scope:
+    - be-message-service/app/services/admin/
+    - be-message-service/app/services/cleanup/
+    - be-message-service/app/services/infrastructure/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/api_audit_ban_avatar_folder

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: vue_frontend/shared_api_clients
+title: 共享 API 客户端与业务接口封装
+scope:
+    - Vue3FrontEndDemoExercise/src/api/base_axios/
+    - Vue3FrontEndDemoExercise/src/api/account/
+    - Vue3FrontEndDemoExercise/src/api/user/
+source_files: []
+depends_on: []
+related_to: []

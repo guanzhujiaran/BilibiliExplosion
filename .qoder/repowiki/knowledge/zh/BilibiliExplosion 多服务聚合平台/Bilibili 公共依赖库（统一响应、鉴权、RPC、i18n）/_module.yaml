@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: bili_common
+title: Bilibili 公共依赖库（统一响应、鉴权、RPC、i18n）
+scope:
+    - bili-common/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/controller_api
+    - path: message_service/api_external_push_msg_feed

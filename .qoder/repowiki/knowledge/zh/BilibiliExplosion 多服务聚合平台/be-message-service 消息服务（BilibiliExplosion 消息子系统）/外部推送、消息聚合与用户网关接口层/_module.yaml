@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: message_service/api_external_push_msg_feed
+title: 外部推送、消息聚合与用户网关接口层
+scope:
+    - be-message-service/app/api/external_push.py
+    - be-message-service/app/api/msg_feed.py
+    - be-message-service/app/api/pptr_user_gateway.py
+    - be-message-service/app/api/message_admin.py
+source_files: []
+depends_on: []
+related_to:
+    - path: bili_common
+    - path: message_service/services_message_dm_insite

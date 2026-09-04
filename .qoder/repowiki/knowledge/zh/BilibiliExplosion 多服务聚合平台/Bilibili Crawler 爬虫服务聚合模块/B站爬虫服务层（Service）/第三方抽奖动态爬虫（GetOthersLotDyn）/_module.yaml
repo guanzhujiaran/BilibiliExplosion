@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/others_lottery_dynamic
+title: 第三方抽奖动态爬虫（GetOthersLotDyn）
+scope:
+    - be-bilibili-crawler/Service/GetOthersLotDyn/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/mq_layer

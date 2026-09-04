@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: message_service/alembic_migrations
+title: 消息服务数据库迁移（Alembic）
+scope:
+    - be-message-service/alembic/
+    - be-message-service/alembic_pptr/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/models_schemas

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: message_service/services_interaction_actions/shared_base
+title: 互动操作共享基类与通用资源实现
+scope:
+    - be-message-service/app/services/interaction_actions/base.py
+    - be-message-service/app/services/interaction_actions/base_biz.py
+    - be-message-service/app/services/interaction_actions/common/
+source_files: []
+depends_on: []
+related_to: []

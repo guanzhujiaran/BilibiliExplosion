@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: rpa_browser/app_core/shared_infrastructure
+title: RPA Browser 共享基础设施（数据模型、运行时与通用工具）
+scope:
+    - RPA-Browser/app/models/database/
+    - RPA-Browser/app/models/runtime/
+    - RPA-Browser/app/utils/
+source_files: []
+depends_on: []
+related_to:
+    - path: rpa_browser/app_core/admin
+    - path: rpa_browser/botright

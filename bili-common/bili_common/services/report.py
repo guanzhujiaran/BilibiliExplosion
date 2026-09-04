@@ -27,13 +27,12 @@ class ReportBaseService:
         model,
         *,
         reporter_mid: int,
-        biz_type: str,
+        biz_type: int,
         biz_id: int,
         accused_mid: int,
         reason_type: int,
         reason_desc: str | None = None,
         pics: str | None = None,
-        resource_type: int | None = None,
         on_recorded=None,
     ) -> tuple[bool, int | None]:
         """幂等写入一条举报记录到指定子表（一人对同一对象只记一次）。
@@ -41,8 +40,7 @@ class ReportBaseService:
         Args:
             session: 数据库会话（AsyncSession）。
             model: 继承 `ReportBase` 的举报子表模型类（表达表名，逻辑一致）。
-            resource_type: 2.37.0 被举报对象所属资源类型（InteractionBizTypeEnum 值），
-                供通用 EdgeRank 举报数降权按 resourceType+bizId 统计；可空。
+            biz_type: 举报来源类型（`InteractionBizTypeEnum` 值，即业务资源类型）。
             on_recorded: 可选回调 `on_recorded(record)`，在记录写入并 commit 后调用
                 （典型用于把 `ReportEvent` 发布到 MQ）。
 
@@ -66,7 +64,6 @@ class ReportBaseService:
         rec = model(
             bizType=biz_type,
             bizId=biz_id,
-            resourceType=resource_type,
             accusedMid=accused_mid,
             reportMid=reporter_mid,
             reasonType=reason_type,
@@ -86,7 +83,7 @@ class ReportBaseService:
         session,
         model,
         *,
-        biz_type: str | None = None,
+        biz_type: int | None = None,
         status: str | None = None,
         page: int = 1,
         page_size: int = 20,

@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/base_crawler_framework
+title: 无限爬虫基础框架与调度器
+scope:
+    - be-bilibili-crawler/Service/BaseCrawler/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/auth_and_background_services

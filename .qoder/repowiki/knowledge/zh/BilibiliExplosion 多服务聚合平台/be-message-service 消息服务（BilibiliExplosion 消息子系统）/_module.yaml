@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: message_service
+title: be-message-service 消息服务（BilibiliExplosion 消息子系统）
+scope:
+    - be-message-service/
+source_files: []
+depends_on: []
+related_to: []

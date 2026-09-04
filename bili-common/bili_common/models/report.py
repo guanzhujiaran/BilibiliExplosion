@@ -7,7 +7,7 @@
 
 本模块定义：
 - `ReportBase`：通用举报记录抽象基类（`table=False`，各业务表继承复用同构字段）；
-- `ReportBizTypeEnum`：举报来源类型（dynamic/comment/user）；
+- 举报来源类型：直接复用 `InteractionBizTypeEnum`（业务资源类型即举报来源类型，bizType 列存其 int 值）；
 - `ReportReasonEnum`：统一举报原因（对齐 B 站，1-6 与既有 `MomentReportReasonEnum` 兼容）；
 - `ReportAuditStatusEnum`：统一举报审核状态；
 - `ReportReviewDecisionEnum`：统一管理端处置动作；
@@ -16,23 +16,10 @@
 
 from datetime import datetime
 from bili_common.models import IntEnumAutoDoc
+from bili_common.models.interaction import InteractionBizTypeEnum
 
 from sqlalchemy import BIGINT
 from sqlmodel import Field, SQLModel
-
-
-class ReportBizTypeEnum(IntEnumAutoDoc):
-    """举报来源类型（落 INT）。
-
-    注意：值已改为整数编码，原字符串值（dynamic/comment/user/resource）不再使用，
-    既有数据需配套迁移（bizType 列 VARCHAR -> BIGINT/INT，旧字符串值改写为对应编码）。
-    """
-
-    DYNAMIC = 1  # 动态举报（bizId = dynId）
-    COMMENT = 2  # 评论举报（bizId = rpid）
-    USER = 3  # 用户空间举报（bizId = mid）
-    # 2.39.0：通用资源举报（bizId = 资源 id；resourceType 标识具体资源类型：lottery/rpa_*）
-    RESOURCE = 4
 
 
 class ReportReasonEnum(IntEnumAutoDoc):
@@ -83,17 +70,14 @@ class ReportBase(SQLModel):
     pk: int | None = Field(
         default=None, primary_key=True, sa_type=BIGINT, sa_column_kwargs={"autoincrement": True}
     )
-    bizType: int = Field(default=None, index=True, description="举报来源类型（ReportBizTypeEnum 值）：1=dynamic,2=comment,3=user,4=resource")
-    bizId: int = Field(default=None, index=True, sa_type=BIGINT, description="被举报对象 id：dynamic→dynId，comment→rpid，user→mid")
-    # 2.37.0：被举报对象所属资源类型（InteractionBizTypeEnum 值落 INT）。
-    # dynamic 举报自动填充 1；lottery/rpa_* 等资源举报显式传入；None = 仅来源类型。
-    # 供通用 EdgeRank 举报数降权按 resourceType+bizId 统计（全资源通用）。
-    resourceType: int | None = Field(
+    bizType: int = Field(
         default=None,
         index=True,
-        sa_type=BIGINT,
-        description="被举报对象所属资源类型（InteractionBizTypeEnum 值）：dynamic=1，lottery/rpa_* 显式传；可空",
+        description="举报来源类型（InteractionBizTypeEnum 值）：业务资源类型即举报来源类型——"
+        "dynamic=1，lottery=2，rpa_action=3，rpa_workflow=4，rpa_browser=5，rpa_plugin=6，"
+        "comment=7，user=8；bizType + bizId 唯一确定被举报资源",
     )
+    bizId: int = Field(default=None, index=True, sa_type=BIGINT, description="被举报对象 id：dynamic→dynId，comment→rpid，user→mid，lottery/rpa_*→各自资源 id")
     accusedMid: int = Field(default=None, sa_type=BIGINT, description="被举报用户 mid")
     reportMid: int = Field(default=None, index=True, sa_type=BIGINT, description="举报人 mid")
     reasonType: int = Field(default=None, description="统一举报原因（ReportReasonEnum 值）：1-10")
@@ -114,7 +98,7 @@ class ReportEvent(SQLModel):
     与记录写入解耦。
     """
 
-    bizType: ReportBizTypeEnum
+    bizType: InteractionBizTypeEnum
     bizId: int  # dynamic→dynId / comment→rpid / user→mid
     reportMid: int  # 举报人
     reasonType: ReportReasonEnum
@@ -123,7 +107,6 @@ class ReportEvent(SQLModel):
 
 __all__ = [
     "ReportBase",
-    "ReportBizTypeEnum",
     "ReportReasonEnum",
     "ReportAuditStatusEnum",
     "ReportReviewDecisionEnum",

@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: bilibili_crawler/service_crawlers/samsclub_crawler
+title: 山姆会员商店(SAMS Club)商品爬虫
+scope:
+    - be-bilibili-crawler/Service/samsclub/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/models
+    - path: vue_frontend/samsclub

@@ -1,0 +1,13 @@
+schema_version: 1
+module_path: message_service/mq_and_consumers
+title: RabbitMQ 消息路由与消费者（FastStream）
+scope:
+    - be-message-service/app/mq/
+    - be-message-service/app/consumers/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler/service_crawlers/mq_layer
+    - path: message_service/services_message_dm_insite
+    - path: message_service/tests
+    - path: rpa_browser/app_core

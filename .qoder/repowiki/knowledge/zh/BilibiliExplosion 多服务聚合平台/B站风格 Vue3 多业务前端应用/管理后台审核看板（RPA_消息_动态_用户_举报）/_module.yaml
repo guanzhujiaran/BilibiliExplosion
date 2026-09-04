@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: vue_frontend/admin_dashboard
+title: 管理后台审核看板（RPA/消息/动态/用户/举报）
+scope:
+    - Vue3FrontEndDemoExercise/src/views/admin/
+    - Vue3FrontEndDemoExercise/src/stores/rpa_admin.ts
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/api_audit_ban_avatar_folder
+    - path: rpa_browser/app_core/admin

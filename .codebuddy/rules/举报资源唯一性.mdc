@@ -1,0 +1,57 @@
+---
+description: 举报/通用资源定位的 biz_type+biz_id 唯一性设计约束
+globs: "**/report*.py,**/report.py,**/interaction*.py,**/moment*.py,**/comment*.py"
+alwaysApply: false
+---
+
+# 举报资源唯一性约束（核心设计原则）
+
+> **唯一原则**：`biz_type`（即 `InteractionBizTypeEnum` 的 int 值） + `biz_id` 可以唯一确定被举报 / 被定位的资源。
+> 任何举报、资源处置、跨服务资源引用场景都以此原则为准，不需要、也不允许引入额外的二级分流字段。
+
+## 强制约束
+
+1. **举报来源类型直接复用 `InteractionBizTypeEnum`**：举报模型的 `bizType` 列承载 `InteractionBizTypeEnum` 的 int 值（dynamic=1、lottery=2、rpa_action=3、rpa_workflow=4、rpa_browser=5、rpa_plugin=6、comment=7、user=8）。
+   - **禁止**再定义独立的 `ReportBizTypeEnum` 或类似的「来源枚举」做二次分流；
+   - **禁止**使用 `resourceType` 之类的冗余字段区分资源大类（`biz_type + biz_id` 已经足够，`resourceType` 是冗余且易不一致的）。
+
+2. **新增可被举报 / 可被定位的资源类型时**：
+   - 直接在 `bili-common/bili_common/models/interaction.py` 的 `InteractionBizTypeEnum` 中追加新成员（值不与其他成员冲突）；
+   - 在 be-message 举报服务的 `_MODEL_MAP`（`be-message-service/app/services/admin/report.py`）登记「枚举成员 → 子表」映射，保证 `biz_type + biz_id` 仍能唯一锁定资源；
+   - 通用资源类（lottery / rpa_*）若需 RPC 取作者 / 双层处置，登记进 `_RESOURCE_REPORT_TYPES` 集合。
+
+3. **资源定位键统一为 `(bizType, bizId)`**：幂等去重、举报计数、审核、隐藏 / 下架处置、事件通知等关键逻辑，必须以 `(bizType, bizId)` 作为资源定位键，**不得依赖 `resourceType` 或其他二级字段**。
+   - 幂等：`ReportBaseService.record_report` 按 `(reportMid, bizType, bizId)` 去重；
+   - 计数 / 处置：`col(model.bizType) == biz_type and col(model.bizId) == biz_id` 作为唯一过滤条件。
+
+4. **`bizId` 语义随 `bizType` 变化，但始终唯一**：dynamic→dynId、comment→rpid、user→mid、lottery/rpa_*→各自资源 id。前端 / 跨服务 RPC 一律用 `biz_type`（文字或 int）+ `biz_id` 引用资源，不要携带资源大类字段。
+
+## 反例（禁止）
+
+```python
+# ❌ 引入独立来源枚举做二级分流
+class ReportBizTypeEnum(IntEnum):
+    DYNAMIC = 1
+    COMMENT = 2
+    USER = 3
+    RESOURCE = 4
+
+# ❌ 用 resourceType 冗余字段区分资源
+record_report(biz_type=..., resource_type=ReportBizTypeEnum.RESOURCE, ...)
+```
+
+## 正例
+
+```python
+# ✅ 直接复用 InteractionBizTypeEnum，仅用 biz_type + biz_id 定位
+rec = await ReportBaseService.record_report(
+    session, model,
+    reporter_mid=viewer_mid,
+    biz_type=biz.value,        # InteractionBizTypeEnum 的 int 值
+    biz_id=req.bizId,
+    accused_mid=accused,
+    reason_type=int(reason),
+    reason_desc=req.reasonDesc,
+    pics=pics,
+)
+```

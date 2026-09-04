@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: bilibili_crawler
+title: Bilibili Crawler 爬虫服务聚合模块
+scope:
+    - be-bilibili-crawler/
+source_files: []
+depends_on: []
+related_to:
+    - path: go_proxy_ipv6_pool
+    - path: unidbg_springboot

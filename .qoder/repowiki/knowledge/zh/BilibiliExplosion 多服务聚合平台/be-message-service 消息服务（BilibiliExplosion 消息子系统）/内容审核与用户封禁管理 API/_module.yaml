@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: message_service/api_audit_ban_avatar_folder
+title: 内容审核与用户封禁管理 API
+scope:
+    - be-message-service/app/api/avatar_audit.py
+    - be-message-service/app/api/ban.py
+    - be-message-service/app/api/folder_cover_audit.py
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/services_admin_cleanup_infrastructure
+    - path: vue_frontend/admin_dashboard

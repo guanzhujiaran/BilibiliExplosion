@@ -1,0 +1,10 @@
+schema_version: 1
+module_path: rpa_browser/app_core
+title: RPA-Browser 应用核心（FastAPI 服务装配层）
+scope:
+    - RPA-Browser/app/
+source_files: []
+depends_on: []
+related_to:
+    - path: message_service/mq_and_consumers
+    - path: rpa_browser/tests

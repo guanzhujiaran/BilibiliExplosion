@@ -1,0 +1,800 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: main
+nodes_managed: true
+exported_at: "2026-09-02T09:57:25Z"
+modules:
+    "":
+        dir_name: BilibiliExplosion 多服务聚合平台
+        title: BilibiliExplosion 多服务聚合平台
+        scope:
+            - README.md
+            - Makefile
+            - Dockerfile.mono
+            - docker-compose.yml
+            - dc-dev.yml
+            - pm2.app.js
+            - .gitignore
+            - .github/
+            - .trunk/
+            - .codebuddy/
+            - docs/
+            - docker_vol/
+            - .dockerignore
+            - .env.example
+            - .gitmodules
+            - .sourcery.yaml
+            - dev_init_chmod.bash
+        source_files: []
+        children:
+            - bili_common
+            - bilibili_crawler
+            - gateway
+            - go_proxy_ipv6_pool
+            - message_service
+            - rpa_browser
+            - unidbg_springboot
+            - vue_frontend
+        depends_on: []
+        related_to: []
+    bili_common:
+        dir_name: Bilibili 公共依赖库（统一响应、鉴权、RPC、i18n）
+        title: Bilibili 公共依赖库（统一响应、鉴权、RPC、i18n）
+        scope:
+            - bili-common/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/controller_api
+            - path: message_service/api_external_push_msg_feed
+    bilibili_crawler:
+        dir_name: Bilibili Crawler 爬虫服务聚合模块
+        title: Bilibili Crawler 爬虫服务聚合模块
+        scope:
+            - be-bilibili-crawler/
+        source_files: []
+        children:
+            - bilibili_crawler/alembic_migrations
+            - bilibili_crawler/controller_api
+            - bilibili_crawler/dao_layer
+            - bilibili_crawler/models
+            - bilibili_crawler/scripts
+            - bilibili_crawler/service_crawlers
+            - bilibili_crawler/tests
+            - bilibili_crawler/utils
+        depends_on: []
+        related_to:
+            - path: go_proxy_ipv6_pool
+            - path: unidbg_springboot
+    bilibili_crawler/alembic_migrations:
+        dir_name: 多数据库 Alembic 异步迁移配置
+        title: 多数据库 Alembic 异步迁移配置
+        scope:
+            - be-bilibili-crawler/alembic/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/dao_layer
+    bilibili_crawler/controller_api:
+        dir_name: B站爬虫 FastAPI 控制器层
+        title: B站爬虫 FastAPI 控制器层
+        scope:
+            - be-bilibili-crawler/controller/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bili_common
+            - path: bilibili_crawler/dao_layer
+            - path: bilibili_crawler/service_crawlers
+            - path: bilibili_crawler/tests
+            - path: vue_frontend/lottery_data
+    bilibili_crawler/dao_layer:
+        dir_name: B站爬虫数据访问层（DAO）
+        title: B站爬虫数据访问层（DAO）
+        scope:
+            - be-bilibili-crawler/dao/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/alembic_migrations
+            - path: bilibili_crawler/controller_api
+    bilibili_crawler/models:
+        dir_name: 爬虫数据模型与消息契约定义
+        title: 爬虫数据模型与消息契约定义
+        scope:
+            - be-bilibili-crawler/Models/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/samsclub_crawler
+    bilibili_crawler/scripts:
+        dir_name: B站爬虫运维脚本集
+        title: B站爬虫运维脚本集
+        scope:
+            - be-bilibili-crawler/scripts/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers
+    bilibili_crawler/service_crawlers:
+        dir_name: B站爬虫服务层（Service）
+        title: B站爬虫服务层（Service）
+        scope:
+            - be-bilibili-crawler/Service/
+        source_files: []
+        children:
+            - bilibili_crawler/service_crawlers/auth_and_background_services
+            - bilibili_crawler/service_crawlers/base_crawler_framework
+            - bilibili_crawler/service_crawlers/grpc_module
+            - bilibili_crawler/service_crawlers/langchain_compo
+            - bilibili_crawler/service_crawlers/llm_service
+            - bilibili_crawler/service_crawlers/mq_layer
+            - bilibili_crawler/service_crawlers/opus_official_lottery
+            - bilibili_crawler/service_crawlers/others_lottery_dynamic
+            - bilibili_crawler/service_crawlers/samsclub_crawler
+            - bilibili_crawler/service_crawlers/toutiao_crawler
+            - bilibili_crawler/service_crawlers/zhihu_crawler
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/controller_api
+            - path: bilibili_crawler/scripts
+            - path: message_service/services_interaction_actions
+    bilibili_crawler/service_crawlers/auth_and_background_services:
+        dir_name: 后台爬虫调度与健康监控服务
+        title: 后台爬虫调度与健康监控服务
+        scope:
+            - be-bilibili-crawler/Service/BackgroundService/
+            - be-bilibili-crawler/Service/BackgroundServiceStatus/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/base_crawler_framework
+    bilibili_crawler/service_crawlers/base_crawler_framework:
+        dir_name: 无限爬虫基础框架与调度器
+        title: 无限爬虫基础框架与调度器
+        scope:
+            - be-bilibili-crawler/Service/BaseCrawler/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/auth_and_background_services
+    bilibili_crawler/service_crawlers/grpc_module:
+        dir_name: B站gRPC动态爬虫模块
+        title: B站gRPC动态爬虫模块
+        scope:
+            - be-bilibili-crawler/Service/GrpcModule/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/utils
+    bilibili_crawler/service_crawlers/langchain_compo:
+        dir_name: LangChain 组件与抽奖向量检索服务
+        title: LangChain 组件与抽奖向量检索服务
+        scope:
+            - be-bilibili-crawler/Service/LangChainCompo/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/llm_service
+    bilibili_crawler/service_crawlers/llm_service:
+        dir_name: 云端 LLM 服务（OpenAI 兼容实例池与调用统计）
+        title: 云端 LLM 服务（OpenAI 兼容实例池与调用统计）
+        scope:
+            - be-bilibili-crawler/Service/llm_service/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/langchain_compo
+    bilibili_crawler/service_crawlers/mq_layer:
+        dir_name: RabbitMQ 消息队列层（FastStream_Blocking 双实现）
+        title: RabbitMQ 消息队列层（FastStream/Blocking 双实现）
+        scope:
+            - be-bilibili-crawler/Service/MQ/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/opus_official_lottery
+            - path: bilibili_crawler/service_crawlers/others_lottery_dynamic
+            - path: bilibili_crawler/service_crawlers/toutiao_crawler
+            - path: bilibili_crawler/service_crawlers/zhihu_crawler
+            - path: message_service/mq_and_consumers
+    bilibili_crawler/service_crawlers/opus_official_lottery:
+        dir_name: B站官方_活动_预约抽奖爬虫与服务
+        title: B站官方/活动/预约抽奖爬虫与服务
+        scope:
+            - be-bilibili-crawler/Service/opus新版官方抽奖/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/mq_layer
+    bilibili_crawler/service_crawlers/others_lottery_dynamic:
+        dir_name: 第三方抽奖动态爬虫（GetOthersLotDyn）
+        title: 第三方抽奖动态爬虫（GetOthersLotDyn）
+        scope:
+            - be-bilibili-crawler/Service/GetOthersLotDyn/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/mq_layer
+    bilibili_crawler/service_crawlers/samsclub_crawler:
+        dir_name: 山姆会员商店(SAMS Club)商品爬虫
+        title: 山姆会员商店(SAMS Club)商品爬虫
+        scope:
+            - be-bilibili-crawler/Service/samsclub/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/models
+            - path: vue_frontend/samsclub
+    bilibili_crawler/service_crawlers/toutiao_crawler:
+        dir_name: 头条用户空间爬虫与抽奖数据服务
+        title: 头条用户空间爬虫与抽奖数据服务
+        scope:
+            - be-bilibili-crawler/Service/toutiao/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/mq_layer
+    bilibili_crawler/service_crawlers/zhihu_crawler:
+        dir_name: 知乎爬虫服务（想法_专栏抓取与加密请求）
+        title: 知乎爬虫服务（想法/专栏抓取与加密请求）
+        scope:
+            - be-bilibili-crawler/Service/zhihu/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/mq_layer
+    bilibili_crawler/tests:
+        dir_name: Bilibili Crawler 测试套件
+        title: Bilibili Crawler 测试套件
+        scope:
+            - be-bilibili-crawler/test/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/controller_api
+    bilibili_crawler/utils:
+        dir_name: 爬虫通用工具与基础设施库
+        title: 爬虫通用工具与基础设施库
+        scope:
+            - be-bilibili-crawler/Utils/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/grpc_module
+    gateway:
+        dir_name: B站抽奖网关与自动化服务
+        title: B站抽奖网关与自动化服务
+        scope:
+            - be-gateway/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    go_proxy_ipv6_pool:
+        dir_name: IPv6 动态出口代理池服务
+        title: IPv6 动态出口代理池服务
+        scope:
+            - go-proxy-ipv6-pool-auto/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler
+    message_service:
+        dir_name: be-message-service 消息服务（BilibiliExplosion 消息子系统）
+        title: be-message-service 消息服务（BilibiliExplosion 消息子系统）
+        scope:
+            - be-message-service/
+        source_files: []
+        children:
+            - message_service/alembic_migrations
+            - message_service/api_audit_ban_avatar_folder
+            - message_service/api_comment_dm
+            - message_service/api_external_push_msg_feed
+            - message_service/api_moment
+            - message_service/api_notify_event_report_setting
+            - message_service/api_user_follow_favorite
+            - message_service/app_core_infra
+            - message_service/models_schemas
+            - message_service/mq_and_consumers
+            - message_service/services_admin_cleanup_infrastructure
+            - message_service/services_comment
+            - message_service/services_interaction_actions
+            - message_service/services_message_dm_insite
+            - message_service/services_moment
+            - message_service/services_user_account
+            - message_service/tests
+        depends_on: []
+        related_to: []
+    message_service/alembic_migrations:
+        dir_name: 消息服务数据库迁移（Alembic）
+        title: 消息服务数据库迁移（Alembic）
+        scope:
+            - be-message-service/alembic/
+            - be-message-service/alembic_pptr/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/models_schemas
+    message_service/api_audit_ban_avatar_folder:
+        dir_name: 内容审核与用户封禁管理 API
+        title: 内容审核与用户封禁管理 API
+        scope:
+            - be-message-service/app/api/avatar_audit.py
+            - be-message-service/app/api/ban.py
+            - be-message-service/app/api/folder_cover_audit.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/services_admin_cleanup_infrastructure
+            - path: vue_frontend/admin_dashboard
+    message_service/api_comment_dm:
+        dir_name: 评论与私信 HTTP 接口层
+        title: 评论与私信 HTTP 接口层
+        scope:
+            - be-message-service/app/api/comment.py
+            - be-message-service/app/api/comment_admin.py
+            - be-message-service/app/api/dm.py
+            - be-message-service/app/api/dm_admin.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/services_comment
+            - path: message_service/tests
+            - path: vue_frontend/message_system
+    message_service/api_external_push_msg_feed:
+        dir_name: 外部推送、消息聚合与用户网关接口层
+        title: 外部推送、消息聚合与用户网关接口层
+        scope:
+            - be-message-service/app/api/external_push.py
+            - be-message-service/app/api/msg_feed.py
+            - be-message-service/app/api/pptr_user_gateway.py
+            - be-message-service/app/api/message_admin.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bili_common
+            - path: message_service/services_message_dm_insite
+    message_service/api_moment:
+        dir_name: 动态（Moment）HTTP API 路由层
+        title: 动态（Moment）HTTP API 路由层
+        scope:
+            - be-message-service/app/api/moment.py
+            - be-message-service/app/api/moment_audit.py
+            - be-message-service/app/api/moment_feed.py
+            - be-message-service/app/api/moment_topic_audit.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/services_moment
+            - path: vue_frontend/moment_feed
+    message_service/api_notify_event_report_setting:
+        dir_name: 消息服务 HTTP 接口层（通知_事件_举报_设置）
+        title: 消息服务 HTTP 接口层（通知/事件/举报/设置）
+        scope:
+            - be-message-service/app/api/notify.py
+            - be-message-service/app/api/event.py
+            - be-message-service/app/api/report.py
+            - be-message-service/app/api/setting.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    message_service/api_user_follow_favorite:
+        dir_name: 用户关注、收藏与管理端用户查询 API
+        title: 用户关注、收藏与管理端用户查询 API
+        scope:
+            - be-message-service/app/api/user.py
+            - be-message-service/app/api/follow.py
+            - be-message-service/app/api/favorite.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/services_user_account
+    message_service/app_core_infra:
+        dir_name: 应用核心基础设施（配置_数据库_消息队列_分片_依赖注入_工具）
+        title: 应用核心基础设施（配置/数据库/消息队列/分片/依赖注入/工具）
+        scope:
+            - be-message-service/app/core/
+            - be-message-service/app/dependencies/
+            - be-message-service/app/utils/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    message_service/models_schemas:
+        dir_name: 消息服务数据模型与 Schema 层
+        title: 消息服务数据模型与 Schema 层
+        scope:
+            - be-message-service/app/models/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/alembic_migrations
+    message_service/mq_and_consumers:
+        dir_name: RabbitMQ 消息路由与消费者（FastStream）
+        title: RabbitMQ 消息路由与消费者（FastStream）
+        scope:
+            - be-message-service/app/mq/
+            - be-message-service/app/consumers/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/mq_layer
+            - path: message_service/services_message_dm_insite
+            - path: message_service/tests
+            - path: rpa_browser/app_core
+    message_service/services_admin_cleanup_infrastructure:
+        dir_name: 管理端权限、举报与注销清理及基础设施服务
+        title: 管理端权限、举报与注销清理及基础设施服务
+        scope:
+            - be-message-service/app/services/admin/
+            - be-message-service/app/services/cleanup/
+            - be-message-service/app/services/infrastructure/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_audit_ban_avatar_folder
+    message_service/services_comment:
+        dir_name: 评论服务（写_读_互动_审核_管理）
+        title: 评论服务（写/读/互动/审核/管理）
+        scope:
+            - be-message-service/app/services/comment/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_comment_dm
+            - path: message_service/services_interaction_actions
+    message_service/services_interaction_actions:
+        dir_name: 互动操作资源业务层（Interaction Actions）
+        title: 互动操作资源业务层（Interaction Actions）
+        scope:
+            - be-message-service/app/services/interaction_actions/
+        source_files: []
+        children:
+            - message_service/services_interaction_actions/comment_dynamic
+            - message_service/services_interaction_actions/lottery_user
+            - message_service/services_interaction_actions/rpa_actions
+            - message_service/services_interaction_actions/shared_base
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers
+            - path: message_service/services_comment
+            - path: message_service/services_moment
+    message_service/services_interaction_actions/comment_dynamic:
+        dir_name: 评论与动态互动行为实现
+        title: 评论与动态互动行为实现
+        scope:
+            - be-message-service/app/services/interaction_actions/comment/
+            - be-message-service/app/services/interaction_actions/dynamic/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    message_service/services_interaction_actions/lottery_user:
+        dir_name: 互动资源业务实现（抽奖与用户）
+        title: 互动资源业务实现（抽奖与用户）
+        scope:
+            - be-message-service/app/services/interaction_actions/lottery/
+            - be-message-service/app/services/interaction_actions/user/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    message_service/services_interaction_actions/rpa_actions:
+        dir_name: RPA 资源业务类（Action_Browser_Plugin_Workflow）
+        title: RPA 资源业务类（Action/Browser/Plugin/Workflow）
+        scope:
+            - be-message-service/app/services/interaction_actions/rpa_action/
+            - be-message-service/app/services/interaction_actions/rpa_browser/
+            - be-message-service/app/services/interaction_actions/rpa_plugin/
+            - be-message-service/app/services/interaction_actions/rpa_workflow/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    message_service/services_interaction_actions/shared_base:
+        dir_name: 互动操作共享基类与通用资源实现
+        title: 互动操作共享基类与通用资源实现
+        scope:
+            - be-message-service/app/services/interaction_actions/base.py
+            - be-message-service/app/services/interaction_actions/base_biz.py
+            - be-message-service/app/services/interaction_actions/common/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    message_service/services_message_dm_insite:
+        dir_name: 消息服务（私信_站内信_外部推送）
+        title: 消息服务（私信/站内信/外部推送）
+        scope:
+            - be-message-service/app/services/message/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_external_push_msg_feed
+            - path: message_service/mq_and_consumers
+    message_service/services_moment:
+        dir_name: 动态（Moment）业务服务层
+        title: 动态（Moment）业务服务层
+        scope:
+            - be-message-service/app/services/moment/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_moment
+            - path: message_service/services_interaction_actions
+    message_service/services_user_account:
+        dir_name: 用户账号与关系服务（pptr 主数据 + Casdoor 认证 + 关注_封禁_头像审核）
+        title: 用户账号与关系服务（pptr 主数据 + Casdoor 认证 + 关注/封禁/头像审核）
+        scope:
+            - be-message-service/app/services/user/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_user_follow_favorite
+    message_service/tests:
+        dir_name: 消息服务集成与契约测试套件
+        title: 消息服务集成与契约测试套件
+        scope:
+            - be-message-service/tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_comment_dm
+            - path: message_service/mq_and_consumers
+    rpa_browser:
+        dir_name: RPA-Browser 浏览器自动化服务
+        title: RPA-Browser 浏览器自动化服务
+        scope:
+            - RPA-Browser/
+        source_files: []
+        children:
+            - rpa_browser/app_core
+            - rpa_browser/botright
+            - rpa_browser/tests
+        depends_on: []
+        related_to: []
+    rpa_browser/app_core:
+        dir_name: RPA-Browser 应用核心（FastAPI 服务装配层）
+        title: RPA-Browser 应用核心（FastAPI 服务装配层）
+        scope:
+            - RPA-Browser/app/
+        source_files: []
+        children:
+            - rpa_browser/app_core/admin
+            - rpa_browser/app_core/browser_control
+            - rpa_browser/app_core/execution_engine
+            - rpa_browser/app_core/shared_infrastructure
+            - rpa_browser/app_core/workflow
+        depends_on: []
+        related_to:
+            - path: message_service/mq_and_consumers
+            - path: rpa_browser/tests
+    rpa_browser/app_core/admin:
+        dir_name: 管理员后台管理 API（Admin 治理模块）
+        title: 管理员后台管理 API（Admin 治理模块）
+        scope:
+            - RPA-Browser/app/controller/v1/admin/
+            - RPA-Browser/app/models/system/
+            - RPA-Browser/app/services/admin_audit.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core/shared_infrastructure
+            - path: vue_frontend/admin_dashboard
+    rpa_browser/app_core/browser_control:
+        dir_name: 浏览器控制与 WebRTC 流管理
+        title: 浏览器控制与 WebRTC 流管理
+        scope:
+            - RPA-Browser/app/controller/v1/browser_control/
+            - RPA-Browser/app/services/RPA_browser/session/
+            - RPA-Browser/app/services/RPA_browser/webrtc/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core/execution_engine
+            - path: rpa_browser/app_core/workflow
+            - path: vue_frontend/rpa_browser_editor
+    rpa_browser/app_core/execution_engine:
+        dir_name: RPA 浏览器操作执行引擎
+        title: RPA 浏览器操作执行引擎
+        scope:
+            - RPA-Browser/app/services/execution/
+            - RPA-Browser/app/models/execution/
+            - RPA-Browser/app/controller/v1/browser_control/execution/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core/browser_control
+            - path: rpa_browser/app_core/workflow
+    rpa_browser/app_core/shared_infrastructure:
+        dir_name: RPA Browser 共享基础设施（数据模型、运行时与通用工具）
+        title: RPA Browser 共享基础设施（数据模型、运行时与通用工具）
+        scope:
+            - RPA-Browser/app/models/database/
+            - RPA-Browser/app/models/runtime/
+            - RPA-Browser/app/utils/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core/admin
+            - path: rpa_browser/botright
+    rpa_browser/app_core/workflow:
+        dir_name: 工作流与复合操作 CRUD 数据访问层
+        title: 工作流与复合操作 CRUD 数据访问层
+        scope:
+            - RPA-Browser/app/services/execution/crud_service/
+            - RPA-Browser/app/models/workflow/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core/browser_control
+            - path: rpa_browser/app_core/execution_engine
+    rpa_browser/botright:
+        dir_name: Botright 反检测浏览器自动化框架
+        title: Botright 反检测浏览器自动化框架
+        scope:
+            - RPA-Browser/botright/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core/shared_infrastructure
+    rpa_browser/tests:
+        dir_name: RPA-Browser 测试套件
+        title: RPA-Browser 测试套件
+        scope:
+            - RPA-Browser/test/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core
+    unidbg_springboot:
+        dir_name: 山姆会员商店 App 加密逆向服务（unidbg + Spring Boot）
+        title: 山姆会员商店 App 加密逆向服务（unidbg + Spring Boot）
+        scope:
+            - unidbgSpringBoot/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler
+    vue_frontend:
+        dir_name: B站风格 Vue3 多业务前端应用
+        title: B站风格 Vue3 多业务前端应用
+        scope:
+            - Vue3FrontEndDemoExercise/
+        source_files: []
+        children:
+            - vue_frontend/admin_dashboard
+            - vue_frontend/lottery_data
+            - vue_frontend/message_system
+            - vue_frontend/moment_feed
+            - vue_frontend/rpa_browser_editor
+            - vue_frontend/samsclub
+            - vue_frontend/shared_api_clients
+        depends_on: []
+        related_to: []
+    vue_frontend/admin_dashboard:
+        dir_name: 管理后台审核看板（RPA_消息_动态_用户_举报）
+        title: 管理后台审核看板（RPA/消息/动态/用户/举报）
+        scope:
+            - Vue3FrontEndDemoExercise/src/views/admin/
+            - Vue3FrontEndDemoExercise/src/stores/rpa_admin.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_audit_ban_avatar_folder
+            - path: rpa_browser/app_core/admin
+    vue_frontend/lottery_data:
+        dir_name: B站抽奖数据展示与运营模块
+        title: B站抽奖数据展示与运营模块
+        scope:
+            - Vue3FrontEndDemoExercise/src/components/lottery_data/
+            - Vue3FrontEndDemoExercise/src/api/lottery_data/
+            - Vue3FrontEndDemoExercise/src/api/do_lottery/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/controller_api
+    vue_frontend/message_system:
+        dir_name: 消息与私信系统（通知_互动_私信_管理后台）
+        title: 消息与私信系统（通知/互动/私信/管理后台）
+        scope:
+            - Vue3FrontEndDemoExercise/src/views/message/
+            - Vue3FrontEndDemoExercise/src/components/message/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_comment_dm
+    vue_frontend/moment_feed:
+        dir_name: 动态（Moment）信息流与详情页
+        title: 动态（Moment）信息流与详情页
+        scope:
+            - Vue3FrontEndDemoExercise/src/views/moment/
+            - Vue3FrontEndDemoExercise/src/components/moment/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: message_service/api_moment
+    vue_frontend/rpa_browser_editor:
+        dir_name: RPA 浏览器可视化编排与调试前端
+        title: RPA 浏览器可视化编排与调试前端
+        scope:
+            - Vue3FrontEndDemoExercise/src/views/rpa-browser/
+            - Vue3FrontEndDemoExercise/src/components/rpa-browser/
+            - Vue3FrontEndDemoExercise/src/models/rpa_browser/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: rpa_browser/app_core/browser_control
+    vue_frontend/samsclub:
+        dir_name: 山姆会员店 SPU 商品展示与筛选模块
+        title: 山姆会员店 SPU 商品展示与筛选模块
+        scope:
+            - Vue3FrontEndDemoExercise/src/components/SamsClubCompo/
+            - Vue3FrontEndDemoExercise/src/gql/samsclub/
+            - Vue3FrontEndDemoExercise/src/api/samsclub/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to:
+            - path: bilibili_crawler/service_crawlers/samsclub_crawler
+    vue_frontend/shared_api_clients:
+        dir_name: 共享 API 客户端与业务接口封装
+        title: 共享 API 客户端与业务接口封装
+        scope:
+            - Vue3FrontEndDemoExercise/src/api/base_axios/
+            - Vue3FrontEndDemoExercise/src/api/account/
+            - Vue3FrontEndDemoExercise/src/api/user/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

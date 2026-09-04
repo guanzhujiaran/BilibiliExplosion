@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: message_service/services_interaction_actions/lottery_user
+title: 互动资源业务实现（抽奖与用户）
+scope:
+    - be-message-service/app/services/interaction_actions/lottery/
+    - be-message-service/app/services/interaction_actions/user/
+source_files: []
+depends_on: []
+related_to: []

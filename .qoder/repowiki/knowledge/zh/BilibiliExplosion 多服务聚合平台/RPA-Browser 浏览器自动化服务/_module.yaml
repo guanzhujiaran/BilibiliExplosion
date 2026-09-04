@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: rpa_browser
+title: RPA-Browser 浏览器自动化服务
+scope:
+    - RPA-Browser/
+source_files: []
+depends_on: []
+related_to: []

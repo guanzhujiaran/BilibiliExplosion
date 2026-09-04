@@ -74,5 +74,14 @@ class ResponseCode(IntEnumAutoDoc):
     CASDOOR_USER_NOT_FOUND = 3004     # Casdoor 用户不存在
     CASDOOR_CREATE_USER_FAILED = 3005  # 创建本地用户失败
 
+    # 消息（私信）发送限制错误码（2.57.0，be-message 私信发送拦截）
+    DM_SEND_DAILY_LIMIT = 4001        # 单用户当天发送私信达到每日上限（dm_daily_send_limit）
+    DM_SEND_STRANGER_LIMIT = 4002     # 对方未关注且未回过消息时，陌生人单条额度已用尽
+
+    # 内容发布每日上限错误码（2.58.0，评论 / 动态 / 话题创建拦截）
+    COMMENT_DAILY_CREATE_LIMIT = 4101  # 单用户当天评论创建达到每日上限（comment_daily_create_limit）
+    MOMENT_DAILY_CREATE_LIMIT = 4102   # 单用户当天动态(WORD)创建达到每日上限（moment_daily_create_limit）
+    TOPIC_DAILY_CREATE_LIMIT = 4103    # 单用户当天话题创建达到每日上限（topic_daily_create_limit）
+
 
 __all__ = ["ResponseCode"]

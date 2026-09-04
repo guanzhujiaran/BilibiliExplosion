@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: go_proxy_ipv6_pool
+title: IPv6 动态出口代理池服务
+scope:
+    - go-proxy-ipv6-pool-auto/
+source_files: []
+depends_on: []
+related_to:
+    - path: bilibili_crawler

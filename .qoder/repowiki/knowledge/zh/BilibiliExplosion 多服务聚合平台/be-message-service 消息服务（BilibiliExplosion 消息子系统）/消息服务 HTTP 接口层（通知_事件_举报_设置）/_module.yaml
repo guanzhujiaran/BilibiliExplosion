@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: message_service/api_notify_event_report_setting
+title: 消息服务 HTTP 接口层（通知/事件/举报/设置）
+scope:
+    - be-message-service/app/api/notify.py
+    - be-message-service/app/api/event.py
+    - be-message-service/app/api/report.py
+    - be-message-service/app/api/setting.py
+source_files: []
+depends_on: []
+related_to: []
