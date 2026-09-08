@@ -25,6 +25,8 @@ class RpaRpcMethodName(StrEnumAutoDoc):
     GET_RESOURCE_DETAIL = "get_resource_detail"
     # 2.39.0：举报处置——归属服务按 bizType 内部路由（lottery→crawler、rpa_*→本地）
     HIDE_RESOURCE = "hide_resource"
+    # RPA 资源审核——归属服务对「发布审批单(rpa_approval, action=publish)」置通过/驳回
+    REVIEW_RESOURCE = "review_resource"
 
 
 # ---------------------------------------------------------------------------
@@ -59,6 +61,29 @@ class HideResourceResult(SQLModel):
     message: str | None = Field(default=None, description="失败原因 / 补充说明（可选）")
 
 
+class ReviewResourceParams(SQLModel):
+    """RPA 资源审核请求（review_resource）。
+
+    归属服务（RPA-Browser）按 ``bizType`` + ``bizId`` 找到该资源**发布到社区的审批单**
+    （`rpa_approval` 表，resource_type 去 rpa_ 前缀、resource_id 为该资源业务 id、
+    action=publish），把其 status 置为 ``decision``。只改审批单，不动资源 is_public。
+    """
+
+    bizType: str = Field(description="资源类型：rpa_action / rpa_workflow / rpa_plugin")
+    bizId: int = Field(description="资源表主键 id（int）")
+    decision: str = Field(description="审核结果：approved / rejected")
+    operatorMid: int = Field(description="审核员 mid")
+    note: str = Field(default="", description="审核意见（可选）")
+
+
+class ReviewResourceResult(SQLModel):
+    """review_resource 返回结果。"""
+
+    success: bool = Field(default=False, description="是否成功审核")
+    message: str | None = Field(default=None, description="失败原因 / 补充说明（可选）")
+    approvalId: int | None = Field(default=None, description="被审核的审批单 id（无匹配时为 None）")
+
+
 # ---------------------------------------------------------------------------
 # 响应
 # ---------------------------------------------------------------------------
@@ -86,6 +111,7 @@ class GetResourceDetailResult(SQLModel):
 RPA_RPC_CONTRACT: dict[str, tuple[type[SQLModel], type[SQLModel]]] = {
     RpaRpcMethodName.GET_RESOURCE_DETAIL: (GetResourceDetailParams, GetResourceDetailResult),
     RpaRpcMethodName.HIDE_RESOURCE: (HideResourceParams, HideResourceResult),
+    RpaRpcMethodName.REVIEW_RESOURCE: (ReviewResourceParams, ReviewResourceResult),
 }
 
 
@@ -95,6 +121,8 @@ __all__ = [
     "GetResourceDetailResult",
     "HideResourceParams",
     "HideResourceResult",
+    "ReviewResourceParams",
+    "ReviewResourceResult",
     "ResourceDetail",
     "RPA_RPC_CONTRACT",
 ]
