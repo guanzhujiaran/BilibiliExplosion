@@ -21,7 +21,7 @@
 
 ## 2. 统一工程约定
 
-- **响应契约**：HTTP 恒 200，业务成败看 `body.code`；公共业务码单一来源 `bili_common.models.response_code.ResponseCode`；未登录恒 `NotLoggedInException`（-101）。
+- **响应契约**：**失败一律返回非 200 的 HTTP 状态码**（HTTP 状态只表达错误大类，无需与 `body.code` 同值）；业务细分仍看 `body.code`；公共业务码单一来源 `bili_common.models.response_code.ResponseCode`；未登录恒 `NotLoggedInException`（业务码 -101 + HTTP 401）。映射规则见 `bili_common.exceptions.http_status_for_code`（400~599 沿用、-101→401、其余自定义业务码→400、未捕获异常→500）；业务代码里「HTTP 200 + 非 0 业务码」的返回由 `bili_common.middlewares.ErrorStatusMiddleware` 在出口统一改写。
 - **对外 ID**：雪花 ID 字符串出参；分钟级短 ID 位布局 39 bits、`sequence_bits` 默认 4 可配（限清库开发环境）；实体独立 worker/epoch。
 - **枚举落库**：业务枚举一律标准库 `enum.IntEnum`，模型字段 `Field(sa_type=IntEnum(EnumCls))` 落 SMALLINT 整数；**禁用原生 ENUM**（存成员名会导致查询/过滤错乱）；列类型从 `bili_common.models.db_types` 导入 `IntEnum/StrEnum`。
 - **鉴权**：身份来自网关注入 `x-bili-*` 头（微服务互信）；依赖注入 `CurrentUser/RequiredUser/AdminUser/RootUser`（管理端审核统一 `RootUser`）。
@@ -101,11 +101,13 @@
 
 - 点赞/收藏/浏览/点踩/分享/举报/转发支持多资源；be-message 只存互动明细+计数，详情经 RPC 实时获取、失败降级。
 - **资源为中心的统一操作模型**：`interaction_actions/` 以 `InteractionBizTypeEnum` 为主体（`BaseBiz` 资源类体系，见 §5.10），互动操作、举报、审核处置均为资源方法。
+- **抽奖卡片详情 HTTP 接口（be-bilibili-crawler 侧）**：`POST /api/v1/lottery_database/bili/GetLotteryDetail`（body `{lottery_id}`）按 `dyndetail.lotdata.lottery_id` 返回完整卡片原始行（LotdataResp 形态）+ `t_lot_extra_info` 附加信息，供前端卡片详情页（`/app/lot-data/card-detail?id=`）按 id 拉取详情渲染，替代 localStorage 旧缓存传参。互动资源 ID 口径不变：lottery 一律 `lotdata.lottery_id`（预约 sid / 天选 lot_id / 第三方 dynId 不作为互动资源 ID，缺失 lottery_id 的旧数据前端禁用互动）。
 
 ### 5.6 通知可见性细节
 
 - 受众解析 `resolve_target_mids`（按 `recv_notify`）；投放类型 ALL/CUSTOM/LEVEL/ROLE/VIP；免打扰由 `can_push_now` 判定。
 - **读取即已读**：`/notify/pull` 等构造出参后批量 upsert 本页为已读，出参 `is_read` 是读取前快照；无 `/notify/read` 接口、无 `only_unread` 参数（翻页收缩跳条）。
+- **网关匿名白名单（评论读接口）**：`GET /api/v1/comment/latest`（首页最新评论）与 `comment/main`、`comment/detail/{rpid}`、`comment/sub` 同口径放入 be-gateway jwtAuth `unless` 白名单——be-message 侧本就经 `resolve_optional_viewer` 允许匿名（匿名仅不回填点赞态），此前 latest 漏配导致未登录访问首页 401。评论写接口（add / reply / delete / audit 等）仍走 jwtAuth + 上游 RequiredUser。
 
 ### 5.7 seed 灌数（`scripts/seed_cli.py` 唯一入口 + `scripts/seed/` 功能分包）
 
@@ -149,6 +151,28 @@
 - **权限原语**：`InteractionRelationScopeEnum`（FOLLOWING/NON_FOLLOWING/NOT_BLOCKED）+ `InteractionAclScopeEnum`（OWNER_ONLY/AUDITOR_ONLY）+ 注册表；`InteractionResource`（SQLModel）统一资源表示（bizType/bizId/authorMid/ownerMid/exists/interactable/title/cover）。
 - **举报与管理路径**：`report()/resolve_accused()/hide()` 与 `report_reject()/report_resolved()` 均为 `BaseBiz` 方法（通用实现），资源只需声明 `model + resolve_accused + hide` 即得完整举报能力；`ReportService` 退化为纯协调器（无 bizType if/elif）；资源→表唯一真相源是资源类 `model`。
 - **DDL 约束**：`msg_event.event_type` 用原生 ENUM 存成员名（存量遗留，与 §2.3 不一致），新增枚举成员须同步 ALTER。
+
+### 5.13 统一审核动作（bizType + bizId）与审核结果通知
+
+- **统一审核入口（新增）**：`POST /api/v1/audit/approve`、`POST /api/v1/audit/reject`（管理端鉴权同现有审核路由），入参 `AuditActionReq{bizType, bizId, remark?}` / `AuditRejectReq{bizType, bizId, rejectReason, remark?}`。路由层只做「`get_biz(bizType, session, bizId, actor)` → `audit_approve()/audit_reject()` → 装配」，与各资源专用路由（动态 dynId / 话题 topicId / 头像·封面 pk / 评论 rpid）**并存**，前端统一走新接口，专用路由逐步收敛。定位口径与 §5.9 一致：`(bizType, bizId)` 唯一确定资源。
+- **审核动作下沉到资源类**：`BaseBiz.audit_approve/audit_reject` 从「接口声明（默认抛不支持）」升级为「各资源必须实现」：
+  - `DynamicBiz`：沿用现有实现（含 `_notify_reject`、FORWARD 源计数状态机、AuditLog、Feed 同步）；
+  - `CommentBiz`：**新增** `audit_approve/audit_reject`，复用 `CommentAdminService.set_state` 的状态流转与通知（`notify_audit_rejected` / `_notify_hidden`），入参统一为 rpid（comment 的 bizId 即 rpid）；
+  - `UserBiz`：**新增** 头像审核结果处理（bizId=mid），通过/驳回均通知；
+  - `GenericResourceBiz`（lottery / rpa_*）：`audit_approve/audit_reject` 在现有 RPC 审批之外补**站内通知**；`LotteryBiz.hide` 保持 no-op。
+- **审核结果通知（弱依赖）**：`BaseBiz._notify_audit_result(*, author_mid, passed, reject_reason, remark)` 统一封装 `report_event_weakly`（`AUDIT_APPROVE` / `AUDIT_REJECT` 事件，携带 `source_type=bizType`、`source_id=bizId`、跳转目标），由各资源方法自行调用——**驳回必须通知作者**，通过按资源策略（动态默认不通知，头像/封面/评论已有的通知保持不变）。
+- **流水**：统一写 `TResourceAuditLog`（`bizType + bizId` 定位），与 §5.1 状态机骨架一致。
+- **通用审核统计**：`GET /api/v1/community/audit/statistics?bizType=<biz>` 按业务域返回审核概览（`{total, byStatus: {<状态名>: n}, byType: [{type: <子类型名>, <状态名>: n, …, total}]}`），bizType ∈ dynamic/topic/comment/dm/avatar/folder_cover/report，缺省 dynamic 向后兼容。各域统计源：dynamic=TMoment（dynType×auditStatus）、topic=TMomentTopic、comment=CommentIndex（type×auditStatus）、dm=DmMessageIndex（按 msgkey 去重计数）、avatar=TUserAvatarAudit、folder_cover=TFolderCoverAudit、report=TResourceReport（auditStatus：1=pending/2=resolved/3=rejected，byType 按 bizType 分组）。管理端各审核页顶部「审核总览」卡片统一消费该接口。**口径对齐**：report 域统计跨全部举报表（`_distinct_models()`，与 `report/admin/list` 无 biz_type 时的跨表口径一致，total 恒等）。**权限模型 v2（Linux 风格 per-biz_type 位掩码，整体重做，无兼容包袱）**：
+- 操作位 `BizPermOp`（IntFlag，对齐 rwx 数值）：`BAN=1(x 处置：封禁/解封)`、`AUDIT=2(w 审核)`、`VIEW=4(r 查看)`；资源维度 = `InteractionBizTypeEnum`（类比「文件」）；每域权限字 0~7（`7`=rwx 全权、`4`=只读），按位检查 `biz_perms[biz] & op`；
+- 存储：`msg_admin.biz_perms: dict[biz文本, 权限字]`（JSON）替代旧令牌列表；网关头 `x-bili-permissions` 同构（JSON dict），root 恒 `{"*": 7}`；内容明文 root 专属，不占权限位；
+- 旧 `UserPermission / WIRE_TOKEN / ROOT_ONLY / sanitize_permissions / require_permission` 全部删除，新增 `require_biz_perm(biz, op)` 依赖工厂；账号角色（评论/私信/治理/超管）预设改为 `ROLE_BIZ_PERMS` 掩码并集；授权 API `grant` 入参与 `/me`、管理员列表响应均为 `biz_perms`；
+- 前端：`messageAdmin.ts` 提供域行/操作位元数据与 `hasBizPerm / opsText / bizPermsText` 工具；权限管理页授予弹窗改为「资源域 × rwx 勾选矩阵」，管理员列表展示 `域:rwx` 文本；`canBan`（评论/私信/封禁弹窗）改按 `biz_perms` 位检查。
+- **权限设置页独立**：管理端权限页从消息域拆出独立路由 `/app/admin/permission`（`ADMIN_PERMISSION`，组件 `views/admin/AdminPermissionView.vue`），侧边栏独立「权限设置」分组（isMessageRoot 可见），不再挂在「消息管理端」组下；路由名枚举同步为 `ADMIN_PERMISSION`。
+- **通知管理区分系统通知 / 用户通知**：`NotifyMessage.target_type` 已有 ALL/ROLE/LEVEL/VIP/CUSTOM 五类（CUSTOM=逗号分隔 mid 的定向用户通知）；`GET /message/notify/admin/list` 加 `target_type` 筛选，列表 target 列用「系统通知 / 用户通知」tag 区分；发布表单选 CUSTOM 时以公共组件 `UserSearchPicker`（多选模式）搜索点选用户合成 target_value，不再手填 mid。`UserSearchPicker` 同时支持单选 / 多选两种模式。
+
+**统计域枚举收口**：`/audit/statistics?bizType=` 直接复用 `bili_common.models.interaction.InteractionBizTypeEnum`（审核域补充成员 TOPIC=9 / DM=10 / AVATAR=11 / FOLDER_COVER=12 / REPORT=13，仅作审核统计与队列归属、不作为互动资源 ID），删除 be-message 侧自造的 `AuditStatsBizType`；非审核域成员（LOTTERY/RPA_*/USER）请求统计返回 400。**admin list 统一 `bizType` 参数名**：有资源子类型维度的审核 list 接口（动态 `/community/audit/list`（MomentTypeEnum）、评论 `/comment/admin/audit`（InteractionBizTypeEnum）、举报 `/report/admin/list`（InteractionBizTypeEnum））均以 `bizType` 筛选特定资源；无子类型维度的话题 / 头像 / 封面 / 私信不加。
+- **私信审核页对齐（message-dm）**：顶部统一 `AdminAuditTabs`（单选状态 Tab，非 root 仅「待审核」），删除页头刷新与状态下拉、表格右上重复刷新按钮；表格新增行内操作列（状态机：待审核=通过/驳回、已过审=驳回撤回、已驳回=通过恢复、已下架=恢复），批量工具栏与封禁保留；统计卡网格修复（总览卡移出网格），`/message/dm/admin/stats` 的 `today_new` 改按 `msgkey` 去重与 `total_dm` 口径一致。
+- **评论审核页对齐（message-comment）**：状态多选下拉收敛为 `AdminAuditTabs` 单选 Tab（待审核/已过审/已驳回/已下架，非 root 仅「待审核」，权限语义不变），页头标题并入 Tabs，保留评论区类型（bizType）筛选与统计卡；至此动态/话题/头像/封面/举报/私信/评论七个审核页全部为「上方统计总览 + 状态 Tab 切换」统一布局。
 
 ### 5.10 事件资源定位统一
 
@@ -223,7 +247,7 @@
 | C5 | 枚举落库 | `IntEnum` 落 SMALLINT 整数，禁原生 ENUM；**遗留例外**：`DmSessionTypeEnum` 仍以 MySQL 原生 ENUM 存储（先于本规则创建），新增值（如 `STRANGER=2`）通过 `ALTER ... MODIFY COLUMN` 在原生 ENUM 上追加；后续若治理统一，可单独迁移该列到 `IntEnum(SMALLINT)` |
 | C6 | 站内信 | DB 写路径保证送达；第三方仅 `/push` 站外提醒 |
 | C7 | 通知可见性 | 读时用 `func.now()`；受众精确过滤在读取侧 |
-| C8 | 响应契约 | HTTP 恒 200，业务码在 body；未登录恒 -101 |
+| C8 | 响应契约 | 失败一律非 200 HTTP（HTTP 状态与业务码解耦）；细分业务码仍在 body；未登录 -101 + HTTP 401 |
 | C9 | 跳转契约 | 后端只发前端路由名，路径只在前端路由表写一次 |
 | C10 | biz_type | `InteractionBizTypeEnum` 为业务类型唯一真相源 |
 | C11 | 资源定位 | 举报/处置/事件等以 `(bizType, bizId)` 唯一定位，不引入二级分流字段 |

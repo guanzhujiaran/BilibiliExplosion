@@ -250,6 +250,8 @@ services:
       - GEMINI_API_KEY=1234-2234-3234-4234
       # RabbitMQ RPC 调用 be-bilibili-crawler（auto_attach_auth 模式依赖）
       - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      # be-message 服务地址（管理员身份判定 /api/v1/message/admin/me）
+      - message_service_url=http://be-message-service:18739
       # 与 be-message-service / be-bilibili-crawler 共用同一份推送渠道配置（JSON），作为无 per-user 配置时的全局兜底
       - MESSAGE_CONFIG=${MESSAGE_CONFIG}
       - SERVER_NAME=${SERVER_NAME}

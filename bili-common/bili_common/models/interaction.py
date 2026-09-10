@@ -27,6 +27,18 @@ class InteractionBizTypeEnum(IntEnumAutoDoc):
     COMMENT = 7  # 评论（bizId = rpid）
     # 用户空间资源：可被举报 / 作为事件来源（如被关注、被 @ 等用户维度事件）。
     USER = 8  # 用户（bizId = mid）
+    # RPA 资源标签：共享池 + 审核（模板于 RPA_ACTION 等 RPA 内容，同纳入 be-message
+    # 管理与审核栈；bizId = rpa_tag.id）。
+    RPA_TAG = 14
+
+    # ===== 审核统计域（`GET /audit/statistics?bizType=` 直接复用本枚举，计划书 §5.13）=====
+    # 注意：9~13 为审核域单据 / 聚合口径，仅用于审核统计与审核队列归属，
+    # **不作为互动资源 ID**（点赞 / 评论 / 收藏的 bizType 仍限 1~8 的实体资源）。
+    TOPIC = 9  # 话题动态（审核域：TMomentTopic）
+    DM = 10  # 私信（审核域：DmMessageIndex）
+    AVATAR = 11  # 头像审核单（TUserAvatarAudit）
+    FOLDER_COVER = 12  # 收藏夹封面审核单（TFolderCoverAudit）
+    REPORT = 13  # 举报单聚合域（跨全部举报表的举报审核统计 / 管理列表）
 
     @classmethod
     def from_text(cls, text: "InteractionBizTypeEnum | str | int | None") -> Self:

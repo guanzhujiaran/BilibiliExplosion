@@ -27,6 +27,8 @@ from bili_common.models.pagination import (
     RequestPaginationParams,
     RequestCursorParams,
     RequestOffsetLimitParams,
+    BasePaginationReq,
+    BasePaginationResp,
 )
 from bili_common.models.lottery_query import (
     LotteryDataSortEnum,
@@ -140,6 +142,7 @@ from bili_common.models.interaction import InteractionBizTypeEnum, InteractionAc
 from bili_common.models.interaction_stat import InteractionStatBase
 
 from bili_common.models.auto_str import AutoStrMixin, SnowflakeInt
+from bili_common.models.db import BaseTimestamp
 
 
 __all__ = [
@@ -159,6 +162,8 @@ __all__ = [
     "RequestPaginationParams",
     "RequestCursorParams",
     "RequestOffsetLimitParams",
+    "BasePaginationReq",
+    "BasePaginationResp",
     "LotteryDataSortEnum",
     "SortOrderEnum",
     "OthersLotDynSortEnum",
@@ -255,4 +260,5 @@ __all__ = [
     "StrEnumAutoDoc",
     "AutoStrMixin",
     "SnowflakeInt",
+    "BaseTimestamp",
 ]

@@ -7,6 +7,7 @@
 
 from typing import Generic, TypeVar
 
+from pydantic import computed_field
 from sqlmodel import SQLModel, Field
 
 T = TypeVar("T")  # 泛型类型 T
@@ -64,9 +65,54 @@ class RequestOffsetLimitParams(SQLModel, Generic[T]):
     )  # 限制返回数量，默认 20 条，最小值为 1
 
 
+class BasePaginationReq(SQLModel):
+    """基于页码的分页请求参数（`page` / `per_page` 约定，与
+    `RequestPaginationParams` 的 `page_num` / `page_size` 并存，
+    供采用该命名约定的服务复用，避免各项目重复定义）。"""
+
+    page: int = Field(default=1, description="页码，从 1 开始")
+    per_page: int = Field(default=10, description="每页数量")
+
+
+class BasePaginationResp(SQLModel, Generic[T]):
+    """基于页码的分页响应（`page` / `per_page` / `total` / `items`，附带导航计算字段）"""
+
+    page: int = Field(default=1, description="页码")
+    per_page: int = Field(default=10, description="每页数量")
+    total: int = Field(default=0, description="总记录数")
+    items: list[T] = Field(default_factory=list, description="当前页数据")
+
+    @computed_field
+    @property
+    def pages(self) -> int:
+        return self.total // self.per_page + (1 if self.total % self.per_page > 0 else 0)
+
+    @computed_field
+    @property
+    def has_next(self) -> bool:
+        return self.page < self.pages
+
+    @computed_field
+    @property
+    def has_prev(self) -> bool:
+        return self.page > 1
+
+    @computed_field
+    @property
+    def next_page(self) -> int:
+        return self.page + 1 if self.has_next else self.page
+
+    @computed_field
+    @property
+    def prev_page(self) -> int:
+        return self.page - 1 if self.has_prev else self.page
+
+
 __all__ = [
     "ResponsePaginationItems",
     "RequestPaginationParams",
     "RequestCursorParams",
     "RequestOffsetLimitParams",
+    "BasePaginationReq",
+    "BasePaginationResp",
 ]

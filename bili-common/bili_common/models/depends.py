@@ -9,10 +9,11 @@ from sqlmodel import SQLModel, Field
 from pydantic import field_validator
 from bili_common.core.browser import BaseBrowserId, BaseUserMid
 from bili_common.deps.permissions import (
-    ROOT_ONLY_PERMISSIONS,
-    UserPermission,
-    resolve_permission_value,
+    ROOT_BIZ_PERM,
+    BizPermOp,
+    has_biz_perm,
 )
+from bili_common.models.interaction import InteractionBizTypeEnum
 
 
 class AuthInfo(SQLModel):
@@ -20,8 +21,8 @@ class AuthInfo(SQLModel):
 
     字段与 RPA-Browser / nodejs-pptr ProxyEndPort.setUserHeaders 注入的请求头一一对应。
 
-    细粒度权限 `permissions` 与 RPA-Browser 的 `rpa_admin.permissions` 共用同一套词表
-    （`["*"]` 表示全部权限），由网关经 `x-bili-permissions` 请求头转发；root 恒为 `["*"]`。
+    管理端权限 `biz_perms`（per-biz_type 位掩码权限字）由网关经 `x-bili-permissions`
+    请求头转发（JSON dict）；root 恒为 `{"*": 7}`。
     """
 
     # 用户唯一 ID（B 站 mid）
@@ -30,9 +31,10 @@ class AuthInfo(SQLModel):
     level: int = 0
     # 角色：root / normal
     role: str = "normal"
-    # 细粒度权限列表（与 RPA rpa_admin.permissions 同一套词表，`["*"]` 表示全部）。
-    # 由网关经 x-bili-permissions 请求头转发；root 恒为 ["*"]。
-    permissions: list[str] = Field(default_factory=list)
+    # 管理端权限（Linux 风格 per-biz 位掩码：键=资源域文本（dynamic/dm/…），
+    # 值=权限字 0~7（VIEW=4 / AUDIT=2 / BAN=1，见 bili_common.deps.permissions.BizPermOp）。
+    # 由网关经 x-bili-permissions 请求头转发（JSON dict）；root 恒为 {"*": 7}。
+    biz_perms: dict[str, int] = Field(default_factory=dict)
     # 登录用户名
     user_name: str | None = None
     # 用户昵称（uname）
@@ -61,32 +63,20 @@ class AuthInfo(SQLModel):
         """是否为 root 管理员（role=root）。"""
         return self.role == "root"
 
-    def has_permission(self, perm: "str | int | UserPermission") -> bool:
-        """是否拥有某权限。
+    def has_biz_perm(
+        self, biz: InteractionBizTypeEnum, op: "BizPermOp | int"
+    ) -> bool:
+        """是否对某资源域持有某操作位（Linux 按位检查）。
 
-        - root 恒拥有全部权限；
-        - root 专属权限（`ROOT_ONLY_PERMISSIONS`）即使持有 `*` 也只对 root 放行；
-        - 其余按 `permissions` 列表判断（`*` 通配）。
-
-        `perm` 支持三种形式：线令牌字符串（如 ``"comment:audit"``）、
-        ``UserPermission`` 枚举成员、或整数枚举值（如 ``3``）；统一经
-        ``resolve_permission_value`` 归一为整数值再比对。
+        - root 恒拥有全部资源域的全部操作位（含 `*` 键全权标记）；
+        - 其余按 `biz_perms[biz_text] & op` 判定。
         """
         if self.is_root:
             return True
-        value = resolve_permission_value(perm)
-        if value is None:
-            return False
-        if value in ROOT_ONLY_PERMISSIONS:
-            return False
-        perms = self.permissions or []
-        if "*" in perms:
+        perms = self.biz_perms or {}
+        if int(perms.get("*", 0)) == ROOT_BIZ_PERM:
             return True
-        granted = {resolve_permission_value(p) for p in perms}
-        return value in granted
-
-    def has_any_permission(self, *perms: "str | int | UserPermission") -> bool:
-        return any(self.has_permission(p) for p in perms)
+        return has_biz_perm(perms, biz, BizPermOp(op))
 
 
 class VerifyBrowserDependsReq(BaseBrowserId):

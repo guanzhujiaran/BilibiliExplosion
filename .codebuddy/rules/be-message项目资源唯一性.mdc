@@ -1,10 +1,12 @@
 ---
-description: 举报/通用资源定位的 biz_type+biz_id 唯一性设计约束
-globs: "**/report*.py,**/report.py,**/interaction*.py,**/moment*.py,**/comment*.py"
+description: be-message的资源优先设计
 alwaysApply: false
+enabled: true
+updatedAt: 2026-09-09T02:29:25.616Z
+provider: 
 ---
 
-# 举报资源唯一性约束（核心设计原则）
+# 资源唯一性约束（核心设计原则）
 
 > **唯一原则**：`biz_type`（即 `InteractionBizTypeEnum` 的 int 值） + `biz_id` 可以唯一确定被举报 / 被定位的资源。
 > 任何举报、资源处置、跨服务资源引用场景都以此原则为准，不需要、也不允许引入额外的二级分流字段。

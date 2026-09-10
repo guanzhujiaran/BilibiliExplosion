@@ -15,5 +15,6 @@ class AdminStatusResponse(SQLModel):
 
     is_root: bool = False
     is_admin: bool = False
-    permissions: List[str] = Field(default_factory=list)
+    # 管理端权限（per-biz 位掩码权限字）：键=资源域文本，值=0~7；root 恒 {"*": 7}
+    biz_perms: dict[str, int] = Field(default_factory=dict)
     mid: int = 0

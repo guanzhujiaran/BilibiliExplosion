@@ -1,0 +1,78 @@
+---
+description: 修改vue和ts代码（顶层路由组件 / 布局 / keep-alive / transition）
+globs:
+alwaysApply: false
+---
+
+# 顶层路由组件必须单根（fragment 会破坏 router-view 渲染）
+
+## 适用范围
+
+`App.vue` 里的顶层 `<RouterView>`：
+
+```html
+<RouterView v-slot="{ Component, route }">
+  <transition name="slide-fade" mode="out-in">
+    <keep-alive :max="30" :exclude="['MomentDetailView']">
+      <component :is="Component" :key="route.matched[0]?.path || route.path" class="main-inner ..." />
+    </keep-alive>
+  </transition>
+</RouterView>
+```
+
+该 `<transition mode="out-in">` + `<keep-alive>` 的状态机**依赖子组件是单根元素**。
+因此**所有被它渲染的顶层路由组件**（`/app/admin` 的 `AdminLayout`、`/app/rpa-browser` 的 `RpaBrowserLayout`、`/app/moment` 的 `MomentLayout`、`/app/message` 的 `MessageLayout` 等）都必须是单根组件。
+
+## 强制规则
+
+1. **顶层路由组件只能有一个根节点**。需要分支（`v-if` / `v-else`、错误页 + 内容页）时，用一层 `<div>`（或已有的单一根组件）包住，参考 `MessageLayout.vue` 的 `<div class="message-layout">`。
+2. **根层严禁出现注释节点**。Vue 编译器会把根层的 `<!-- -->` 也当成一个根节点，导致组件被编译成 fragment —— 注释必须写在根元素**内部**。
+3. 新增 / 修改顶层路由组件后，用编译产物自查，有输出即为 fragment，必须改成单根：
+
+```bash
+curl -s "http://localhost:5173/src/views/<path>/<Comp>.vue" | grep -o "DEV_ROOT_FRAGMENT"
+```
+
+## 违反后的症状（曾真实发生）
+
+从 `/app/admin` 切到 `/app/rpa-browser`（当时其 `RpaBrowserLayout` 是 `v-if` / `v-else` 多根）再切回：
+
+- 内容区只剩深层子页面（`AdminOverview`），外层 `AdminLayout` / `BiliSideNavLayout`（含 `bili-side-nav`）整块消失 → 表现为「页面没有被 side nav 包裹」；
+- 或旧布局 DOM 残留，同一页内容**重复渲染两份**。
+
+注意：出问题时 `route.matched` 始终是正确的 `[ADMIN, ADMIN_OVERVIEW]`。
+**不要去改路由表**，问题在渲染层（`<transition>` / `<keep-alive>` 与 fragment 根组件的交互）。
+
+## 排查手法
+
+- `document.querySelectorAll('.main-inner').length`：正常应为 **1**，>1 说明有残留 DOM。
+- 顶层路由组件对应元素上出现 `slide-fade-enter-from` / `slide-fade-enter-active` 且卡住不退 → 外层 transition 目标错乱。
+- 用真实登录态逐个做 `/app/admin ⇄ X` 往返，检查 `sidenav` 数量与侧边栏菜单项数是否恢复。
+
+## 错误示范
+
+```html
+<!-- 错误1：两个根节点 => fragment -->
+<template>
+  <BiliErrorRouteTo v-if="!isLoggedIn" />
+  <router-view v-else v-slot="{ Component }">...</router-view>
+</template>
+
+<!-- 错误2：根层注释 + 单根元素 => 仍然是 fragment -->
+<template>
+  <!-- 说明注释 -->
+  <div class="layout">...</div>
+</template>
+```
+
+## 正确示范
+
+```html
+<template>
+  <div class="rpa-browser-layout flex flex-col flex-1">
+    <!-- 注释写在根元素内部 -->
+    <BiliErrorRouteTo v-if="!isLoggedIn" />
+    <router-view v-else v-slot="{ Component }">...</router-view>
+  </div>
+</template>
+```

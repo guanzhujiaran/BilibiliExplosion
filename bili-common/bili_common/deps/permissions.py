@@ -1,114 +1,130 @@
-"""管理端细粒度权限定义（与 RPA `rpa_admin.permissions` 共用同一套字符串词表）。
+"""管理端权限（v2，Linux 风格 per-biz_type 位掩码，计划书 §权限 v2）。
 
-设计要点：
-- ``UserPermission`` 为**整数枚举**（`IntEnumAutoDoc`），每个权限对应一个稳定 int 值，
-  便于落库 / 比对 / 序列化，且 Swagger 自动渲染「枚举选项：name: value」；
-- 网关 / RPA 在线上仍使用「字符串令牌」（如 ``comment:audit``）互通，由本模块的
-  ``WIRE_TOKEN`` 在字符串令牌与整数枚举值之间双向映射；
-- ``ROOT_ONLY_PERMISSIONS`` 为「root 专属、不可授予其他管理员」的权限（按 int 值）；
-- ``sanitize_permissions`` 供 RPA 授权接口落库前清洗，入参 / 出参均为字符串令牌列表，
-  确保非 root 管理员永远拿不到 root 专属权限（即使被授予 ``["*"]`` 也被拦截）。
+设计（对齐 Linux 文件权限的心智模型）：
+
+- **资源维度** = `InteractionBizTypeEnum`（动态 / 话题 / 评论 / 私信 / 头像 / 封面 /
+  举报 / 用户 …），类比 Linux 下「不同的文件」；
+- **操作位** = `BizPermOp`（`IntFlag`），数值语义对齐 rwx：
+  `BAN=1(x 处置：封禁/解封)`、`AUDIT=2(w 审核：通过/驳回/下架/恢复)`、`VIEW=4(r 查看)`;
+- **权限字** = 每个资源域一个 `0~7` 的 int（`7`=rwx 全权、`6`=查看+审核、`4`=只读、
+  `0`=无权限），即 chmod 的八进制权限字；
+- **存储 / 传输**：`dict[biz文本, 权限字]`（如 `{"dm": 7, "comment": 4}`），
+  管理员表 `msg_admin.biz_perms`（JSON 列）与网关头 `x-bili-permissions` 同构；
+  root 恒为 `{"*": 7}`（`*` 键表示全部资源域全权）；
+- **检查**：`has_biz_perm(biz, op)` = root 恒真，否则 `biz_perms.get(biz_text, 0) & op`；
+- **内容明文**：root 专属（原 `*_VIEW_CONTENT`），不占权限位——依赖层直接按
+  `is_root` 判定，普通管理员的权限字最高 7 也拿不到明文。
+
 """
 
-from typing import Iterable
+from typing import Any
+from enum import IntFlag
 
-from bili_common.models import IntEnumAutoDoc
-
-
-class UserPermission(IntEnumAutoDoc):
-    """管理端细粒度权限标识（整数枚举）。"""
-
-    # 评论管理端
-    COMMENT_VIEW_QUEUE = 1  # 查看评论审核队列（不含内容明文）
-    COMMENT_VIEW_CONTENT = 2  # 查看评论内容明文（root 专属）
-    COMMENT_AUDIT = 3  # 设置过审/没过审（root 专属）
-
-    # 私信管理端
-    DM_VIEW_QUEUE = 4  # 查看私信审核队列（不含内容明文）
-    DM_VIEW_CONTENT = 5  # 查看私信内容明文（root 专属）
-    DM_AUDIT = 6  # 设置过审/没过审（root 专属）
-
-    # 用户治理（封禁/解封，可授予其他管理员；按服务维度拆分：评论 / 私信）
-    COMMENT_BAN = 7  # 封禁 / 解封用户在评论服务
-    DM_BAN = 8  # 封禁 / 解封用户在私信服务
-    USER_BAN = 9  # 封禁 / 解封用户（仅 RPA 服务，跨服务拦截）
-    USER_BAN_VIEW = 10  # 查看封禁记录与封禁状态（跨服务）
+__doc__ = __doc__  # noqa: A003
 
 
-# 线令牌 ↔ 枚举成员 映射：网关 / RPA 在线使用字符串令牌，内部逻辑使用整数枚举值。
-WIRE_TOKEN: dict[str, UserPermission] = {
-    "comment:view-queue": UserPermission.COMMENT_VIEW_QUEUE,
-    "comment:view-content": UserPermission.COMMENT_VIEW_CONTENT,
-    "comment:audit": UserPermission.COMMENT_AUDIT,
-    "dm:view-queue": UserPermission.DM_VIEW_QUEUE,
-    "dm:view-content": UserPermission.DM_VIEW_CONTENT,
-    "dm:audit": UserPermission.DM_AUDIT,
-    "comment:ban": UserPermission.COMMENT_BAN,
-    "dm:ban": UserPermission.DM_BAN,
-    "user:ban": UserPermission.USER_BAN,
-    "user:ban-view": UserPermission.USER_BAN_VIEW,
-}
+class BizPermOp(IntFlag):
+    """资源操作位（数值对齐 Linux rwx：x=1 / w=2 / r=4）。"""
+
+    BAN = 1  # 处置（x）：封禁 / 解封用户
+    AUDIT = 2  # 审核（w）：通过 / 驳回 / 下架 / 恢复
+    VIEW = 4  # 查看（r）：审核队列 / 详情
 
 
-def resolve_permission_value(perm: "str | int | UserPermission") -> int | None:
-    """把任意形式的权限描述归一为整数枚举值。
+#: 全部基础操作位（0b111 = 7）
+ALL_OPS = int(BizPermOp.VIEW | BizPermOp.AUDIT | BizPermOp.BAN)
 
-    - ``UserPermission`` 成员 → 其 ``.value``；
-    - ``int`` → 若为合法枚举值则原样返回；
-    - ``str`` → 匹配 ``WIRE_TOKEN`` 线令牌；无法识别返回 ``None``。
+#: root 的权限字（`*` 键 = 全部资源域全权）
+ROOT_BIZ_PERM = 7
+
+#: 审核统计 / 管理队列涉及的默认资源域文本（授权 UI 的行序即此序）
+AUDIT_BIZ_KEYS: list[str] = [
+    "dynamic",
+    "topic",
+    "comment",
+    "dm",
+    "avatar",
+    "folder_cover",
+    "report",
+    "user",
+    "rpa_action",
+    "rpa_workflow",
+    "rpa_plugin",
+    "rpa_browser",
+]
+
+
+def parse_biz_key(key: str):
+    """资源域键 → 枚举成员（文本形式，大小写不敏感）；非法返回 None。
+
+    延迟导入 InteractionBizTypeEnum（避免 models ↔ deps 循环导入）。
     """
-    if isinstance(perm, UserPermission):
-        return int(perm.value)
-    if isinstance(perm, int):
-        try:
-            return int(UserPermission(perm).value)
-        except ValueError:
-            return None
-    if isinstance(perm, str):
-        mapped = WIRE_TOKEN.get(perm)
-        return int(mapped.value) if mapped is not None else None
-    return None
+    from bili_common.models.interaction import InteractionBizTypeEnum
+
+    return _BIZ_BY_TEXT().get(str(key).strip().lower())
 
 
-# root 专属、不可授予其他管理员的权限集合（按 int 值）
-ROOT_ONLY_PERMISSIONS: frozenset[int] = frozenset(
-    {
-        UserPermission.COMMENT_VIEW_CONTENT.value,
-        UserPermission.COMMENT_AUDIT.value,
-        UserPermission.DM_VIEW_CONTENT.value,
-        UserPermission.DM_AUDIT.value,
-    }
-)
+def _BIZ_BY_TEXT() -> dict:
+    from bili_common.models.interaction import InteractionBizTypeEnum
+
+    return {b.to_text(): b for b in InteractionBizTypeEnum}
 
 
-# 可授予其他管理员的权限（供 RPA 授权接口 / 前端权限选择器使用），返回整数枚举值
-GRANTABLE_PERMISSIONS: tuple[int, ...] = tuple(
-    p.value for p in UserPermission if p.value not in ROOT_ONLY_PERMISSIONS
-)
+def normalize_biz_perms(raw: Any) -> dict[str, int]:
+    """把任意入参清洗为合法的 `dict[biz文本, 权限字]`。
 
-
-def sanitize_permissions(permissions: list[str] | None) -> list[str]:
-    """剔除不可授予的 root 专属权限，返回安全的管理员权限列表（线令牌格式）。
-
-    用于 RPA 授权接口落库前清洗，确保非 root 管理员永远不会拿到
-    查看内容明文 / 设置审核的权限。入参 / 出参均为线令牌字符串。
+    - 非 dict / 空值 → `{}`；
+    - 键：必须是合法资源域文本（`parse_biz_key` 可解析），非法键丢弃；
+    - 值：0~7（超出按位截断到 3 位）；
+    - `*` 键保留（root 专用标记，普通管理员授权 API 不得写入）。
     """
-    if not permissions:
-        return []
-    safe: list[str] = []
-    for token in permissions:
-        value = resolve_permission_value(token)
-        if value is None or value in ROOT_ONLY_PERMISSIONS:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, int] = {}
+    for k, v in raw.items():
+        if not isinstance(k, str) or not k:
             continue
-        safe.append(token)
-    return safe
+        if k == "*":
+            out[k] = int(v) & ALL_OPS
+            continue
+        biz = parse_biz_key(k)
+        if biz is None:
+            continue
+        try:
+            out[k] = int(v) & ALL_OPS
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def has_biz_perm(
+    biz_perms: dict[str, int] | None,
+    biz: "InteractionBizTypeEnum",
+    op: "BizPermOp | int",
+) -> bool:
+    """按位检查：指定资源域是否持有某操作位。"""
+    if not biz_perms:
+        return False
+    return (int(biz_perms.get(biz.to_text(), 0)) & int(op)) != 0
+
+
+def ops_text(mask: int) -> str:
+    """权限字 → 可读字母串（如 `7` → `rwx`、`4` → `r--`、`0` → `---`）。"""
+    m = int(mask) & ALL_OPS
+    return (
+        ("r" if m & int(BizPermOp.VIEW) else "-")
+        + ("w" if m & int(BizPermOp.AUDIT) else "-")
+        + ("x" if m & int(BizPermOp.BAN) else "-")
+    )
 
 
 __all__ = [
-    "UserPermission",
-    "WIRE_TOKEN",
-    "resolve_permission_value",
-    "ROOT_ONLY_PERMISSIONS",
-    "GRANTABLE_PERMISSIONS",
-    "sanitize_permissions",
+    "BizPermOp",
+    "ALL_OPS",
+    "ROOT_BIZ_PERM",
+    "AUDIT_BIZ_KEYS",
+    "parse_biz_key",
+    "normalize_biz_perms",
+    "has_biz_perm",
+    "ops_text",
 ]

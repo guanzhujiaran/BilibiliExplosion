@@ -1,7 +1,9 @@
 ---
-description: 修改vue和ts代码
-globs:
-alwaysApply: false
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-09-09T03:56:58.169Z
+provider: 
 ---
 
 前端 hey-api 生成的 SDK（位于 `src/api/**/hey-api/` 目录下）属于自动生成代码，结构如下：
