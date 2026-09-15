@@ -234,6 +234,54 @@
 | `CommentAuditItem` | `ip_v4` / `ip_v6` | 仅管理员（C3：出参打码、管理员明文） |
 | 审核单据类（`avatar_audit` / `folder_cover_audit` / moment 审核日志） | `auditReason` / `operatorMid` / `operatorRole` | 仅管理员 |
 
+### 5.14 RPA 浏览器实例监管（治理闭环）
+
+- **前提口径**：浏览器指纹 / 浏览器实例（`InteractionBizTypeEnum.RPA_BROWSER=5`，bizId=`browser_id`）是**用户私有资源**——不对外公开、无社区广场；可被点赞 / 收藏（走通用互动，`RpaBrowserBiz`），但**可互动 ≠ 可公开**。可公开的是 action / workflow / plugin 这类可执行资产（`is_public`）。
+- **治理目标**：审核员可查看**运行中的浏览器实例**是否在跑恶意内容，并就地处置；处置动作只有**停止会话 / 通知 / 封号**三种，不引入「警告」中间态（短时封禁即 `ban_type=temporary` + `duration_minutes`）。
+- **跨服务职责**：
+  | 动作 | 落地位置 | 说明 |
+  | --- | --- | --- |
+  | 运行中实例列表、标签页只读、强制停止 | RPA-Browser 管理端接口（新增 `POST /api/admin/rpa/browser/monitors`、`/monitor/pages`、`/session/stop`） | 绕过 `verify_browser_ownership`，由 `require_permission(RPA_BROWSER, VIEW/BAN)` 把关；强制停止复用会话 `force_close` |
+  | 封号 | RPA-Browser `POST /api/admin/rpa/ban/create` | `scope=rpa`（仅拦截 RPA 服务，不影响评论 / 私信）；`permanent` / `temporary` |
+- **封禁边界（不联动）**：监管页封号**只封 RPA**（`rpa_user_ban`，由 RPA 侧 `ban_guard` 中间件本地拦截，封禁后清缓存即时生效）。评论 / 私信的封禁归 be-message 自管（`POST /api/v1/message/admin/ban`，`ban_services=comment/dm` → `msg_user_ban`），**不在监管页联动、也不新增跨服务 RPC**。三套封禁各自独立：RPA 封禁不写 be-message，反之亦然。
+- **权限口径**：监管列表 / 停止用 `RPA_BROWSER` 域 VIEW / BAN 位；封号用 `USER` 域 BAN 位（`require_permission(USER, BizPermOp.BAN)`，沿用 `user_ban_router`），审核员需同时持有两类位才能完成「停止 + 封号」。
+- **只读拉流的依赖放宽**：WebRTC（`offer` / `answer` / `ice-candidate` / `status` / `close`）原本一律 `verify_browser_ownership`（严格 owner），管理员无法观看。新增 `verify_browser_ownership_or_admin`：owner 走原校验；非 owner 时若调用方为 root 或持有 `RPA_BROWSER` 域 VIEW / BAN 位，则只校验浏览器实例存在后放行。普通用户行为不变。
+- **只读边界（前端）**：监管页复用 `LiveBox` 的 `readonly` 模式——只拉流观看，**不调用** `/operation/*` 与 `/actions/execute`，标签页信息走监管专用只读接口，审核员不能代替用户操作浏览器。
+  | 通知 | be-message `POST /api/v1/message/notify/admin/create` | `target_type=CUSTOM` + `target_value=<mid>` 定向通知被处置用户 |
+  | 审计 | RPA-Browser `AdminAuditLog` | `browser:stop` / `browser:ban`，与 §5.13 治理审计同源 |
+- **只读边界**：监管页复用 stream 页的 `LiveBox` 观看 WebRTC 流，但为 `readonly`——不调用任何 `/operation/*` 与 `/actions/execute`，审核员不能代替用户操作浏览器。
+- **前端**：管理端新增「浏览器监管」页（`/app/admin/browser-monitor`，`AdminBrowserMonitorView.vue`），与封禁 / 审核 / 举报同域；列表用 `el-table-v2` + 分页（对齐 `docs/frontend-plan.md` §四 规范）。
+
+### 5.15 RPA 浏览器会话闲置生命周期（三级软着陆）
+
+- **背景问题**：闲置回收原本散落两处且口径不一致——WebRTC 流层每 10 分钟按「信令活跃」关流（只关流不关实例、不反映真实操作）；会话层每 5 分钟按 `is_idle` 判关实例，但 `status` 从不进入 `IDLE`、`last_activity` 也不随操作刷新，判定恒不成立（**失效死代码**）。
+- **统一真相源**：以 `BrowserSessionEntry.last_activity` 为唯一活跃时间戳。所有「真实操作」统一调用 `LiveService.touch(mid, browser_id)`（HTTP 操作接口 / action 执行 / WebRTC 信令），**仅状态查询类接口不 touch**（避免前端轮询续命）。
+- **三级软着陆**（扫描间隔 `browser_session_cleanup_interval`，默认 60s）：
+
+  | 档位 | 闲置阈值（无 touch） | 动作 | 释放资源 |
+  | --- | --- | --- | --- |
+  | DEGRADED | ≥ `browser_stream_degrade_after`（120s） | 重启 screencast 降 `quality`（`browser_stream_degrade_quality`）+ 限帧（`browser_stream_degrade_max_fps`） | CPU / 带宽 |
+  | SUSPENDED | ≥ `browser_stream_suspend_after`（300s） | `webrtc_manager.suspend_streams()` 关流、**保留浏览器实例**；`status=IDLE` | CPU（流） |
+  | TERMINATING | ≥ `browser_session_max_idle_time`（1800s） | 先进 `browser_session_terminate_grace`（60s）宽限，到期 `release_browser_session()` 关实例出池 | 内存 / 进程 |
+
+- **自动化占用（pin）**：`entry.pin_count` 在 `ExecutionEngine.execute_action / execute_steps` 进入 +1、退出 -1；`pin_count>0` 跳过一切降级/关闭，退出时刷新 `last_activity`（避免长任务刚结束即被判闲置）。
+- **返回活跃**：任意 `touch` / `pin` 清空 `terminate_scheduled_at`、解除降级（恢复全速 screencast）、`status=RUNNING`；挂起后用户重新 `webrtc/offer` 自动重建流（`start_stream` 幂等）。
+- **可观测**：`BrowserSessionStatusData` 新增 `idle_seconds / is_pinned / pending_termination_at`，供前端展示「已暂停 / 待关闭倒计时」。
+- **部署**：`user_data_dir` 必须挂持久卷（`docker-compose.yml` 的 `rpa-browser` 增加 `./docker_vol/rpa/user_data_dir:/app/user_data_dir`），否则容器重建丢登录态。
+- **边界**：仍为单体部署，不引入 worker 位分片 / 网关亲和路由 / 跨机 WebRTC（分布式方案暂缓）。
+
+### 5.16 RPA 浏览器 WebRTC 帧生产者（screencast）优化
+
+- **背景问题**：`VideoFrameProducer` 存在三类浪费/隐患——① `screencast.start()` 返回的是 `DisposableStub`（只有 `dispose()/close()`，**没有 `stop()`**），`await session.stop()` 必抛 `AttributeError` 被吞掉，**screencast 从未真正停止**，页面流关闭后浏览器仍在持续 JPEG 编码；② `max_fps` / `degrade_max_fps` 只写 `_last_emit` 从不读取，**限帧完全失效**（§5.15 的 DEGRADED 档位只降了 quality）；③ `get_next_frame()` 阻塞在 `queue.get()` 时 `stop()` 无法唤醒，且解码失败一次即返回 `None` 终止整条轨道。
+- **帧节奏（背压式限帧）**：利用 CDP screencast 的 **ack 驱动**特性（未 ack 不发下一帧）——在 `on_frame` 回调内按 `1/max_fps` 做帧间隔对齐，**入队前**才 ack。既避免「丢弃 + 立即 ack」导致浏览器以 60fps 空转编码，也真正把降级 `degrade_max_fps` 落到实处（CPU / 带宽同步下降）。
+- **解码路径**：① 帧进入解码前先**合并积压**（`qsize()>0` 时把旧帧全部丢弃，只解码最新一帧），落后时不再做无意义的 JPEG 解码；② 解码改投**模块级专用线程池**（`webrtc-frame-decode`），不再抢占 `asyncio.to_thread` 的默认全局执行器，避免多流互相拖慢事件循环；③ 奇数宽高对齐到偶数（yuv420p / H264 编码器要求）；④ 绿屏兜底帧按尺寸缓存复用，不再每帧新建 PIL Image。
+- **分辨率降级**：降级态通过 screencast 的 `size` 参数在**浏览器侧**降分辨率（`browser_stream_degrade_frame_max_width/height`，默认 640×360），JPEG 编码 / CDP 传输 / Python 解码三端同时降载；正常态沿用浏览器默认（viewport 等比缩放到 800×800 内），不改动画面观感。
+- **生命周期修正**：`stop()` 统一走 `session.dispose()`（回退 `page.screencast.stop()`），并向队列投递哨兵唤醒阻塞的 `get_next_frame()`，停止后清空队列与 `_last_frame` 释放帧缓冲；解码失败返回上一帧 / 绿屏而**不终止轨道**。`start()` / 降级重启共用同一个 `_start_screencast()`，去掉重复分支。
+- **可观测**：新增 `dropped_frames` / `emitted_frames` 计数，`stats` 快照统一用 SQLModel `VideoFrameProducerStats`（丢帧率 = `dropped/(dropped+emitted)`），用于校验降级是否真正生效。
+- **解码快路径（第二期）**：JPEG 解码由「PIL → RGB → av 转 yuv420p」改为 **libavcodec MJPEG 直接解到 YUV** 再 `reformat(yuv420p)`，省掉一次全画幅 RGB 中间转换与拷贝。实测（800×450，quality=80）：平坦图 5.5ms → 2.8ms（-50%），高熵图 6.9ms → 4.7ms（-32%），8 线程并发 -45%+；`CodecContext` 非线程安全，按 `threading.local()` 每线程各持一个，解码异常时丢弃重建并**回退 PIL 路径**（兼容 CMYK / 异常 JPEG）。
+- **时间戳基准修正（第二期）**：`aiortc.VideoStreamTrack.next_timestamp()` 硬编码 `VIDEO_PTIME = 1/30` 递增 PTS 并按 30fps 睡眠——降级限帧真正生效后（5fps），PTS 仍按 33.3ms/帧推进，**时间轴与真实出帧节奏脱钩**。改为在 `WebRTCMediaTrack.recv()` 内用**墙钟时间**换算 PTS（严格单调递增），节流职责完全由生产者承担；轨道结束由 `raise StopIteration` 改为 `raise MediaStreamError`（aiortc 的 sender 只对 `MediaStreamError` 静默收尾，`StopIteration` 会被 asyncio 包装成 `RuntimeError` 走 warning 分支）。
+- **解码失败语义（第二期）**：不再「一次失败即返回上一帧 / 绿屏」，改为**跳过该帧继续取下一帧**；仅当连续失败达阈值（`_MAX_DECODE_FAILURES=5`）才用绿屏保活。同时去掉 `start()` 预置的 640×480 死帧（消费者本就阻塞等队列，该帧永不生效），绿屏兜底尺寸跟随最近一次成功帧，避免尺寸突变触发 H264 编码器重配。
+
 ---
 
 ## 6. 关键约束与决策（当前有效）

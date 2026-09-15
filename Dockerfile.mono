@@ -121,7 +121,10 @@ RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
 # 拷贝源码与清单（pyproject.toml / uv.lock 供最终 uv sync 使用）
 COPY be-message-service/pyproject.toml ./pyproject.toml
 COPY be-message-service/uv.lock ./uv.lock
-COPY be-message-service/app ./
+# app 包整体落到 /app/app：与运行期 volume 挂载点（./be-message-service/app:/app/app）一致。
+# 旧写法 `COPY ... ./` 会把包内容铺平到 /app，形成「/app 一份、/app/app 一份」的双代码树：
+# uvicorn main:app 加载的是镜像内的 /app/main.py，改 main.py 必须重建镜像才生效。
+COPY be-message-service/app ./app
 
 # 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
@@ -131,7 +134,9 @@ RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 18739
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "18739"]
+# 入口必须是 app.main（= /app/app/main.py）：与挂载的源码同一个文件，
+# 改路由 / 生命周期钩子后无需重建镜像，重启容器即可生效。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "18739"]
 
 # ============================ default (meta-target) ============================
 # docker-compose 总是通过 --target 构建具体服务（crawler / rpa / message）。

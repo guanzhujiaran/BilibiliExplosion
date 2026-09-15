@@ -174,16 +174,54 @@ services:
             dockerfile: ./Dockerfile.mono
             target: message
         volumes:
-            - ./be-message-service/app:/fastapi/app
+            # 源码挂在容器项目根下（Dockerfile.mono message 阶段 WORKDIR=/app，app 包 → /app/app）
+            - ./be-message-service/app:/app/app
+            # Alembic 迁移（启动自动 upgrade head）：镜像只 COPY 了 app 包，
+            # 根目录 ini 与脚本目录都不在镜像里，必须挂载，否则迁移静默失败
+            - ./be-message-service/alembic.ini:/app/alembic.ini
+            - ./be-message-service/alembic:/app/alembic
+            # pptr Postgres 用户库（PPTR_Bili_Lot）是独立 Alembic 分支，单独挂载
+            - ./be-message-service/alembic_pptr.ini:/app/alembic_pptr.ini
+            - ./be-message-service/alembic_pptr:/app/alembic_pptr
+            # 内容审核词库（data/sensitive-words：三层词库 / 分类词库 / whitelist / 域名名单）。
+            # 不挂载时容器内无该目录，审核引擎会按弱依赖降级成空词库（全部放行）。
+            - ./be-message-service/data:/app/data
+            # GeoIP 属地库（GeoLite2 mmdb），与 GEOIP_MMDB_DIR 一致
+            - ./docker_vol/geoip/mmdb:/app/mmdb
             - ./docker_vol/uv_cache:/root/.cache/uv # uv 运行时缓存（主机持久化，构建期走 BuildKit cache mount）
         ports:
             - "${MESSAGE_SERVICE_PORT}:18739"
         depends_on:
             - rabbitmq
+            - mysql
+            - casdoor
         environment:
             - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/?heartbeat=180
+            # 业务日志等级（loguru，只输出 stderr、不写文件；开发可设 DEBUG）
+            - LOG_LEVEL=${LOG_LEVEL:-DEBUG}
+            # 消息系统主库（元数据库）：系统通知 / 事件提醒 / 私信索引与会话 / 消息设置
+            # 私信「内容」不在此库，而是按月分库 bili_msg_content_YYYYMM + 库内 100 张分表
+            - MYSQL_MESSAGE_URL=mysql+aiomysql://root:${MYSQL_PASSWORD}@mysql:3306/BiliMessageDB?charset=utf8mb4
+            # 直连 pptr 的 Postgres（PPTR_Bili_Lot）只读取用户展示信息与 @ 搜索，不写入
+            - POSTGRES_PPTR_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/PPTR_Bili_Lot
             # 与 be-bilibili-crawler / rpa-browser 共用同一份推送渠道配置（JSON）
             - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+            # Casdoor OAuth2 配置（与 gateway 共用同一套 Casdoor 应用）
+            - CASDOOR_ENABLED=true
+            - CASDOOR_ENDPOINT=http://fastapi-casdoor:8000
+            - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
+            - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
+            - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
+            - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
+            - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
+            # Casdoor 管理员账号（查询用户信息用，password grant 换 admin token）
+            # 管理员走内置 application「app-built-in」，clientId/clientSecret 与普通登录应用不同
+            - CASDOOR_ADMIN_NAME=${CASDOOR_ADMIN_NAME}
+            - CASDOOR_ADMIN_PASSWORD=${CASDOOR_ADMIN_PASSWORD}
+            - CASDOOR_ADMIN_CLIENT_ID=${CASDOOR_ADMIN_CLIENT_ID}
+            - CASDOOR_ADMIN_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET}
+            # GeoIP 属地库目录（与挂载点一致）
+            - GEOIP_MMDB_DIR=/app/mmdb
             - TZ=${ENV_TZ}
         restart: unless-stopped
         extra_hosts:

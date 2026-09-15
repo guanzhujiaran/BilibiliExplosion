@@ -1,17 +1,20 @@
-"""错误响应 HTTP 状态码归一化中间件。
+"""错误响应 HTTP 状态码归一化中间件（契约见 docs/response-code-design.md）。
 
 背景：业务代码里大量使用「返回响应体 + 非 0 业务码」表达失败，例如
-`return StandardResponse(code=400, msg="...")`；FastAPI 默认仍以 HTTP 200 返回，
-与「失败一律返回非 200」的契约不一致。逐处改写成 JSONResponse 成本过高，
-故由本中间件在**响应出口统一兜底**：
+`return StandardResponse(code=403, msg="无权访问")`；FastAPI 默认仍以 HTTP 200 返回，
+而 HTTP 语义码（400~599）应当由 HTTP 状态码本身承载。逐处改写成 JSONResponse
+成本过高，故由本中间件在**响应出口统一兜底**：
 
 - 仅处理 2xx 且 content-type 为 JSON 的响应；
 - 解析 body 顶层 `code`，`code == 0`（成功）原样返回；
-- `code != 0` → 按 `http_status_for_code()` 推导 HTTP 状态码（400~599 沿用、
-  -101 → 401、其余业务码 → 400），重写状态码后返回，body 内容不变。
+- `code != 0` → 按 `http_status_for_code()` 推导 HTTP 状态码后重写，body 内容不变。
 
-这样：异常路径（异常处理器）+ 手写返回路径（StandardResponse）两条链路
-对外表现一致，前端/网关可只按 HTTP 状态码判断是否失败。
+注意推导规则：`400~599` 沿用（403/404/409/429/5xx）、`-101` → 401，
+而**自定义业务码（1000+ 等）推导结果就是 200**，因此对业务码而言本中间件是 no-op。
+这是有意为之：业务失败由 `body.code` 表达 —— 若返回非 2xx，前端 SDK
+（`responseStyle='data'`）会丢弃整个响应体，前端将拿不到 `code` / `msg`。
+
+这样：异常路径（异常处理器）+ 手写返回路径（StandardResponse）两条链路对外表现一致。
 """
 
 import json

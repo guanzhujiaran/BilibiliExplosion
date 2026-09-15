@@ -12,9 +12,10 @@ class ResponseCode(IntEnumAutoDoc):
     # 成功
     SUCCESS = 0
 
-    # 未登录：采用 B 站官方约定业务码 -101（注意不是 HTTP 401）。
-    # 所有对外 HTTP 响应状态码恒为 200，业务状态通过 body 中的 `code` 表达，
-    # 前端据此判断未登录并跳转登录页。详见 docs/response-code-design.md。
+    # 未登录：采用 B 站官方约定业务码 -101。
+    # 契约：业务状态一律由 body 的 `code` 表达；HTTP 状态码只表达 HTTP 层语义。
+    # -101 由 http_status_for_code() 映射为 401，前端同时也按 `code == -101` 判定，
+    # 两者互为兜底。完整设计见 docs/response-code-design.md。
     NOT_LOGGED_IN = -101
 
     # 通用错误码
@@ -47,6 +48,13 @@ class ResponseCode(IntEnumAutoDoc):
     BROWSER_NOT_STARTED = 1007
     USER_NOT_FOUND = 1008  # 目标用户不存在（空间资料等单用户读接口返回，替代空列表/0/404 兜底）
 
+    # 资源冲突 / 缺失（RPA-Browser：名称冲突、通知配置、被引用的动作）
+    # 注意：这些是「业务语义」而非 HTTP 语义，一律映射 HTTP 200，业务由 body.code 表达，
+    # 以便前端读到 msg 做精准提示（详见 docs/response-code-design.md）。
+    NAME_ALREADY_EXISTS = 1009  # 同名资源冲突（工作流 / 插件 / 动作重名，需引导改名）
+    BROWSER_NOTIFY_CONF_NOT_FOUND = 1010  # 浏览器通知配置不存在（命令类删除场景）
+    ACTION_NOT_FOUND = 1011  # 引用的自定义操作不存在
+
     # WebRTC 相关错误码
     WEBRTC_OFFER_FAILED = 2001
     WEBRTC_ANSWER_FAILED = 2002
@@ -56,8 +64,9 @@ class ResponseCode(IntEnumAutoDoc):
     WEBRTC_STATUS_FAILED = 2006
     WEBRTC_STREAM_NOT_ACTIVE = 2009
 
-    # 截图相关错误码
-    SCREENSHOT_FAILED = 2007
+    # 页面状态错误码
+    # 注意：PAGE_CLOSED 与 SCREENSHOT_FAILED 曾共用 2007（两义歧义），现已拆分：
+    # PAGE_CLOSED 保留 2007（前置状态不满足），截图失败归入下方浏览器/页面操作失败族。
     PAGE_CLOSED = 2007
 
     # 指纹数量限制错误码
@@ -66,6 +75,7 @@ class ResponseCode(IntEnumAutoDoc):
     # 浏览器/页面相关错误码
     GET_BROWSER_INFO_FAILED = 2010
     PAGE_NAVIGATION_FAILED = 2011
+    SCREENSHOT_FAILED = 2012  # 截图失败（操作失败；原与 PAGE_CLOSED 共用 2007）
 
     # Casdoor OAuth 相关错误码
     CASDOOR_OAUTH_ERROR = 3001       # Casdoor 返回错误（如 code 过期、invalid_grant）

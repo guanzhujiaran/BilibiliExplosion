@@ -1,17 +1,22 @@
 """
 公共认证/业务异常（单一来源，供各后端统一使用）
 
-设计约定（HTTP 状态码契约）：
-- **失败一律返回非 200 的 HTTP 状态码**，成功才返回 2xx（HTTP 状态码只表达
-  「大类」，不要求与业务码 `body.code` 同值）；
-- 业务状态仍通过响应体 body 中的 `code` 字段表达（参考 B 站官方约定，
-  例如未登录 code = -101），前端按 `body.code` 做业务分支；
-- HTTP 状态码由 `http_status_for_code()` 从业务码推导：
-  400~599 直接沿用；-101（未登录）→ 401；其余自定义业务码（1000+/2000+/4001+ 等）
-  统一 400；未捕获异常 500。
+设计约定（HTTP 状态码契约，完整设计见 docs/response-code-design.md）：
+
+- **业务结果一律由响应体的 `code` 表达，并由 HTTP 200 承载**：
+  前端 hey-api SDK 使用 `responseStyle: 'data'`，HTTP 非 2xx 时响应体会被整包丢弃
+  （见 `wrapErrorReturn`），业务 `code` / `msg` 将无法被消费；
+- **HTTP 非 200 只表达「HTTP 层语义」**，供前端全局兜底 / 网关 / 监控使用：
+  401 未登录（前端同时也认 `code == -101`）、403 无权限、404 **路由**不存在、
+  405 / 408 / 410、429 限流、5xx 服务端故障；
+- HTTP 状态码由 `http_status_for_code()` 推导：`0` → 200；`-101` → 401；
+  `400~599` 直接沿用；**其余自定义业务码（1000+ / 2000+ / 3000+ / 4000+ 等）→ 200**；
+- 查询类接口的「无数据 / 未就绪 / 不存在」是**正常状态**，必须用 `code=0` +
+  data 状态字段表达，禁止用错误码（否则会连锁变成非 200 并丢失前端文案）；
+- 只有 5xx 才应触发告警，业务失败改由 `body.code` 维度统计。
 
 本模块同时提供：
-- `BaseException`：统一业务异常基类（非 200 HTTP + {code, msg, data}）。
+- `BaseException`：统一业务异常基类（默认 200 + {code, msg, data}）。
 - 一批预置业务异常（如 `NotLoggedInException`）。
 - `register_exception_handlers(app)`：一键注册统一异常处理器，
   让各后端以同一套契约对外返回（含全局兜底 Exception 处理器）。
@@ -31,26 +36,32 @@ from bili_common.models.response_code import ResponseCode
 
 
 # ==========================================================================
-# 业务码 → HTTP 状态码映射（HTTP 状态只表达错误大类，无需与业务码同值）
+# 业务码 → HTTP 状态码映射（契约见 docs/response-code-design.md）
 # ==========================================================================
-# 业务异常的默认 HTTP 状态码（自定义业务码如 1004 / 2008 / 4001 / 4101 等，
-# 语义上都是「请求被拒」，统一按 400 处理）。
+#: 自定义业务码（1000+ / 2000+ / 3000+ / 4000+ 等）的 HTTP 状态。
+#: 这类码没有 HTTP 语义，业务结果只由 `body.code` 表达，故统一用 200 承载
+#: —— 一旦返回非 2xx，前端 SDK（responseStyle='data'）会丢弃整个响应体，
+#: 导致前端拿不到 `code` / `msg` 而无法做业务分支与精准提示。
+BUSINESS_CODE_HTTP_STATUS = 200
+#: 无法解析业务码时的兜底（属于程序员错误：code 不是 int）。沿用 400 以便暴露问题。
 DEFAULT_ERROR_HTTP_STATUS = 400
 
 
-def http_status_for_code(code: Any, default: int = DEFAULT_ERROR_HTTP_STATUS) -> int:
-    """由业务码推导对外 HTTP 状态码（保证非 2xx，且落在合法 HTTP 区间）。
+def http_status_for_code(code: Any, default: int = BUSINESS_CODE_HTTP_STATUS) -> int:
+    """由业务码推导对外 HTTP 状态码（业务码 → 200，HTTP 语义码 → 同值）。
 
-    规则：
-    - `code` 为 0/None（成功语义）→ 200；
-    - `-101`（未登录）→ 401；其余负数码 → 400；
-    - 400~599 → 直接沿用（与 HTTP 语义天然一致，如 404/409/429/500/503）；
-    - 其他自定义业务码（1000+ / 2001+ / 4001+ / 4101+ …）→ `default`（默认 400）。
+    规则（详见 docs/response-code-design.md）：
+    - `0`（成功语义）→ 200（含查询类「无数据 / 未就绪」的正常状态）；
+    - `-101`（未登录）→ 401；前端同时也按 `code == -101` 判定，两者互为兜底；
+    - `400~599` → 直接沿用（码值本身即 HTTP 语义，如 403/404/409/429/500/503）；
+    - **其余自定义业务码（1000+ / 2000+ / 3000+ / 4000+ 等）→ 200**，
+      业务结果由 `body.code` 表达（前端需要读 `msg` 做提示）；
+    - 无法解析为整数的码 → `DEFAULT_ERROR_HTTP_STATUS`（程序员错误，暴露问题）。
     """
     try:
         code_int = int(code)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return default
+        return DEFAULT_ERROR_HTTP_STATUS
     if code_int == ResponseCode.SUCCESS:
         return 200
     if code_int == ResponseCode.NOT_LOGGED_IN:
@@ -61,13 +72,14 @@ def http_status_for_code(code: Any, default: int = DEFAULT_ERROR_HTTP_STATUS) ->
 
 
 # ==========================================================================
-# 业务异常基类（统一以「非 200 HTTP + body.code」返回）
+# 业务异常基类（统一以「{code, msg, data} + 见下」返回）
 # ==========================================================================
 class BaseException(Exception):
     """统一业务异常基类。
 
-    约定：对外 HTTP 状态码**必须非 200**（由 `http_status` 指定，缺省则按
-    `http_status_for_code(code)` 推导），业务状态仍由 body 的 `code` 表达。
+    约定：对外 HTTP 状态码由 `http_status` 指定（缺省按 `http_status_for_code(code)`
+    推导），业务状态由 body 的 `code` 表达。注意**业务失败不等于 HTTP 失败**：
+    自定义业务码（1000+ 等）推导结果就是 HTTP 200，以便前端能读到 `code` / `msg`。
     子类通过覆盖 `code` / `msg` / `data` / `http_status` 描述具体异常。
     """
 
@@ -96,14 +108,16 @@ class BaseException(Exception):
 
     @property
     def status_code(self) -> int:
-        """对外 HTTP 状态码（兼容旧引用；保证非 200）。"""
-        status = (
-            self.http_status
-            if self.http_status is not None
-            else http_status_for_code(self.code)
-        )
-        # 业务异常代表失败：推导结果若仍是 2xx，一律回退为 400
-        return status if status >= 400 else DEFAULT_ERROR_HTTP_STATUS
+        """对外 HTTP 状态码（兼容旧引用）。
+
+        业务异常默认以 HTTP 200 返回 —— 业务失败由 `body.code` 表达，而不是靠
+        HTTP 状态码（非 2xx 会让前端 SDK 丢弃响应体，见模块 docstring）。
+        仅当异常显式声明了 `http_status`（如 `NotLoggedInException` → 401），
+        或 `code` 本身是 HTTP 语义码（400~599）时才返回非 200。
+        """
+        if self.http_status is not None:
+            return self.http_status
+        return http_status_for_code(self.code)
 
     def to_response(self) -> dict:
         # 延迟翻译：在请求上下文执行期才调用 _()，按当前语言翻译 msg
@@ -168,19 +182,18 @@ class ResourceConflictException(BiliException):
 
 
 # ==========================================================================
-# 统一异常处理器（HTTP 状态码契约，全项目唯一标准）
+# 统一异常处理器（HTTP 状态码契约，全项目唯一标准，见 docs/response-code-design.md）
 # ==========================================================================
-# 约定（各后端统一遵循，勿在业务代码里把错误响应压回 200）：
-# - **失败一律非 200**：HTTP 状态码只表达错误大类，无需与 body.code 同值；
-# - 业务类异常（BaseException）：HTTP 状态码 = `http_status`（缺省按 code 推导，
-#   兜底 400），body 仍为 {code, msg, data}；
+# 约定（各后端统一遵循；「业务失败」由 body.code 表达，不靠 HTTP 状态码表达）：
+# - 业务类异常（BaseException）：HTTP 状态码 = `http_status`（缺省按 code 推导：
+#   业务码 → 200、HTTP 语义码 400~599 → 同值），body 为 {code, msg, data}；
 # - HTTP 请求类异常（StarletteHTTPException）：HTTP 状态码 = 原异常的 status_code
-#   （本身即为非 200，如 401/403/404/405 等），body 仍为 {code, msg, data}；
+#   （401/403/404/405 等），body 仍为 {code, msg, data}；
 # - 参数校验失败（RequestValidationError）：HTTP 400；
 # - 其他未捕获异常（Exception，全局兜底）：HTTP 500 + error_id。
 # ==========================================================================
 def _business_exception_handler(_req: object, exc: BaseException) -> JSONResponse:
-    # 业务类异常：HTTP 状态码非 200（显式 http_status 优先，否则按 code 推导）
+    # 业务类异常：显式 http_status 优先；否则按 code 推导（业务码 → 200，HTTP 语义码 → 同值）
     return JSONResponse(status_code=exc.status_code, content=exc.to_response())
 
 
@@ -282,8 +295,9 @@ def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONRespon
 def register_exception_handlers(app) -> None:
     """在 FastAPI 应用上注册 bili_common 统一异常处理（全项目统一标准）。
 
-    统一契约（失败一律非 200）：
-    - 业务异常（BaseException）→ 非 200（http_status 或按 code 推导，兜底 400）+ {code, msg, data}；
+    统一契约（详见 docs/response-code-design.md）：
+    - 业务异常（BaseException）→ `http_status` 或按 code 推导
+      （业务码 → 200、HTTP 语义码 400~599 → 同值）+ {code, msg, data}；
     - HTTP 异常（StarletteHTTPException）→ 原 status_code（401/403/404/…）+ {code, msg, data}；
     - 参数校验失败（RequestValidationError）→ HTTP 400 + {code: 400, msg, data}；
     - 未捕获异常（Exception，全局兜底）→ HTTP 500 + {code: 500, msg, data}（含 error_id，DEV 带 traceback）。
