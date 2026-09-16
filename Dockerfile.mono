@@ -23,6 +23,8 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 
 # 三个服务公共的系统依赖（crawler 的构建工具 + Node.js；rpa 的 OpenCV 运行库；message 的构建工具）。
 # 全部放 base，作为共享层，三个 target 继承后无需各自再 apt-get。
+# libpq-dev：提供 pg_config 与 libpq5，供 message 的 psycopg2 源码编译 / 运行期加载
+# （alembic_pptr 用 psycopg2 同步驱动连接 pptr 的 Postgres）。
 RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     gcc \
@@ -32,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     pkg-config \
     libssl-dev \
+    libpq-dev \
     git \
     libgl1-mesa-glx \
     libglib2.0-0 \
