@@ -16,7 +16,7 @@ be-message-service（RPC 服务端）与 be-gateway（RPC 客户端）统一复�
 - RPA-Browser/app/models/execution/system_services.py
 """
 
-from bili_common.models import StrEnumAutoDoc
+from bili_common.core.enums import StrEnumAutoDoc
 
 from pydantic import BaseModel, Field
 

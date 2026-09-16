@@ -2,7 +2,7 @@
 
 from typing import Self
 
-from bili_common.models import IntEnumAutoDoc
+from bili_common.core.enums import IntEnumAutoDoc
 
 
 class InteractionBizTypeEnum(IntEnumAutoDoc):

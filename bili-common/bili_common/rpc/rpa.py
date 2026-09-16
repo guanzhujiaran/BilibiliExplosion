@@ -11,7 +11,7 @@ browser / plugin）的详情，随互动状态一并返回前端。
 - 请求 / 响应模型统一用 SQLModel，保证两端契约一致。
 """
 
-from bili_common.models import StrEnumAutoDoc
+from bili_common.core.enums import StrEnumAutoDoc
 
 from sqlmodel import SQLModel, Field
 

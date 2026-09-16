@@ -17,7 +17,7 @@ HTTP `/api/v1/message/push` 与 RPC 并存：HTTP 面向终端用户 / 浏览器
 RPC 面向服务端系统，二者都落到同一套 `PushMessageService` 执行体。
 """
 
-from bili_common.models import StrEnumAutoDoc
+from bili_common.core.enums import StrEnumAutoDoc
 
 from sqlmodel import SQLModel, Field
 

@@ -15,7 +15,7 @@
 """
 
 from datetime import datetime
-from bili_common.models import IntEnumAutoDoc
+from bili_common.core.enums import IntEnumAutoDoc
 from bili_common.models.interaction import InteractionBizTypeEnum
 
 from sqlalchemy import BIGINT

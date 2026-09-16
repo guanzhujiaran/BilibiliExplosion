@@ -2,10 +2,8 @@
 Mid 相关依赖注入函数（公共认证入口，自包含）
 """
 
-from bili_common.models import StrEnumAutoDoc
+from bili_common.core.enums import IntEnumAutoDoc, StrEnumAutoDoc
 import json
-
-from bili_common.models import IntEnumAutoDoc
 from typing import Annotated, List
 from fastapi import Depends, Header, HTTPException, status
 from sqlmodel import SQLModel

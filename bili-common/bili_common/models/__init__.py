@@ -1,9 +1,11 @@
 """models: 公共响应码、响应消息、响应模型与认证模型（统一使用 sqlmodel）"""
 
-# 必须在导入子模块之前暴露 IntEnumAutoDoc / StrEnumAutoDoc：
-# 子模块（response_code / interaction / report / response_msg / rpc ...）会
-# `from bili_common.models import IntEnumAutoDoc` / `StrEnumAutoDoc`，
-# 若放在子模块导入之后会因 models 包尚未完成初始化而触发 circular import。
+# 通用 IntEnum / StrEnum 基类的**定义源**是 bili_common.core.enums（自包含，不依赖
+# bili_common.models）。包内子模块（response_code / interaction / report /
+# response_msg / lottery_query / notify / rpc.* / deps.auth）一律直接从
+# bili_common.core.enums 导入，避免「子模块 → 包 __init__ → 子模块」的循环导入；
+# 此处仅做 re-export，兼容外部服务既有的
+# `from bili_common.models import IntEnumAutoDoc / StrEnumAutoDoc`。
 from bili_common.core.enums import IntEnumAutoDoc, StrEnumAutoDoc
 
 from bili_common.models.response_code import ResponseCode

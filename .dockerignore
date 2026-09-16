@@ -11,6 +11,12 @@ README.md
 # Python 缓存 / 虚拟环境 / 本地依赖产物
 **/__pycache__/
 **/*.pyc
+
+# setuptools 就地构建产物：build/lib 里的旧文件会被 build_py 复用并打进 wheel，
+# 导致镜像内装的是过期代码（曾引发 bili_common.models 循环导入）——一律排除。
+**/build/
+**/*.egg-info/
+
 **/.venv/
 **/.pytest_cache/
 **/.ruff_cache/

@@ -11,7 +11,7 @@
 - 查询：LotteryAdvancedQueryParams / OthersLotDynListFilterMetadata
 """
 
-from bili_common.models import StrEnumAutoDoc
+from bili_common.core.enums import StrEnumAutoDoc
 
 from pydantic import ConfigDict, Field
 from sqlmodel import SQLModel

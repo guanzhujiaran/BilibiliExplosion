@@ -11,7 +11,7 @@ be-message 侧的历史 import 路径 `app.models.enums` 仍可导入同名枚�
 见 `bili_common.models.IntEnumAutoDoc`。
 """
 
-from bili_common.models import IntEnumAutoDoc
+from bili_common.core.enums import IntEnumAutoDoc
 
 
 class NotifyTargetTypeEnum(IntEnumAutoDoc):

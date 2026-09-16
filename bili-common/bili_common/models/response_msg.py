@@ -6,7 +6,7 @@ i18n 约定：枚举值存「原文」（中文），对外返回时需调用 `.
 动态占位符：`.t(browser_id=...)` 会用 `.format()` 填充。
 """
 
-from bili_common.models import StrEnumAutoDoc
+from bili_common.core.enums import StrEnumAutoDoc
 
 from bili_common.i18n import _
 

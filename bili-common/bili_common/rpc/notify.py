@@ -37,7 +37,7 @@ HTTP 面向管理员浏览器侧，RPC 面向服务端系统，二者落到同�
 
 from sqlmodel import Field, SQLModel
 
-from bili_common.models import StrEnumAutoDoc
+from bili_common.core.enums import StrEnumAutoDoc
 from bili_common.models.notify import NotifyLevelEnum, NotifyTargetTypeEnum
 
 
