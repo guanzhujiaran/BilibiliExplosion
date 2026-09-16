@@ -9,6 +9,12 @@ ENV PYTHONUNBUFFERED=1 \
     UV_NO_DEV=1 \
     UV_NO_EDITABLE=1 \
     UV_TOOL_BIN_DIR=/usr/local/bin \
+    # 虚拟环境固定建在 /opt/venv，而不是 uv 默认的 /app/.venv：
+    # be-bilibili-crawler 在 compose 里把整个项目目录 bind mount 到 /app，
+    # /app/.venv 会被宿主机目录顶掉（宿主机 .venv 的控制台脚本 shebang 指向宿主机绝对路径，
+    # 容器内 exec 直接失败），表现为 `uvicorn: executable file not found in $PATH`。
+    # 放到 /app 之外后，运行期解释器与依赖不再受任何 /app 挂载影响。
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
     # 三个服务各自的源码根目录，统一加入 PYTHONPATH，让控制台脚本 `uvicorn` 能找到本地包
@@ -16,6 +22,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     RUSTUP_UPDATE_ROOT=https://mirrors.aliyun.com/rustup/rustup \
     RUSTUP_DIST_SERVER=https://mirrors.aliyun.com/rustup
+
+# uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
+ENV PATH="/opt/venv/bin:$PATH"
 
 # 配置 Debian 阿里云镜像源
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
@@ -74,10 +83,9 @@ COPY be-bilibili-crawler/ .
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     uv sync --locked
 
-# 把虚拟环境可执行文件放到 PATH 最前（PYTHONPATH 继承自 base，已是统一值）
-ENV PATH="/app/.venv/bin:$PATH"
-
 EXPOSE 23333
+# 依赖由构建期 `uv sync --locked` 固定进镜像的 /opt/venv；compose 的 develop.watch 在
+# uv.lock / pyproject.toml 变化时自动重建镜像，故运行期无需再同步依赖（启动不依赖网络）。
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "23333"]
 
 # ============================ rpa target ============================
@@ -101,9 +109,6 @@ COPY RPA-Browser/ .
 # 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     uv sync --locked
-
-# 把虚拟环境可执行文件放到 PATH 最前（PYTHONPATH 继承自 base，已是统一值）
-ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 28000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "28000"]
@@ -132,9 +137,6 @@ COPY be-message-service/app ./app
 # 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     uv sync --locked
-
-# 把虚拟环境可执行文件放到 PATH 最前（PYTHONPATH 继承自 base，已是统一值）
-ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 18739
 # 入口必须是 app.main（= /app/app/main.py）：与挂载的源码同一个文件，
