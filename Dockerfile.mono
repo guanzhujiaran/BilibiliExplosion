@@ -53,14 +53,80 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================ crawler target ============================
-FROM base AS crawler
+# ============================ crawler 专用底座（Debian 13 / glibc 2.41）============================
+# crawler 不能复用共享 base（Debian 12 bookworm / glibc 2.36），原因：
+# 依赖 bili_ticket_gt_python-0.3.3 的 wheel 是 maturin 打的
+# Tag=cp313-cp313-linux_x86_64（**不是 manylinux**，见其 dist-info/WHEEL），
+# 构建机器用的是 glibc>=2.38 的工具链，因此这个 .so 运行期需要 glibc 2.38 引入的
+# __isoc23_strtol / __isoc23_strtoll / __isoc23_strtoull / __isoc23_sscanf 四个符号
+# （objdump -T 可见 GLIBC_2.38 版本依赖）。
+#   - Debian 12 bookworm = glibc 2.36  → ImportError: undefined symbol: __isoc23_strtoll
+#   - Debian 13 trixie   = glibc 2.41  → 导入正常（已实测）
+#   - 开发机 Ubuntu 24.04 = glibc 2.39 → 导入正常（所以本地跑得起来、容器起不来）
+# rpa / message 仍用共享 base，不受影响。
+FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-trixie-slim AS crawler-base
+
+ENV PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_CACHE_DIR=/cache/uv \
+    UV_NO_DEV=1 \
+    UV_NO_EDITABLE=1 \
+    UV_TOOL_BIN_DIR=/usr/local/bin \
+    # 虚拟环境固定建在 /opt/venv，而不是 uv 默认的 /app/.venv：
+    # be-bilibili-crawler 在 compose 里把整个项目目录 bind mount 到 /app，
+    # /app/.venv 会被宿主机目录顶掉（宿主机 .venv 的控制台脚本 shebang 指向宿主机绝对路径，
+    # 容器内 exec 直接失败），表现为 `uvicorn: executable file not found in $PATH`。
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    PYTHONPATH=/app
+
+# uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# 配置 Debian 阿里云镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# crawler 需要的构建工具 + Node.js + chromium 运行库。
+# 注意 Debian 13 的包名变化（相对 bookworm）：
+#   libgl1-mesa-glx → libgl1 + libglx-mesa0 + libgl1-mesa-dri
+#   libglib2.0-0    → libglib2.0-0t64（t64 过渡改名，旧名在 trixie 已无候选）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ \
+    gcc \
+    make \
+    nodejs \
+    npm \
+    curl \
+    pkg-config \
+    libssl-dev \
+    git \
+    libgl1 \
+    libglx-mesa0 \
+    libgl1-mesa-dri \
+    libglib2.0-0t64 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================ crawler 构建阶段 ============================
+# 只承担「构建」：上面的编译工具链（g++ / gcc / make / pkg-config）、git、npm
+# 与各类 -dev 头文件都只存在于本阶段，不会进入最终运行镜像。
+FROM crawler-base AS crawler-build
 WORKDIR /app
 
-# Node 依赖仅 crawler 需要
+# Node 依赖仅 crawler 需要（jsdom / md5）。运行期只需要 node 二进制跑 execjs，
+# npm 自身与 /root/.npm 缓存都不进运行镜像（npm install 默认还会留 ~100MB 缓存）。
 COPY be-bilibili-crawler/package.json ./package.json
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install
+    npm install --omit=dev --no-audit --no-fund && \
+    npm cache clean --force && \
+    rm -rf /root/.npm
 
 # bili-common 作为路径依赖，解析 ../bili-common → /bili-common（解析阶段需存在）
 COPY bili-common /bili-common
@@ -72,9 +138,11 @@ RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     --mount=type=bind,source=be-bilibili-crawler/.python-version,target=.python-version \
     uv sync --locked --no-install-project
 
-# 安装 Playwright chromium（仅 crawler 运行期需要，写入共享目录）
+# 安装 chromium（仅 crawler 运行期需要，写入共享目录，运行阶段整目录 COPY 走）
+# 用 patchright 自带的 CLI：运行代码只用 patchright.async_api，playwright 包已移出运行依赖；
+# patchright 同样遵循 PLAYWRIGHT_BROWSERS_PATH 环境变量，浏览器仍落在 /opt/playwright-browsers。
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
-    uv run playwright install chromium
+    uv run patchright install chromium
 
 # 拷贝源码（含 pyproject.toml / uv.lock，供最终 uv sync 使用）
 COPY be-bilibili-crawler/ .
@@ -82,6 +150,63 @@ COPY be-bilibili-crawler/ .
 # 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     uv sync --locked
+
+# ============================ crawler 运行阶段 ============================
+# 刻意不 FROM base：base 为构建准备的 apt 包——g++ gcc make git npm pkg-config
+# libssl-dev libpq-dev 共约 640MB，外加没做 apt-get clean 残留的 ~57MB .deb 归档——
+# 都不该出现在运行镜像里。这里单独铺最小运行底座，只装真正运行期需要的系统包：
+# nodejs（execjs 跑 JS）+ chromium 运行库 + curl/ca-certificates。
+# venv（/opt/venv）、浏览器（/opt/playwright-browsers）、node_modules、源码都从构建阶段复制。
+# 必须与 crawler-base 同发行版（Debian 13 / glibc 2.41）：
+#   1) bili_ticket_gt_python 的 .so 需要 glibc>=2.38（见上面 crawler-base 的说明）；
+#   2) /opt/venv 的 pyvenv.cfg / shebang 指向镜像里的 python，发行版要一致，避免解释器版本漂移。
+FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-trixie-slim AS crawler
+
+ENV PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_CACHE_DIR=/cache/uv \
+    UV_NO_DEV=1 \
+    UV_NO_EDITABLE=1 \
+    UV_TOOL_BIN_DIR=/usr/local/bin \
+    # 与 base 保持一致：虚拟环境在 /opt/venv，不受 compose 把项目目录 bind mount 到 /app 影响
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
+    # 源码根目录，让控制台脚本 `uvicorn` 能找到本地包（main / app）
+    PYTHONPATH=/app
+
+# uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# 配置 Debian 阿里云镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# 只装运行期系统依赖：lib*-dev 头文件与编译工具一律不装
+# （Debian 13 包名：libglib2.0-0t64 / libssl3t64；libgl1-mesa-glx 改为 libgl1 + libglx-mesa0 + libgl1-mesa-dri）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    nodejs \
+    libglib2.0-0t64 \
+    libgl1 \
+    libglx-mesa0 \
+    libgl1-mesa-dri \
+    libglu1-mesa \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libssl3t64 \
+    ca-certificates \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=crawler-build /opt/venv /opt/venv
+COPY --from=crawler-build /opt/playwright-browsers /opt/playwright-browsers
+COPY --from=crawler-build /app /app
 
 EXPOSE 23333
 # 依赖由构建期 `uv sync --locked` 固定进镜像的 /opt/venv；compose 的 develop.watch 在

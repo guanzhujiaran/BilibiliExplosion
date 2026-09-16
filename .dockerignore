@@ -22,3 +22,12 @@ README.md
 **/.ruff_cache/
 **/node_modules/
 **/.git/
+
+# be-bilibili-crawler 自带的 .dockerignore 在「根上下文」构建时不会被读取
+# （docker 只认 context 根目录下的 .dockerignore），这里把它的意图平移过来：
+# 这些目录/文件原本会被 COPY 进 crawler 镜像，其中 models/*.onnx 合计约 68MB。
+be-bilibili-crawler/test/
+be-bilibili-crawler/scripts/log/
+be-bilibili-crawler/Service/PlayWright/user_data/
+**/siamese.onnx
+**/yolov11n_captcha.onnx
