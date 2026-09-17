@@ -109,3 +109,60 @@ CMD ["uvicorn", "app.main:app", ...]
    ```
 5. 改一个 py 文件后 `docker compose restart be-bilibili-crawler`，容器内 `/app` 读到新内容，日志出现新的 uvicorn 启动行；
 6. 改 `bili-common` 后同样只需 restart。
+
+## 6. 实施记录（2026-09-17）
+
+### 6.1 构建耗时实测
+
+| 轮次 | 情况 | 耗时 |
+|---|---|---|
+| 冷构建 | apt 层 359s + uv sync 199s + chromium 走官方源（0.3MB/s，中途终止） | 未完成 |
+| 第 2 次 | 复用 apt/npm/uv 层缓存；chromium 走 npmmirror 73.8s；运行阶段 apt 137.6s | **265s** |
+| 第 3 次 | pin `mapper==0.8.0` 后：uv sync 9.0s + chromium 34.8s + 运行阶段 apt CACHED | **167s** |
+
+### 6.2 构建提速改造
+
+- **chromium 换国内源**：`PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright`
+  （官方 `cdn.playwright.dev` 实测 ~0.3MB/s，177MiB 要约 9 分钟；换镜像后 35~75s）。
+  该变量只在该 RUN 层内联，不写 ENV，避免污染运行期与后续层缓存。
+- **crawler 运行阶段 apt 改用 BuildKit cache mount**（`/var/cache/apt`、`/var/lib/apt/lists`），
+  并**移除** `apt-get clean` / `rm -rf /var/lib/apt/lists/*`（会清空缓存；挂载内容本就不提交进镜像层）。
+- `crawler-base` 的 apt 层本次**刻意不动**：它已缓存（359s），改了就白付一次；
+  后续若想进一步提速，可同样加 cache mount（代价是重下一次，可选）。
+
+### 6.3 bind mount 暴露的配置陷阱（compose 必须显式覆盖）
+
+`CONFIG.py` 的 `env_file=(.env.fastapi.prod, .env.fastapi.dev)`，pydantic-settings **后者覆盖前者**。
+镜像里 `.env.fastapi.dev` 被 `.dockerignore` 排除，bind mount 后宿主机目录里的它进了容器，
+其「宿主机视角」值会盖掉 prod 的「容器视角」值：
+
+| 键 | dev（宿主机视角） | 容器需要 |
+|---|---|---|
+| `MYSQL_PORT` | 10000（映射端口） | 3306 |
+| `LLAMA_HOST` | localhost | llama_cpp |
+| `LLAMA_PORT` | 10009 | 8080 |
+| `sqlalchemy_logging` | True | False |
+
+修复：在 `docker-compose.yml` 的 crawler `environment` 里显式给出（环境变量优先级最高），
+表现为修复前 `pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'mysql'")`。
+
+### 6.4 依赖版本回归修复
+
+`strawberry-sqlalchemy-mapper` 0.9.0 与 `strawberry-graphql` 0.327.7 组合下 `BigInt` 标量解析失败
+（`main.py` 导入即崩），pin 到 `==0.8.0` 后正常。详见依赖瘦身计划书 §7.5。
+
+### 6.5 验收结果
+
+| 项 | 结果 |
+|---|---|
+| 构建耗时 | 167s（< 5 分钟） |
+| 容器启动 | `Application startup complete` + `Uvicorn running on 0.0.0.0:23333`，HTTP 200 |
+| 源码挂载 | `main.py` md5 宿主机 == 容器；宿主机新建文件容器**立即可见**（无需重启） |
+| `bili-common` | 导入自 `/bili-common/bili_common/__init__.py`（PYTHONPATH 命中源码） |
+| node_modules | 位于 `/opt/node_modules`，`execjs` 的 `require('md5'/'jsdom')` 冒烟通过；`/app/node_modules` 不存在 |
+| playwright | 已移除（`ModuleNotFoundError`）；`patchright` 正常导入，chromium 在 `/opt/playwright-browsers` |
+| 重启生效 | `docker compose restart be-bilibili-crawler` 后自动恢复，**全程未重建镜像** |
+
+> 提醒：crawler 的 lifespan 把 `message-service /health`、`llama.cpp`、`Milvus` 等列为**关键依赖**，
+> 任一未就绪会 `SystemExit` 拒绝启动（日志形如 `关键依赖服务未启动，拒绝启动: ...`）；
+> 挨个把依赖服务拉起后，crawler 靠 `restart: unless-stopped` 会自动恢复，无需人工干预。

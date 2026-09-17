@@ -130,6 +130,13 @@ services:
       - unidbg
     environment:
       - MYSQL_HOST=mysql
+      # CONFIG.py 的 env_file 是 (.env.fastapi.prod, .env.fastapi.dev)，pydantic-settings
+      # 后者覆盖前者；源码 bind mount 后宿主机上的 .env.fastapi.dev 也会进容器
+      # （镜像里它被 .dockerignore 排除），于是 dev 的「宿主机视角」值会盖掉 prod 的
+      # 「容器视角」值（dev: MYSQL_PORT=10000 / LLAMA_HOST=localhost / LLAMA_PORT=10009）。
+      # 环境变量优先级最高，容器视角的键必须在这里显式给出。
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - RABBITMQ_HOST=rabbitmq
@@ -149,6 +156,11 @@ services:
       - SHOW_LOG=${FASTAPI_SHOW_LOG}
       - IS_DEV=${IS_DEV}
       - llm_apis=${llm_apis}
+      # 同上的原因：这三项在 .env.fastapi.dev 里是宿主机视角（localhost / 10009 / True），
+      # 会覆盖 prod 文件里的容器视角值
+      - LLAMA_HOST=llama_cpp
+      - LLAMA_PORT=8080
+      - sqlalchemy_logging=False
     build:
       context: .
       dockerfile: ./Dockerfile.mono

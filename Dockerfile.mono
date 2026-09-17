@@ -30,11 +30,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
     sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
-# 三个服务公共的系统依赖（crawler 的构建工具 + Node.js；rpa 的 OpenCV 运行库；message 的构建工具）。
-# 全部放 base，作为共享层，三个 target 继承后无需各自再 apt-get。
-# libpq-dev：提供 pg_config 与 libpq5，供 message 的 psycopg2 源码编译 / 运行期加载
-# （alembic_pptr 用 psycopg2 同步驱动连接 pptr 的 Postgres）。
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 构建阶段共享的系统依赖（编译工具链 + Node.js + chromium 运行库等），作为共享层，
+# rpa / message 的「构建阶段」继承后无需各自再 apt-get。
+# 注意：这些只进构建阶段——rpa / message 的「运行阶段」都是独立的最小底座（见各自 target），
+# 不会被继承，因此不会进入最终运行镜像（crawler 另有 crawler-base，本层与其无关）。
+# 注：message 的 psycopg2 已改用自带 libpq 的 psycopg2-binary（manylinux wheel），
+# 不再需要 libpq-dev/pg_config 做源码编译，故此处已移除 libpq-dev。
+# apt 索引与 .deb 归档交给 BuildKit cache mount 保管：以后调整本层不必重新下载，
+# 且挂载内容不会提交进镜像层（因此这里不再 apt-get clean / rm -rf lists）。
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     gcc \
     make \
@@ -43,15 +49,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     pkg-config \
     libssl-dev \
-    libpq-dev \
     git \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+    libgomp1
 
 # ============================ crawler 专用底座（Debian 13 / glibc 2.41）============================
 # crawler 不能复用共享 base（Debian 12 bookworm / glibc 2.36），原因：
@@ -145,7 +149,11 @@ RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
 # 安装 chromium（仅 crawler 运行期需要，写入共享目录，运行阶段整目录 COPY 走）
 # 用 patchright 自带的 CLI：运行代码只用 patchright.async_api，playwright 包已移出运行依赖；
 # patchright 同样遵循 PLAYWRIGHT_BROWSERS_PATH 环境变量，浏览器仍落在 /opt/playwright-browsers。
+# PLAYWRIGHT_DOWNLOAD_HOST 指向 npmmirror：官方 cdn.playwright.dev 实测约 0.3MB/s
+# （177MiB 的 chrome-linux64.zip 要 ~9 分钟），换镜像后同一构建可压到 1 分钟内。
+# 该变量只在本层内联生效，不写进 ENV，避免污染运行期环境与后续层缓存。
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright \
     uv run patchright install chromium
 
 # 拷贝源码（含 pyproject.toml / uv.lock，供最终 uv sync 使用）
@@ -195,7 +203,12 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 
 # 只装运行期系统依赖：lib*-dev 头文件与编译工具一律不装
 # （Debian 13 包名：libglib2.0-0t64 / libssl3t64；libgl1-mesa-glx 改为 libgl1 + libglx-mesa0 + libgl1-mesa-dri）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt 索引与 .deb 交给 BuildKit cache mount 保管：以后调整本层不必重新下载。
+# 因此这里**不再**执行 apt-get clean / rm -rf /var/lib/apt/lists（那会清空缓存，
+# 且挂载内容不会提交进镜像层，索引本来也不会留在镜像里）。
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     libglib2.0-0t64 \
     libgl1 \
@@ -208,9 +221,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     libssl3t64 \
     ca-certificates \
-    curl \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    curl
 
 WORKDIR /app
 
@@ -229,47 +240,118 @@ EXPOSE 23333
 # 即生效；只有 uv.lock / pyproject.toml 变了才需要重建镜像（develop.watch 的 rebuild 规则）。
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "23333"]
 
-# ============================ rpa target ============================
-FROM base AS rpa
+# ============================ rpa 构建阶段 ============================
+# 与 crawler/message 一致做「构建 / 运行」分离：编译器与 nodejs/npm 只留在本阶段。
+# RPA-Browser 已提交 uv.lock，故改用与 crawler/message 相同的 --locked 两阶段写法
+# （不再在构建期执行 `uv lock`，构建结果完全由仓库内的 lock 决定）。
+FROM base AS rpa-build
 WORKDIR /app
 
-# bili-common 作为路径依赖，解析 ../bili-common → /bili-common（解析阶段需存在）
+# bili-common 作为路径依赖，解析 ../bili-common → /bili-common。
+# 注意：--no-install-project 只是不装 rpa-browser 本体，路径依赖 bili-common 仍会被
+# 构建并安装，所以这里必须放完整源码。
 COPY bili-common /bili-common
 
-# RPA 暂未提交 uv.lock：先 bind pyproject 生成 lock，再安装依赖（同一层，缓存仅依赖 pyproject）。
-# 若后续提交 RPA-Browser/uv.lock，可改为与 crawler/message 一致的两阶段 --locked 写法。
+# 仅安装依赖（不装项目本体）：lock + pyproject + .python-version 通过 bind 挂载
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    --mount=type=bind,source=RPA-Browser/uv.lock,target=uv.lock \
     --mount=type=bind,source=RPA-Browser/pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=RPA-Browser/.python-version,target=.python-version \
-    uv lock && \
     uv sync --locked --no-install-project
 
-# 复制项目文件（含生成的 uv.lock，供最终 uv sync 使用）
+# 复制项目文件（含 pyproject.toml / uv.lock，供最终 uv sync 使用）
 COPY RPA-Browser/ .
 
 # 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     uv sync --locked
 
+# ============================ rpa 运行阶段 ============================
+# 刻意不 FROM base：base 为构建准备的 g++ gcc make git pkg-config libssl-dev
+# 与 crawler 的 nodejs/npm 都不该进运行镜像。
+# 这里只装运行期真正需要的系统库：patchright 下载的 chromium 运行库 + onnxruntime 的 libgomp1。
+# 必须与 base 同发行版（Debian 12 bookworm）：/opt/venv 的 pyvenv.cfg / shebang 指向镜像里的
+# python，发行版一致才能避免解释器版本漂移。
+FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-bookworm-slim AS rpa
+
+ENV PYTHONUNBUFFERED=1 \
+    # 与构建阶段保持一致：潜在的任何运行期 uv 调用都不会在 /app 下另建 .venv
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PYTHONPATH=/app
+
+# uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# 配置 Debian 阿里云镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# chromium 运行库（现状 base 提供的 libgl*/libglib/libsm/libxext/libxrender/libgomp 运行期对应物）
+# + patchright/chromium 还需要的 nss/atk/cups/drm/gbm/pango/cairo/asound/atspi 等
+# + git/curl/ca-certificates：modelscope/HF 拉取模型与 https 访问所需（与 base 现状能力对齐）
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    git \
+    curl \
+    ca-certificates
+
+WORKDIR /app
+
+COPY --from=rpa-build /opt/venv /opt/venv
+# 镜像自带一份源码作兜底；compose 挂载 ./RPA-Browser/app:/app/app 后被覆盖，
+# 改代码重启容器即可生效。
+COPY --from=rpa-build /app /app
+
 EXPOSE 28000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "28000"]
 
-# ============================ message target ============================
-FROM base AS message
+# ============================ message 构建阶段 ============================
+# 与 crawler 一样做「构建 / 运行」分离：base 里为 crawler/rpa 准备的编译工具链
+# （g++ gcc make git pkg-config libssl-dev libpq-dev）、nodejs/npm，以及 rpa 的 OpenCV
+# 运行库，都只留在本阶段，不会进入最终运行镜像。
+FROM base AS message-build
 WORKDIR /app
 
-# bili-common 作为路径依赖，解析 ../bili-common → /bili-common（解析阶段需存在）
+# bili-common 作为路径依赖，解析 ../bili-common → /bili-common。
+# 注意：--no-install-project 只是不装 message-service 本体，路径依赖 bili-common
+# 仍会被构建并安装，所以这里必须放完整源码，不能只 COPY 其 pyproject.toml。
 COPY bili-common /bili-common
 
-# 仅安装依赖（不装项目本体）：lock + pyproject 通过 bind 挂载，源码变动不会使该层缓存失效
+# 仅安装依赖（不装项目本体）：lock + pyproject + .python-version 通过 bind 挂载，
+# 源码变动不会使该层缓存失效（.python-version 与 crawler/rpa 保持一致，避免解释器漂移）。
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     --mount=type=bind,source=be-message-service/uv.lock,target=uv.lock \
     --mount=type=bind,source=be-message-service/pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=be-message-service/.python-version,target=.python-version \
     uv sync --locked --no-install-project
 
-# 拷贝源码与清单（pyproject.toml / uv.lock 供最终 uv sync 使用）
+# 拷贝源码与清单（pyproject.toml / uv.lock / README.md 供最终 uv sync 使用）
 COPY be-message-service/pyproject.toml ./pyproject.toml
 COPY be-message-service/uv.lock ./uv.lock
+COPY be-message-service/README.md ./README.md
 # app 包整体落到 /app/app：与运行期 volume 挂载点（./be-message-service/app:/app/app）一致。
 # 旧写法 `COPY ... ./` 会把包内容铺平到 /app，形成「/app 一份、/app/app 一份」的双代码树：
 # uvicorn main:app 加载的是镜像内的 /app/main.py，改 main.py 必须重建镜像才生效。
@@ -278,6 +360,42 @@ COPY be-message-service/app ./app
 # 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     uv sync --locked
+
+# ============================ message 运行阶段 ============================
+# 刻意不 FROM base：base 的编译工具链（g++ gcc make git pkg-config libssl-dev libpq-dev）、
+# crawler 的 nodejs/npm、rpa 的 OpenCV 运行库都只为构建服务，不该出现在运行镜像里。
+# 这里只铺最小运行底座：
+#   ca-certificates → httpx 走 https 调用 Casdoor / 推送渠道
+# psycopg2 已改用 psycopg2-binary（manylinux wheel 自带 libpq），运行期不再需要系统 libpq5。
+# healthcheck 用 python urllib 探活，故不需要 curl。
+# 必须与 base 同发行版（Debian 12 bookworm）：/opt/venv 的 pyvenv.cfg / shebang 指向
+# 镜像里的 python，发行版一致才能避免解释器版本漂移。
+FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-bookworm-slim AS message
+
+ENV PYTHONUNBUFFERED=1 \
+    # 与构建阶段保持一致：潜在的任何运行期 uv 调用都不会在 /app 下另建 .venv
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PYTHONPATH=/app
+
+# uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# 配置 Debian 阿里云镜像源
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+# 只装运行期系统依赖；apt 索引与 .deb 交给 BuildKit cache mount 保管，不提交进镜像层
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates
+
+WORKDIR /app
+
+COPY --from=message-build /opt/venv /opt/venv
+# 镜像自带一份源码作兜底；compose 挂载 ./be-message-service/app:/app/app 后被覆盖，
+# 改代码重启容器即可生效。
+COPY --from=message-build /app /app
 
 EXPOSE 18739
 # 入口必须是 app.main（= /app/app/main.py）：与挂载的源码同一个文件，
