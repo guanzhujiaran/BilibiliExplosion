@@ -23,6 +23,8 @@
 
 - **响应契约**：**失败一律返回非 200 的 HTTP 状态码**（HTTP 状态只表达错误大类，无需与 `body.code` 同值）；业务细分仍看 `body.code`；公共业务码单一来源 `bili_common.models.response_code.ResponseCode`；未登录恒 `NotLoggedInException`（业务码 -101 + HTTP 401）。映射规则见 `bili_common.exceptions.http_status_for_code`（400~599 沿用、-101→401、其余自定义业务码→400、未捕获异常→500）；业务代码里「HTTP 200 + 非 0 业务码」的返回由 `bili_common.middlewares.ErrorStatusMiddleware` 在出口统一改写。
 - **对外 ID**：雪花 ID 字符串出参；分钟级短 ID 位布局 39 bits、`sequence_bits` 默认 4 可配（限清库开发环境）；实体独立 worker/epoch。
+- **字符串版 ID 字段后缀**：响应模型的雪花 ID 除数值字段外，由 **`@auto_str` 类装饰器**（`bili_common.models.auto_str`）自动派生字符串版字段，**后缀优先级：装饰器 `suffix=` 参数 > 类属性 `_auto_str_suffix` > 默认 `"Str"`（`mid` -> `midStr`）**；出参整体为 snake_case 的模型可用 `"_str"`（`mid` -> `mid_str`）。**同一接口内不得混用两种后缀**；新增模型按其字段命名风格二选一，禁止为兼容存量而全局改默认后缀（改默认=破坏性变更，需同步重生成全部前端 SDK）。可选字段（``X | None``）按内层类型判定，同样派生，出参为 ``str | None``。
+- **派生机制**：一律用 `@auto_str` 装饰器（**不再用 `AutoStrMixin` 继承**，后者仅作遗留兼容保留）。装饰器在类创建**之后**注入 `computed_field`，因此必须重建 `__pydantic_decorators__` 再 `model_rebuild(force=True)`——pydantic 只在 `ModelMetaclass.__new__` 里 build 一次 decorators，`model_rebuild()` 不会重新扫描类字典；重建时须以既有 decorators 为底合并（否则类体手写的 `@computed_field` / 校验器会丢）。模型含「指向本模块后面才定义的类」的前向引用时，重建会暂时失败，交由 pydantic 的 `MockValSer` 在首次使用时自动重试。
 - **枚举落库**：业务枚举一律标准库 `enum.IntEnum`，模型字段 `Field(sa_type=IntEnum(EnumCls))` 落 SMALLINT 整数；**禁用原生 ENUM**（存成员名会导致查询/过滤错乱）；列类型从 `bili_common.models.db_types` 导入 `IntEnum/StrEnum`。
 - **鉴权**：身份来自网关注入 `x-bili-*` 头（微服务互信）；依赖注入 `CurrentUser/RequiredUser/AdminUser/RootUser`（管理端审核统一 `RootUser`）。
 - **i18n**：后端 bili-common 层 fastapi-i18n + 延迟翻译；前端 vue-i18n + Accept-Language。
@@ -291,7 +293,7 @@
 | C1 | 存储 | 仅 MySQL（`BiliMessageDB`），不引入 Redis；私信按月分库+100 表；图片只存 URL |
 | C2 | 评论归属 | Node 端评论代码与 Postgres 表就地冻结，新评论全由 be-message 承担 |
 | C3 | IP 处理 | 只存原始 IP，出参打码，管理员明文 |
-| C4 | 对外 ID | 雪花字符串出参；分钟短 ID 39 bits、`sequence_bits` 默认 4（限清库环境） |
+| C4 | 对外 ID | 雪花字符串出参；分钟短 ID 39 bits、`sequence_bits` 默认 4（限清库环境）；字符串版字段由 `@auto_str` 装饰器派生，后缀可配（默认 `Str`，snake_case 模型可设 `_str`） |
 | C5 | 枚举落库 | `IntEnum` 落 SMALLINT 整数，禁原生 ENUM；**遗留例外**：`DmSessionTypeEnum` 仍以 MySQL 原生 ENUM 存储（先于本规则创建），新增值（如 `STRANGER=2`）通过 `ALTER ... MODIFY COLUMN` 在原生 ENUM 上追加；后续若治理统一，可单独迁移该列到 `IntEnum(SMALLINT)` |
 | C6 | 站内信 | DB 写路径保证送达；第三方仅 `/push` 站外提醒 |
 | C7 | 通知可见性 | 读时用 `func.now()`；受众精确过滤在读取侧 |

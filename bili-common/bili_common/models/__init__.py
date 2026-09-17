@@ -143,7 +143,7 @@ from bili_common.models.admin_status import AdminStatusResponse
 from bili_common.models.interaction import InteractionBizTypeEnum, InteractionActionTypeEnum
 from bili_common.models.interaction_stat import InteractionStatBase
 
-from bili_common.models.auto_str import AutoStrMixin, SnowflakeInt
+from bili_common.models.auto_str import AutoStrMixin, SnowflakeInt, auto_str
 from bili_common.models.db import BaseTimestamp
 
 
@@ -262,5 +262,6 @@ __all__ = [
     "StrEnumAutoDoc",
     "AutoStrMixin",
     "SnowflakeInt",
+    "auto_str",
     "BaseTimestamp",
 ]

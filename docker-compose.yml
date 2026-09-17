@@ -349,18 +349,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:
-      # /health 同时校验 broker 连通性（未连上返回 503），故仅需探活该端点
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:18739/health').status==204 else 1)",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      # 关闭容器健康检查：原 30s 一次的 /health 探活会持续刷 uvicorn 访问日志，
+      # 且无任何服务以 service_healthy 依赖它。探活能力由 /health 路由本身保留
+      # （be-bilibili-crawler 启动期仍会探测一次），只是不再由 Docker 定时调用。
+      disable: true
   llama_cpp:
     image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server
     container_name: llama_cpp
