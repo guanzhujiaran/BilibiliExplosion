@@ -30,32 +30,21 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
     sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
-# 构建阶段共享的系统依赖（编译工具链 + Node.js + chromium 运行库等），作为共享层，
-# rpa / message 的「构建阶段」继承后无需各自再 apt-get。
-# 注意：这些只进构建阶段——rpa / message 的「运行阶段」都是独立的最小底座（见各自 target），
-# 不会被继承，因此不会进入最终运行镜像（crawler 另有 crawler-base，本层与其无关）。
-# 注：message 的 psycopg2 已改用自带 libpq 的 psycopg2-binary（manylinux wheel），
-# 不再需要 libpq-dev/pg_config 做源码编译，故此处已移除 libpq-dev。
+# rpa / message「构建阶段」共享的系统依赖。
+# 实测两者依赖全部命中 manylinux wheel（psycopg2 已改为自带 libpq 的 psycopg2-binary），
+# 构建期无需 C 扩展源码编译，故不再保留 g++/gcc/make/pkg-config/libssl-dev 与 nodejs/npm，
+# 也不再保留 chromium 运行库（那是运行阶段才需要的，现由 rpa 运行阶段自行安装）。
+# 只留 curl / git / ca-certificates，保证构建期额外的 https / git 拉取能力。
+# 这些只进构建阶段——rpa / message 的运行阶段是各自独立的最小底座（见各自 target），
+# 不会被继承，因此不会进入最终运行镜像（crawler 另有 crawler-base，与本层无关）。
 # apt 索引与 .deb 归档交给 BuildKit cache mount 保管：以后调整本层不必重新下载，
 # 且挂载内容不会提交进镜像层（因此这里不再 apt-get clean / rm -rf lists）。
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    g++ \
-    gcc \
-    make \
-    nodejs \
-    npm \
     curl \
-    pkg-config \
-    libssl-dev \
     git \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1
+    ca-certificates
 
 # ============================ crawler 专用底座（Debian 13 / glibc 2.41）============================
 # crawler 不能复用共享 base（Debian 12 bookworm / glibc 2.36），原因：
@@ -97,7 +86,11 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 # 注意 Debian 13 的包名变化（相对 bookworm）：
 #   libgl1-mesa-glx → libgl1 + libglx-mesa0 + libgl1-mesa-dri
 #   libglib2.0-0    → libglib2.0-0t64（t64 过渡改名，旧名在 trixie 已无候选）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt 索引与 .deb 归档交给 BuildKit cache mount 保管：以后调整本层不必重新下载，
+# 且挂载内容不会提交进镜像层（因此这里不再 apt-get clean / rm -rf lists）。
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     gcc \
     make \
@@ -114,9 +107,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    libgomp1 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    libgomp1
 
 # ============================ crawler 构建阶段 ============================
 # 只承担「构建」：上面的编译工具链（g++ / gcc / make / pkg-config）、git、npm
