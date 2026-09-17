@@ -40,3 +40,6 @@ docker_vol/nginx/logs/
 !docker_vol/llama/Dockerfile
 docker_vol/llama/models/
 !.vscode/launch.json
+
+# 前端独立仓库（Vue3FrontEndDemoExercise）：单独维护，不纳入主仓库，也不作为 submodule
+/Vue3FrontEndDemoExercise/
