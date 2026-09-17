@@ -122,9 +122,13 @@ WORKDIR /app
 
 # Node 依赖仅 crawler 需要（jsdom / md5）。运行期只需要 node 二进制跑 execjs，
 # npm 自身与 /root/.npm 缓存都不进运行镜像（npm install 默认还会留 ~100MB 缓存）。
-COPY be-bilibili-crawler/package.json ./package.json
+# 刻意装到 /opt/node 而不是 /app/node_modules：compose 会把 ./be-bilibili-crawler 整目录
+# bind mount 到 /app（对齐 be-message-service 的「改代码重启即生效」），宿主机没有 node_modules，
+# 放在 /app 下会被宿主机目录顶掉 → execjs 里 require('jsdom' / 'md5') 直接失败。
+# 外移后由 NODE_PATH=/opt/node_modules 兜底解析（execjs 把 JS 写到临时文件执行，靠不了 cwd）。
+COPY be-bilibili-crawler/package.json /opt/node/package.json
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm install --omit=dev --no-audit --no-fund && \
+    npm install --omit=dev --no-audit --no-fund --prefix /opt/node && \
     npm cache clean --force && \
     rm -rf /root/.npm
 
@@ -173,8 +177,14 @@ ENV PYTHONUNBUFFERED=1 \
     UV_PROJECT_ENVIRONMENT=/opt/venv \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers \
-    # 源码根目录，让控制台脚本 `uvicorn` 能找到本地包（main / app）
-    PYTHONPATH=/app
+    # 源码根目录，让控制台脚本 `uvicorn` 能找到本地包（main / app）。
+    # /bili-common：compose 把仓库的 bili-common 挂到这里，PYTHONPATH 优先于 site-packages，
+    # 于是公共包改动也能靠「重启容器」生效；不挂载时该目录不存在，Python 自动忽略，
+    # 回落到 venv 里构建期装好的非 editable 副本。
+    PYTHONPATH=/app:/bili-common \
+    # execjs 的 JS 由 node 在临时文件里执行，require('jsdom' / 'md5') 靠不了 cwd，
+    # 只能走 NODE_PATH 兜底（node_modules 已外移到 /opt，见 crawler-build 的说明）
+    NODE_PATH=/opt/node_modules
 
 # uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
 ENV PATH="/opt/venv/bin:$PATH"
@@ -206,11 +216,17 @@ WORKDIR /app
 
 COPY --from=crawler-build /opt/venv /opt/venv
 COPY --from=crawler-build /opt/playwright-browsers /opt/playwright-browsers
+# node_modules 刻意放在 /app 之外：compose 会把 ./be-bilibili-crawler bind mount 到 /app，
+# /app/node_modules 会被宿主机目录顶掉。运行期由 NODE_PATH=/opt/node_modules 解析。
+COPY --from=crawler-build /opt/node/node_modules /opt/node_modules
+# 镜像自带一份源码作兜底（与 message 阶段 COPY app 包的意图一致）；
+# compose 挂载 ./be-bilibili-crawler:/app 后被覆盖，改代码重启容器即可生效。
 COPY --from=crawler-build /app /app
 
 EXPOSE 23333
-# 依赖由构建期 `uv sync --locked` 固定进镜像的 /opt/venv；compose 的 develop.watch 在
-# uv.lock / pyproject.toml 变化时自动重建镜像，故运行期无需再同步依赖（启动不依赖网络）。
+# 依赖由构建期 `uv sync --locked` 固定进镜像的 /opt/venv，运行期无需再同步依赖（启动不依赖网络）。
+# 源码由 compose 的 bind mount 覆盖（./be-bilibili-crawler:/app），改代码 → docker compose restart
+# 即生效；只有 uv.lock / pyproject.toml 变了才需要重建镜像（develop.watch 的 rebuild 规则）。
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "23333"]
 
 # ============================ rpa target ============================

@@ -38,7 +38,7 @@ crawler 镜像 4.4G，其中 `/opt/venv` 实测 **1.4G**。逐包 `du` 后发现
 |---|---|---|---|
 | `datasets>=5.0.0` | 5.2M | 全仓 0 引用 | `pyarrow` 156M、`zstandard` 23M、`huggingface_hub` 6.8M、`xxhash`、`multiprocess`、`dill`、`fsspec` 1.9M |
 | `modelscope==1.37.1` | 66M | 全仓 0 引用（仅 `"modelscope达摩机器学习"` 字符串出现在 `ApiRoutes/__init__.py` 的枚举注释里）；其 wheel 关联的 `models/*.onnx`（58M）同样无代码引用、且已被 `.gitignore` 排除 | 无独占子依赖（filelock / packaging / requests / tqdm / urllib3 均为公共依赖） |
-| `playwright>=1.55.0` | 137M | **代码只用 `from patchright.async_api import ...`**（`Service/PlayWright/Operator.py`）；`patchright` 不依赖 `playwright`（lock 中其依赖仅 `greenlet` / `pyee`），可独立工作。镜像里唯一用到它的是浏览器安装 CLI | 无 |
+| `playwright>=1.55.0` | 137M | **代码只用 `from patchright.async_api import ...`**（`Service/PlayWright/Operator.py`）；`patchright` 不依赖 `playwright`（lock 中其依赖仅 `greenlet` / `pyee`），可独立工作。镜像里唯一用到它的是浏览器安装 CLI | 无（**已实施**：2026-09-17 从 dev 组删除并重新 `uv lock`，浏览器安装已切到 patchright CLI，见 §4.1 / §7） |
 
 ### 3.3 迁移项
 

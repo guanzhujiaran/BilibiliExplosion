@@ -153,33 +153,22 @@ services:
       context: .
       dockerfile: ./Dockerfile.mono
       target: crawler
-    # 不再把项目目录 bind mount 到 /app（会顶掉镜像里的虚拟环境）：
-    # 源码由 develop.watch 的 sync 增量同步进容器，虚拟环境（/opt/venv）始终属于镜像。
-    # sync 是单向的（宿主机 → 容器），容器内产生的文件必须单独挂卷，否则不回传。
+    # 源码整目录 bind mount 到 /app，与 be-message-service 对齐：
+    # 改完代码 `docker compose restart be-bilibili-crawler` 即生效，无需重建镜像。
+    # 前提：构建期已把 node_modules 外移到 /opt/node_modules（见 Dockerfile.mono），
+    # 否则宿主机目录会顶掉容器内的 node_modules，execjs 的 require('jsdom'/'md5') 会失败；
+    # 虚拟环境同样在 /app 之外（UV_PROJECT_ENVIRONMENT=/opt/venv），不受挂载影响。
     volumes:
-      # 运行期日志落宿主机（容器内外都要可见）
+      # 源码（容器内代码根目录 /app，入口 uvicorn main:app）
+      - ./be-bilibili-crawler:/app
+      # 公共包源码：PYTHONPATH 含 /bili-common，改 bili-common 同样重启即生效
+      - ./bili-common:/bili-common
+      # 运行期日志落宿主机（容器内外都要可见；子路径挂载优先于父路径 /app）
       - ./docker_vol/fastapi/log:/app/scripts/log
     develop:
       watch:
-        # 源码改动增量同步进 /app，并重启服务使其生效
-        # （改用 uvicorn --reload 的话可换成 action: sync，省掉整容器重启）
-        - action: sync+restart
-          path: ./be-bilibili-crawler
-          target: /app
-          # 排除：宿主机的虚拟环境可能是别的平台、以及构建期就不进镜像的产物目录。
-          # 这些目录要么属于容器自己（venv），要么由容器运行期生成（同步会覆盖/删除）。
-          ignore:
-            - .venv/
-            - __pycache__/
-            - .pytest_cache/
-            - .git/
-            - .vscode/
-            - node_modules/
-            - log/
-            - scripts/log/
-            - Service/PlayWright/user_data/
-            - Service/samsclub/api/app_storage.json
-        # 依赖变了 → 重建镜像（uv sync --locked 在构建期跑，venv 随镜像更新）
+        # 源码已 bind mount，不再需要 sync+restart；只有依赖变了才重建镜像
+        # （uv sync --locked 在构建期跑，venv 随镜像更新）
         - action: rebuild
           path: ./be-bilibili-crawler/uv.lock
         - action: rebuild
