@@ -311,6 +311,12 @@ services:
       - ./be-message-service/data:/app/data
       # GeoIP 属地库（GeoLite2 mmdb），统一放 docker_vol 底下
       - ./docker_vol/geoip/mmdb:/app/mmdb
+      # 公共包源码：与 crawler 对齐，PYTHONPATH 含 /bili-common（见下 environment）。
+      # 不挂载时 bili_common 只能来自镜像内 venv 的构建期副本；一旦 bili-common 有
+      # 变更而 app 已挂载（宿主新代码 + 镜像旧 bili_common），启动即 ImportError：
+      #   cannot import name 'auto_str' from 'bili_common.models.auto_str'
+      # 挂载后改 bili-common 只需 `docker compose up -d` 重建容器，无需重建镜像。
+      - ./bili-common:/bili-common
     ports:
       - "${MESSAGE_SERVICE_PORT}:18739"
     depends_on:
@@ -345,6 +351,9 @@ services:
       # GeoIP 属地库目录（与挂载点一致）
       - GEOIP_MMDB_DIR=/app/mmdb
       - TZ=${ENV_TZ}
+      # /bili-common 优先于 venv/site-packages 里的 bili_common，使宿主 bili-common
+      # 源码改动重启即生效（与 be-bilibili-crawler 一致）
+      - PYTHONPATH=/app:/bili-common
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
