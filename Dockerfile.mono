@@ -1,5 +1,16 @@
+# 全局构建参数：Debian apt 镜像源。
+# 实测本机 mirrors.aliyun.com 只有 ~25KB/s（trixie 那一层会卡几分钟到几十分钟），
+# 而 mirror.nju.edu.cn 能到 ~28MB/s，故默认换成南大源。
+# 换源方式：docker build --build-arg DEBIAN_MIRROR=mirrors.ustc.edu.cn ...
+# （docker-compose 下可在服务的 build.args 里加 DEBIAN_MIRROR: xxx）
+# 每个 stage 里必须再写一次 `ARG DEBIAN_MIRROR` 才能展开（Dockerfile 的 ARG 作用域规则）。
+ARG DEBIAN_MIRROR=mirror.nju.edu.cn
+
 # ============================ 共享 base ============================
 FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-bookworm-slim AS base
+
+# 承接文件头的全局 ARG（本层 apt 源）
+ARG DEBIAN_MIRROR
 
 # 标准 uv Docker 最佳实践环境变量
 ENV PYTHONUNBUFFERED=1 \
@@ -26,9 +37,16 @@ ENV PYTHONUNBUFFERED=1 \
 # uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 配置 Debian 阿里云镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+# 配置 Debian 镜像源（地址由 ARG DEBIAN_MIRROR 决定，默认 mirror.nju.edu.cn）
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
+    # 加速 apt 下载：Queue-Mode=access 允许对同一镜像源开多个并发连接（默认是 host 串行），
+    # Pipeline-Depth 提高单连接内请求流水深度，Retries 避免偶发 4xx/超时直接失败。
+    printf '%s\n' \
+      'Acquire::Queue-Mode "access";' \
+      'Acquire::http::Pipeline-Depth "5";' \
+      'Acquire::Retries "3";' \
+      'Acquire::http::Timeout "20";' \
+      > /etc/apt/apt.conf.d/99-build-speed.conf
 
 # rpa / message「构建阶段」共享的系统依赖。
 # 实测两者依赖全部命中 manylinux wheel（psycopg2 已改为自带 libpq 的 psycopg2-binary），
@@ -39,8 +57,10 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 # 不会被继承，因此不会进入最终运行镜像（crawler 另有 crawler-base，与本层无关）。
 # apt 索引与 .deb 归档交给 BuildKit cache mount 保管：以后调整本层不必重新下载，
 # 且挂载内容不会提交进镜像层（因此这里不再 apt-get clean / rm -rf lists）。
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+# cache id 带上发行版：bookworm 与 trixie 不能共用 apt 缓存，否则两边的
+# /var/lib/apt/lists 索引会互相覆盖，每次切发行版都要重新拉取索引。
+RUN --mount=type=cache,id=apt-archives-bookworm,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-bookworm,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
@@ -59,6 +79,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # rpa / message 仍用共享 base，不受影响。
 FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-trixie-slim AS crawler-base
 
+ARG DEBIAN_MIRROR
+
 ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -76,27 +98,37 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
 # uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
-ENV PATH="/opt/venv/bin:$PATH"
+# /opt/node-dist/bin：Node.js 官方二进制的 node / npm（不走 apt，见下方 apt 层说明）
+ENV PATH="/opt/venv/bin:/opt/node-dist/bin:$PATH"
 
-# 配置 Debian 阿里云镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+# 配置 Debian 镜像源（地址由 ARG DEBIAN_MIRROR 决定，默认 mirror.nju.edu.cn）
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
+    # 加速 apt 下载：Queue-Mode=access 允许对同一镜像源开多个并发连接（默认是 host 串行），
+    # Pipeline-Depth 提高单连接内请求流水深度，Retries 避免偶发 4xx/超时直接失败。
+    printf '%s\n' \
+      'Acquire::Queue-Mode "access";' \
+      'Acquire::http::Pipeline-Depth "5";' \
+      'Acquire::Retries "3";' \
+      'Acquire::http::Timeout "20";' \
+      > /etc/apt/apt.conf.d/99-build-speed.conf
 
-# crawler 需要的构建工具 + Node.js + chromium 运行库。
+# crawler 需要的构建工具 + chromium 运行库。
 # 注意 Debian 13 的包名变化（相对 bookworm）：
 #   libgl1-mesa-glx → libgl1 + libglx-mesa0 + libgl1-mesa-dri
 #   libglib2.0-0    → libglib2.0-0t64（t64 过渡改名，旧名在 trixie 已无候选）
+# Node.js 刻意**不**走 apt：Debian 的 npm 包会连带拉进 webpack / jest / babel 等上百个
+# node-* 依赖，光下载 + dpkg 解包就要两分多钟；改用下方官方二进制（29MB，2~3 秒）。
 # apt 索引与 .deb 归档交给 BuildKit cache mount 保管：以后调整本层不必重新下载，
 # 且挂载内容不会提交进镜像层（因此这里不再 apt-get clean / rm -rf lists）。
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+# 与 bookworm 的 apt cache 分开（发行版不同，索引互不通用）
+RUN --mount=type=cache,id=apt-archives-trixie,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-trixie,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     gcc \
     make \
-    nodejs \
-    npm \
     curl \
+    xz-utils \
     pkg-config \
     libssl-dev \
     git \
@@ -108,6 +140,15 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libxext6 \
     libxrender-dev \
     libgomp1
+
+# Node.js 官方二进制（cdn.npmmirror.com 镜像）：构建期用它跑 `npm install jsdom md5`，
+# 运行期 execjs 也只需要 node 二进制。换版本：--build-arg NODE_VERSION=20.18.0
+ARG NODE_VERSION=22.11.0
+RUN curl -fsSL "https://cdn.npmmirror.com/binaries/node/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz && \
+    mkdir -p /opt/node-dist && \
+    tar -xJf /tmp/node.tar.xz -C /opt/node-dist --strip-components=1 && \
+    rm -f /tmp/node.tar.xz && \
+    node -v && npm -v
 
 # ============================ crawler 构建阶段 ============================
 # 只承担「构建」：上面的编译工具链（g++ / gcc / make / pkg-config）、git、npm
@@ -165,6 +206,8 @@ RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
 #   2) /opt/venv 的 pyvenv.cfg / shebang 指向镜像里的 python，发行版要一致，避免解释器版本漂移。
 FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-trixie-slim AS crawler
 
+ARG DEBIAN_MIRROR
+
 ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -186,21 +229,28 @@ ENV PYTHONUNBUFFERED=1 \
     NODE_PATH=/opt/node_modules
 
 # uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
-ENV PATH="/opt/venv/bin:$PATH"
+# /opt/node-dist/bin：node 官方二进制，从 crawler-build 直接 COPY 过来（不再走 apt 装 nodejs）
+ENV PATH="/opt/venv/bin:/opt/node-dist/bin:$PATH"
 
-# 配置 Debian 阿里云镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+# 配置 Debian 镜像源（地址由 ARG DEBIAN_MIRROR 决定，默认 mirror.nju.edu.cn）
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
+    # 加速 apt 下载：Queue-Mode=access 允许对同一镜像源开多个并发连接（默认是 host 串行），
+    # Pipeline-Depth 提高单连接内请求流水深度，Retries 避免偶发 4xx/超时直接失败。
+    printf '%s\n' \
+      'Acquire::Queue-Mode "access";' \
+      'Acquire::http::Pipeline-Depth "5";' \
+      'Acquire::Retries "3";' \
+      'Acquire::http::Timeout "20";' \
+      > /etc/apt/apt.conf.d/99-build-speed.conf
 
 # 只装运行期系统依赖：lib*-dev 头文件与编译工具一律不装
 # （Debian 13 包名：libglib2.0-0t64 / libssl3t64；libgl1-mesa-glx 改为 libgl1 + libglx-mesa0 + libgl1-mesa-dri）
 # apt 索引与 .deb 交给 BuildKit cache mount 保管：以后调整本层不必重新下载。
 # 因此这里**不再**执行 apt-get clean / rm -rf /var/lib/apt/lists（那会清空缓存，
 # 且挂载内容不会提交进镜像层，索引本来也不会留在镜像里）。
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-archives-trixie,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-trixie,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    nodejs \
     libglib2.0-0t64 \
     libgl1 \
     libglx-mesa0 \
@@ -221,6 +271,8 @@ COPY --from=crawler-build /opt/playwright-browsers /opt/playwright-browsers
 # node_modules 刻意放在 /app 之外：compose 会把 ./be-bilibili-crawler bind mount 到 /app，
 # /app/node_modules 会被宿主机目录顶掉。运行期由 NODE_PATH=/opt/node_modules 解析。
 COPY --from=crawler-build /opt/node/node_modules /opt/node_modules
+# node 二进制（含 npm）直接从构建阶段取，运行镜像不必再 apt 装 nodejs
+COPY --from=crawler-build /opt/node-dist /opt/node-dist
 # 镜像自带一份源码作兜底（与 message 阶段 COPY app 包的意图一致）；
 # compose 挂载 ./be-bilibili-crawler:/app 后被覆盖，改代码重启容器即可生效。
 COPY --from=crawler-build /app /app
@@ -265,6 +317,8 @@ RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
 # python，发行版一致才能避免解释器版本漂移。
 FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-bookworm-slim AS rpa
 
+ARG DEBIAN_MIRROR
+
 ENV PYTHONUNBUFFERED=1 \
     # 与构建阶段保持一致：潜在的任何运行期 uv 调用都不会在 /app 下另建 .venv
     UV_PROJECT_ENVIRONMENT=/opt/venv \
@@ -273,15 +327,22 @@ ENV PYTHONUNBUFFERED=1 \
 # uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 配置 Debian 阿里云镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+# 配置 Debian 镜像源（地址由 ARG DEBIAN_MIRROR 决定，默认 mirror.nju.edu.cn）
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
+    # 加速 apt 下载：Queue-Mode=access 允许对同一镜像源开多个并发连接（默认是 host 串行），
+    # Pipeline-Depth 提高单连接内请求流水深度，Retries 避免偶发 4xx/超时直接失败。
+    printf '%s\n' \
+      'Acquire::Queue-Mode "access";' \
+      'Acquire::http::Pipeline-Depth "5";' \
+      'Acquire::Retries "3";' \
+      'Acquire::http::Timeout "20";' \
+      > /etc/apt/apt.conf.d/99-build-speed.conf
 
 # chromium 运行库（现状 base 提供的 libgl*/libglib/libsm/libxext/libxrender/libgomp 运行期对应物）
 # + patchright/chromium 还需要的 nss/atk/cups/drm/gbm/pango/cairo/asound/atspi 等
 # + git/curl/ca-certificates：modelscope/HF 拉取模型与 https 访问所需（与 base 现状能力对齐）
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-archives-bookworm,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-bookworm,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -363,6 +424,8 @@ RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
 # 镜像里的 python，发行版一致才能避免解释器版本漂移。
 FROM ghcr.nju.edu.cn/astral-sh/uv:python3.13-bookworm-slim AS message
 
+ARG DEBIAN_MIRROR
+
 ENV PYTHONUNBUFFERED=1 \
     # 与构建阶段保持一致：潜在的任何运行期 uv 调用都不会在 /app 下另建 .venv
     UV_PROJECT_ENVIRONMENT=/opt/venv \
@@ -371,13 +434,20 @@ ENV PYTHONUNBUFFERED=1 \
 # uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
 ENV PATH="/opt/venv/bin:$PATH"
 
-# 配置 Debian 阿里云镜像源
-RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+# 配置 Debian 镜像源（地址由 ARG DEBIAN_MIRROR 决定，默认 mirror.nju.edu.cn）
+RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
+    # 加速 apt 下载：Queue-Mode=access 允许对同一镜像源开多个并发连接（默认是 host 串行），
+    # Pipeline-Depth 提高单连接内请求流水深度，Retries 避免偶发 4xx/超时直接失败。
+    printf '%s\n' \
+      'Acquire::Queue-Mode "access";' \
+      'Acquire::http::Pipeline-Depth "5";' \
+      'Acquire::Retries "3";' \
+      'Acquire::http::Timeout "20";' \
+      > /etc/apt/apt.conf.d/99-build-speed.conf
 
 # 只装运行期系统依赖；apt 索引与 .deb 交给 BuildKit cache mount 保管，不提交进镜像层
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+RUN --mount=type=cache,id=apt-archives-bookworm,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=apt-lists-bookworm,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates
 
