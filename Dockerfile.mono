@@ -172,10 +172,15 @@ RUN npm config set registry https://registry.npmmirror.com && \
 COPY bili-common /bili-common
 
 # 仅安装依赖（不装项目本体）：lock + pyproject 通过 bind 挂载，源码变动不会使该层缓存失效
+# 并发参数：本机 lock 有 182 个 wheel，默认并发下 overlayfs 上的 copy 安装（UV_LINK_MODE=copy）
+# 会拖到 8 分钟级；提高下载 / 安装 / 缓存读取并发可明显缩短冷装时间。
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
     --mount=type=bind,source=be-bilibili-crawler/uv.lock,target=uv.lock \
     --mount=type=bind,source=be-bilibili-crawler/pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=be-bilibili-crawler/.python-version,target=.python-version \
+    UV_CONCURRENT_DOWNLOADS=32 \
+    UV_CONCURRENT_INSTALLS=8 \
+    UV_CONCURRENT_CACHE_READS=8 \
     uv sync --locked --no-install-project
 
 # 安装 chromium（仅 crawler 运行期需要，写入共享目录，运行阶段整目录 COPY 走）
@@ -193,6 +198,8 @@ COPY be-bilibili-crawler/ .
 
 # 安装项目本体（bili-common 的非 editable 安装由 UV_NO_EDITABLE 控制）
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    UV_CONCURRENT_INSTALLS=8 \
+    UV_CONCURRENT_CACHE_READS=8 \
     uv sync --locked
 
 # ============================ crawler 运行阶段 ============================

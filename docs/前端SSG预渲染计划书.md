@@ -58,7 +58,39 @@ src/
 - **风险**：水合不匹配（客户端与服务端 DOM 不一致）→ 主题/尺寸等依赖 localStorage 的初始化只在客户端执行，服务端用默认主题。
 - **回滚**：Vike 只新增文件 + 改 `vite.config.ts`/`package.json` scripts；出问题把 scripts 改回 `vite`、移除 `vike()` 插件即回到纯 SPA。
 
-## 5. 验证方式
+## 5. P1 实施记录（已跑通）
+
+**产物**：`vike build` 输出 10 个静态 HTML（`dist/client/index.html` 及各页面目录 `index.html`），
+纯静态托管即可（Vike 提示 "your app is fully pre-rendered and can be statically deployed"）。
+
+| 页面 | 预渲染 title | canonical |
+| --- | --- | --- |
+| `/` | 爆破哔哩哔哩弹幕视频网 - ( ゜- ゜)つロ 乾杯~ - bilibili | `https://serena.dynv6.net/` |
+| `/app/lot-data/bili-data/official` | 官方抽奖 - B站抽奖数据 - 爆破哔哩哔哩弹幕视频网 | 对应路径 |
+| 其余 8 个页面 | 各自「页面 - 父级 - 站点名」 | 对应路径 |
+
+**浏览器实测**：首屏水合后 `description / canonical / og:title` 各 1 份（无重复）、静态兜底标签清零；
+SPA 跳转到 `/app/lot-data/bili-data/official` 后 title 变为「官方抽奖 - ...」，说明客户端 head 由
+`useRouteSeo` 正常接管；无 hydration mismatch 报错。
+
+**踩坑与修复（同类页面改造时直接复用）**
+
+1. `App.vue`：`window.innerHeight` / `outerWidth` 在 setup 顶层访问 → SSR 安全化；
+   `isInit` 在 SSR 下必须为 `true`（否则 HTML 只有加载遮罩）；
+   `el-dialog` 类弹层只在 `isMounted` 后渲染。
+2. `ScrollButtons.vue` / `LoadingMoreContainer.vue`：`window.innerHeight` 初始化 → SSR 按 0 处理。
+3. `@vueuse/head` 的 `renderHeadToString()` 是**异步**的，必须 `await`（漏了会注入 `undefined`）。
+4. Element Plus SSR 需要 `ID_INJECTION_KEY` / `ZINDEX_INJECTION_KEY` 两个 provider。
+5. urql 必须在服务端也安装 provider（山姆页直接 `useQuery`，缺 provider 会抛错）。
+6. `src/app/createApp.ts` 里 `type App` 与 `import App from '@/App.vue'` 同名 → dev（esbuild）报
+   "Identifier App has already been declared"，必须给 Vue 的 `App` 类型取别名。
+7. `vike dev` 默认端口 3000 → 在 `vite.config.ts` 固定 `server.port: 5173`，保持与 nginx 反代一致。
+8. 多个 pinia store 在**模块加载期**就引用 `localStorage` → `src/app/ssr_shim.ts` 兜底（过渡方案）。
+
+**已知待办**：Element Plus 仍打印 `IdInjection / ZIndexInjection` 警告（疑似 element-plus 被打成两份，
+待用 `resolve.dedupe` 或 `ssr.noExternal` 收敛）；页面正文目前不含接口数据（P2 补 `onServerPrefetch`）。
+
+## 6. 验证方式
 
 - `curl -s dist/client/index.html | grep -c "抽奖"`：预渲染产物必须含真实内容（而非只有骨架）；
 - 每个 URL 对应 `dist/client/<path>/index.html` 存在且含 `<title>`、`canonical`、JSON-LD；
