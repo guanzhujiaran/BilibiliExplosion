@@ -11,7 +11,7 @@ class InteractionBizTypeEnum(IntEnumAutoDoc):
     本枚举是「业务资源类型」的唯一真相源（bili-common 收口），下列枚举直接复用本枚举
     的成员而非重新定义：bili-common 各服务的 bizType 列（事件来源类型同样直接复用本枚举成员）。
 
-    **存储**：数据库以 int 存储（值 1~7），减小存储空间、利于索引；
+    **存储**：数据库以 int 存储（实体资源 1~8 / 14 / 15，审核域 9~13），减小存储空间、利于索引；
     **对外契约**：API 层经 `from_text` / `to_text` 转换为可读文字
     （`dynamic` / `lottery` / ...），前端 / 跨服务 RPC 契约保持文字不变。
     """
@@ -30,6 +30,11 @@ class InteractionBizTypeEnum(IntEnumAutoDoc):
     # RPA 资源标签：共享池 + 审核（模板于 RPA_ACTION 等 RPA 内容，同纳入 be-message
     # 管理与审核栈；bizId = rpa_tag.id）。
     RPA_TAG = 14
+    # 第三方抽奖动态（2.61.0）：站外 B 站抽奖动态卡片，bizId = biliopusdb.t_lotdyninfo.dynId。
+    # 与 LOTTERY（bizId = lotdata.lottery_id）**是两个独立命名空间**：第三方动态没有
+    # lottery_id，若拿 dynId 当 LOTTERY 的 bizId，会被 check_lottery_exist 判不存在，
+    # 导致点赞/收藏 400、详情与跳转定位失败——故单开本类型，不复用 LOTTERY。
+    OTHERS_LOT_DYN = 15
 
     # ===== 审核统计域（`GET /audit/statistics?bizType=` 直接复用本枚举，计划书 §5.13）=====
     # 注意：9~13 为审核域单据 / 聚合口径，仅用于审核统计与审核队列归属，

@@ -185,6 +185,44 @@ class CheckLotteryExistRpcResult(SQLModel):
     items: list[LotteryDetailItem] = Field(default_factory=list, description="批量查询结果（lottery_ids 时返回）")
 
 
+class CheckOthersLotDynExistRpcParams(SQLModel):
+    """check_others_lot_dyn_exist 方法请求参数（2.61.0）。
+
+    `dyn_ids` 优先（批量查询）；为空时回退到单个 `dyn_id`。
+    """
+
+    dyn_id: int | None = Field(default=None, description="第三方抽奖动态 dynId（t_lotdyninfo.dynId），单查用")
+    dyn_ids: list[int] = Field(default_factory=list, description="dynId 批量列表（批量查，优先于 dyn_id）")
+
+
+class OthersLotDynDetailItem(SQLModel):
+    """第三方抽奖动态单个资源详情（批量响应元素）。"""
+
+    dyn_id: int = Field(description="第三方抽奖动态 dynId")
+    exists: bool = Field(default=False, description="该 dynId 是否存在于 t_lotdyninfo")
+    title: str | None = Field(default=None, description="卡片标题（作者名 + 「的抽奖动态」，无作者名时为 null）")
+    cover: str | None = Field(default=None, description="封面图链接（第三方动态无封面，恒 null）")
+    jumpUrl: str | None = Field(default=None, description="跳转链接（t_lotdyninfo.dynamicUrl，缺省为 null）")
+    authorMid: int | None = Field(default=None, description="动态作者 mid（t_lotdyninfo.up_uid）")
+    authorName: str | None = Field(default=None, description="动态作者昵称（t_lotdyninfo.authorName）")
+
+
+class CheckOthersLotDynExistRpcResult(SQLModel):
+    """check_others_lot_dyn_exist 方法响应数据（2.61.0）。
+
+    批量请求走 ``items``；单查仍填充 ``exists`` / ``dyn_id`` 等单条字段。
+    """
+
+    exists: bool = Field(default=False, description="dynId 是否存在（单查）")
+    dyn_id: int | None = Field(default=None, description="校验的 dynId（回显，单查）")
+    title: str | None = Field(default=None, description="卡片标题")
+    cover: str | None = Field(default=None, description="封面图链接")
+    jumpUrl: str | None = Field(default=None, description="跳转链接")
+    authorMid: int | None = Field(default=None, description="动态作者 mid")
+    authorName: str | None = Field(default=None, description="动态作者昵称")
+    items: list[OthersLotDynDetailItem] = Field(default_factory=list, description="批量查询结果（dyn_ids 时返回）")
+
+
 __all__ = [
     "BaseLotteryRpcParams",
     "GetReserveLotteryRpcParams",
@@ -196,6 +234,9 @@ __all__ = [
     "CheckLotteryExistRpcParams",
     "CheckLotteryExistRpcResult",
     "LotteryDetailItem",
+    "CheckOthersLotDynExistRpcParams",
+    "CheckOthersLotDynExistRpcResult",
+    "OthersLotDynDetailItem",
     "RPC_METHOD_PARAMS_MODEL_MAP",
     "RPC_METHOD_PARAMS_FIELD_MAP",
 ]

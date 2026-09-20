@@ -59,6 +59,8 @@ class RpcMethodName(StrEnumAutoDoc):
     GET_OTHERS_LOT_DYN_LIST = "get_others_lot_dyn_list"
     # 内部校验（be-message 客户端调用，不进入 ALLOWED_RPC_METHODS 前端白名单）
     CHECK_LOTTERY_EXIST = "check_lottery_exist"
+    # 第三方抽奖动态存在性校验（2.61.0，be-message 客户端调用；查 t_lotdyninfo.dynId）
+    CHECK_OTHERS_LOT_DYN_EXIST = "check_others_lot_dyn_exist"
 
     # pptr 用户相关（be-message 服务端 / be-gateway 客户端）
     GET_USER_INFO = "get_user_info"

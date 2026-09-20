@@ -103,7 +103,12 @@
 
 - 点赞/收藏/浏览/点踩/分享/举报/转发支持多资源；be-message 只存互动明细+计数，详情经 RPC 实时获取、失败降级。
 - **资源为中心的统一操作模型**：`interaction_actions/` 以 `InteractionBizTypeEnum` 为主体（`BaseBiz` 资源类体系，见 §5.10），互动操作、举报、审核处置均为资源方法。
-- **抽奖卡片详情 HTTP 接口（be-bilibili-crawler 侧）**：`POST /api/v1/lottery_database/bili/GetLotteryDetail`（body `{lottery_id}`）按 `dyndetail.lotdata.lottery_id` 返回完整卡片原始行（LotdataResp 形态）+ `t_lot_extra_info` 附加信息，供前端卡片详情页（`/app/lot-data/card-detail?id=`）按 id 拉取详情渲染，替代 localStorage 旧缓存传参。互动资源 ID 口径不变：lottery 一律 `lotdata.lottery_id`（预约 sid / 天选 lot_id / 第三方 dynId 不作为互动资源 ID，缺失 lottery_id 的旧数据前端禁用互动）。
+- **抽奖卡片详情 HTTP 接口（be-bilibili-crawler 侧）**：`POST /api/v1/lottery_database/bili/GetLotteryDetail`（body `{lottery_id}`）按 `dyndetail.lotdata.lottery_id` 返回完整卡片原始行（LotdataResp 形态）+ `t_lot_extra_info` 附加信息，供前端卡片详情页（`/app/lot-data/card-detail?id=`）按 id 拉取详情渲染，替代 localStorage 旧缓存传参。
+- **互动资源 ID 口径（2.61.0 修正）**：
+  - `lottery`（bizType=2）一律 `lotdata.lottery_id`；预约 sid / 天选 lot_id **不得**作为 lottery 的互动资源 ID，缺失 `lottery_id` 的旧数据前端禁用互动。
+  - **第三方抽奖动态另立资源类型 `others_lot_dyn`（bizType=15，bizId=`biliopusdb.t_lotdyninfo.dynId`）**。原「第三方 dynId 不作为互动资源 ID」是**针对 lottery 命名空间**的约束（dynId 不是 `lottery_id`，拿它当 lottery 的 bizId 会被 `check_lottery_exist` 判不存在 → 点赞/收藏 400、详情/跳转定位失败）；本次按资源唯一性原则（`(bizType, bizId)` 唯一确定资源）为其单开命名空间，**不是**把 dynId 塞回 lottery，两条口径不冲突。
+  - 因此第三方抽奖卡片的评论 / 收藏 / 点赞 / 举报 / 跳转一律用 `bizType=others_lot_dyn + bizId=dynId`；存在性经新增 RPC `check_others_lot_dyn_exist`（查 `t_lotdyninfo.dynId`）校验，与 lottery 的 `check_lottery_exist` 完全隔离。
+  - 迁移注意：`others_lot_dyn` 上线前以 `lottery+dynId` 写下的评论（若已存在）落在 `type=2` 的评论区，与新 `type=15` 评论区不是同一个 `CommentSubject`，属历史脏数据（该路径此前必然 400，实际存量应为空），不做自动迁移。
 
 ### 5.6 通知可见性细节
 
@@ -152,7 +157,15 @@
 - **`interaction_actions/` 以资源为主体**：`BaseBiz`（`base_biz.py`）把 `InteractionActionTypeEnum` 全成员声明为方法接口（默认抛"该资源不支持"），承载举报/审核/评论操作；每个资源一个类（`<resource>/biz.py`，声明 `_biz_type`）；通用资源共享 `GenericResourceBiz`；**继承即登记**（`__init_subclass__` 自动入表，无工厂映射）；权限用 `@biz_action(relation=[...], acl=[...])` 装饰器声明式集中校验。
 - **权限原语**：`InteractionRelationScopeEnum`（FOLLOWING/NON_FOLLOWING/NOT_BLOCKED）+ `InteractionAclScopeEnum`（OWNER_ONLY/AUDITOR_ONLY）+ 注册表；`InteractionResource`（SQLModel）统一资源表示（bizType/bizId/authorMid/ownerMid/exists/interactable/title/cover）。
 - **举报与管理路径**：`report()/resolve_accused()/hide()` 与 `report_reject()/report_resolved()` 均为 `BaseBiz` 方法（通用实现），资源只需声明 `model + resolve_accused + hide` 即得完整举报能力；`ReportService` 退化为纯协调器（无 bizType if/elif）；资源→表唯一真相源是资源类 `model`。
-- **DDL 约束**：`msg_event.event_type` 用原生 ENUM 存成员名（存量遗留，与 §2.3 不一致），新增枚举成员须同步 ALTER。
+- **评论发布入口统一走资源类（2.63.0）**：`POST /comment/add` 不再直连 `CommentService.add`，改为经 `get_biz(...).reply()`——一级评论按目标资源（`dynamic` / `lottery` / `others_lot_dyn` / `rpa_*`…），楼中楼按根评论（`CommentBiz`）。由此：
+  - 「该类型是否支持评论」由资源类自身表达能力（`BaseBiz.reply/at` 默认 `_unsupported`，支持者覆盖实现），**接口层禁止写类型白名单**；
+  - 「资源是否存在 / 是否可互动」由 `@biz_action` 统一校验（**写路径严格，不做降级**），避免用不存在的 `oid` 造出 `msg_comment_subject` / `msg_comment_index` / `TInteractionStat` 脏行；
+  - 频控 / 日限 / 审核 / 楼层 / @ / 通知仍是 `CommentService.add` 的单一实现，`ops.do_comment` 只做参数透传；
+  - 客户端上下文（IP / UA / 属地 / 昵称）由路由注入资源实例（`biz.client_ip_v4` / `client_ip_v6` / `ip_location` / `ip_isp` / `actor_uname`，与动态发布既有的 `biz.client_ip` 注入方式一致），经 `ops.do_comment` 透传，保证 IP 属地与通知里的昵称不丢。
+  - **`CommentBiz.reply/at` 定位修正**：评论区 subject 用**所属评论区** `(CommentIndex.oid, CommentIndex.type)` 定位，`root` 才是自身 rpid；原实现把 rpid 当 `oid` 传，会被 `_resolve_tree` 判「根评论不属于该评论区」，即该路径此前不可用。
+- **DDL 约束**：`msg_event.event_type` 用原生 ENUM 存成员名（存量遗留，与 §2.3 不一致），新增枚举成员须同步 ALTER。**同理，`InteractionBizTypeEnum` 新增成员必须同步 ALTER 全部以 `SAEnum(InteractionBizTypeEnum)` 落库的列**（原生 ENUM 存成员名）：`msg_comment_subject.type`、`msg_comment_index.type`、`msg_comment_at.type`、`msg_event.source_type`、`TFeedImpression.bizType`、`TResourceFeed.bizType`、`ResourceBase.bizType`（`TResourceLike/Dislike/Favorite/Report/AuditLog`）、`TMoment.bizType`。否则写入新类型会因 ENUM 取值缺失报错（典型报错 `(1265, "Data truncated for column 'type' at row 1")`）。
+  - **已提供迁移**：`be-message-service/alembic/versions/20260920_1300-others_lot_dyn_enum_.py`（`down_revision=1cb38c34aef9`）——按 `information_schema` 现有定义**幂等追加**缺失成员，已补齐 `OTHERS_LOT_DYN` 与**存量遗漏的 `RPA_TAG`**（模型早就在用、初始建表 ENUM 里没有）；非 `enum(` 开头的列（如 `TResourceReport.bizType` 实为 `int`）自动跳过。新增枚举成员时按同样方式补一份迁移即可。
+- **资源类清单（2.61.0）**：`dynamic / lottery / comment / user / rpa_action / rpa_workflow / rpa_browser / rpa_plugin / rpa_tag` + **新增 `others_lot_dyn`（第三方抽奖动态，bizId=dynId）**。`others_lot_dyn` 继承 `GenericResourceBiz`（举报落 `TResourceReport`，作者回查取 `t_lotdyninfo.up_uid`），并覆盖 `hide()` 为 no-op（站外 B 站动态不由本站下架）。
 
 ### 5.13 统一审核动作（bizType + bizId）与审核结果通知
 
@@ -179,12 +192,19 @@
 ### 5.10 事件资源定位统一
 
 - 事件跳转身份统一为 `(resource_type, resource_id)`（顶层 `InteractionBizTypeEnum` + oid/卡片 id）；后端下发 `jump_target`（`route:{name}?{query}`，含 rpid 锚点），前端只 `router.push(name)`。
+- **跳转路由映射**：`jump_target_for` 的 `_JUMP_ROUTE_MAP` 按资源类型登记「前端路由名 + id 参数名」——`dynamic→MOMENT_DETAIL(momentId)`、`lottery→LOTTERY_CARD_DETAIL(id)`、**`others_lot_dyn→OTHERS_LOT_DYN_DETAIL(dynId)`（2.61.0 新增）**。第三方抽奖动态没有 `lottery_id`，因此**不能**复用 `LOTTERY_CARD_DETAIL`（该页按 `lottery_id` 拉详情必然失败）。
 - 复用 `BaseBiz` 体系：各资源实现 `check_exists()/_load_meta()` 钩子，`get_resource()` 统一装配 `InteractionResource`，`batch_get_resources()` 为每类批量接口（一次 IN/RPC 防 N+1）；不存在返回 `exists=False` 空占位。
 - 评论锚定事件（REPLY/AT）正文经 `CommentBiz.batch_get_resources` 批量回捞，出参带楼层作者 `source_mid/name` 等。
 
 ### 5.11 其余机制要点
 
 - **互动接口通用化**：`/thumb /dislike /share /report` 一律 `bizType+bizId` 定位；路由层只做「`resolve_target` 归一 → `get_biz(...).动作()` → 装配」，防乱调/计数/装配在 service 层。
+- **互动态读接口的存在性校验口径（2.63.0）**：校验只为「有副作用的路径」而设，读接口不替归属服务做存在性判定。
+  - `GET /community/interaction/status`（批量，列表专用、**不累计浏览**）：**不做资源存在性校验**，直接读本地 `TInteractionStat` + 明细 + 评论/转发计数；资源没有互动态本就应返回 `isLike=false` / 计数 0，这是正确语义而非错误。原「任一缺失 → 整批 400」会把下游 RPC 的可用性抖动放大成整页互动态缺失（第三方抽奖列表踩到过），一并去除。
+  - `GET /community/interaction/status/{bizId}`（detail 专用，登录后**投递浏览计数**，有写副作用）：**保留**校验（防任意 bizId 在 `TInteractionStat` / `TInteractionViewLog` 造脏行），但把「校验不通过 / 不可用」从 `400` 改为**降级**：不投递浏览、照常返回本地状态（全 0）。可用性问题不再伪装成业务错误。
+  - 写接口（`thumb / dislike / favorite / report / share / repost`）仍严格校验（`@biz_action(require_resource=True)`），保证 `(bizType, bizId)` 指向真实资源。
+  - 装配侧：`query_status_items` 的详情 RPC **仅对 RPA 系列类型**（`rpa_action / rpa_workflow / rpa_browser / rpa_plugin / rpa_tag`）发起——其余类型（含 `lottery` / `others_lot_dyn` / `comment` / `user`）原样白跑 N 次 RPC 且必然返回空。
+- **浏览计数消费端二次兜底（2.63.0）**：`interaction.view` 消费者在写 `TInteractionViewLog` / `TInteractionStat` 前，用**三态存在性** `BaseBiz.check_exists_state()` 兜底——`False`（明确不存在：资源已删 / 脏消息）→ `ack` 丢弃，防止绕过投递端直接往队列塞任意 `bizId` 造脏行；`None`（校验不可用，如归属服务 RPC 失败）→ 按弱依赖继续计数，避免下游抖动静默吞掉真实浏览；真异常仍 `nack(requeue=True)` 重试、超最大次数 `ack` 丢弃（原策略不变）。`check_exists_state()` 默认复用 `check_exists()`（本地判定无「不可用」态），`LotteryBiz` / `OthersLotDynBiz` 覆盖为真实三态（`get_existing_*_ids` 的 `None` = 不可用）。
 - **私信发送限制**：每日上限 `dm_daily_send_limit`(1000) + 陌生人单条闸门 `dm_stranger_gate_*`；超限分别回业务码 `4001/4002`，不落库。
 - **陌生人私信分类（`DmSessionTypeEnum.STRANGER`，参考 B 站「陌生人消息」集合）**：
   - `DmSessionTypeEnum` 新增 `STRANGER=2`（与 `SINGLE=1` 并列）。`SINGLE` 走主 DM 列表；`STRANGER` 是被接收方「陌生人私信拦截」开关拦下的会话集合，**不进主列表**。
@@ -195,6 +215,15 @@
   - `DmInbox.count_unread` 仅统计 `session_type=SINGLE`：被拦截消息归 STRANGER，顶部 DM 红点不包含它们。
   - 一旦接收方回复同一对话方，会话升级为 `relation=NORMAL`（`case` 表达式只升不降），`session_type` 同步迁回 SINGLE，「毕业」出陌生人分类。
 - **内容发布每日上限**：评论/动态(WORD)/话题按当天创建行计数（软删仍算次数），上限配置化，超限回 `4101/4102/4103`。
+- **评论冗余计数校准（2.64.0，按需工具）**：`msg_comment_subject.root_count / all_count` 与动态类型的 `TInteractionStat.commentCount` 由写路径同事务原子 ±1 维护（2.46.0 已移除定时对账任务，正常无需对账）；**但评论索引 / 正文行被外部删除、迁移或历史脏数据后计数会残留**，表现为「评论数 N 但列表为空」。此时用 `be-message-service/scripts/recount_comment_subject.py` 按 `msg_comment_index` 真实行数重算（口径与写路径一致：仅 `visible(NORMAL)`、`root_count` 只算 `root=0`、动态 `commentCount` 以评论区 `all_count` 为准；不动 `floor_seq`/`state`/`top_rpid`）。默认 dry-run，`--apply` 写回，`--oid` 限定单个评论区；**幂等**（先恢复备份数据再跑一次即可重新对齐）。
+- **运行时配置中心（2.64.0）**：`msg_sys_config`（`key` 主键 + `value` JSON + `updatedBy`）承载**可热更新**的运营参数，由 `app/services/common/runtime_config.py` 提供读取器：各配置项在 `CONFIG_SPECS` 登记**值模型（SQLModel）+ settings 默认值提供者**，`get_config_model()` 把库里的 JSON 转成模型实例后返回——缺失字段补模型默认、多余字段忽略、类型不符则整体回落默认，业务侧拿到的**始终是校验过的强类型对象**（不接触裸 dict）；写入侧走同一模型的 `model_dump(mode="json")` 规范化后落库，脏配置进不了库。进程内 TTL 缓存（默认 10s）+ DB 权威 → 管理端改一次，写入实例立即生效、其余实例 ≤ TTL 自然刷新（**不引入 Redis**，与「所有数据落 MySQL」的项目约定一致）。DB 未建 / 查询失败 / 值非法一律回落 `settings` 默认值（不阻断业务）——**读取用 `SAVEPOINT`（`begin_nested`）包裹**，失败只回滚到保存点，绝不把调用方业务事务打成失败态（否则表未建时整个评论发布会连带崩）；写入要求管理员（`AdminUser`）+ pydantic 校验，非法值 400 不入库。**分层语义**：settings 只表示「代码默认值 / 兜底」，运行时可覆盖项按需接入（当前仅评论频率限制）。迁移：`alembic/versions/20260920_1500-msg_sys_config_.py`。**管理端界面**：`/app/admin/sys-config`（路由名 `ADMIN_SYS_CONFIG`，`requiresMessageRoot`，管理后台侧边栏「系统设置」组 + 首页卡片入口）；`GET /api/v1/message/admin/sys-config` 返回**全部已登记项**（未写入 DB 的项以 settings 默认值返回并标 `isDefault=true`，管理端因此能看到「当前生效值」），`POST .../update` 写入；评论限流用结构化表单（两档 × 规则行增删，实时显示规则效果），未登记的 / 未来新增项回退 JSON 编辑；前端调用走手写封装 `Vue3FrontEndDemoExercise/src/api/community/sys_config_api.ts`（不阻塞 hey-api SDK 重新生成，生成后可平滑替换）。**注意**：TTL 缓存意味着「改完配置到全实例一致」有 ≤ TTL 的窗口，限流阈值调整场景可接受；若将来要求秒级一致，可在既有 `message_exchange`（TOPIC）上加广播失效，不改变读取路径。
+- **评论防刷屏（2.63.0；2.64.0 改为 DB 窗口计数 + 双档阈值 + 可热更新）**：三层窗口（同内容 / 总量短窗 / 总量长窗）的**求值逻辑唯一**，但**阈值按 scope 分两档**：
+  - `root`（一级评论，广场刷屏的主要目标）：同内容 10s ≤ 2 次；总量 10s ≤ 3 次；总量 60s ≤ 15 次；
+  - `reply`（楼中楼回复，连回多人属正常行为）：同内容 10s ≤ 3 次；总量 10s ≤ 6 次；总量 60s ≤ 30 次（沿用 2.63.0 原数值）；
+  - 阈值可管理端热更新（见上条）：`msg_sys_config['comment_rate_limit']`（形如 `{"root":[...],"reply":[...]}`，两档同 key 保证原子更新），缺失时回落 `settings.comment_rate_root_rules` / `comment_rate_reply_rules`；规则字段 `{window_seconds, max_count, same_content}`，`[]` 表示关闭该档限流。
+  - **计数源改为 MySQL `msg_comment_index`**（跨实例一致，取代原「各实例独立计数」的既有局限）：总量 = 窗口内该 mid 的创建行数（一级加 `root=0`、回复加 `root<>0`）；同内容 = 同窗口内 JOIN `msg_comment_content` 按 `message` 等值匹配。走 `idx_comment_user(mid, rpid)` + `created_at`，窗口内行数极少，成本可忽略。删除为软删（行保留），故被删评论仍计入窗口，与每日上限口径一致。
+  - 命中任一规则统一回 400「操作过于频繁，请稍后再试」；被拒请求不落库、不计入窗口。与每日创建上限（`comment_daily_create_limit`）叠加：前者防秒级刷屏、后者防累计灌水；并发下两条同时通过计数可能超出阈值 1~2 条（阈值有余量 + 日上限兜底，可接受）。
+  - **执行点唯一、求值逻辑唯一（阈值分档不违反本约束）**：限流只在 `CommentService.add` 一处执行（一级 `reply` 与楼中楼 `CommentBiz.reply` 的共同落点），按 `req.root`（`"0"` = 一级）选一档阈值后交给**同一个求值循环**；新增发布入口必须收敛到 `CommentService.add`，**禁止在路由层 / 资源类各自实现限流**（否则会出现两套计数源）。每日创建上限同样在同点共用（按 `CommentIndex.mid` 当天全部行计，含一级与楼中楼）。回归由 `tests/test_comment_rate_limit.py` 锁定。
 - **动态不可编辑**（2.58.0 移除 `POST /edit`）；转发/发布/删除/置顶保留。
 - **会话置顶**：`top_ts`（毫秒，0=未置顶）唯一真相源，列表 `top_ts DESC → last_msg_ts DESC`，可多会话置顶。
 - **匿名可读互动态**：`interaction/status` 依赖降级 `OptionalUser`，匿名 `viewer_mid=0` → `isLike/isFavorite` 恒 false；浏览统计不匿名投递。

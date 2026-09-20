@@ -71,6 +71,9 @@ from bili_common.rpc.lottery import (
     CheckLotteryExistRpcParams,
     CheckLotteryExistRpcResult,
     LotteryDetailItem,
+    CheckOthersLotDynExistRpcParams,
+    CheckOthersLotDynExistRpcResult,
+    OthersLotDynDetailItem,
 )
 from bili_common.models.user_search import (
     UserSearchParams,
@@ -197,6 +200,9 @@ __all__ = [
     "CheckLotteryExistRpcParams",
     "CheckLotteryExistRpcResult",
     "LotteryDetailItem",
+    "CheckOthersLotDynExistRpcParams",
+    "CheckOthersLotDynExistRpcResult",
+    "OthersLotDynDetailItem",
     "UserSearchParams",
     "PptrUserRoleInfo",
     "PptrUserLevelInfo",
