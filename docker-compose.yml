@@ -154,6 +154,10 @@ services:
       - V2RAY_HOST=${V2RAY_HOST}
       - TZ=${ENV_TZ}
       - SHOW_LOG=${FASTAPI_SHOW_LOG}
+      # 业务日志等级（loguru，SHOW_LOG=0 时作用于 stdout sink）。
+      # 与 be-message-service 共用同一变量名 LOG_LEVEL，宿主 .env 里设一次即可统一调整；
+      # 未设置时默认 WARNING（只保留告警与错误）；临时排查可设 INFO。
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       - IS_DEV=${IS_DEV}
       - llm_apis=${llm_apis}
       # 同上的原因：这三项在 .env.fastapi.dev 里是宿主机视角（localhost / 10009 / True），

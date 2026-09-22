@@ -4,7 +4,63 @@
 > 上一轮补的 SEO 标签（title / description / canonical / OG / JSON-LD）要等 JS 执行后才写入 DOM，
 > 不执行 JS 的爬虫（Bing、多数社交分享抓取）什么都拿不到。
 
-## 1. 方案选型
+## 0. 方案变更（最终形态：无头浏览器预渲染）
+
+> 下文 §1~§7 是最初的「Vike renderToString（SSR/SSG）」方案与实施记录，仍然有效但**已被替换**——
+> 因组件里大量浏览器 API + 数据都在 `onMounted` 里取，Node 端渲染要额外做 SSR 兼容改造，成本偏高。
+> 现改为**构建后用无头浏览器抓取**，SSR 兼容那层全部不需要。
+
+**当前流程**：`vike build --mode prod`（产出前端资源）→ `node scripts/prerender.mjs`
+（起 `vike preview`：按 `renderer/+onRenderHtml.ts` 输出外壳 HTML 并把 `/api` 反代到后端 →
+Playwright 逐个打开收录 URL → 等首屏渲染出内容 → 把渲染后的 DOM 连同页面实际加载到的数据
+写回 `dist/client/<path>/index.html`）。
+
+**实测验证（2026-09-21）**
+
+```
+PRERENDER_API_TARGET=https://serena.dynv6.net npm run build
+→ 客户端 ✓ built / ✓ built，预渲染 10/10 成功
+→ 产物数据核对：official 页 total=345、首条 opus/1247774079235129382
+   与生产接口「相同筛选参数」返回完全一致（生产 total=32081 是本页默认筛选前的总数）
+→ preview 的 /api 代理探测 total=32081 = 生产（不是本地 30511），确认数据源正确
+→ 浏览器（Playwright）：首屏快照即渲染、客户端刷新后「筛选结果 345」、无 hydration/mismatch
+   报错；屏蔽第三方脚本后零 PAGEERROR
+```
+
+**健壮性**：列表请求失败时**不再清空已有列表**（`clearOnlyWhenEmpty`）——
+首屏可能来自静态快照，若因一次网络抖动就清零，页面反而比 SPA 更差。
+
+| 关注点 | 做法 |
+| --- | --- |
+| 数据进 HTML | 页面正常在浏览器里跑（`onMounted` 照旧），DOM 快照天然带数据 |
+| 首屏不闪 / 不重复请求 | 采集：`collectSsrData()`（`VITE_PRERENDER_COLLECT=1` 时生效）→ 脚本读 `window.__PRERENDER_DATA__` → 注入为 `window.__SSR_DATA__` → 客户端 `loadSsrData()` 复用 |
+| 水合 | 客户端用 `createApp().mount()`（非 hydrate），Vue 接管并重建 DOM，**没有水合不匹配** |
+| Vike 的角色 | 只提供 SPA 外壳（`ssr: false` / `prerender: false`）+ 客户端入口注入 + dev/preview；路由仍由 vue-router 负责（catch-all `/*`） |
+| 预渲染清单 | `src/config/seo_routes.ts`，与 sitemap / robots 同源 |
+| 环境变量 | `PRERENDER_API_TARGET`（默认 `http://localhost:9923`）、`PRERENDER_CHROMIUM`（自定义 chromium 路径）、`PRERENDER_SKIP_THIRD_PARTY=0`（不屏蔽第三方脚本） |
+
+**前提**：构建与预渲染都需要后端在线（hey-api 生成 SDK 要拉本地 `openapi.json`；预渲染要真实接口数据）。
+
+### 数据源策略（重要）
+
+HTML 里的数据来自 `PRERENDER_API_TARGET`，且是**构建时刻的快照**：
+
+- **生产构建必须指向生产接口**，否则会把本地开发库的数据写进上线产物：
+  ```bash
+  PRERENDER_API_TARGET=https://serena.dynv6.net npm run build
+  ```
+  脚本在检测到目标仍是 `localhost` 时会打印醒目告警。
+- **客户端加载后仍会重新拉取最新数据**（快照只用于首屏渲染，不会让用户停在旧列表）。
+- 因此快照的时效 = 构建频率，建议把预渲染纳入发布流程，或按需定时重建。
+- 需要登录态的页面可用 `PRERENDER_COOKIE` 带凭证抓取；当前清单里的页面都是匿名可读
+  （已实测生产接口 `GetOfficialLottery` / `GetReserveLottery` / `GetChargeLottery` /
+  `GetTopicLottery` 匿名返回 200）。
+
+**因此已删除/回滚的东西**：`onServerPrefetch` 预取、`src/app/ssr_shim.ts`、createApp 的 ssr 分支、
+服务端 `baseUrl`、Element Plus SSR provider。SSR 兼容相关的 `typeof window` 判断予以保留（无害，
+且以后若要上真 SSR 可直接复用）。
+
+## 1. 方案选型（原 SSR/SSG 方案，已弃用）
 
 | 决策项 | 结论 | 理由 |
 | --- | --- | --- |
@@ -90,7 +146,36 @@ SPA 跳转到 `/app/lot-data/bili-data/official` 后 title 变为「官方抽奖
 **已知待办**：Element Plus 仍打印 `IdInjection / ZIndexInjection` 警告（疑似 element-plus 被打成两份，
 待用 `resolve.dedupe` 或 `ssr.noExternal` 收敛）；页面正文目前不含接口数据（P2 补 `onServerPrefetch`）。
 
-## 6. 验证方式
+## 6. P2 实施记录（真实数据进 HTML）
+
+**做法**：`src/app/ssrData.ts` 提供「服务端预取 → 序列化进 HTML → 客户端首屏复用」的快照机制。
+
+- 页面组件：`onServerPrefetch()` 里拉数据 + `setSsrData(key, 快照)`；
+- 数据消费方（`useLotteryData`）：初始化时 `getSsrData(key)`，有值即用，并返回 `hydratedFromSsr` 让 `onMounted` **跳过重复请求**；
+- `+onRenderHtml.ts`：渲染前 `clearSsrData()`（每页独立），渲染后把快照写成 `window.__SSR_DATA__`（`<` 转义防脚本提前闭合）；
+- `+onRenderClient.ts`：创建应用**之前** `loadSsrData(window.__SSR_DATA__)`，保证首屏与服务端一致。
+
+**结果**（预渲染 HTML 正文长度，改造前均约 650 字符）
+
+| 页面 | 正文长度 | 下发数据 |
+| --- | --- | --- |
+| 官方抽奖 | 656 → **60040** | 筛选参数 14 项 + 列表 10 条（total 30511） |
+| 充电抽奖 | → **29435** | 14 项 + 10 条（total 26102） |
+| 预约抽奖 | → **11141** | 14 项 + 10 条（total 60831） |
+| 话题抽奖 | → **7249** | 14 项 + 10 条（total 27） |
+
+**浏览器实测**：`window.__SSR_DATA__` 存在、列表首屏即为服务端数据、**无 hydration mismatch**、
+title 正确；SPA 跳转 head 仍由 `useRouteSeo` 正常接管。
+
+**附带修复**：`runtime_config.ts` 在 SSR 下改用绝对 `baseUrl`（`VITE_SSR_API_BASE`，默认本地网关
+`http://localhost:9923`，因为 Node 无法请求相对 URL）；`useLotteryData` 的轻提示改为 SSR 安全的
+`notifyError`（服务端没有 DOM）。
+
+**P2 未覆盖**（后续可再加）：名人堂（数据由懒加载子组件驱动）、爬虫状态页、山姆会员店（GraphQL）、
+以及动态详情类页面（`?dynId=` / `?lottery_id=` / `/app/moment-detail/:id`：URL 无法穷举，
+纯静态托管下无法预渲染，需要真 SSR 服务才能覆盖，届时可复用同一套 `ssrData` 机制）。
+
+## 7. 验证方式
 
 - `curl -s dist/client/index.html | grep -c "抽奖"`：预渲染产物必须含真实内容（而非只有骨架）；
 - 每个 URL 对应 `dist/client/<path>/index.html` 存在且含 `<title>`、`canonical`、JSON-LD；
