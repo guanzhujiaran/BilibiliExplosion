@@ -77,6 +77,14 @@ class ResponseCode(IntEnumAutoDoc):
     PAGE_NAVIGATION_FAILED = 2011
     SCREENSHOT_FAILED = 2012  # 截图失败（操作失败；原与 PAGE_CLOSED 共用 2007）
 
+    # 浏览器启动内存准入 / 排队（RPA-Browser：内存不足时按 VIP / 普通双队列排队）
+    BROWSER_LAUNCH_MEMORY_INSUFFICIENT = 2013  # 内存不足，启动请求已进入排队
+    BROWSER_LAUNCH_QUEUE_TIMEOUT = 2014  # 排队等待超时（内存长时间未释放）
+    BROWSER_LAUNCH_QUEUE_CANCELLED = 2015  # 排队被取消（用户关闭 / 主动取消）
+
+    # 执行期互斥（RPA-Browser：工作流运行中禁止调试类接口，直播不受影响，见计划书 §5.17）
+    BROWSER_WORKFLOW_RUNNING = 2016  # 浏览器正在执行工作流，调试类接口暂不可用
+
     # Casdoor OAuth 相关错误码
     CASDOOR_OAUTH_ERROR = 3001       # Casdoor 返回错误（如 code 过期、invalid_grant）
     CASDOOR_ENDPOINT_NOT_CONFIGURED = 3002  # Casdoor endpoint 未配置

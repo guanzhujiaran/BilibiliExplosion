@@ -59,10 +59,10 @@
 ### 5.1 资源约定（`public` 下静态托管目录）
 
 动作图标是**内容图库**（可能是 png 等位图，不是纯 SVG，规模达数千张 / 数百 MB），因此资源放在
-`public/action-icons/`：Web 服务器**原样托管、不参与打包、不加内容 hash**。
+项目根 `action-icons/`（**不在 `public/`**）：Web 服务器**原样托管、不参与打包、不加内容 hash**；不进产物，部署时单独同步到站点根（见 `docs/前端部署说明.md`）。
 
 ```
-public/action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片名称}.{扩展名}
+action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片名称}.{扩展名}
 ```
 
 > 变更说明：初版曾放在 `src/assets/action-icons/` 并用 `import.meta.glob` 按需加载，
@@ -134,7 +134,7 @@ public/action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{�
 
 | 文件 | 改造 |
 | --- | --- |
-| `src/utils/rpa/actionIcon.ts`（改造） | 不再用 `import.meta.glob`，改为读取清单 `actionIconManifest.ts` 构建 `系列编号 → {系列名, 分类, 图标表}` 注册表；运行时 URL = `` `${import.meta.env.BASE_URL}action-icons/${dir}/${file}` ``（逐段 `encodeURIComponent`）；图标组件惰性创建并缓存（`<img>`）；导出 `resolveActionIcon` / `getDefaultActionIcon` / `isDefaultActionIcon` / `hasActionIcon` / `getActionIconName` / `getActionIconSeriesName` / `getActionIconCategory` / `getActionIconSeries` / `getActionIconCategories` / `formatActionIconSeriesLabel` / `hasAnyActionIcon` / `ACTION_ICON_DIR` |
+| `src/utils/rpa/actionIcon.ts`（改造） | 不再用 `import.meta.glob`，改为读取清单 `actionIconManifest.ts` 构建 `系列编号 → {系列名, 分类, 图标表}` 注册表；运行时 URL = `` `/action-icons/${dir}/${file}` ``（**站点根绝对路径**，逐段 `encodeURIComponent`；**不可用 `import.meta.env.BASE_URL`** —— Nuxt 客户端它是 `/_nuxt/`，拼出来是 `/_nuxt/action-icons/…` 必然 404 破图）；`ActionIcon.vue` 直接渲染 `<img>` 并在 `@error` 时回落 fallback；导出 `resolveActionIconUrl` / `getDefaultActionIcon` / `isDefaultActionIcon` / `hasActionIcon` / `getActionIconName` / `getActionIconSeriesName` / `getActionIconCategory` / `getActionIconSeries` / `getActionIconCategories` / `formatActionIconSeriesLabel` / `hasAnyActionIcon` / `ACTION_ICON_DIR` |
 | `scripts/gen-action-icon-manifest.mjs`（新） | 扫描 `public/action-icons/`（分类层可选）解析 `series/id/名称/扩展名`，SVG 优先去重、跨分类同编号告警，生成 `src/utils/rpa/actionIconManifest.ts`（含 TS 接口，避免 TS 逐键推断超大字面量）；支持 `--check` 校验清单是否最新 |
 | `src/utils/rpa/actionTypeIcon.ts`（新） | 内置动作类型图标表（由 `ActionCard` 原 `iconMap` 抽出）+ `DEFAULT_ACTION_ICON`（`QuestionFilled`）+ `resolveActionTypeIcon()`；作为图库未命中时的**统一默认图标** |
 | `src/components/rpa-browser/ActionIcon.vue`（新） | 统一图标渲染器：`<component :is>` 渲染异步组件（SVG / 位图形态差异已被注册表抽象）；未命中时渲染 `fallback` 插槽；`inheritAttrs: false` + `v-bind="$attrs"` 让尺寸/颜色 class 透传 |
@@ -150,7 +150,7 @@ public/action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{�
 
 ### 5.4 待用户提供
 
-1. 在 `public/action-icons/` 下按
+1. 在项目根 `action-icons/` 下按
    `{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片名称}.{ext}` 放置资源
    （分类层可省略；`ext` 可为 `svg` / `png` / `jpg` / `jpeg` / `webp` / `gif`），
    然后执行 `npm run icons:manifest` 重建清单。

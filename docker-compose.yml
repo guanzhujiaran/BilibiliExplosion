@@ -271,6 +271,9 @@ services:
       # 仅挂载源码子目录（容器内代码根目录为 /app）
       - ./RPA-Browser/app:/app/app
       - ./RPA-Browser/alembic:/app/alembic
+      # 等级指纹配额配置（app/data/permissions.json，管理端「浏览器配额」页读写）：
+      # 显式单独挂载（比外层 app 目录更具体，覆盖之），去掉源码挂载时也不会随容器重建丢失
+      - ./RPA-Browser/app/data:/app/app/data
       # 运行期下载的 chromium 落到宿主机目录持久化（避免被源码挂载覆盖、容器重建后丢失）
       - ./docker_vol/rpa/chrome_app:/app/app/chrome
       # 浏览器 user_data_dir（登录态/指纹 profile）落宿主机持久化，容器重建不丢

@@ -32,6 +32,11 @@
 - **模型文件命名**：`app/models/db/` 各表模型统一 `_tbl` 后缀；包导出方式不变。
 - **输出模型命名**：对外响应模型统一 `XxxOut` 后缀（对齐 FastAPI「输出模型过滤」语义）；字段可见性一律用 `Private()` 标记 + 序列化期上下文裁剪表达（见 §5.12），**不再用 Public/Private 继承**。
 - **跳转契约**：后端只发前端路由名（`route:{name}?{query}`，枚举 `FrontendRouteEnum`），路径只在前端路由表写一次。
+- **推送/服务标识配置单一来源**：`bili_common.core.push_settings.PushNotifySettingsMixin`（pydantic 片段，供 `BaseSettings` 混入）承载各服务共用的推送与会话标识字段——`message_config`（全局渠道配置，单 JSON 环境变量 `MESSAGE_CONFIG`）、`SERVER_NAME` / `SERVER_ADDRESS`、`hitokoto_api_url`、`pushme_url` / `pushplus_url`（渠道默认端点）、`rabbitmq_url`。
+  - `be-message-service/app/core/config.py`、`RPA-Browser/app/config.py`、`be-bilibili-crawler/CONFIG.py` 的 `Settings` 统一写成 `class Settings(PushNotifySettingsMixin, BaseSettings)`：**mixin 必须排在 `BaseSettings` 之前**（pydantic 才能把基类注解收成字段，且环境变量 / `env_file` 覆盖行为不变）；服务各自的差异默认值在自己的类体里覆盖——`SERVER_NAME`（`rpa-browser` / `be-bilibili-crawler`）、be-message 的 `message_config = PushChannelConfig(hitokoto=False)`（本服务不拼随机句子）。`rabbitmq_url` 的默认值（`amqp://guest:guest@rabbitmq:5672/?heartbeat=180`）也收敛到 mixin，RPA-Browser 与 be-message-service 不再各自声明。
+  - **禁止再复制渠道配置模型**：`PushChannelConfig` 单一来源为 `bili_common.models.push`（历史上 `bili_common` / `RPA-Browser` / `be-bilibili-crawler` 各有一份副本，已收敛）；RPA 侧 `app.config` 继续 re-export 以兼容存量 `from app.config import PushChannelConfig` 的引用。
+  - 需要按 `host/port/user/password` 自行拼连接串的服务（crawler）不使用共享的 `rabbitmq_url`，其 `RabbitMQConfig.broker_url` 维持原拼接方式。
+  - **服务标识前缀单一来源**：`[服务名@地址]` 的拼接收敛到 `bili_common.core.push_settings.build_server_label(settings)`——服务名取 `settings.SERVER_NAME`，被环境变量置空（模板里的 `SERVER_NAME=`）时回落**该类字段声明的默认值**（各服务 `Settings` 里写的服务名），最后 `unknown-service` 兜底；地址取 `settings.SERVER_ADDRESS`，缺省自动取本机 hostname。RPA-Browser 的 `app/services/message/push_msg.py` 与 be-bilibili-crawler 的 `Utils/推送/PushMe.py` 各自保留零参 `server_label()` 包装（历史调用点零改动），内部只委托一次，不再各写一遍逻辑。
 - **日志**：loguru。
 
 ---
@@ -49,7 +54,7 @@
 
 - **动态 Moment** `/api/v1/community`：发布/删除/转发/详情/互动（`thumb/dislike/share/report/repost/favorite`）/置顶/Feed（综合/话题/关注流/空间）。
 - **评论** `/api/v1/comment`：发表/列表/楼中楼/赞踩/置顶/@/举报/管理端审核队列。
-- **消息** `/api/v1/message`：`notify`（通知）/`event`（事件）/`dm`（私信，含 send/审核/置顶）/`setting`/`msg_feed`/`follow`/`push`/`admin`。
+- **消息** `/api/v1/message`：`notify`（通知）/`event`（事件）/`dm`（私信，含 send/审核/置顶）/`setting`/`msg_feed`/`follow`/`push`（投递/测试/`feedback` 用户反馈，见 §5.11）/`admin`。
 - **收藏夹** `/api/v1/favorite`。
 - **用户中心** `/api/v1/user`：空间信息/资料更新（头像审核）/登录经验。
 - **管理端**：评论/动态/话题/头像/封面/举报审核队列 + 统计。
@@ -228,6 +233,9 @@
 - **会话置顶**：`top_ts`（毫秒，0=未置顶）唯一真相源，列表 `top_ts DESC → last_msg_ts DESC`，可多会话置顶。
 - **匿名可读互动态**：`interaction/status` 依赖降级 `OptionalUser`，匿名 `viewer_mid=0` → `isLike/isFavorite` 恒 false；浏览统计不匿名投递。
 - **举报列表**：`ReportItem` 追加举报人/被举报人用户信息 + 资源快照 `resource`（一次批量回捞）。
+- **用户反馈（`POST /api/v1/message/push/feedback`）**：只投给站长本人——不接收 per-user 渠道配置，固定回落全局 `MESSAGE_CONFIG`；推送标题为 `用户反馈|{source}` + 用户标签。
+  - **`source` 由前端页面自己传入**：常量单一来源 `Vue3FrontEndDemoExercise/src/api/notify/message_feedback.ts` 的 `FEEDBACK_SOURCE`，各抽奖页把**具体抽奖类型**（官方抽奖 / 预约抽奖 / 充电抽奖 / 话题抽奖 / 第三方抽奖）经 `LotteryDataTableToolbar` 透传给 `SubmitFeedbackModal`，**不再一律落到笼统的「抽奖数据页」**（站长据此才能区分反馈来自哪种抽奖页面）。
+  - **`contact` 长度上限** `FEEDBACK_CONTACT_MAX_LENGTH = 100`（`be-message-service/app/models/push.py`）：后端 `FeedbackRequest.contact` 用 `Field(max_length=...)` 做**最终校验**（超长由请求参数校验拦截），前端 `maxlength` + 表单 `max` 规则只做体验层拦截，两侧数值保持一致；前端提交失败优先展示后端 `msg`。
 
 ### 5.12 字段可见性：上下文感知序列化
 
@@ -313,7 +321,113 @@
 - **时间戳基准修正（第二期）**：`aiortc.VideoStreamTrack.next_timestamp()` 硬编码 `VIDEO_PTIME = 1/30` 递增 PTS 并按 30fps 睡眠——降级限帧真正生效后（5fps），PTS 仍按 33.3ms/帧推进，**时间轴与真实出帧节奏脱钩**。改为在 `WebRTCMediaTrack.recv()` 内用**墙钟时间**换算 PTS（严格单调递增），节流职责完全由生产者承担；轨道结束由 `raise StopIteration` 改为 `raise MediaStreamError`（aiortc 的 sender 只对 `MediaStreamError` 静默收尾，`StopIteration` 会被 asyncio 包装成 `RuntimeError` 走 warning 分支）。
 - **解码失败语义（第二期）**：不再「一次失败即返回上一帧 / 绿屏」，改为**跳过该帧继续取下一帧**；仅当连续失败达阈值（`_MAX_DECODE_FAILURES=5`）才用绿屏保活。同时去掉 `start()` 预置的 640×480 死帧（消费者本就阻塞等队列，该帧永不生效），绿屏兜底尺寸跟随最近一次成功帧，避免尺寸突变触发 H264 编码器重配。
 
+### 5.17 RPA 浏览器入口准入与执行期互斥
+
+- **背景问题**：启动内存准入（§5.11 / `docs/frontend_requirements/浏览器启动内存排队.md`）落地后，各入口的「是否启动浏览器」「会话不存在时如何响应」口径不统一，并存在两处实现缺陷：
+  1. `workflow_router.execute_workflow_step` 的 `except Exception` 会把业务异常 `BrowserNotStartedException`（`code=1007`）吞掉并降级成 **HTTP 500**，前端拿到的是「服务端故障」而非可操作状态（`execution_router` 只 catch `ValueError`，同场景正常返回 `1007`，两者不一致）；
+  2. 两处 `_resolve_page` 中的 `if not entry: raise ValueError(...)` 是**死代码**——`get_browser_session_entry` 的返回类型非 Optional，找不到会话直接抛 `BrowserNotStartedException`，从不返回 `None`，该分支永不成立且会误导读者以为「会话不存在 = ValueError」。
+- **入口分类（唯一口径）**：
+
+  | 类别 | 入口 | 会话不存在时 |
+  | --- | --- | --- |
+  | **会启动** | `create`、`pages/*`、`webrtc/offer`、工作流执行 | 先 `would_queue_browser_session()` 前置；内存不足返 `2013`，否则自动启动并进入内存队列 |
+  | **只消费** | 调试 / 单步执行（`/actions/execute`、`/actions/execute_step`、`/workflows/execute_step`） | 返回 `1007 BROWSER_NOT_STARTED`，由前端引导用户点「启动浏览器」 |
+
+  **调试入口不承担启动职责**：单步执行是高频轻量操作，不应触发「启动浏览器」这一重操作，更不应把 HTTP 请求阻塞在最长 `browser_launch_queue_max_wait_time`（600s）的排队上。会话被闲置回收（§5.15）后，引导用户复用既有排队 UI 重新启动。
+- **执行期互斥（工作流 ⇄ 调试）**：工作流执行期间**禁止**调试类接口操作同一会话，避免与工作流的页面操作相互干扰；但**允许直播**——WebRTC `offer` / `answer` / `ice-candidate` 属只读拉流，不影响自动化。
+  - **判定不复用 `pin_count`**：`ExecutionEngine.execute_action`（单步调试自身）与 `execute_steps`（工作流）都会 `pin`（见 §5.15 自动化占用），无法据此区分「工作流在执行」与「用户自己在调试」，因此需要**独立的「工作流占用」标记**（如 `BrowserSessionEntry.workflow_run_id: str | None`，由 `WorkflowRunner.run_workflow` 进入时设置、退出时清空）。
+  - **互斥响应**：命中时返回新增业务码（落 `bili_common.models.response_code`，语义「该浏览器正在执行工作流」），前端提示「浏览器正在执行工作流，请稍后重试」。
+- **会话统一有头**：所有浏览器实例均为**有头模式**（`xvfb_enabled` 提供虚拟屏幕，见 §5.11），**不存在无头会话，定时任务也不例外**。
+  - **已修正（本轮落地）**：`app/services/execution/workflow_runner.py` 原传 `headless=True`（该值会透传到 `Botright(headless=...)` 产生真正的无头 Chromium），现改为 `headless=False`。
+  - **依据**：有头模式是反自动化检测的关键（见 `app/config.py` 中 `xvfb_enabled` 的注释——服务器无物理显示器，用 Xvfb 提供虚拟屏幕，浏览器仍是完整有头模式）。定时任务同样要访问 B 站页面，无头指纹会显著抬高被检测风险，不能因「无人值守」而降级为无头。
+- **排队时长估算（ETA）**：`/browser/control/queue_status` 增加 `estimated_wait_seconds` + `estimate_reliable`，供前端展示「预计还需约 X 秒」。模型按「排队慢在哪」分两种情形：
+  - **名额已释放**（`_admission_budget() > 0`）：剩余等待只来自放行冷却，估算 = 冷却剩余 + 前方人数 × 冷却周期，标记**可信**；
+  - **名额不足**：时间主要花在「等别的会话释放内存」上，用**实测连续放行间隔**推算——内存越紧张、间隔越大，估算自动放大；但释放时机取决于其他会话的关闭时刻，无法预测，故标记**不可信**；样本不足时退化为冷却下限（偏乐观）。
+  - **采样口径**：仅在「放行后队列仍有等待者」时记录放行时刻。该间隔由内存释放 + 冷却共同决定，才是排队时长的有效信号；队列排空后的间隔只反映空闲时长，纳入会严重高估。
+  - **队首不返回 0**：名额不足时队首（前方 0 人）仍要等下一次放行，故按「前方人数 + 1」个间隔估算，避免「0 秒」误导。
+  - **本质局限**：内存何时释放取决于其他会话的关闭时机，不可预测，因此该值只作参考、不作承诺，前端措辞必须区分可信 / 不可信两种口径。
+  - 配置：`browser_launch_eta_sample_window`（默认 20）、`browser_launch_eta_min_samples`（默认 3）。
+
+- **错误码语义（本节明确）**：
+
+  | code | 语义 | 适用入口 |
+  | --- | --- | --- |
+  | `1007` | 浏览器未启动 / 已被闲置回收 | 调试 / 单步执行 |
+  | `2013` | 内存不足，启动请求已进入排队 | 会启动的入口 |
+  | 待新增 | 浏览器正在执行工作流 | 工作流执行期间的调试请求 |
+
+- **前端需求**：见 `docs/frontend_requirements/浏览器调试接口准入与互斥.md`。
+
+### 5.18 RPA 浏览器 WebRTC 清晰度档位与自动降载
+
+- **背景问题**：§5.16 的清晰度控制只有**布尔两档**（`VideoFrameProducer.set_degraded(bool)`），且完全由后端闲置生命周期单向驱动（闲置降档、真实操作 `touch` 恢复）。两个缺口：① 用户无法主动选清晰度（弱网 / 小屏场景只能忍受默认画质）；② 前端把标签页切到后台时，画面仍按满帧编码传输，CPU / 带宽 / 电量纯属浪费。
+- **档位定义**（`StreamQualityLevelEnum`，越省资源档位越低）：
+
+  | 档位 | JPEG quality | 分辨率（浏览器侧） | 帧率 |
+  | --- | --- | --- | --- |
+  | `high` 高清（默认） | 80 | 浏览器自适应（≤800×800） | 30fps |
+  | `medium` 标清 | 65 | 960×540 | 15fps |
+  | `low` 流畅 | 50 | 640×360 | 5fps |
+
+  `high` / `low` 与改造前的「正常档 / 降级档」参数完全一致，**行为向后兼容**；`medium` 为新增中间档。
+- **「取最省」仲裁**：三个来源各自只表达「我想要哪一档」，最终生效档位取其中最省的一个，彼此无需感知对方：
+
+  | 来源 | 表达 | 说明 |
+  | --- | --- | --- |
+  | 用户手动 | `user_level`（默认 `high`） | 前端清晰度选择器 |
+  | 前端可见性 | `visibility_low`（bool） | 标签页切后台 / LiveBox 不可见 |
+  | 后端闲置 | `idle_degraded`（bool，沿用既有 `set_degraded`） | §5.15 闲置生命周期驱动 |
+
+  **生效档位 = `low` if (可见性低 or 闲置降级) else user_level**。
+  这解决了两类冲突：闲置降级**始终生效**（省资源优先，用户选高清也不能阻止）；`touch` 恢复只解除闲置来源，**不解除可见性来源**（页面仍在后台时不该恢复满帧）。
+- **接口**（均为控制类，不涉及 SDP 重协商）：
+
+  | 接口 | body | 语义 |
+  | --- | --- | --- |
+  | `POST /browser/control/webrtc/quality` | `{ level }` | 设置用户档位，作用于本会话所有流 |
+  | `POST /browser/control/webrtc/visibility` | `{ visible }` | 前端可见性信号：`false` 降档、`true` 恢复 |
+
+  档位切换通过**重启 screencast**（`_restart_screencast`）生效，WebRTC 连接与轨道不变，前端画面自然衔接（切换瞬间可能丢 1~2 帧），**无需重连、无需重新 offer/answer**。
+- **前端自动降载**：`LiveBox.vue` 同时监听两类不可见，任一不可见即 `visible=false`，全部恢复才 `visible=true`：
+  - `document.visibilitychange`（标签页切后台 / 最小化）；
+  - `IntersectionObserver`（LiveBox 被 `el-splitter` 折叠、被弹层遮挡、滚出视口）。
+
+  **组件卸载 / 主动停流时需复位**，避免残留不可见状态把后续新流压在低档。
+- **暂停 / 恢复**：`POST /browser/control/webrtc/pause`（body `{ paused }`）——用户主动暂停发送视频。
+  - **暂停**：停止 screencast（浏览器侧不再做 JPEG 编码），并让轨道 `recv()` 挂起、不返回帧。效果：带宽归零、CPU 近乎归零；接收端画面停留在最后一帧（浏览器行为，非后端保证）。
+  - **恢复**：重启 screencast，画面立即续上。**全程不重建 WebRTC 连接**，无需重新 offer/answer。
+  - **与档位无关**：暂停是独立开关，优先级高于清晰度档位（暂停时不出帧，无论选了哪档），也**不参与**「取最省」仲裁。
+  - **关键约束**：`recv()` 挂起期间**绝不能返回 `None`** —— 那会被 `WebRTCMediaTrack` 判定为「生产者已停止」而抛 `MediaStreamError`、直接结束轨道（连接随之结束）。因此 `stop()` 必须唤醒挂起的 `recv()`。
+- **可观测**：`VideoFrameProducerStats` 增加 `level`（生效档位），便于校验降档是否真正生效。
+- **前端需求**：见 `docs/frontend_requirements/WebRTC清晰度档位.md`。
+
+### 5.19 等级指纹配额（浏览器数量上限）管理端配置
+
+- **配置源**：`RPA-Browser/app/data/permissions.json` 的 `levels[].max_fingerprints`，由 `PermissionConfigService`（`app/services/RPA_browser/permission_config_service.py`）读写；文件缺失或读取异常时回落代码内 `DEFAULT_CONFIG`（缺失时按默认值自动生成该文件）。读取**每次都直接读文件、无进程内缓存**，改完即时生效、无需重启。
+- **生效点**：`verify_fingerprint_limit`（`app/utils/depends/security_depends.py`）挂在「创建/更新浏览器指纹」接口上 —— 指纹数 ≥ 该等级 `max_fingerprints` 即拒绝；`root` 角色恒取 root 档（不受等级限制），未匹配到 `level_value` 时返回 0（不允许创建）。超限抛 `FingerprintLimitExceededException`（业务码 `2008`）。
+- **管理端接口（仅 root）**：
+  - `GET /api/admin/rpa/permission/levels`：返回各等级 `level_name` / `level_value` / `permissions` / `max_fingerprints`，并附带 `config_file`（实际读写路径，便于运维定位）。
+  - `POST /api/admin/rpa/permission/update`：**只接受 `max_fingerprints`**，按 `level_name` 合并进磁盘现值后整体写回；`permissions` 与 `level_value` 一律以服务端现值为准——即使调用方伪造这两个字段也不会生效，避免经配额接口变相改功能权限位。未知 `level_name` 直接 400。
+  - `POST /api/admin/rpa/permission/reset`：恢复为代码内 `DEFAULT_CONFIG` 并写回配置文件（同样 root-only + 审计），供误改 / 数据异常时一键回滚。
+- **落地**：`app/controller/v1/admin/permission_router.py`（`require_root` + `log_admin_action("permission:update", ...)` 审计），业务逻辑在 `PermissionConfigService.update_max_fingerprints()`；路由路径常量在 `app/models/router/router_prefix.py` 的 `AdminPermissionRouterPath`，子路由在 `app/controller/v1/admin/__init__.py` 聚合。
+- **Docker**：`docker-compose.yml` 的 `rpa-browser` 显式挂载 `./RPA-Browser/app/data:/app/app/data`（与既有 `chrome_app` 同一手法：更具体的挂载覆盖外层 `./RPA-Browser/app:/app/app`），避免将来去掉源码挂载后配额配置随容器重建丢失。
+- **前端需求**：见 `docs/frontend_requirements/等级指纹配额管理页.md`。
+
 ---
+
+### 5.20 WebRTC 观看端前提与前端自愈（2026-09-26 实测）
+
+- **观看端浏览器必须能产出 ICE 候选**：本机实测「受控浏览器」（`RPA-Browser/botright/botright.py` 下发的 `--force-webrtc-ip-handling-policy=disable_non_proxied_udp`、`--webrtc-ip-handling-policy=disable_non_proxied_udp`，以及指纹里的 `mockWebRTC`）**产出 0 个候选**、`iceGatheringState` 立刻 complete。用它打开前端观看直播时：后端一个远端候选都收不到 → `ICE: checking` 永不推进 → 画面全黑（后端日志表现为 `Answer 内候选数=0`，且没有任何 `ICE Candidate 已添加`）。带 WebRTC 防护的指纹浏览器 / `WebRTC Network Limiter` 类扩展同理。
+  - **看直播请用未启用 WebRTC 防护的浏览器**（普通 Chrome / Edge / Firefox 即可）；
+  - 若要兼容这类客户端，唯一正解是部署 TURN：`disable_non_proxied_udp` 的语义是「只允许经代理 / TURN 的 UDP」，配了 TURN 才会产出 relay 候选（顺带解决远端 / NAT 场景）。
+- **后端链路已实测正常**：用 aiortc 客户端（真实 host / srflx 候选）跑完整 offer/answer → `ICE completed`、`connection connected`、首帧 800×450 到达。因此「黑屏」优先排查**客户端候选**，而不是后端出帧。
+- **前端自愈（`LiveBox.vue`）**：
+  - 发 answer 前 `waitForIceGatheringComplete()`（3s 超时）并以 `pc.localDescription.sdp`（**自带候选**）提交，trickle 降级为「锦上添花」；
+  - **候选上报必须晚于 answer**：Chrome 在 `setLocalDescription(answer)` 期间就回调候选，此时后端 PeerConnection 还没有 remote description，直接上报必然失败（实测该 POST 会拿到 **502**）。故 answer 提交前收集到的候选先**入队**，`answer` 返回 `code=0` 后再补发，并对 502 / 抖动重试一次；
+  - 本端候选数为 0 → 报 `rpa.streamNoIceCandidate`（zh-CN / zh-TW / en / ja / ko 五语言）并中止，不再黑屏装死；
+  - 只有 `connectionState === 'connected'` 才算「直播中」（`waitForPeerConnected`，10s 超时）；
+  - 「已连接但连续 8s 零字节」看门狗、`connectionState === 'failed'` → 自动重建流（最多 3 次，超限如实停播，用户主动停播不触发）。
+- **可观测（把静默失败变可诊断）**：offer 日志打 `本端候选数`、answer 日志打 `Answer 内候选数`、候选入库日志由 DEBUG 提到 INFO；`/webrtc/ice-candidate` 查不到流时打 **WARNING**（此前静默返回业务码，前端也不 throw，问题完全不可见）。
 
 ## 6. 关键约束与决策（当前有效）
 

@@ -13,6 +13,7 @@ BilibiliExplosion 后端各微服务共享的**公共依赖库**。把统一响�
 - 消息推送客户端（`MessageServiceClient`，对接 `be-message-service`）
 - RPC 公共设施与契约（`bili_common.rpc`）：`rpc_safe` 装饰器、`RpcClient` 通用客户端、按系统分模块的 RPC 契约（抽奖 / pptr 用户 / 站外推送）
 - 站外推送 MQ 公共发布函数（`bili_common.core.message_pub`）：fire-and-forget 把推送请求发布到 `message.push` 队列，不需要管返回
+- 各服务共享的「推送 / 服务标识」配置片段（`bili_common.core.push_settings.PushNotifySettingsMixin`）：渠道配置（`PushChannelConfig`，单一来源 `bili_common.models.push`）、服务标识、渠道默认端点、RabbitMQ 连接串，供各服务 `Settings` 混入
 - 日志、网页抓取辅助（`get_cookies` / `get_headers` / `get_html`）
 
 ## 技术栈
@@ -43,6 +44,7 @@ bili-common/
     │   ├── proxy.py           # ProxyManager / ProxyRule
     │   ├── message.py         # MessageServiceClient
     │   ├── message_pub.py     # publish_push_message（站外推送 MQ 公共发布，fire-and-forget，需 faststream）
+    │   ├── push_settings.py   # PushNotifySettingsMixin（各服务共享的推送 / 服务标识配置片段）
     │   └── request.py         # get_cookies / get_headers / get_html
     ├── deps/
     │   └── auth.py            # CurrentUser（JWT 依赖）

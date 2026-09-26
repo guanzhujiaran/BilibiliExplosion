@@ -43,6 +43,14 @@ class ResponseMsg(StrEnumAutoDoc):
 
     exception_fingerprint_limit_exceeded = "已达到最大指纹数量限制，当前等级最多可创建 {max} 个指纹"
 
+    exception_browser_launch_memory_insufficient = "当前服务器内存不足，浏览器启动请求已进入排队"
+    exception_browser_launch_queue_timeout = (
+        "浏览器启动排队超时（已等待 {seconds} 秒），请稍后重试"
+    )
+    exception_browser_launch_queue_cancelled = "浏览器启动排队已取消"
+
+    exception_browser_workflow_running = "浏览器正在执行工作流，请稍后重试"
+
     def t(self, **kwargs) -> str:
         """返回当前语言下的翻译（含占位符格式化）。
 
@@ -77,6 +85,10 @@ _I18N_EXTRACT_MARKERS = [
     _("B站登录失败"),
     _("浏览器指纹不存在"),
     _("已达到最大指纹数量限制，当前等级最多可创建 {max} 个指纹"),
+    _("当前服务器内存不足，浏览器启动请求已进入排队"),
+    _("浏览器启动排队超时（已等待 {seconds} 秒），请稍后重试"),
+    _("浏览器启动排队已取消"),
+    _("浏览器正在执行工作流，请稍后重试"),
 ]
 
 
