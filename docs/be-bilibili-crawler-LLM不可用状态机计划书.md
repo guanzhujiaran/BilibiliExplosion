@@ -359,3 +359,47 @@ RabbitMQ 有 `consumer_timeout`（broker 端配置，默认 **30 分钟 = 1800s*
 `prize_extractor._do_extract` 里**显式指定 `method`**（并确认目标上游支持 tool calling），
 或改为「普通调用 + 本地解析」；本计划书不擅自决定该方法，需单独确认。
 
+---
+
+## 10. 报错推送收敛（2026-10-01 追加）
+
+### 10.1 现状（推送过载）
+
+`prize_extractor._do_extract` 目前有 3 个推送点，都会在「其实还能好」的时候发告警：
+
+| 推送点 | 触发条件 | 问题 |
+|---|---|---|
+| `_push_cloud_unavailable_error` | 单轮全部 LLM 失败（槽位仍 `HEALTHY`，只是连续失败计数 < 3） | 瞬时抖动，槽位很快恢复；每轮耗尽都会推一次 |
+| `_push_llms_cooling_error` | 全部槽位在冷却中（`COOLING` / `QUOTA_WAIT` / `SUSPENDED`） | 冷却**可自动恢复**，属「等一等」，不是「坏了」 |
+| `_push_all_llms_disabled_error` | 全部槽位被删除（`REMOVED`，不可恢复） | 真正的「全都不能用」，保留 |
+
+结果：限流 / 额度 / 欠费这类**会自己好**的情况也在刷告警，运维噪声大。
+
+### 10.2 目标
+
+1. **只有「全都不能用了」才推送**：全部 `REMOVED`、或未配置任何 LLM；
+2. **冷却期内一律不推送**：`COOLING` / `QUOTA_WAIT` / `SUSPENDED` 只记本地日志；
+3. **单轮失败 / 部分不可用不推送**：槽位仍 `HEALTHY` 时仅日志 + 等比退避重试。
+
+### 10.3 改动
+
+| # | 文件 | 改动 |
+|---|---|---|
+| 20 | `Service/GetOthersLotDyn/parser/prize_extractor.py` | 删除 `_push_llms_cooling_error`；`AllLLMsCoolingError` 分支只记日志、不推送；单轮全部失败分支不再推送（仅日志 + 等比退避重试）；`_push_cloud_unavailable_error` 更名为 `_push_no_llm_configured_error`（仅用于「未配置任何 LLM」）；删除 `alerted` 局部开关；`_describe_disabled_llms` 改用 `reason` 字段（旧字段 `disabled_reason` 已随状态机移除） |
+
+### 10.4 保留的两个推送点
+
+| 场景 | 函数 | 说明 |
+|---|---|---|
+| 全部槽位被删除（`REMOVED`，不可恢复） | `_push_all_llms_disabled_error` | 需人工补回 `llm_apis` 配置 |
+| 未配置任何云端 LLM | `_push_no_llm_configured_error` | 需人工配置 |
+
+> 重复推送的去重 / 冷却仍由 message-service 的 `push_aggregator` 统一治理（按「接收人 × 标题」聚合）；
+> 本次改动只收敛「什么时候该发」——冷却期与单轮失败根本不发，terminal（全都不能用）才发。
+
+### 10.5 验证
+
+1. 全部槽位冷却时：日志出现「全部云端 LLM 均在冷却中…继续重试」，**不产生推送**；
+2. 单轮全部失败但槽位仍 `HEALTHY`：只记日志与退避，**不产生推送**；
+3. 全部槽位 `REMOVED` / 未配置：日志 + 推送一次（再由 message-service 聚合）；
+4. 回归：正常路径与既有测试不受影响（测试均 mock 掉提取函数，不触达推送）。
