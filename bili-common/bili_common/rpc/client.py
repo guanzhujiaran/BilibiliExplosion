@@ -91,7 +91,9 @@ class RpcClient:
         if not self.connected:
             raise ConnectionError("RPC 客户端未连接，请先调用 connect()")
 
-        logger.info(f"[RpcClient] 发送 RPC 请求: routing_key={routing_key}")
+        # 每次调用都打日志太吵（如观看者接入时的属地查询），降到 DEBUG：
+        # 需要逐次跟踪 RPC 时把 LOG_LEVEL 调到 DEBUG 即可
+        logger.debug(f"[RpcClient] 发送 RPC 请求: routing_key={routing_key}")
 
         # FastStream broker.request() 使用 Direct Reply-To，自动处理 correlation_id 和 reply_to
         # 通过 asyncio.wait_for 控制超时（FastStream request 的 timeout 参数是发布确认超时，非 RPC 等待超时）
@@ -112,7 +114,7 @@ class RpcClient:
         except Exception as e:  # noqa: BLE001
             raise ValueError(f"RPC 响应解析失败: {e}")
 
-        logger.info(
+        logger.debug(
             f"[RpcClient] 收到 RPC 响应: routing_key={routing_key} "
             f"code={raw.get('code', '-')} msg={raw.get('msg', '-')}"
         )

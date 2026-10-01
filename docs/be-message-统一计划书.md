@@ -58,7 +58,7 @@
 - **收藏夹** `/api/v1/favorite`。
 - **用户中心** `/api/v1/user`：空间信息/资料更新（头像审核）/登录经验。
 - **管理端**：评论/动态/话题/头像/封面/举报审核队列 + 统计。
-- **RPC**（RabbitMQ 同步，非 HTTP）：`message.notify.rpc.publish_notify`、`message.push.rpc.*`、`message.pptr.rpc.*`（用户读写），be-message 也作为 RPC 客户端调 RPA/lottery 详情。
+- **RPC**（RabbitMQ 同步，非 HTTP）：`message.notify.rpc.publish_notify`、`message.push.rpc.*`、`message.pptr.rpc.*`（用户读写）、`message.geoip.rpc.resolve_ip_region`（IP 属地解析，见 §5.21），be-message 也作为 RPC 客户端调 RPA/lottery 详情。
 
 ---
 
@@ -365,6 +365,7 @@
 
   | 档位 | JPEG quality | 分辨率（浏览器侧） | 帧率 |
   | --- | --- | --- | --- |
+  | `ultra` 超清 | 90 | 1920×1080 | 30fps |
   | `high` 高清（默认） | 80 | 浏览器自适应（≤800×800） | 30fps |
   | `medium` 标清 | 65 | 960×540 | 15fps |
   | `low` 流畅 | 50 | 640×360 | 5fps |
@@ -428,6 +429,26 @@
   - 只有 `connectionState === 'connected'` 才算「直播中」（`waitForPeerConnected`，10s 超时）；
   - 「已连接但连续 8s 零字节」看门狗、`connectionState === 'failed'` → 自动重建流（最多 3 次，超限如实停播，用户主动停播不触发）。
 - **可观测（把静默失败变可诊断）**：offer 日志打 `本端候选数`、answer 日志打 `Answer 内候选数`、候选入库日志由 DEBUG 提到 INFO；`/webrtc/ice-candidate` 查不到流时打 **WARNING**（此前静默返回业务码，前端也不 throw，问题完全不可见）。
+
+### 5.21 IP 属地解析 RPC（`message.geoip.rpc.resolve_ip_region`）
+
+- **背景**：「谁在看」（RPA 直播观看者列表）需要把客户端 IP 显示成「属地 + 运营商」。
+  这两项都依赖 GeoLite2 mmdb，而**库与下载 / 更新流程只在本服务**
+  （`docker_vol/geoip/mmdb`，见 `scripts/download_geoip_mmdb.py`）；
+  若让 RPA 也装 `geoip2` + 挂一份 66MB 的 City 库，等于一份库要更新 N 次。
+- **做法**：本服务作为 RPC 服务端暴露 `resolve_ip_region`
+  （`app/mq/rpc_geoip.py`，复用 `app/services/infrastructure/geo_ip.py::lookup`：
+  **City 库出属地、ASN 库出运营商 / ISP**，一次调用一并返回，避免调用方查两次），
+  约定与 `message.notify.rpc.*` / `message.push.rpc.*` 一致
+  （TOPIC exchange `message_exchange`，队列名 = routing_key，durable，`@rpc_safe` 兜异常）。
+- **契约**：`bili_common.rpc.geoip`（`ResolveIpRegionParams{ip}` →
+  `ResolveIpRegionResult{region, isp}`），
+  路由键前缀 `bili_common.rpc.base.GEOIP_RPC_ROUTING_KEY_PREFIX`。
+- **语义**：`region=""` / `isp=""` 表示「没有可展示的值」（空 IP / 内网 / 未命中 / 库缺失），
+  即 `lookup` 的「未知」与 `None` 在 RPC 边界被归一成空串 —— 文案由调用方决定
+  （前端显示「未知属地」「未知运营商」），调用方不需要重试。
+- **收益**：mmdb 单一来源 + 属地口径与评论 / 动态的 `lbsPoi` 完全一致
+  （不会出现「动态显示浙江、观看者显示杭州」）；调用方零新增依赖。
 
 ## 6. 关键约束与决策（当前有效）
 

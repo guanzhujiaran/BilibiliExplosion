@@ -86,7 +86,7 @@ action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片�
   因后端只存 `icon_series` 一个 int，编号必须**全局唯一**。当前分配：
   `FGO头像 1~27`、`Saber脸 28~33`、`指令纹章 34~38`、`礼装 39~43`。
   新增资源一律**追加到末尾**（新增分类则整段接在其后）。
-  **内置动作不保留专属系列号**：其图标直接复用现有系列 `s_1`（`FGO头像/s_1_saber`）的 `i_1~i_16`，
+  **内置动作不保留专属系列号**：其图标直接复用现有系列 `s_33`（`Saber脸/s_33_FGO状态图`）的 `i_1~i_16`，
   与后端 `BuiltinActionIconId`（1~16）一比一对应（见 §5.5），因此不会占用或阻塞连续编号。
 - **图片编号规则**：每个系列内 `i_{编号}` 按升序**连续 `1..N`**；编号与文件名中的名称无关（名称仅供展示，可省略）。
   ⚠️ **编号一旦被自定义动作引用（DB `icon_series` / `icon_id`）就不可再重排** —— 重排前必须确认「已引用组合数 = 0」。
@@ -165,24 +165,43 @@ action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片�
 
 内置操作的图标**不在前端硬编码**，由后端统一分配编号，且**不占用专属系列号**：
 
-- 系列号：`BUILTIN_ACTION_ICON_SERIES = 1`
-  —— 即复用现有系列 `FGO头像/s_1_saber`。因此内置动作不再保留 `101` 这类专属号，
-  不会占用、也不会阻塞图库的全局连续编号（见 §5.1）；
-- 编号表 `BuiltinActionIconId`（`app/models/execution/action_params.py`）：`1~16` 分别对应 `s_1` 的 `i_1~i_16`：
+- 系列号：`BUILTIN_ACTION_ICON_SERIES = 33`
+  —— 即复用现有系列 `Saber脸/s_33_FGO状态图`（`Saber脸` 分类下 `s_28~s_33` 中的最后一个系列）。
+  因此内置动作不保留专属号，不会占用、也不会阻塞图库的全局连续编号（见 §5.1）；
+- 编号表 `BuiltinActionIconId`（`app/models/execution/action_params.py`）：
+  **不使用 `i_1~i_16` 连续编号**——连续编号会让 16 个内置动作挤在同一角色的 1/2/3 再临上
+  （`i_1~i_16` 实际只有阿尔托莉雅 / 阿尔托莉雅〔Alter〕/ Lily / 尼禄 四个角色，看上去是同一张脸）。
+  改为**一个动作一位不同角色，且各取该角色的「最终形态」**（`s_33` 内命名 `i_*_<角色>_3.png`，
+  `_1/_2/_3` 即第一/二/三再临，`_3` 为最终再临）：
 
-| 编号 | 操作 | 编号 | 操作 | 编号 | 操作 | 编号 | 操作 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | click 点击 | 5 | navigate 导航 | 9 | new_page 新页面 | 13 | print 打印参数 |
-| 2 | input 输入 | 6 | screenshot 截图 | 10 | get_text 获取文本 | 14 | loop 循环 |
-| 3 | wait 等待 | 7 | llm LLM | 11 | get_window 获取窗口 | 15 | composite 复合操作 |
-| 4 | scroll 滚动 | 8 | hover 悬停 | 12 | fetch_external_data 获取外部数据 | 16 | if_else 条件判断 |
+| 操作 | 编号 | 角色（最终形态） | 操作 | 编号 | 角色（最终形态） |
+| --- | --- | --- | --- | --- | --- |
+| click 点击 | 28 | 冲田总司 | new_page 新页面 | 11 | 阿尔托莉雅·潘德拉贡〔Lily〕 |
+| input 输入 | 65 | 阿尔托莉雅·卡斯特 | get_text 获取文本 | 75 | 格蕾 |
+| wait 等待 | 87 | 摩根 | get_window 获取窗口 | 14 | 尼禄·克劳狄乌斯 |
+| scroll 滚动 | 68 | 雨之魔女梣 | fetch_external_data 获取外部数据 | 121 | 所多玛之兽／德拉科 |
+| navigate 导航 | 3 | 阿尔托莉雅·潘德拉贡 | print 打印参数 | 41 | 贞德 |
+| screenshot 截图 | 112 | 谜之女主角XX | loop 循环 | 23 | 莫德雷德 |
+| llm LLM | 101 | 梅塔特隆·贞德 | composite 复合操作 | 115 | 谜之偶像X〔Alter〕 |
+| hover 悬停 | 7 | 阿尔托莉雅·潘德拉贡〔Alter〕 | if_else 条件判断 | 84 | 贞德〔Alter〕 |
 
-- `BuiltinActionType.icon` → `(1, 编号)`；`ActionMetadata` / `ActionMetadataResponse` 增加
+  角色分配为「按动作语义挑选、且 16 个角色互不重复」，仅影响观感；
+  想换人只需改 `BuiltinActionIconId` 的编号。
+
+  ⚠️ **换人时以「编号对应的图片」为准，不要只看文件名**：该图库是素材批量dump，
+  同一显示名可能对应多位不同角色（实测 `i_38` 与 `i_45` 都叫「阿尔托莉雅·潘德拉贡」，
+  但分别是绿披风王女与白甲骑士）。本文档选图时已逐张核对图片内容。
+
+- `BuiltinActionType.icon` → `(33, 编号)`；`ActionMetadata` / `ActionMetadataResponse` 增加
   `icon_series` / `icon_id`，由 `/actions/registered` 一并返回；
 - 前端链路：`/actions/registered` → `ToolboxPanel` 基础操作树渲染图标 →
   拖拽 payload 携带 `icon_series`/`icon_id` → `DroppedItem` → `ActionCard` 渲染
   （`ActionCard` 取 `action.icon_series ?? action.action_detail?.icon_series`）；
-- 资源对应（当前已就位，无需改动）：`s_1_saber/i_1_阿尔托莉雅·潘德拉贡.png` … `i_16_兰斯洛特.png`。
+- 工具箱展示口径（图标 24px、条目行高 48px、拖拽预览用该动作的**设置图标**做方形缩略图，
+  `setDragImage` 替代浏览器默认整行截图）见 `docs/frontend_requirements/工具箱图标与拖拽预览.md`；
+- 资源对应（当前已就位，无需改动）：`Saber脸/s_33_FGO状态图/i_1_阿尔托莉雅·潘德拉贡_1.png` …
+  `i_16_尼禄·克劳狄乌斯_100540.png`（前端清单中 `series = 33`，`icons 1..16` 齐全）。
+  ⚠️ 该系列 `i_1~i_16` 自此被内置动作常驻引用（不落库，但每次展示都取），**不可再重排编号**；
   若日后想换成专属图标，把常量改指向其它**现有**系列即可（或新建系列并按 §5.1 编号规则排号）；
 - **兜底**：对应资源缺失时前端回落内置类型图标（`resolveActionTypeIcon`），不报错、不空白。
 
@@ -202,7 +221,8 @@ action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片�
 11. 两个分类下出现相同系列编号 → 开发态打印冲突告警（不是静默覆盖）。
 12. 编号取实际值（如 `icon_id = 9946760`）→ 后端接受；超过 8 位（如 `100000000`）→ 422。
 13. 未配置任何资源时 → 选择器显示目录指引；展示侧保留原有类型图标，不空白、不报错。
-14. `/actions/registered` 返回的 16 个内置操作各自带 `icon_series = 1` 与**唯一** `icon_id`（1~16）。
+14. `/actions/registered` 返回的 16 个内置操作各自带 `icon_series = 33` 与**唯一** `icon_id`
+    （§5.5 表中 16 个编号，指向 16 位不同角色的最终形态；不是 `1~16` 连续编号）。
 15. 工具箱「基础操作」树中 16 个内置动作分别显示 `s_1` 的 `i_1~i_16`（阿尔托莉雅…兰斯洛特），
     `ActionCard` 同样显示该图标。
 16. 对应资源缺失（如把 `s_1` 清空）→ 基础操作树与 `ActionCard` 回落内置类型图标（`resolveActionTypeIcon`），不报错。

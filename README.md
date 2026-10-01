@@ -103,7 +103,27 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
    pm2 start pm2.app.js
    ```
 
-2. Docker 部署（推荐）：
+2. 本地一键启动（VSCode，按顺序）：运行与调试面板（`Ctrl+Shift+D`）顶部下拉选择 → `F5`
+
+   | 启动项 | 拉起内容 |
+   | --- | --- |
+   | `🚀 顺序启动：4 服务 + 前端` | ①be-message-service → ②be-bilibili-crawler → ③RPA-Browser → ④be-gateway(dev) → ⑤Nuxt 前端 |
+   | `🚀 顺序启动：仅 4 服务` | 同上，不含前端 |
+   | `🚀 只启动前端` | 仅 Nuxt 前端（`npm run dev`） |
+
+   VSCode 的 compound 只能**并行**发起各配置，顺序靠 `preLaunchTask` 的固定延时实现：
+   ② 延迟 30s、③ 60s、④ 90s、⑤ 120s（相邻相差 30s），因此实际启动顺序是 ① → ② → ③ → ④ → ⑤。
+   想改间隔就改 `.vscode/tasks.json` 里 `sleep` 的秒数（注意是**累计**延迟：都写 30 会一起启动）。
+
+   每个进程各占一个终端页签（面板底部可切换）；停止任意一个会连带停止同批其余进程（`stopAll`）。
+   配置见 `.vscode/launch.json` + `.vscode/tasks.json`，后端分别读各自的 dev 配置：
+   `be-message-service/app/.env`、`be-bilibili-crawler/.env.fastapi.dev`、`RPA-Browser/.env.dev`、`--env=dev`。
+
+   > 只想单独调试某个服务时，用不带编号的那组配置（如 `be-message-service: app`），它们不挂闸门、可直接启动。
+
+   > MySQL / Redis / RabbitMQ / Milvus 等基础设施仍由 Docker 提供，请先 `docker compose up -d`（或 `make start`）。
+
+3. Docker 部署（推荐）：
 
    ```bash
    docker compose up -d

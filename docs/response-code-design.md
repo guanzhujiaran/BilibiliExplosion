@@ -122,6 +122,13 @@
 | 1009 | NAME_ALREADY_EXISTS | 200 | 同名资源冲突，必须提示用户改名 |
 | 1010 | BROWSER_NOTIFY_CONF_NOT_FOUND | 200 | 通知配置不存在（命令类删除场景） |
 | 1011 | ACTION_NOT_FOUND | 200 | 引用的自定义操作不存在，需提示用户 |
+| 1012 | WORKFLOW_NOT_FOUND | 200 | 业务资源不存在（工作流不存在 / 无权限，对外不区分） |
+| 1013 | PLUGIN_NOT_FOUND | 200 | 同上（插件） |
+| 1014 | PLUGIN_CONF_NOT_FOUND | 200 | 同上（插件配置） |
+| 1015 | WORKFLOW_RUN_NOT_FOUND | 200 | 同上（工作流运行记录） |
+| 1016 | ACTION_LOG_NOT_FOUND | 200 | 同上（操作日志） |
+| 1017 | APPROVAL_NOT_FOUND | 200 | 同上（审批单） |
+| 1018 | TAG_NOT_FOUND | 200 | 同上（资源标签） |
 | 2001~2006 | WEBRTC_*_FAILED | 200 | 媒体链路操作失败，需提示具体原因 |
 | 2007 | PAGE_CLOSED | 200 | 前置状态不满足（页面已关闭） |
 | 2008 | FINGERPRINT_LIMIT_EXCEEDED | 200 | 额度超限，需提示「升级/清理」 |
@@ -256,3 +263,36 @@
 | `src/views/admin/AdminPermissionView.vue` | 管理员列表（读） | 以 `res.data` 是否存在判定成功，依据脆弱 |
 
 若未来整体改造前端 SDK 口径，届时「4xx 能否承载业务错误」可重新评估。
+
+### 7.5 控制器手写 `error_response(404, ...)` 归位 ✅ 已实施
+
+§7.1 只迁移了**异常类**，控制器里**手写**的 `error_response(404, ...)` 遗留了下来
+（27 处，RPA-Browser）。404 在契约里专指「路由不存在」（§2 R3），
+用它表达「会话 / 资源不存在」会连锁变成 HTTP 404，前端 SDK 直接丢弃 body。
+
+| 场景 | 改前 | 改后 | 数量 |
+|---|---|---|---|
+| 会话不存在（`operation/*` 只消费会话的入口） | `404` | `BROWSER_NOT_STARTED(1007)` | 5 |
+| 操作不存在 / 操作不存在或无权限 | `404` | `ACTION_NOT_FOUND(1011)` | 7 |
+| 工作流不存在 / 工作流不存在或无权限 | `404` | `WORKFLOW_NOT_FOUND(1012)` | 9 |
+| 运行记录不存在 | `404` | `WORKFLOW_RUN_NOT_FOUND(1015)` | 1 |
+| 插件不存在 | `404` | `PLUGIN_NOT_FOUND(1013)` | 2 |
+| 插件配置不存在 | `404` | `PLUGIN_CONF_NOT_FOUND(1014)` | 2 |
+| 操作日志不存在 | `404` | `ACTION_LOG_NOT_FOUND(1016)` | 1 |
+| 审批单不存在（`admin/approval_router.py`） | `NOT_FOUND` | `APPROVAL_NOT_FOUND(1017)` | 3 |
+| 标签不存在（`admin/tag_router.py`） | `NOT_FOUND` | `TAG_NOT_FOUND(1018)` | 2 |
+| 会话不存在或浏览器未启动（`admin/browser_monitor_router.py`） | `NOT_FOUND` | `BROWSER_NOT_STARTED(1007)` | 2 |
+| 该用户当前未被封禁（`admin/user_ban_router.py`） | `NOT_FOUND` | `BUSINESS_ERROR(1000)` | 1 |
+| 该资源未认证（`admin/certification_router.py`） | `NOT_FOUND` | `BUSINESS_ERROR(1000)` | 1 |
+
+后两处不是「资源不存在」，而是**操作的前置状态不满足**（解封一个未封禁的用户、
+撤销一个未认证的资源），故复用通用业务拒绝码 `BUSINESS_ERROR(1000)`，不新建码值。
+`app/exceptions/handlers.py` 里 `code=NOT_FOUND` + `msg="API endpoint not found"`
+是**路由不存在**，符合 §2 R3，保持不动。
+
+**保持不动**（与 §7.1 的归类一致）：缺参数的 `400`、权限类 `403`、
+`except Exception` 兜底的 `500` —— 它们本就是 HTTP 层语义（400 = 参数非法，
+403 = 无权限，5xx = 服务端故障并用于告警）。
+
+前端配套：`LiveBox.vue` 里唯一按该码分支的一处
+（`if (response?.code !== 404)` → `!== 1007`）同步更新；其余调用点未消费该码。

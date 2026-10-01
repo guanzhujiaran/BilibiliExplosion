@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "jadx-mcp-server": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/minato/jadx-mcp-server/",
+        "run",
+        "jadx_mcp_server.py",
+        "--jadx-host",
+        "192.168.1.200",
+        "--jadx-port",
+        "8650"
+      ]
+    }
+  }
+}

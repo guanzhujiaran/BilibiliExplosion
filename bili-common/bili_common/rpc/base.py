@@ -39,6 +39,11 @@ RPA_RPC_ROUTING_KEY_PREFIX = "message.rpa.rpc"
 # 与 message.pptr.rpc / message.push.rpc / message.rpa.rpc 隔离，互不冲突。
 NOTIFY_RPC_ROUTING_KEY_PREFIX = "message.notify.rpc"
 
+# GeoIP 属地 RPC 路由键前缀（be-message 为服务端，RPA-Browser 等为客户端）。
+# be-message 是 GeoLite2 mmdb 的唯一持有方（含下载 / 更新流程），其它服务按需查属地，
+# 避免各服务各存一份库、各推一次更新；契约见 `bili_common.rpc.geoip`。
+GEOIP_RPC_ROUTING_KEY_PREFIX = "message.geoip.rpc"
+
 
 class RpcMethodName(StrEnumAutoDoc):
     """RPC 业务方法名枚举
@@ -113,6 +118,11 @@ def rpa_rpc_routing_key_for(method_name: str) -> str:
 def notify_rpc_routing_key_for(method_name: str) -> str:
     """根据系统通知 RPC 方法名生成 routing_key（前缀 message.notify.rpc，2.48.0）"""
     return f"{NOTIFY_RPC_ROUTING_KEY_PREFIX}.{method_name}"
+
+
+def geoip_rpc_routing_key_for(method_name: str) -> str:
+    """根据 GeoIP 属地 RPC 方法名生成 routing_key（前缀 message.geoip.rpc）"""
+    return f"{GEOIP_RPC_ROUTING_KEY_PREFIX}.{method_name}"
 
 
 class RpcMethodInfo(BaseModel):
@@ -213,11 +223,13 @@ __all__ = [
     "PUSH_RPC_ROUTING_KEY_PREFIX",
     "RPA_RPC_ROUTING_KEY_PREFIX",
     "NOTIFY_RPC_ROUTING_KEY_PREFIX",
+    "GEOIP_RPC_ROUTING_KEY_PREFIX",
     "routing_key_for",
     "pptr_routing_key_for",
     "push_rpc_routing_key_for",
     "rpa_rpc_routing_key_for",
     "notify_rpc_routing_key_for",
+    "geoip_rpc_routing_key_for",
     "RpcMethodInfo",
     "RpcMethodInfoResponse",
     "ALLOWED_RPC_METHODS",

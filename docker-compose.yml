@@ -278,6 +278,10 @@ services:
       - ./docker_vol/rpa/chrome_app:/app/app/chrome
       # 浏览器 user_data_dir（登录态/指纹 profile）落宿主机持久化，容器重建不丢
       - ./docker_vol/rpa/user_data_dir:/app/user_data_dir
+      # 公共包源码：与 crawler / message 对齐，PYTHONPATH 含 /bili-common（见下 environment）。
+      # 不挂载时 bili_common 只能来自镜像内 venv 的构建期副本（rpa 运行阶段没有 COPY /bili-common），
+      # 改 bili-common 必须重建镜像才生效；挂载后改 bili-common 只需重建容器（docker compose up -d）。
+      - ./bili-common:/bili-common
     ports:
       - "${RPA_BROWSER_PORT}:28000"
     environment:
@@ -293,6 +297,10 @@ services:
       - MESSAGE_CONFIG=${MESSAGE_CONFIG}
       - SERVER_NAME=${SERVER_NAME}
       - SERVER_ADDRESS=${SERVER_ADDRESS}
+      # /bili-common 优先于 venv/site-packages 里的 bili_common，使宿主 bili-common
+      # 源码改动重启即生效（与 be-bilibili-crawler / be-message-service 一致）。
+      # 镜像内 PYTHONPATH 只有 /app，这里必须显式补上 /bili-common。
+      - PYTHONPATH=/app:/bili-common
       - TZ=${ENV_TZ}
     restart: unless-stopped
     extra_hosts:

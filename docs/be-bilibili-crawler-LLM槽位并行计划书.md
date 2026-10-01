@@ -14,6 +14,37 @@
 
 ---
 
+## 0. 修订（2026-10-01）：槽位锁已整体移除，改用 langchain rate limiter
+
+> 本节覆盖第 3～7 节的并发控制设计；被移除的是「加锁」这件事，**a/b 节之前的
+> 健康状态机、去重锁、ack/nack 语义、ConsumeBudget 预算等设计与实现保持不变**。
+
+**决定**：不再自己实现「同一槽位同时最多 1 个在途请求」的互斥，请求节流全部交给
+langchain 的 `InMemoryRateLimiter`（每个实例一个，已在 `pool.py` 构建时挂上）。
+
+**删除内容**：
+
+| 文件 | 改动 |
+|---|---|
+| `Service/llm_service/tracked_llm.py` | 删除进程内 `_SlotLockRegistry` / `_slot_locks`；`invoke` / `ainvoke` 不再加锁，仅保留统计与健康状态机 |
+| `Service/llm_service/slot.py` | **删除**：`LLMSlotLease` / `LLMSlotPool` / `llm_slot_pool`（redis 租约 + 心跳 + BLPOP 等待） |
+| `Service/llm_service/pool.py` | 删除仅为租约池服务的 `LLMSlot` / `get_llm_slots()`（已无调用方） |
+| `Service/llm_service/__init__.py` | 移除上述符号的导入与导出 |
+| `Service/MQ/base/MQClient/PrizeExtract.py` | 去掉「抢槽位 → 用该槽位」流程；`_do_extract_and_store` 不再接收 lease，直接调用 `extract_prize_info_for_*`（不传 `chat_openai_client`，由 `prize_extractor` 内部 `get_all_free_llms()` 轮询逐个尝试） |
+| `test/test_prize_extract_flow.py` | 移除租约桩与 `llm_slot_pool` patch；原「等槽位超预算」用例改为「`_consume_once` 主动报告预算耗尽」 |
+
+**新的并发/限流语义**：
+
+- 每个 `TrackedChatOpenAI` 实例自带一个 `InMemoryRateLimiter(requests_per_second=cfg.requests_per_second, check_every_n_seconds=0.1, max_bucket_size=1)`：
+  `invoke` / `ainvoke` 前自动取令牌，超速时阻塞等待（`max_bucket_size=1` ⇒ 无突发，等效于按速率串行）；
+- 多实例之间互不阻塞，天然并行；
+- **不再有跨进程互斥**：多消费者实例可能同时打同一条配置，节流由两侧各自的
+  rate limiter 兜底（如需严格跨进程控制需另行引入分布式限流，本次不做）；
+- MQ 消费者的「选哪条 LLM」改为 `get_all_free_llms()`（健康检查 + 轮转）逐个尝试，
+  全失败时由 `prize_extractor` 内部的等比退避继续重试。
+
+---
+
 ## 1. 背景与现状
 
 ### 1.1 现有链路

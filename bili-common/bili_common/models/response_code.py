@@ -54,6 +54,16 @@ class ResponseCode(IntEnumAutoDoc):
     NAME_ALREADY_EXISTS = 1009  # 同名资源冲突（工作流 / 插件 / 动作重名，需引导改名）
     BROWSER_NOTIFY_CONF_NOT_FOUND = 1010  # 浏览器通知配置不存在（命令类删除场景）
     ACTION_NOT_FOUND = 1011  # 引用的自定义操作不存在
+    # 以下 5 个为「业务资源不存在」：历史上控制器里手写了 error_response(404, ...)，
+    # 404 在契约里专指「路由不存在」（docs/response-code-design.md §2 R3），
+    # 且非 2xx 会让前端 SDK（responseStyle='data'）丢弃整个 body，连 msg 都拿不到。
+    WORKFLOW_NOT_FOUND = 1012  # 工作流不存在 / 无权访问（对外不区分二者，避免泄露存在性）
+    PLUGIN_NOT_FOUND = 1013  # 插件不存在
+    PLUGIN_CONF_NOT_FOUND = 1014  # 插件配置不存在（插件已挂载但未配置 / 已删除）
+    WORKFLOW_RUN_NOT_FOUND = 1015  # 工作流运行记录不存在
+    ACTION_LOG_NOT_FOUND = 1016  # 操作日志不存在
+    APPROVAL_NOT_FOUND = 1017  # 审批单不存在
+    TAG_NOT_FOUND = 1018  # 资源标签不存在
 
     # WebRTC 相关错误码
     WEBRTC_OFFER_FAILED = 2001
