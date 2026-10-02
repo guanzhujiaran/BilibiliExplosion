@@ -66,7 +66,15 @@ class ResolveIpRegionResult(SQLModel):
     )
 
 
+# 方法名 → (请求模型, 响应模型)。与其余 RPC 模块的 *_RPC_CONTRACT 对齐，
+# 供管理端「RPC 调试接口」这类需要枚举契约的设施统一消费。
+GEOIP_RPC_CONTRACT: dict[str, tuple[type[SQLModel], type[SQLModel]]] = {
+    GeoIpRpcMethodName.RESOLVE_IP_REGION: (ResolveIpRegionParams, ResolveIpRegionResult),
+}
+
+
 __all__ = [
+    "GEOIP_RPC_CONTRACT",
     "GeoIpRpcMethodName",
     "ResolveIpRegionParams",
     "ResolveIpRegionResult",

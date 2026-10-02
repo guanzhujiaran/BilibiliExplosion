@@ -95,6 +95,12 @@ from bili_common.rpc.push import (
     PushRpcSendParams,
     PushRpcSendResult,
 )
+from bili_common.rpc.geoip import (
+    GEOIP_RPC_CONTRACT,
+    GeoIpRpcMethodName,
+    ResolveIpRegionParams,
+    ResolveIpRegionResult,
+)
 from bili_common.rpc.rpa import (
     GetResourceDetailParams,
     GetResourceDetailResult,
@@ -173,4 +179,9 @@ __all__ = [
     "GetResourceDetailResult",
     "ResourceDetail",
     "RPA_RPC_CONTRACT",
+    # geoip
+    "GEOIP_RPC_CONTRACT",
+    "GeoIpRpcMethodName",
+    "ResolveIpRegionParams",
+    "ResolveIpRegionResult",
 ]

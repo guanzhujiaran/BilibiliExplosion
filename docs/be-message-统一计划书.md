@@ -59,6 +59,7 @@
 - **用户中心** `/api/v1/user`：空间信息/资料更新（头像审核）/登录经验。
 - **管理端**：评论/动态/话题/头像/封面/举报审核队列 + 统计。
 - **RPC**（RabbitMQ 同步，非 HTTP）：`message.notify.rpc.publish_notify`、`message.push.rpc.*`、`message.pptr.rpc.*`（用户读写）、`message.geoip.rpc.resolve_ip_region`（IP 属地解析，见 §5.21），be-message 也作为 RPC 客户端调 RPA/lottery 详情。
+- **RPC 调试**（管理端，root）：`/api/v1/message/admin/rpc-debug`（`methods` 列出可测契约方法、`invoke` 真实往返并回显信封，见 §5.22）。
 
 ---
 
@@ -449,6 +450,32 @@
   （前端显示「未知属地」「未知运营商」），调用方不需要重试。
 - **收益**：mmdb 单一来源 + 属地口径与评论 / 动态的 `lbsPoi` 完全一致
   （不会出现「动态显示浙江、观看者显示杭州」）；调用方零新增依赖。
+
+### 5.22 RPC 调试接口（管理端，root 专用）
+
+- **背景**：RPC 走 RabbitMQ，没有现成的可视化调用入口 —— FastStream `/asyncapi` 文档页的
+  「Try it out」默认走**内存 TestRabbitBroker** 且只按默认 exchange 匹配订阅者，本服务全部
+  队列绑定在自定义 `message_exchange` 上，必然 404 `"{destination} destination not found."`；
+  勾选 `sendToRealBroker` 也只是单向 `broker.publish`（不等待回包），都测不出 RPC 返回值。
+  RabbitMQ 管理台虽可借「自建回包队列 + 手填 `reply_to`」测通，但每次要手填路由键与属性，太繁琐。
+- **做法**：新增管理端 HTTP 调试接口，把「选方法 → 贴参数 → 发起真实 RPC → 回显信封」收敛成一次调用。
+  - `GET /api/v1/message/admin/rpc-debug/methods`：列出**契约表里登记过**的全部可测方法
+    （method_name / 归属系统 / routing_key / 参数模型名 / 参数 JSON Schema），前端据此渲染下拉与表单；
+  - `POST /api/v1/message/admin/rpc-debug/invoke`：`{methodName, payloadJson, timeout}` →
+    服务端 `json.loads` 后**用该方法契约的 params 模型严格校验**，再经
+    `bili_common.rpc.client.RpcClient`（Direct Reply-To）真实往返，回显
+    `{routingKey, durationMs, reply: StandardResponse}` 原始信封（成功与失败都回显，不吞错）。
+- **安全边界**：
+  - **仅 root**（`RootUser` 依赖，role=root）；
+  - **路由键不接受任意字符串**：只能调契约表登记过的方法（`bili_common.rpc.*` 各 CONTRACT 表 +
+    lottery `RPC_METHOD_PARAMS_MODEL_MAP`），杜绝把调试接口当任意 MQ 发布器用；
+  - 超时默认 5s、上限 30s，避免长调用拖住事件循环；
+  - 参数校验在 HTTP 边界完成，非法参数直接 400 回包，不会把坏消息投进 MQ。
+- **实现**：`app/services/admin/rpc_debug.py`（`RpcDebugService`：契约注册表 + 真实往返，
+  `RpcClient` 懒连接、进程内复用）；`app/api/rpc_debug.py`（路由）。契约新增
+  `bili_common.rpc.geoip.GEOIP_RPC_CONTRACT`（与其余 RPC 模块对齐）。
+- **前端**：管理端「RPC 调试」页（方法下拉 + 参数表单/JSON 文本域 + 结果信封展示），
+  需求见 `docs/frontend_requirements/管理端RPC调试页.md`。
 
 ## 6. 关键约束与决策（当前有效）
 
