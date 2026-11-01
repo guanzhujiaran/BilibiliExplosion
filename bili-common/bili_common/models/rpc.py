@@ -13,6 +13,7 @@ from bili_common.rpc.base import (
     RpcMethodInfo,
     RpcMethodInfoResponse,
     RpcMethodName,
+    all_rpc_method_names,
     build_method_responses,
     get_allowed_method_names,
     pptr_routing_key_for,
@@ -36,6 +37,7 @@ __all__ = [
     "RpcMethodInfoResponse",
     "ALLOWED_RPC_METHODS",
     "get_allowed_method_names",
+    "all_rpc_method_names",
     "build_method_responses",
     "validate_rpc_method",
 ]

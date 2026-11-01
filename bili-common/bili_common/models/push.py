@@ -6,8 +6,6 @@ be-message-service 的消费者 `consume_message` 也用本模型反序列化，
 统一使用 SQLModel；所有字段均为字符串/可空对象，不涉及 JS 精度问题。
 """
 
-
-
 from sqlmodel import SQLModel, Field
 
 
@@ -150,6 +148,9 @@ class PushMessagePayload(SQLModel):
     push_type: str | None = "text"
     # 渠道配置；为空时回落到 message-service 的全局环境变量配置
     config: PushChannelConfig | None = None
+    # 接收人 mid：投递侧据此判定用户级总开关（push_enabled / 免打扰）。
+    # 缺省为 None（旧消息 / 无法识别用户的推送）时一律放行，保证兼容。
+    mid: int | None = None
 
 
 __all__ = ["PushChannelConfig", "PushMessagePayload"]

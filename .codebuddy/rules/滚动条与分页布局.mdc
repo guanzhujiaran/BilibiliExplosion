@@ -1,0 +1,89 @@
+---
+description: 修改前端页面涉及滚动容器、分页吸底、无限滚动加载时
+alwaysApply: false
+enabled: true
+updatedAt: 2026-10-04T00:00:00.000Z
+provider:
+---
+
+# 滚动条与快速滚动按钮规范
+
+## 1. 统一使用 BiliScrollbar 封装
+
+- **禁止直接使用 `el-scrollbar`**：凡是需要纵向滚动容器的地方，一律使用统一封装的
+  `BiliScrollbar`（`src/components/CommonCompo/Bili-Container-Compo/BiliScrollbar.vue`，
+  Nuxt 组件自动导入，无需手动 import）。
+- 组件内部已组合 `el-scrollbar` + 快速滚动按钮（回到顶部 / 一键到底），按钮随内容
+  可滚动性自动显隐（内容不满一屏时两个按钮都不出现）。
+- **结构只有三层**：`el-scrollbar` → `.el-scrollbar__wrap`（真实滚动元素）→
+  `.el-scrollbar__view`（= slot 内容根节点）。组件**不再额外包一层 div**，
+  因此写在 `view-class` / `inner-class` 上的 `h-full` / `flex` 直接作用到内容根节点，
+  高度链不会出现「view 是 h-full、内容根节点却是自然高度」的断裂。
+- 属性约定：
+  - `view-class` / `inner-class`：**都作用在同一个 `.el-scrollbar__view` 上**（内部合并，
+    默认补 `min-h-0`）。需要子内容撑满剩余高度时传 `"h-full flex flex-col min-h-0"`；
+    自然高度滚动（列表超出才滚）可不传；
+  - `wrap-style`：与 el-scrollbar 同名属性对应，原样透传（默认 `overflow-x: hidden`）；
+  - `show-scroll-buttons`：是否显示内置快速滚动按钮（默认 `true`）；
+  - `top-threshold` / `bottom-threshold`：按钮显隐阈值（默认 100）；
+  - 其余属性（`class` / `style` / `noresize` 等）自动透传给内部 el-scrollbar；
+  - `@scroll` 事件负载为 `{ scrollTop, scrollLeft }`，向外转发；
+  - ref 暴露 `scrollbarRef`（el-scrollbar 实例，含 `update()`）与 `wrapRef`（真实滚动元素），
+    无限滚动 / 滚动定位场景通过 `wrapRef` 操作，与直接持有 el-scrollbar 的用法一致。
+- **小区域列表不要嵌套 BiliScrollbar**：一个 `max-h-96` 的局部列表用普通
+  `div + overflow-y-auto + bili-thin-scroll` 即可，避免多出 `wrap/view/2 条 bar`
+  的元素堆叠（项目已有 `bili-thin-scroll` 细滚动条工具类）。
+
+## 2. 侧边导航内容区高度与外层留白约定
+
+- **外层留白统一由 App.vue 的 el-main 提供**（`mx-6 mt-3 pb-4`），页面/布局根节点
+  **禁止**再写同级的 mx/mt/pb（会双重留白）。页面内部的间距（卡片间、区块间）才由
+  页面自己管理。
+- 侧边导航模块（消息 / 管理后台 / RPA）经 `BiliSideNavLayout` 布局，根节点不带任何
+  外层间距（el-main 已提供）。
+- `AutoHeightContainer`（v2）按**自身位置**测量高度：
+  `height = window.innerHeight − 自身 top − bottomOffset(默认 16)`；
+  `bottomOffset=16` 与 el-main 的 `pb-4` 对应，不要随意改。
+- `BiliSideNavLayout` 内容区的滚动已由布局内部接管：其 `BiliScrollbar` 的
+  `view-class="h-full flex flex-col min-h-0"`。因此**子页面根节点直接用 `FlexContainer`
+  即可**（它自带 `flex flex-col flex-1 rounded`），**无需再写**
+  `flex-1` / `flex-col` / `min-h-0`。
+- **页面根节点禁止写 `overflow-auto` / `overflow-y-auto`**：布局已有滚动容器，页面再
+  自带滚动会出现两层滚动容器（多出浏览器原生滚动条，且快速滚动按钮显隐失真）。
+  页面内容按自然高度堆叠、由布局统一滚动即可。
+- **列表内部滚动 + 分页吸底**是唯一需要在页面内再放滚动容器的场景（页面整体不滚，
+  只有列表滚），此时才需要 `min-h-0` 让高度链能压缩：
+
+```vue
+<FlexContainer class="min-h-0">                          <!-- 页面根 -->
+  <BiliPageHeader ... />
+  <FlexContainer class="mt-4 flex-1 min-h-0">            <!-- 内容卡片容器：撑满剩余高度 -->
+    <BiliScrollbar class="flex-1 min-h-0">               <!-- 列表内部滚动 -->
+      <div class="grid gap-6">...列表项...</div>
+    </BiliScrollbar>
+    <el-pagination class="mt-3 shrink-0" ... />          <!-- 分页吸底 -->
+  </FlexContainer>
+</FlexContainer>
+```
+
+- **滚动只发生在列表内部**：外层页面不产生滚动条；卡片/列表项高度交由 flex 布局
+  自行计算，禁止为对齐滚动区域而给卡片写固定高度。
+- **非侧边导航的独立页面**（首页 / 抽奖 / 动态 / 用户中心等）需在各自根节点自行补充
+  外层 margin/padding（对齐旧 `mx-6 mt-3` 视觉），新建页面同理。
+
+## 3. 快速滚动按钮显隐规则
+
+- 快速滚动按钮（`src/components/common/ScrollButtons.vue`）只在内容**真正可滚动**
+  （`scrollHeight - clientHeight > 1`）时出现，显隐随滚动事件重算；
+- **不要在页面里手动放置 `ScrollButtons`**：优先用 `BiliScrollbar` 自带的；
+  嵌套使用内层 `BiliScrollbar` 时传 `:show-scroll-buttons="false"`；
+- 全局（App.vue）的快速滚动按钮在三个自带内部滚动的侧边导航模块
+  （`/app/message`、`/app/admin`、`/app/rpa-browser`）下隐藏，避免两对按钮叠放；
+  新增侧边导航模块时记得同步把该路由前缀加进 App.vue 的隐藏判断。
+
+## 4. 无限滚动加载
+
+- 无限滚动 / 触底加载统一使用 `LoadingMoreContainer`（内部已替换为 BiliScrollbar），
+  其 `scrollbarRef.wrapRef` 即真实滚动元素，触底加载与聊天定位逻辑不受封装影响。
+- 局部列表（如「时长明细」这类固定 `max-h-*` 的小区域）直接监听自身 `@scroll`，
+  用 `e.target` 读 `scrollTop / clientHeight / scrollHeight` 判断触底。

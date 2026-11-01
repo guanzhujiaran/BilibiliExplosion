@@ -1,0 +1,98 @@
+---
+description: 对外接口返回的时间统一为秒级 int32 时间戳（禁止 ISO 字符串/带时区字符串）
+globs:
+alwaysApply: false
+---
+
+# 对外接口的时间字段统一为秒级时间戳
+
+## 背景
+
+接口出参把时间下发成 `1969-12-31T16:00:00+00:00` 这类带时区的 ISO 字符串，会带来三个问题：
+
+1. **时区歧义**：naive 时间（如 MySQL `DATETIME`）序列化时被 pydantic 强行标注为 `+00:00`，实际业务时区是 `Asia/Shanghai`，前端解析后整体偏 8 小时；
+2. **格式不统一**：同一项目里并存 `isoformat()`、`strftime("%Y-%m-%d %H:%M:%S")`、`%m-%d` 等多种字符串格式，前端要写多套解析；
+3. **前端负担**：展示、排序、倒计时、日期选择器回填都要 `new Date(str)`，且无法直接参与数值比较。
+
+## 强制约束
+
+1. **所有对外 HTTP 接口的出参（响应模型）中的时间字段，一律为秒级 `int`（int32，UTC epoch 秒）**，禁止返回 ISO 8601 字符串、`%Y-%m-%d %H:%M:%S` 字符串、纯日期字符串。**`date` 与 `datetime` 同样适用**（生日这类「日期」也是时间戳，前端自行格式化月/日）。
+
+2. **统一使用 `bili-common/bili_common/core/time_utils.py` 提供的类型**，禁止在各服务里重复造序列化器：
+
+   ```python
+   from bili_common.core.time_utils import OptionalUnixTime, UnixTime, to_unix_timestamp
+   ```
+
+   - `UnixTime` = `Annotated[datetime, PlainSerializer(...)]`：非空时间字段直接用它标注，**内部仍是 `datetime`**，service 层赋值逻辑完全不变，只在序列化边界转 int；
+   - `OptionalUnixTime`：可空时间字段用它，输出 `int | None`；
+   - `to_unix_timestamp(value)`：给「本来就是字符串 / int」的字段做兜底转换，例如把 `PptrUserDetail.birthday` 转成时间戳、或给 `None` 场景兜 `0`；
+   - OpenAPI 中类型为 `integer`，前端 SDK 生成的是 `number`。
+
+3. **时区约定**：naive（无时区信息的 `datetime`，MySQL `DATETIME` 大量如此）按 **`Asia/Shanghai`** 解释；aware 类型按其真实时区换算。禁止在出参里出现 `+00:00` 这种与业务时区不符的标注。
+
+4. **空值约定**：
+   - 可空时间字段 → `null`（用 `OptionalUnixTime`）；
+   - 非空字段但业务上「未设置」（如生日未填）→ **给 `0`，不要给 `None`**，且用 `to_unix_timestamp(value) or 0` 兜底。前端以 `0` / `!ts` 判断未设置。
+
+5. **只改出参，不改内部**：
+   - **请求模型**（`Req` / `Params`）继续用 `datetime` 接收 ISO 字符串，**不改**（前端表单按现状提交）；
+   - **DB 表模型**（`app.models.**`）保持 `datetime`；
+   - **RPC 内部传输模型**（`bili_common/rpc/**`）保持 `datetime`，只在 HTTP 边界转换；
+   - 翻页游标（`cursor`）若是内部约定字符串，可保持不变，但**响应里表示「时间」的业务字段必须转换**。
+
+6. **例外（B 站协议兼容字段）**：为对齐 B 站原始协议而必须保持字符串的字段可保留，例如 `SystemNotifyItem.time_at`（`"%Y-%m-%d %H:%M:%S"`）、`jointime`（B 站本身就是秒级时间戳，保持 number）。此类字段需在字段注释中标注「对齐 B 站协议，保持原格式」。
+
+7. **新增响应字段时的自检**：
+   - 出参模型里出现 `datetime` / `date` 注解 = 违规；
+   - 出参模型里出现 `time_at=` / `created_at=` 之类的 `strftime(...)`、`isoformat()` 结果 = 违规；
+   - 修改后需同步确认 OpenAPI 中该字段为 `integer`（Swagger 可见）。
+
+8. **前端配合**：
+   - 时间戳一律 `number`，直接参与比较、排序、`new Date(ts * 1000)`；
+   - 展示格式统一收敛到时间工具（如 `formatUnix` / `dayjs(ts * 1000)`），禁止在组件里手写 `new Date(x)` 解析字符串；
+   - 生日等日期类字段按 `MM-DD` / `YYYY-MM-DD` 展示由前端格式化，后端不再 `strftime`；
+   - ⚠️ 出参类型从 `string(date-time)` 变为 `integer` 后，**必须重新生成 hey-api SDK**（生成代码禁止手改），由用户手动执行同步，待确认完成后再改前端消费点。
+
+## 现有实现位置
+
+- 工具与类型：`bili-common/bili_common/core/time_utils.py`（`to_unix_timestamp` / `unix_timestamp_serializer` / `UnixTime` / `OptionalUnixTime`）
+- 已改造示例：`be-message-service/app/models/schemas/` 下的 `notify.py`、`comment.py`、`event.py`、`dm.py`、`ban.py`、`space.py`、`moment.py`、`follow.py`、`setting.py`、`sys_config.py`、`user_records.py`、`ml_status.py`
+- 典型用例：`SpaceInfoResp.birthday`（`str "%m-%d"` → `int` 时间戳，0=未设置）、`NotifyItem.publish_at`（ISO 字符串 → 秒级时间戳）
+
+### 反例（禁止）
+
+```python
+# ❌ 出参里塞 ISO 字符串（naive 还会被标成 +00:00，前端偏 8 小时）
+class UserInfo(BaseModel):
+    birthday: str = ""          # "%m-%d" / isoformat() 都算违规
+    created_at: datetime = ...  # OpenAPI 出参是 string(date-time)
+
+# ❌ service 里手动格式化
+return NotifyItem(time_at=item.publish_at.strftime("%Y-%m-%d %H:%M:%S"))
+```
+
+### 正例
+
+```python
+from bili_common.core.time_utils import OptionalUnixTime, UnixTime, to_unix_timestamp
+
+
+class UserInfo(BaseModel):
+    birthday: int = 0                      # 0 = 未设置
+    created_at: UnixTime                   # 非空时间 → 秒级时间戳
+    last_login_at: OptionalUnixTime = None  # 可空时间 → int | None
+
+
+def build(info) -> UserInfo:
+    return UserInfo(
+        birthday=to_unix_timestamp(info.birthday) or 0,
+        created_at=info.created_at,   # 内部仍是 datetime，不用手动转
+    )
+```
+
+```ts
+// ✅ 前端：时间戳直接用
+formatUnix(data.createdAt)          // 统一格式化工具
+new Date(data.birthday * 1000)      // 生日等日期类字段自行取月/日
+```

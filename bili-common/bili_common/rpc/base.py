@@ -140,7 +140,11 @@ class RpcMethodInfoResponse(RpcMethodInfo):
 
 
 # 预设的 RPC 业务方法白名单（写死，不允许前端随意调用其他方法）
-# method_name 必须与 controller/v1/mq/lottery_data.py 的 @rpc_subscriber 保持一致
+# method_name 必须与 controller/v1/mq/rpc_read_lottery_data.py 的 @rpc_subscriber 保持一致。
+#
+# 只读原则（2.70.0）：`FastapiApp.rpc.*` 全部是「只读取数」，服务端只由 query 角色
+# （`query_main.py`，可指向只读账号 / 只读副本）提供。**写库不走 RPC**，
+# 走 `bili_data` 的普通 MQ 消息（`BiliLotDataPublisher` 发布 → crawler 角色的订阅者落库）。
 ALLOWED_RPC_METHODS: list[RpcMethodInfo] = [
     RpcMethodInfo(
         method_name=RpcMethodName.GET_RESERVE_LOTTERY,
@@ -174,10 +178,22 @@ ALLOWED_RPC_METHODS: list[RpcMethodInfo] = [
     ),
 ]
 
+# FastapiApp.rpc.* 的内部校验方法：不在白名单（有身份校验语义，仅 be-message 内部调用），
+# 但与白名单里的 6 个一样是「只读取数」，走同一个服务端（query 角色）。
+_INTERNAL_RPC_METHODS: tuple[str, ...] = (
+    str(RpcMethodName.CHECK_LOTTERY_EXIST),
+    str(RpcMethodName.CHECK_OTHERS_LOT_DYN_EXIST),
+)
+
 
 def get_allowed_method_names() -> list[str]:
-    """获取所有允许的方法名列表"""
+    """获取所有允许的方法名列表（前端可选的白名单）"""
     return [m.method_name for m in ALLOWED_RPC_METHODS]
+
+
+def all_rpc_method_names() -> list[str]:
+    """FastapiApp.rpc.* 的全部方法名 = 白名单 + 内部校验方法（注册期校验用）"""
+    return get_allowed_method_names() + list(_INTERNAL_RPC_METHODS)
 
 
 def build_method_responses() -> list[RpcMethodInfoResponse]:
@@ -234,6 +250,7 @@ __all__ = [
     "RpcMethodInfoResponse",
     "ALLOWED_RPC_METHODS",
     "get_allowed_method_names",
+    "all_rpc_method_names",
     "build_method_responses",
     "validate_rpc_method",
 ]

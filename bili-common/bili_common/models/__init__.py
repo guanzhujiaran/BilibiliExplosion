@@ -51,6 +51,7 @@ from bili_common.models.rpc import (
     routing_key_for,
     validate_rpc_method,
     get_allowed_method_names,
+    all_rpc_method_names,
     RpcMethodInfo,
     RpcMethodInfoResponse,
     build_method_responses,
@@ -66,6 +67,7 @@ from bili_common.models.rpc_params import (
     RPC_METHOD_PARAMS_MODEL_MAP,
     RPC_METHOD_PARAMS_FIELD_MAP,
 )
+
 # 内部校验契约（be-message 客户端 → be-bilibili-crawler，2.20.0）
 from bili_common.rpc.lottery import (
     CheckLotteryExistRpcParams,
@@ -74,6 +76,10 @@ from bili_common.rpc.lottery import (
     CheckOthersLotDynExistRpcParams,
     CheckOthersLotDynExistRpcResult,
     OthersLotDynDetailItem,
+    LotteryCard,
+    LotteryCardList,
+    LotteryCardRaw,
+    LotteryCardExtraInfo,
 )
 from bili_common.models.user_search import (
     UserSearchParams,
@@ -143,7 +149,10 @@ from bili_common.models.notify_rpc import (
     notify_rpc_routing_key_for,
 )
 from bili_common.models.admin_status import AdminStatusResponse
-from bili_common.models.interaction import InteractionBizTypeEnum, InteractionActionTypeEnum
+from bili_common.models.interaction import (
+    InteractionBizTypeEnum,
+    InteractionActionTypeEnum,
+)
 from bili_common.models.interaction_stat import InteractionStatBase
 
 from bili_common.models.auto_str import AutoStrMixin, SnowflakeInt, auto_str
@@ -185,6 +194,7 @@ __all__ = [
     "routing_key_for",
     "validate_rpc_method",
     "get_allowed_method_names",
+    "all_rpc_method_names",
     "RpcMethodInfo",
     "RpcMethodInfoResponse",
     "build_method_responses",
@@ -203,6 +213,10 @@ __all__ = [
     "CheckOthersLotDynExistRpcParams",
     "CheckOthersLotDynExistRpcResult",
     "OthersLotDynDetailItem",
+    "LotteryCard",
+    "LotteryCardList",
+    "LotteryCardRaw",
+    "LotteryCardExtraInfo",
     "UserSearchParams",
     "PptrUserRoleInfo",
     "PptrUserLevelInfo",

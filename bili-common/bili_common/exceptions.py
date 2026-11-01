@@ -197,9 +197,7 @@ def _business_exception_handler(_req: object, exc: BaseException) -> JSONRespons
     return JSONResponse(status_code=exc.status_code, content=exc.to_response())
 
 
-def _http_exception_handler(
-    _req: Request, exc: StarletteHTTPException
-) -> JSONResponse:
+def _http_exception_handler(_req: Request, exc: StarletteHTTPException) -> JSONResponse:
     # HTTP 请求类异常：HTTP 状态码 = 原异常的 status_code（非 200），
     # 仅 body 包装为统一 {code, msg, data} 契约。
     code = getattr(exc, "code", None) or exc.status_code

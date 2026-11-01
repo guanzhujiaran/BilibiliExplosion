@@ -8,34 +8,50 @@
 **响应统一走 `StandardResponse`**（`code=0` 表示成功），不再沿用 pptr 旧的
 `{code, data, msg, ttl}` 格式；前端需同步改造为读取 `StandardResponse`。
 
-bigint（uid / mid）一律以字符串返回，避免 JS 端 Number 精度丢失，与
-`PptrUserSearchItem` 的既有口径保持一致。
+bigint（uid / mid）的数值字段一律用 int 声明，字符串版由 `@auto_str` 自动派生
+（`uid` -> `uid_str`），避免 JS 端 Number 精度丢失；入参（`target_uid`）保持 str，
+由后端自行转 int。前端只消费字符串版字段。
 """
 
-
+from typing import ClassVar
 
 from sqlmodel import SQLModel, Field
 
+from bili_common.models.auto_str import auto_str
 from bili_common.models.user_search import (
     PptrUserLevelInfo,
     PptrUserRoleInfo,
 )
 
 
+@auto_str(suffix="_str")
 class PptrUserNavData(SQLModel):
     """`GET /api/v1/user/nav` 的响应数据。
 
     对齐 pptr 旧 `UserLevelService.get_user_nav_with_level` 的出参结构：
     调用时会顺带触发「每日首次登录加经验」（幂等，由 be-message 侧判定）。
+
+    字符串版 ID 字段由 `@auto_str` 自动派生，后缀为 `_str`（与出参 snake_case 风格一致）。
     """
 
-    uid: str = Field(default="", description="用户ID（字符串，防精度丢失）")
-    user_name: str = Field(default="", description="展示名：优先昵称 uname，缺失时回落注册名")
+    _auto_str_suffix: ClassVar[str] = "_str"
+
+    uid: int = Field(
+        default=0, description="用户ID（雪花ID数值；前端请用同级的 uid_str 字符串版）"
+    )
+    user_name: str = Field(
+        default="", description="展示名：优先昵称 uname，缺失时回落注册名"
+    )
     role_info: PptrUserRoleInfo = Field(default_factory=PptrUserRoleInfo)
-    face: str | None = Field(default=None, description="头像URL；无头像时为 null，由前端回落到默认头像")
+    face: str | None = Field(
+        default=None, description="头像URL；无头像时为 null，由前端回落到默认头像"
+    )
     level_info: PptrUserLevelInfo = Field(default_factory=PptrUserLevelInfo)
     email: str | None = Field(default=None, description="邮箱（脱敏）")
-    jwt_token: str | None = Field(default=None, description="JWT 续期时注入的新 token（非当天签发的 token 需刷新）")
+    jwt_token: str | None = Field(
+        default=None,
+        description="JWT 续期时注入的新 token（非当天签发的 token 需刷新）",
+    )
 
 
 class PptrUserInfoUpdateParams(SQLModel):
@@ -46,9 +62,17 @@ class PptrUserInfoUpdateParams(SQLModel):
     性别限定枚举；生日为 ISO 日期字符串。
     """
 
-    uname: str = Field(default="", max_length=24, description="昵称（空串=不修改；非空时 2-24 字，接口层校验最短 2 字）")
-    usersign: str = Field(default="", max_length=70, description="个性签名（最多 70 字）")
-    sex: str = Field(default="保密", description="性别：男 / 女 / 保密 / 武装直升机 / 永雏塔菲")
+    uname: str = Field(
+        default="",
+        max_length=24,
+        description="昵称（空串=不修改；非空时 2-24 字，接口层校验最短 2 字）",
+    )
+    usersign: str = Field(
+        default="", max_length=70, description="个性签名（最多 70 字）"
+    )
+    sex: str = Field(
+        default="保密", description="性别：男 / 女 / 保密 / 武装直升机 / 永雏塔菲"
+    )
     birthday: str = Field(default="", description="生日（ISO 日期字符串）")
     avatar: str = Field(
         default="",
@@ -57,10 +81,15 @@ class PptrUserInfoUpdateParams(SQLModel):
     )
 
 
+@auto_str(suffix="_str")
 class PptrUserInfoUpdateResult(SQLModel):
     """用户信息更新结果。"""
 
-    uid: str = Field(default="", description="被更新的用户ID")
+    _auto_str_suffix: ClassVar[str] = "_str"
+
+    uid: int = Field(
+        default=0, description="被更新的用户ID（数值；字符串版见 uid_str）"
+    )
     updated: bool = Field(default=False, description="是否更新成功")
     uname_recorded: bool = Field(
         default=False, description="昵称发生变更并已写入昵称历史表 TUserNameRecord"
@@ -77,16 +106,23 @@ class PptrUserRoleSetParams(SQLModel):
     命名上与 RPC 侧的 `PptrSetUserRoleParams`（bili_common.models.pptr_user_rpc）区分：
     本模型是**网关 HTTP 接口**的入参（含 target_uid，操作者身份来自 x-bili-* 头），
     RPC 侧那个是 be-message 内部落库用的参数。
+
+    `target_uid` 为**字符串入参**（前端只传 str，避免 JS 精度丢失），后端自行转 int。
     """
 
-    target_uid: str = Field(description="目标用户UID")
+    target_uid: str = Field(description="目标用户UID（字符串，后端转 int）")
     role: str = Field(description="目标角色：level0..level6 或 root")
 
 
+@auto_str(suffix="_str")
 class PptrUserRoleSetResult(SQLModel):
     """角色设置结果。"""
 
-    target_uid: str = Field(default="", description="目标用户UID")
+    _auto_str_suffix: ClassVar[str] = "_str"
+
+    target_uid: int = Field(
+        default=0, description="目标用户UID（数值；字符串版见 target_uid_str）"
+    )
     target_user_name: str = Field(default="", description="目标用户注册名")
     role: str = Field(default="", description="设置后的角色标识")
     role_name: str = Field(default="", description="角色中文名")

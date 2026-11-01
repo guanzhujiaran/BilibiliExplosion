@@ -37,10 +37,10 @@
 
 ```
 BilibiliExplosion/
-├── docker-compose.yml        # 统一编排（mysql/redis/rabbitmq/milvus/postgres/casdoor/各服务/llama.cpp）
-├── Dockerfile.mono           # 多阶段构建（crawler / rpa / message 目标）
-├── pm2.app.js                # 本地 pm2 启动脚本（ipv6 代理池）
-├── dc-dev.yml  Makefile
+├── docker-compose.yml        # 生产编排（mysql/redis/rabbitmq/milvus/postgres/casdoor/各服务/llama.cpp/go-proxy）
+├── docker-compose.dev.yml    # 开发编排（基础设施 + 爬虫容器 23333（IS_DEV=1 不爬取）+ 只读查询 23336 + nginx/go-proxy）
+├── Dockerfile.mono           # 多阶段构建（crawler / crawler-query / rpa / message 目标）
+├── Makefile
 ├── bili-common/              # 公共依赖库
 ├── be-bilibili-crawler/      # 核心爬虫后端
 ├── be-message-service/       # 统一消息推送
@@ -96,32 +96,53 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ## 使用方法
 
-1. 本地启动 ipv6 代理池（或用 supervisor 等）：
+1. 启动 ipv6 代理池（已容器化，`network_mode: host`，无需 pm2）：
+
+   生产与开发两套编排里都已内置 `go-proxy-server` 服务，**不需要单独启动**，
+   跟随主编排一起 `up -d` 即可（镜像需先在子项目里构建：`cd go-proxy-ipv6-pool-auto && ./build.sh`）。
+   只想单独起代理池时仍可用子项目自带编排：
 
    ```bash
-   npm i pm2 -g
-   pm2 start pm2.app.js
+   cd go-proxy-ipv6-pool-auto && docker compose up -d
    ```
 
-2. 本地一键启动（VSCode，按顺序）：运行与调试面板（`Ctrl+Shift+D`）顶部下拉选择 → `F5`
+2. 本地开发（dev 编排）：
 
-   | 启动项 | 拉起内容 |
-   | --- | --- |
-   | `🚀 顺序启动：4 服务 + 前端` | ①be-message-service → ②be-bilibili-crawler → ③RPA-Browser → ④be-gateway(dev) → ⑤Nuxt 前端 |
-   | `🚀 顺序启动：仅 4 服务` | 同上，不含前端 |
-   | `🚀 只启动前端` | 仅 Nuxt 前端（`npm run dev`） |
+  ```bash
+  docker compose -f docker-compose.dev.yml up -d     # 基础设施 + 两个爬虫容器
+  cd Vue3FrontEndDemoExercise && npm run dev         # 前端 5173
+  ```
 
-   VSCode 的 compound 只能**并行**发起各配置，顺序靠 `preLaunchTask` 的固定延时实现：
-   ② 延迟 30s、③ 60s、④ 90s、⑤ 120s（相邻相差 30s），因此实际启动顺序是 ① → ② → ③ → ④ → ⑤。
-   想改间隔就改 `.vscode/tasks.json` 里 `sleep` 的秒数（注意是**累计**延迟：都写 30 会一起启动）。
+  本地有**两个**应用容器（同一镜像的两个 target）：
 
-   每个进程各占一个终端页签（面板底部可切换）；停止任意一个会连带停止同批其余进程（`stopAll`）。
-   配置见 `.vscode/launch.json` + `.vscode/tasks.json`，后端分别读各自的 dev 配置：
-   `be-message-service/app/.env`、`be-bilibili-crawler/.env.fastapi.dev`、`RPA-Browser/.env.dev`、`--env=dev`。
+  | 容器 | 端口 | 角色 | 库 |
+  | --- | --- | --- | --- |
+  | `be-bilibili-crawler-query` | 23336 | 只读查询（`query_main.py`）+ **RPC 服务端**（`FastapiApp.rpc.*`，全部只读取数） | **生产库 / 生产 Redis**（`CRAWLER_QUERY_*`），数据是真实的 |
+  | `be-bilibili-crawler` | 23333 | **与生产同一角色**（`SERVICE_ROLE` 默认 `crawler`，入口 `main:app`） | 本地 mysql（root，可写）；`IS_DEV=1` 只关掉定时任务 / 监控任务（**不自动爬取**），迁移 / schema 校验 / Milvus / **MQ 入库消费（写库通道）**照常；不提供 RPC |
 
-   > 只想单独调试某个服务时，用不带编号的那组配置（如 `be-message-service: app`），它们不挂闸门、可直接启动。
+  `be-bilibili-crawler` 与生产**同一个容器角色**，`bili_data` 的入库消费者（**写库通道**）都在这个进程里。
+  两条通道分工明确（2.70.0）：**RPC 只做只读取数**，服务端在 query 容器（`get_*` / `check_*`）；
+  **写库走普通 MQ 消息**（`BiliLotDataPublisher` → crawler 的入库消费者），不用 RPC ——
+  所以爬虫容器没起，RPA / be-message 取数也照常可用
+  （旧的 `SERVICE_ROLE=api` 容器不挂 MQ 路由、既没有写库消费者也没有 RPC 服务端，已废弃）。
+  「开发环境不自动爬」靠环境变量 `IS_DEV=1`，想跑真实爬取时改成 `0`。
+  `Add*` 与爬虫回写都落本地库，不会碰生产。
 
-   > MySQL / Redis / RabbitMQ / Milvus 等基础设施仍由 Docker 提供，请先 `docker compose up -d`（或 `make start`）。
+  分流由前端 dev server 的 `/api` 代理完成（见 `nuxt.config.ts` 的 `server.proxy`）：
+
+  | 请求 | 去向 |
+  | --- | --- |
+  | 抽奖查询 `Get*` / `Search*` / `lottery_*` | 本地查询容器 `localhost:23336` |
+  | 爬虫状态 `Get*ScrapyStatus`、`Add*`、`zhuanlan`、rpa、message、casdoor | 本机 `localhost:9923` 的网关 |
+
+  网关的 `BILI_CRAWLER_URI` 指向 `23333`（爬虫容器）、`BILI_CRAWLER_QUERY_URI` 指向 `23336`。
+  `Add*` 落在**查询**容器上仍然没有路由（404），所以走前端直连查询容器那条链路
+  **本地不可能误写生产库**。
+
+  两个目标是 `nuxt.config.ts` 里的常量（`QUERY_API` / `GATEWAY_API`），
+  需要连远端网关时改那两行即可，不引入额外环境变量。
+  改了爬虫代码重启对应容器即可生效（源码已 bind mount）。
+
 
 3. Docker 部署（推荐）：
 

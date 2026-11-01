@@ -58,7 +58,7 @@ services:
       timeout: 20s
       retries: 3
     ports:
-      - "${MILVUS_PORT}:19530"
+      - "${MILVUS_PORT:?请在 .env 里设置 MILVUS_PORT（宿主机映射端口，容器内固定 19530）}:19530"
       - "9091:9091"
     depends_on:
       - "etcd"
@@ -69,13 +69,19 @@ services:
     container_name: fastapi-mysql
     image: mysql:lts
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
-      - TZ=${ENV_TZ}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
+      # 供 init 脚本创建查询服务的只读账号（密码不落仓库）
+      - RO_USER=${CRAWLER_QUERY_MYSQL_USER:-bili_ro}
+      - RO_PASSWORD=${CRAWLER_QUERY_MYSQL_PASSWORD:-}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     volumes:
       - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d # 配置文件目录
       - ./docker_vol/mysql_data/data:/var/lib/mysql # 数据文件目录
+      # 只读账号：**仅当 data/ 为空（全新环境）时执行一次**；
+      # 已有数据的库不会跑，用 scripts/database/create_read_only_account/ 补（幂等）
+      - ./docker_vol/mysql_data/init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "${MYSQL_PORT}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
+      - "${MYSQL_PORT:?请在 .env 里设置 MYSQL_PORT（宿主机映射端口，容器内固定 3306）}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -83,11 +89,11 @@ services:
     container_name: fastapi-redis
     image: redis:latest
     environment:
-      - TZ=${ENV_TZ}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     volumes:
       - ./docker_vol/redis/data:/data
     ports:
-      - "${REDIS_PORT}:6379"
+      - "${REDIS_PORT:?请在 .env 里设置 REDIS_PORT（宿主机映射端口，容器内固定 6379）}:6379"
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -95,12 +101,12 @@ services:
     container_name: fastapi-rabbitmq
     image: rabbitmq:management
     ports:
-      - "${RABBITMQ_PORT}:5672"
-      - "${RABBITMQ_WEBUI_PORT}:15672"
+      - "${RABBITMQ_PORT:?请在 .env 里设置 RABBITMQ_PORT（宿主机映射端口，容器内固定 5672）}:5672"
+      - "${RABBITMQ_WEBUI_PORT:?请在 .env 里设置 RABBITMQ_WEBUI_PORT（宿主机映射端口，容器内固定 15672）}:15672"
     environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
-      - TZ=${ENV_TZ}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     volumes:
       - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
       - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
@@ -111,9 +117,9 @@ services:
     container_name: fastapi-unidbg
     image: unidbg-springboot-samsclub
     environment:
-      - TZ=${ENV_TZ}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     ports:
-      - "${UNIDBG_PORT}:23335"
+      - "${UNIDBG_PORT:?请在 .env 里设置 UNIDBG_PORT（宿主机映射端口，容器内固定 23335）}:23335"
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -144,27 +150,33 @@ services:
       - MILVUS_HOST=standalone
       - MESSAGE_SERVICE_HOST=be-message-service
       - MESSAGE_SERVICE_PORT=18739
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
-      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
+      - RABBITMQ_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
       - SERVER_NAME=${SERVER_NAME}
       - SERVER_ADDRESS=${SERVER_ADDRESS}
       - PROXY_SERVER=${PROXY_SERVER}
       - V2RAY_HOST=${V2RAY_HOST}
-      - TZ=${ENV_TZ}
-      - SHOW_LOG=${FASTAPI_SHOW_LOG}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+      # 下面几个键都带 compose 默认值：这些值「漏配也能跑/本就不该随环境变」，
+      # 只留 .env 可覆盖。省掉它们不会变成空字符串（空串会盖掉 .env.fastapi.* 里的值，
+      # 也会让 pydantic 校验 int / JSON 字段直接报错）。
+      - SHOW_LOG=${FASTAPI_SHOW_LOG:-0}
       # 业务日志等级（loguru，SHOW_LOG=0 时作用于 stdout sink）。
       # 与 be-message-service 共用同一变量名 LOG_LEVEL，宿主 .env 里设一次即可统一调整；
       # 未设置时默认 WARNING（只保留告警与错误）；临时排查可设 INFO。
       - LOG_LEVEL=${LOG_LEVEL:-WARNING}
-      - IS_DEV=${IS_DEV}
-      - llm_apis=${llm_apis}
+      # 生产编排默认 0（启动定时任务）；开发编排 docker-compose.dev.yml 显式写 1
+      - IS_DEV=${IS_DEV:-0}
+      - llm_apis=${llm_apis:-[]}
       # 同上的原因：这三项在 .env.fastapi.dev 里是宿主机视角（localhost / 10009 / True），
       # 会覆盖 prod 文件里的容器视角值
       - LLAMA_HOST=llama_cpp
       - LLAMA_PORT=8080
       - sqlalchemy_logging=False
+      # 动态数据归档目录（挂载点，见下方 volumes 的 dyn_backup 项）
+      - DYN_BACKUP_DIR=/app/scripts/database/dyn_backup
     build:
       context: .
       dockerfile: ./Dockerfile.mono
@@ -181,6 +193,10 @@ services:
       - ./bili-common:/bili-common
       # 运行期日志落宿主机（容器内外都要可见；子路径挂载优先于父路径 /app）
       - ./docker_vol/fastapi/log:/app/scripts/log
+      # 动态数据归档（CrawlerScheduler 每日 0 点清理过期动态时导出的 *.csv.gz）
+      # 显式落 docker_vol，不跟源码混在一起；代码侧走 DYN_BACKUP_DIR 读取该路径
+      # （见 be-bilibili-crawler/Service/GrpcModule/Models/getLotDynSortByDate.py）。
+      - ./docker_vol/fastapi/dyn_backup:/app/scripts/database/dyn_backup
     develop:
       watch:
         # 源码已 bind mount，不再需要 sync+restart；只有依赖变了才重建镜像
@@ -190,7 +206,88 @@ services:
         - action: rebuild
           path: ./be-bilibili-crawler/pyproject.toml
     ports:
-      - "${FASTAPI_PORT}:23333"
+      - "${FASTAPI_PORT:?请在 .env 里设置 FASTAPI_PORT（宿主机映射端口，容器内固定 23333）}:23333"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  # ===== 查询服务（crawler-query target）=====
+  # 与 be-bilibili-crawler 同一份源码 / 同一个 Dockerfile.mono，换 target 与入口：
+  #   只挂只读路由（Add* / 爬虫状态 / zhuanlan / MQ / background_service 一律不挂）
+  #   lifespan 不跑 alembic 迁移、不做 schema 校验、不初始化 Milvus、不启动调度器
+  # 因此这个容器可以单独指向生产只读副本 / 只读账号，而不会在生产库上执行 DDL。
+  # 需要改查询库地址时，只覆盖本服务的 MYSQL_* 即可（爬虫容器不受影响）。
+  be-bilibili-crawler-query:
+    deploy:
+      resources:
+        limits:
+          # 查询进程不跑 chromium，也不加载极验的 ONNX 模型
+          # （ClickPy 已改为首次识别时才创建，见 Utils/GrpcUtils/极验/极验点击验证码.py），
+          # 2G 足够；与爬虫容器（5G）拉开差距。
+          memory: 2G
+    container_name: be-bilibili-crawler-query
+    depends_on:
+      # 查询只依赖 MySQL 与 Redis：RabbitMQ / unidbg / milvus 起来与否不影响它启动
+      - mysql
+      - redis
+    environment:
+      - SERVICE_ROLE=query
+      # ===== 本服务的连接参数独立于爬虫容器 =====
+      # 想让「开发服务器的查询服务直连生产库」时，只改根 .env 里这 7 个 CRAWLER_QUERY_* 变量即可，
+      # 爬虫容器仍连本地库，互不影响：
+      #   CRAWLER_QUERY_MYSQL_HOST / PORT / USER / PASSWORD  -> 生产库 + 只读账号（bili_ro）
+      #   CRAWLER_QUERY_REDIS_HOST / PORT / PWD             -> 生产 Redis（直播抽奖数据只存在于 Redis）
+      # 注意：compose 不支持 ${A:-${B}} 嵌套默认值，所以密码不能回落到 MYSQL_PASSWORD，
+      # 必须由 .env 显式给值；本地默认值与 MYSQL_PASSWORD 相同（见 .env.example 的说明）。
+      - MYSQL_HOST=${CRAWLER_QUERY_MYSQL_HOST:-mysql}
+      - MYSQL_PORT=${CRAWLER_QUERY_MYSQL_PORT:-3306}
+      - MYSQL_USER=${CRAWLER_QUERY_MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${CRAWLER_QUERY_MYSQL_PASSWORD:-}
+      # Redis 不是可选项：GetLiveLottery / GetLotteryFilterParams 的直播数据读的是 Redis
+      # 的 all_live_lot，不在 MySQL 里；漏配会表现为「直播抽奖页永远空白」且不报错。
+      - REDIS_HOST=${CRAWLER_QUERY_REDIS_HOST:-redis}
+      - REDIS_PORT=${CRAWLER_QUERY_REDIS_PORT:-6379}
+      - REDIS_PWD=${CRAWLER_QUERY_REDIS_PWD:-}
+      # 以下键在 Settings 里是必填项（无默认值），查询链路不会真正连接，
+      # 但必须给值否则 pydantic 校验会拒绝启动
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
+      - UNIDBG_HOST=unidbg
+      - MILVUS_HOST=standalone
+      - LLAMA_HOST=llama_cpp
+      - LLAMA_PORT=8080
+      - V2RAY_HOST=${V2RAY_HOST}
+      - MESSAGE_SERVICE_HOST=be-message-service
+      - MESSAGE_SERVICE_PORT=18739
+      - PROXY_SERVER=${PROXY_SERVER}
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
+      - SERVER_NAME=${SERVER_NAME}
+      - SERVER_ADDRESS=${SERVER_ADDRESS}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+      - SHOW_LOG=${FASTAPI_SHOW_LOG:-0}
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
+      # 查询容器不跑调度器，IS_DEV 只影响启动分支，给默认值避免空串导致 int 校验失败
+      - IS_DEV=${IS_DEV:-0}
+      - llm_apis=${llm_apis:-[]}
+      - sqlalchemy_logging=False
+    build:
+      context: .
+      dockerfile: ./Dockerfile.mono
+      target: crawler-query
+    volumes:
+      - ./be-bilibili-crawler:/app
+      - ./bili-common:/bili-common
+      # 日志单独落一个目录：log/base_log.py 的文件名是固定的
+      # error_<logger>_log.log，两个容器共用同一目录会同时 rotation 同一个文件
+      - ./docker_vol/fastapi/log_query:/app/scripts/log
+    develop:
+      watch:
+        - action: rebuild
+          path: ./be-bilibili-crawler/uv.lock
+        - action: rebuild
+          path: ./be-bilibili-crawler/pyproject.toml
+    ports:
+      - "${FASTAPI_QUERY_PORT:-23336}:23336"
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -200,11 +297,11 @@ services:
     volumes:
       - ./docker_vol/postgres/data:/var/lib/postgresql
     environment:
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - TZ=${ENV_TZ}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD（Postgres 密码）}
+      - POSTGRES_USER=${POSTGRES_USER:?请在 .env 里设置 POSTGRES_USER（Postgres 账号）}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     ports:
-      - "${POSTGRES_PORT}:5432"
+      - "${POSTGRES_PORT:?请在 .env 里设置 POSTGRES_PORT（宿主机映射端口，容器内固定 5432）}:5432"
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -221,25 +318,34 @@ services:
       - be-gateway_node_modules:/app/node_modules # 使用命名卷保存 node_modules
       - ./be-gateway:/app
     ports:
-      - "${NODEJS_PPTR_PORT}:9923"
+      - "${NODEJS_PPTR_PORT:?请在 .env 里设置 NODEJS_PPTR_PORT（宿主机映射端口，容器内固定 9923）}:9923"
     restart: unless-stopped
     environment:
-      - DB=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/PPTR_Bili_Lot
+      # ===== 容器间访问地址：全部带默认值 =====
+      # 这些地址在容器网内是固定的（服务名 + 容器端口），只有「网关不在同一套编排里」
+      # 才需要覆盖，所以默认值直接写在编排里，.env 里可以不写。
+      - DB=postgres://${POSTGRES_USER:?请在 .env 里设置 POSTGRES_USER（Postgres 账号）}:${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD（Postgres 密码）}@${POSTGRES_HOST:-postgres}:5432/PPTR_Bili_Lot
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PWD=
-      - BILI_CRAWLER_URI=${BILI_CRAWLER_URI}
-      - RPA_SERVICE_URI=${RPA_SERVICE_URI}
-      - MESSAGE_SERVICE_URI=${MESSAGE_SERVICE_URI}
+      - BILI_CRAWLER_URI=${BILI_CRAWLER_URI:-http://be-bilibili-crawler:23333}
+      # 只读查询服务（crawler-query target）。**故意不给默认值**：
+      # 空值时网关按 `process.env.BILI_CRAWLER_QUERY_URI || process.env.BILI_CRAWLER_URI`
+      # 回落到爬虫容器，只起一个 crawler 容器的部署方式行为不变；
+      # 一旦在这里写死默认值，没起查询容器的部署会被指到一个不存在的地址。
+      - BILI_CRAWLER_QUERY_URI=${BILI_CRAWLER_QUERY_URI:-}
+      - RPA_SERVICE_URI=${RPA_SERVICE_URI:-http://rpa-browser:28000}
+      - MESSAGE_SERVICE_URI=${MESSAGE_SERVICE_URI:-http://be-message-service:18739}
       - CASDOOR_ENABLED=true
-      - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT}
-      - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
-      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
-      - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
-      - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
-      - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI}
-      - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
-      - TZ=${ENV_TZ}
+      # 网关只用它做服务端反向代理（/api/v1/casdoor/backend），不需要浏览器可达的公网地址
+      - CASDOOR_ENDPOINT=${CASDOOR_ENDPOINT:-http://casdoor:8000}
+      - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID:?请在 .env 里设置 CASDOOR_CLIENT_ID（Casdoor 登录应用的 clientId）}
+      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET:?请在 .env 里设置 CASDOOR_CLIENT_SECRET（Casdoor 登录应用的 clientSecret）}
+      - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION:?请在 .env 里设置 CASDOOR_ORGANIZATION（Casdoor organization）}
+      - CASDOOR_APPLICATION=${CASDOOR_APPLICATION:?请在 .env 里设置 CASDOOR_APPLICATION（Casdoor application）}
+      - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI:?请在 .env 里设置 CASDOOR_REDIRECT_URI（Casdoor 登录回调地址，如 http://gateway:9923/api/v1/casdoor/callback）}
+      - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE:?请在 .env 里设置 CASDOOR_CERTIFICATE（Casdoor 公钥证书 PEM，换行写成反斜杠 n）}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     extra_hosts:
       - "host.docker.internal:host-gateway"
   casdoor:
@@ -247,11 +353,11 @@ services:
     image: casbin/casdoor:latest
     restart: unless-stopped
     ports:
-      - "${CASDOOR_PORT}:8000"
+      - "${CASDOOR_PORT:?请在 .env 里设置 CASDOOR_PORT（宿主机映射端口，容器内固定 8000）}:8000"
     volumes:
       - ./docker_vol/casdoor/conf/app.conf:/conf/app.conf
     environment:
-      - TZ=${ENV_TZ}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     depends_on:
       - postgres
     extra_hosts:
@@ -274,6 +380,9 @@ services:
       # 等级指纹配额配置（app/data/permissions.json，管理端「浏览器配额」页读写）：
       # 显式单独挂载（比外层 app 目录更具体，覆盖之），去掉源码挂载时也不会随容器重建丢失
       - ./RPA-Browser/app/data:/app/app/data
+      # 签到奖励配置（app/data/sign_in_rewards.json，管理员自行编辑 / 管理端接口保存）：
+      # 按 mtime 热加载，改完即时生效、无需重启；文件级挂载保证容器重建不丢配置
+      - ./RPA-Browser/app/data/sign_in_rewards.json:/app/app/data/sign_in_rewards.json
       # 运行期下载的 chromium 落到宿主机目录持久化（避免被源码挂载覆盖、容器重建后丢失）
       - ./docker_vol/rpa/chrome_app:/app/app/chrome
       # 浏览器 user_data_dir（登录态/指纹 profile）落宿主机持久化，容器重建不丢
@@ -283,25 +392,33 @@ services:
       # 改 bili-common 必须重建镜像才生效；挂载后改 bili-common 只需重建容器（docker compose up -d）。
       - ./bili-common:/bili-common
     ports:
-      - "${RPA_BROWSER_PORT}:28000"
+      - "${RPA_BROWSER_PORT:?请在 .env 里设置 RPA_BROWSER_PORT（宿主机映射端口，容器内固定 28000）}:28000"
     environment:
-      - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD}
+      - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
       - controller_base_path=/api/v1/rpa
       - proxy_server_url=http://host.docker.internal:10809
+      # 浏览器指纹的默认出口代理：直接复用 crawler 的 PROXY_SERVER（根 .env 里配置），
+      # 不再依赖本机 3128 的代理池，容器内也无需额外的 .env.dev
+      - default_proxy_server=${PROXY_SERVER}
       - GEMINI_API_KEY=1234-2234-3234-4234
       # RabbitMQ RPC 调用 be-bilibili-crawler（auto_attach_auth 模式依赖）
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}:${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}@rabbitmq:5672/
       # be-message 服务地址（管理员身份判定 /api/v1/message/admin/me）
       - message_service_url=http://be-message-service:18739
+      # Casdoor 支付对账（时长权益入账核验，见 RPA-Browser/docs/浏览器使用时长与会员权益计划书.md §3.3）
+      # 复用根 .env 已有的管理员应用凭证，无需新增维护项
+      - CASDOOR_ENDPOINT=http://fastapi-casdoor:8000
+      - CASDOOR_CLIENT_ID=${CASDOOR_ADMIN_CLIENT_ID:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_ID（Casdoor 管理员应用 app-built-in 的 clientId）}
+      - CASDOOR_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_SECRET（Casdoor 管理员应用 app-built-in 的 clientSecret）}
       # 与 be-message-service / be-bilibili-crawler 共用同一份推送渠道配置（JSON），作为无 per-user 配置时的全局兜底
-      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
       - SERVER_NAME=${SERVER_NAME}
       - SERVER_ADDRESS=${SERVER_ADDRESS}
       # /bili-common 优先于 venv/site-packages 里的 bili_common，使宿主 bili-common
       # 源码改动重启即生效（与 be-bilibili-crawler / be-message-service 一致）。
       # 镜像内 PYTHONPATH 只有 /app，这里必须显式补上 /bili-common。
       - PYTHONPATH=/app:/bili-common
-      - TZ=${ENV_TZ}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -333,39 +450,41 @@ services:
       # 挂载后改 bili-common 只需 `docker compose up -d` 重建容器，无需重建镜像。
       - ./bili-common:/bili-common
     ports:
-      - "${MESSAGE_SERVICE_PORT}:18739"
+      - "${MESSAGE_SERVICE_PORT:?请在 .env 里设置 MESSAGE_SERVICE_PORT（宿主机映射端口，容器内固定 18739）}:18739"
     depends_on:
       - rabbitmq
       - mysql
       - casdoor
     environment:
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/?heartbeat=180
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}:${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}@rabbitmq:5672/?heartbeat=180
       # 业务日志等级（loguru，只输出 stderr、不写文件；生产默认 WARNING 只打印告警，开发可设 DEBUG）
       - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       # 消息系统主库（元数据库）：系统通知 / 事件提醒 / 私信索引与会话 / 消息设置
       # 私信「内容」不在此库，而是按月分库 bili_msg_content_YYYYMM + 库内 100 张分表
-      - MYSQL_MESSAGE_URL=mysql+aiomysql://root:${MYSQL_PASSWORD}@mysql:3306/BiliMessageDB?charset=utf8mb4
+      - MYSQL_MESSAGE_URL=mysql+aiomysql://root:${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}@mysql:3306/BiliMessageDB?charset=utf8mb4
       # 直连 pptr 的 Postgres（PPTR_Bili_Lot）只读取用户展示信息与 @ 搜索，不写入
-      - POSTGRES_PPTR_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/PPTR_Bili_Lot
+      - POSTGRES_PPTR_URL=postgresql+asyncpg://${POSTGRES_USER:?请在 .env 里设置 POSTGRES_USER（Postgres 账号）}:${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD（Postgres 密码）}@${POSTGRES_HOST:-postgres}:5432/PPTR_Bili_Lot
       # 与 be-bilibili-crawler / rpa-browser 共用同一份推送渠道配置（JSON）
-      - MESSAGE_CONFIG=${MESSAGE_CONFIG}
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
+      # 抽奖卡片只读查询（热门抽奖榜 / 首页轮播一次返回卡片数据）
+      - CRAWLER_QUERY_BASE_URL=http://be-bilibili-crawler-query:23336
       # Casdoor OAuth2 配置（与 gateway 共用同一套 Casdoor 应用）
       - CASDOOR_ENABLED=true
       - CASDOOR_ENDPOINT=http://fastapi-casdoor:8000
-      - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID}
-      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET}
-      - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION}
-      - CASDOOR_APPLICATION=${CASDOOR_APPLICATION}
-      - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE}
+      - CASDOOR_CLIENT_ID=${CASDOOR_CLIENT_ID:?请在 .env 里设置 CASDOOR_CLIENT_ID（Casdoor 登录应用的 clientId）}
+      - CASDOOR_CLIENT_SECRET=${CASDOOR_CLIENT_SECRET:?请在 .env 里设置 CASDOOR_CLIENT_SECRET（Casdoor 登录应用的 clientSecret）}
+      - CASDOOR_ORGANIZATION=${CASDOOR_ORGANIZATION:?请在 .env 里设置 CASDOOR_ORGANIZATION（Casdoor organization）}
+      - CASDOOR_APPLICATION=${CASDOOR_APPLICATION:?请在 .env 里设置 CASDOOR_APPLICATION（Casdoor application）}
+      - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE:?请在 .env 里设置 CASDOOR_CERTIFICATE（Casdoor 公钥证书 PEM，换行写成反斜杠 n）}
       # Casdoor 管理员账号（查询用户信息用，password grant 换 admin token）
       # 管理员走内置 application「app-built-in」，clientId/clientSecret 与普通登录应用不同
-      - CASDOOR_ADMIN_NAME=${CASDOOR_ADMIN_NAME}
-      - CASDOOR_ADMIN_PASSWORD=${CASDOOR_ADMIN_PASSWORD}
-      - CASDOOR_ADMIN_CLIENT_ID=${CASDOOR_ADMIN_CLIENT_ID}
-      - CASDOOR_ADMIN_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET}
+      - CASDOOR_ADMIN_NAME=${CASDOOR_ADMIN_NAME:?请在 .env 里设置 CASDOOR_ADMIN_NAME（Casdoor 管理员用户名）}
+      - CASDOOR_ADMIN_PASSWORD=${CASDOOR_ADMIN_PASSWORD:?请在 .env 里设置 CASDOOR_ADMIN_PASSWORD（Casdoor 管理员密码）}
+      - CASDOOR_ADMIN_CLIENT_ID=${CASDOOR_ADMIN_CLIENT_ID:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_ID（Casdoor 管理员应用 app-built-in 的 clientId）}
+      - CASDOOR_ADMIN_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_SECRET（Casdoor 管理员应用 app-built-in 的 clientSecret）}
       # GeoIP 属地库目录（与挂载点一致）
       - GEOIP_MMDB_DIR=/app/mmdb
-      - TZ=${ENV_TZ}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
       # /bili-common 优先于 venv/site-packages 里的 bili_common，使宿主 bili-common
       # 源码改动重启即生效（与 be-bilibili-crawler 一致）
       - PYTHONPATH=/app:/bili-common
@@ -384,7 +503,7 @@ services:
       - ./docker_vol/llama/models.ini:/models.ini
       - ./docker_vol/llama_model/cache:/root/.cache
     ports:
-      - ${LLAMA_PORT}:8080
+      - "${LLAMA_PORT:?请在 .env 里设置 LLAMA_PORT（宿主机映射端口，容器内固定 8080）}:8080"
     restart: unless-stopped
     environment:
       - LLAMA_ARG_MODELS_PRESET=/models.ini
@@ -411,21 +530,35 @@ services:
       - LLAMA_ARG_MODEL_URL=https://hf-mirror.com/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true
     ports:
       - "12000:12000"
-  nginx:
-    container_name: fastapi-nginx
-    image: nginx:stable-alpine
+  # ===== IPv6 代理池（go-proxy-ipv6-pool-auto）=====
+  # 该代理每次请求从 eth0 的 /64 前缀里随机生成源地址拨号（伪装成池子里不同 IP），
+  # 依赖两项宿主内核态前置条件（见 scripts/docker/go-proxy-entrypoint.sh）：
+  #   1. net.ipv6.ip_nonlocal_bind = 1  ← 宿主重启后回落为 0，必须由容器启动时补
+  #   2. ip -6 route replace local <prefix>::/64 dev lo（代理自己也会做，脚本兜底并守护）
+  # 因此这里必须给 privileged（写宿主 network namespace 的 /proc/sys 与路由表）
+  # 且使用 host 网络（代理的 NDP 代答、3138/3129 端口都直接落在宿主）。
+  # 镜像来自独立项目（go-proxy-ipv6-pool-auto），需先在本地构建后再 up。
+  go-proxy-server:
+    container_name: go-proxy-server
+    image: go-proxy-ipv6-pool-auto-go-proxy-server
     restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "81:81"
+    network_mode: host
+    privileged: true
+    environment:
+      - NET_IF=${GO_PROXY_NET_IF:-eth0}
+      - RUN_ENV=prod
+      # 复查间隔（秒）：只读探测，只在缺失/前缀变化时才写入（写入会触发
+      # netlink 变更通知，浏览器会判定网络变更 → ERR_NETWORK_CHANGED）
+      - POOL_CHECK_INTERVAL=${GO_PROXY_CHECK_INTERVAL:-300}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
     volumes:
-      - ./docker_vol/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./docker_vol/nginx/cert:/etc/nginx/cert:ro
-      - ./docker_vol/nginx/html:/usr/share/nginx/html
-      - ./docker_vol/nginx/logs:/var/log/nginx
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - ./scripts/docker/go-proxy-entrypoint.sh:/app/entrypoint.sh:ro
+      # 优先使用宿主编译出的二进制（子项目 build.sh 产出）：改完 Go 代码只需
+      # ./build.sh + 重启容器，不必重建镜像。新的 dialer 只 bind 随机源地址、
+      # 不再对 eth0 做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
+      # 判定「网络已变更」并中断请求（ERR_NETWORK_CHANGED）。
+      - ./go-proxy-ipv6-pool-auto/bin:/opt/bin:ro
+    command: ["/bin/sh", "/app/entrypoint.sh"]
 volumes:
   be-gateway_node_modules:
 networks:

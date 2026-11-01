@@ -1,0 +1,406 @@
+# 开发用编排：基础设施 + 两个爬虫容器（爬虫本体 / 只读查询），不再依赖 VS Code 顺序启动。
+#
+# 用法：
+#   docker compose -f docker-compose.dev.yml up -d              # 全部
+#   docker compose -f docker-compose.dev.yml up -d mysql redis  # 只起基础设施
+#   docker compose -f docker-compose.dev.yml down               # 停（数据卷保留）
+#
+# 应用服务是**两个**容器，同一份源码 / 同一个镜像的两个 target：
+#   be-bilibili-crawler       (23333) —— **与生产同一个角色**（SERVICE_ROLE 默认 crawler，
+#     入口 main:app）：写接口 / 控制面 / bili_data 入库消费都在这里。
+#     「开发环境不自动爬」用环境变量 IS_DEV=1 控制：只跳过定时任务 / 监控任务，
+#     其余启动流程与生产一致（迁移 / schema 校验 / Milvus / MQ 入库消费照常）。
+#     库连的是本地 mysql（root，可写），所以 Add* 与爬虫回写都落本地库，不会碰生产。
+#   be-bilibili-crawler-query (23336) —— 只读查询角色（query_main.py），
+#     直连**生产库 / 生产 Redis**（连接参数见根 .env 的 CRAWLER_QUERY_*），
+#     数据是真实的，不需要把生产数据同步到本地库；
+#     同时提供**只读取数 RPC**（FastapiApp.rpc.* → RPA / be-message 取数），
+#     所以取数不依赖爬虫容器是否在跑；写库走 bili_data 的普通 MQ 消息（crawler 容器消费）。
+#
+# 分流不靠本地网关，直接由前端 dev server 的 `/api` 代理完成（见 nuxt.config.ts
+# 的 `server.proxy`，两个目标地址是该文件顶部的常量，无需额外环境变量）：
+#   抽奖查询 Get*/Search*/lottery_*  → 本地 http://localhost:23336（只读查询容器）
+#   其它一切（Add* / Get*ScrapyStatus / zhuanlan / rpa / message / casdoor）
+#                                    → 本机 9923 的网关（需要连远端时改那个常量）
+#   网关的 BILI_CRAWLER_URI 指向 23333（爬虫容器）、BILI_CRAWLER_QUERY_URI 指向 23336。
+# 注意：Add* 落在**查询**容器上仍然是 404（它只挂只读路由），
+# 所以走前端直连查询容器的那条链路本地不可能误写生产库。
+#
+# rpa-browser / message-service 仍然本地跑（VS Code 一键启动，见 .vscode/launch.json）。
+# 确需本地调试其它服务时单独 `uv run python main.py` 起在宿主机，
+# 再把 nuxt.config.ts 里的 `GATEWAY_API` 改成 host.docker.internal 即可。
+#
+# 保留的基础设施：etcd/minio/milvus、mysql、redis、rabbitmq、postgres、casdoor、
+# llama.cpp（CPU + CUDA 两套）、nginx（反代宿主 5173 的 Vue dev server，仅 dev 需要）、
+# go-proxy-server（IPv6 代理池，与生产编排同一份定义）。
+#
+# 注意：
+# - 容器名与 docker-compose.yml 相同，两套编排不要同时起；
+# - 容器内访问基础设施用服务名 + 容器端口（mysql:3306 / redis:6379），
+#   不要照抄宿主机映射端口（MYSQL_PORT=10000 / REDIS_PORT=10001）；
+# - llama_cpp_gpu_cuda 需要 nvidia runtime，默认在 gpu profile 里不启动，
+#   有 GPU 的机器用 `docker compose -f docker-compose.dev.yml --profile gpu up -d`。
+services:
+  etcd:
+    container_name: milvus-etcd
+    image: quay.io/coreos/etcd:v3.5.25
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ./docker_vol/milvus/etcd:/etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  minio:
+    container_name: milvus-minio
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    ports:
+      - "9001:9001"
+      - "9000:9000"
+    volumes:
+      - ./docker_vol/milvus/minio:/minio_data
+    command: minio server /minio_data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  standalone:
+    container_name: milvus-standalone
+    image: milvusdb/milvus:v3.0-beta
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MQ_TYPE: woodpecker
+    volumes:
+      - ./docker_vol/milvus/data:/var/lib/milvus
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "${MILVUS_PORT:?请在 .env 里设置 MILVUS_PORT（宿主机映射端口，容器内固定 19530）}:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  mysql:
+    container_name: fastapi-mysql
+    image: mysql:lts
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
+      # 供 init 脚本创建查询服务的只读账号（密码不落仓库）
+      - RO_USER=${CRAWLER_QUERY_MYSQL_USER:-bili_ro}
+      - RO_PASSWORD=${CRAWLER_QUERY_MYSQL_PASSWORD:-}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+    volumes:
+      - ./docker_vol/mysql_data/conf.d:/etc/mysql/conf.d # 配置文件目录
+      - ./docker_vol/mysql_data/data:/var/lib/mysql # 数据文件目录
+      # 只读账号：**仅当 data/ 为空（全新环境）时执行一次**；
+      # 已有数据的库不会跑，用 scripts/database/create_read_only_account/ 补（幂等）
+      - ./docker_vol/mysql_data/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${MYSQL_PORT:?请在 .env 里设置 MYSQL_PORT（宿主机映射端口，容器内固定 3306）}:3306" # 指定宿主机端口与容器端口映射关系，宿主机:容器
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  redis:
+    container_name: fastapi-redis
+    image: redis:latest
+    environment:
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+    volumes:
+      - ./docker_vol/redis/data:/data
+    ports:
+      - "${REDIS_PORT:?请在 .env 里设置 REDIS_PORT（宿主机映射端口，容器内固定 6379）}:6379"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  rabbitmq:
+    container_name: fastapi-rabbitmq
+    image: rabbitmq:management
+    ports:
+      - "${RABBITMQ_PORT:?请在 .env 里设置 RABBITMQ_PORT（宿主机映射端口，容器内固定 5672）}:5672"
+      - "${RABBITMQ_WEBUI_PORT:?请在 .env 里设置 RABBITMQ_WEBUI_PORT（宿主机映射端口，容器内固定 15672）}:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+    volumes:
+      - ./docker_vol/rabbitmq/data:/var/lib/rabbitmq
+      - ./docker_vol/rabbitmq/logs:/var/log/rabbitmq
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  postgres:
+    container_name: postgres
+    image: postgres:alpine3.22
+    volumes:
+      - ./docker_vol/postgres/data:/var/lib/postgresql
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD（Postgres 密码）}
+      - POSTGRES_USER=${POSTGRES_USER:?请在 .env 里设置 POSTGRES_USER（Postgres 账号）}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+    ports:
+      - "${POSTGRES_PORT:?请在 .env 里设置 POSTGRES_PORT（宿主机映射端口，容器内固定 5432）}:5432"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  casdoor:
+    container_name: fastapi-casdoor
+    image: casbin/casdoor:latest
+    restart: unless-stopped
+    ports:
+      - "${CASDOOR_PORT:?请在 .env 里设置 CASDOOR_PORT（宿主机映射端口，容器内固定 8000）}:8000"
+    volumes:
+      - ./docker_vol/casdoor/conf/app.conf:/conf/app.conf
+    environment:
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+    depends_on:
+      - postgres
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  llama_cpp:
+    image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server
+    container_name: llama_cpp
+    volumes:
+      - ./docker_vol/llama/models.ini:/models.ini
+      - ./docker_vol/llama_model/cache:/root/.cache
+    ports:
+      - ${LLAMA_PORT:?请在 .env 里设置 LLAMA_PORT（宿主机映射端口，容器内固定 8080）}:8080
+    restart: unless-stopped
+    environment:
+      - LLAMA_ARG_MODELS_PRESET=/models.ini
+      - LLAMA_ARG_MODELS_MAX=1
+      - HF_ENDPOINT=https://hf-mirror.com
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  llama_cpp_gpu_cuda:
+    image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server-cuda13
+    container_name: llama_cpp_gpu_cuda
+    # 需要 nvidia 容器运行时（docker --gpus）。没有 GPU / 没配 nvidia runtime 的机器上，
+    # 默认 `up -d` 会因为 "could not select device driver nvidia" 中断整个编排，
+    # 所以放进 gpu profile：默认不启动，需要时 `--profile gpu` 显式带上。
+    profiles: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./docker_vol/llama_gpu_model/cache:/root/.cache
+    environment:
+      - LLAMA_ARG_HOST=0.0.0.0
+      - LLAMA_ARG_PORT=12000
+      - LLAMA_ARG_MODEL=HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive:Q4_K_M
+      - LLAMA_ARG_MODEL_URL=https://hf-mirror.com/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true
+    ports:
+      - "12000:12000"
+  # ===== 只读查询服务：本地容器，直连生产库 / 生产 Redis =====
+  # 入口 query_main.py（SERVICE_ROLE=query）：只读路由、不跑迁移、不启调度器。
+  # 连接参数全部走根 .env 的 CRAWLER_QUERY_*，与生产 gateway 用的 BILI_CRAWLER_* 互不影响。
+  # RPC 读写分离（2.70.0）：`FastapiApp.rpc.*` 的 READ 类方法（get_*/check_*）由本容器提供，
+  # WRITE 类在 crawler 容器 —— 所以 RPA 取数不再依赖爬虫进程是否在跑。
+  be-bilibili-crawler-query:
+    container_name: be-bilibili-crawler-query
+    # 连生产库时用不上本地 mysql/redis，但 dev 编排默认会把它们一起起，
+    # 这里声明顺序可避免首次 `up -d` 时查询服务抢在数据库之前探测而反复重启；
+    # rabbitmq 是只读 RPC 服务端的依赖（broker 由 FastAPI 随 include_router 启动）
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+    build:
+      context: .
+      dockerfile: ./Dockerfile.mono
+      target: crawler-query
+    volumes:
+      - ./be-bilibili-crawler:/app
+      - ./bili-common:/bili-common
+      # 与生产查询容器分开落日志（log/base_log.py 的文件名是固定的）
+      - ./docker_vol/fastapi/log_query_dev:/app/scripts/log
+    environment:
+      - SERVICE_ROLE=query
+      # 直连生产：想换成别的库只改根 .env 的这 7 个变量
+      - MYSQL_HOST=${CRAWLER_QUERY_MYSQL_HOST:-mysql}
+      - MYSQL_PORT=${CRAWLER_QUERY_MYSQL_PORT:-3306}
+      - MYSQL_USER=${CRAWLER_QUERY_MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${CRAWLER_QUERY_MYSQL_PASSWORD:-}
+      - REDIS_HOST=${CRAWLER_QUERY_REDIS_HOST:-redis}
+      - REDIS_PORT=${CRAWLER_QUERY_REDIS_PORT:-6379}
+      - REDIS_PWD=${CRAWLER_QUERY_REDIS_PWD:-}
+      # 以下键在 Settings 里必填，查询链路不会真正连接
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
+      - UNIDBG_HOST=unidbg
+      - MILVUS_HOST=standalone
+      - LLAMA_HOST=llama_cpp
+      - LLAMA_PORT=8080
+      - V2RAY_HOST=${V2RAY_HOST}
+      - MESSAGE_SERVICE_HOST=be-message-service
+      - MESSAGE_SERVICE_PORT=18739
+      - PROXY_SERVER=${PROXY_SERVER}
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
+      # 本地报错会走 MESSAGE_CONFIG 的推送渠道；用独立名字便于与生产告警区分
+      - SERVER_NAME=query
+      - SERVER_ADDRESS=${SERVER_ADDRESS}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+      - SHOW_LOG=${FASTAPI_SHOW_LOG:-0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - IS_DEV=1
+      - llm_apis=${llm_apis:-[]}
+      - sqlalchemy_logging=False
+    ports:
+      - "${FASTAPI_QUERY_PORT:-23336}:23336"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  # ===== 爬虫服务：与生产**同一个角色**（SERVICE_ROLE 默认 crawler），23333 =====
+  # 与生产 docker-compose.yml 的 be-bilibili-crawler 完全一致：同一 target（crawler）、
+  # 同一入口（main:app 的默认 CMD），bili_data 的入库消费者（**写库通道**）都在这个进程里。
+  # RPC（2.70.0）只做只读取数，服务端在 query 容器；写库不走 RPC 而走普通 MQ 消息，
+  # 所以爬虫没起也不影响 RPA / be-message 取数。
+  # （旧编排起的 SERVICE_ROLE=api 不挂 MQ 路由、既没有写库消费者也没有 RPC 服务端，已废弃该容器。）
+  #
+  # 「开发环境不自动爬」靠 IS_DEV=1，而不是靠换角色：
+  #   IS_DEV=1 只跳过 GLOBAL_SCHEDULER 与监控任务（见 Utils/FastAPI/FastapiLifespan.py），
+  #   迁移 / schema 校验 / Milvus 集合初始化 / MQ 入库消费照常启动；
+  #   想跑真实爬取时把 IS_DEV 改成 0 即可。
+  # 库指向本地 mysql（root，可写）——Add* 与爬虫回写都落在本地库，不会碰生产。
+  be-bilibili-crawler:
+    container_name: be-bilibili-crawler
+    depends_on:
+      - mysql
+      - redis
+      - rabbitmq
+      - standalone
+      - llama_cpp
+    build:
+      context: .
+      dockerfile: ./Dockerfile.mono
+      target: crawler
+    volumes:
+      - ./be-bilibili-crawler:/app
+      - ./bili-common:/bili-common
+      # 与查询容器分开落日志（log/base_log.py 的文件名是固定的）
+      - ./docker_vol/fastapi/log_crawler_dev:/app/scripts/log
+    environment:
+      # 开发环境开关：1=不启动定时任务 / 监控任务（不自动爬取）
+      - IS_DEV=1
+      # 本地库（可写）：root@% 由 mysql 镜像初始化时创建，密码与根 .env 的 MYSQL_PASSWORD 一致
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PWD=
+      # crawler 角色会连 MQ（消费 + RPC 服务端）与 Milvus，启动期还会对这些做 critical 探活
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
+      - UNIDBG_HOST=unidbg
+      - MILVUS_HOST=standalone
+      - LLAMA_HOST=llama_cpp
+      - LLAMA_PORT=8080
+      - V2RAY_HOST=${V2RAY_HOST}
+      # be-message-service 地址：**不再是启动依赖**（2.70.1 起 crawler 不再探活它）。
+      # crawler 只通过 RabbitMQ 弱耦合推送（message_exchange / message.push），
+      # message-service 没起时消息留在队列里，crawler 照常启动与运行。
+      # 保留这两个键仅为兼容 Settings 里保留下来的字段。
+      - MESSAGE_SERVICE_HOST=host.docker.internal
+      - MESSAGE_SERVICE_PORT=18739
+      - PROXY_SERVER=${PROXY_SERVER}
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
+      - SERVER_NAME=crawler
+      - SERVER_ADDRESS=${SERVER_ADDRESS}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+      - SHOW_LOG=${FASTAPI_SHOW_LOG:-0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - llm_apis=${llm_apis:-[]}
+      - sqlalchemy_logging=False
+    ports:
+      - "${FASTAPI_CRAWLER_PORT:-23333}:23333"
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  # ===== nginx：**只保留在 dev 编排里**（生产编排已移除）=====
+  # docker_vol/nginx/conf/nginx.conf 的内容是开发视角的：80/443 反代宿主 5173（Vue
+  # dev server）+ 转发 /api 到宿主 9923 网关、/casdoor 到宿主 10011、81 端口直通 Casdoor 控制台。
+  # 生产入口不走它（网关/前端各自对外），所以 docker-compose.yml 里不再有这个服务。
+  nginx:
+    container_name: fastapi-nginx
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    volumes:
+      - ./docker_vol/nginx/conf/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker_vol/nginx/cert:/etc/nginx/cert:ro
+      - ./docker_vol/nginx/html:/usr/share/nginx/html
+      - ./docker_vol/nginx/logs:/var/log/nginx
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  # ===== IPv6 代理池（go-proxy-ipv6-pool-auto），与生产编排同一份定义 =====
+  # 该代理每次请求从 eth0 的 /64 前缀里随机生成源地址拨号（伪装成池子里不同 IP），
+  # 依赖两项宿主内核态前置条件（见 scripts/docker/go-proxy-entrypoint.sh）：
+  #   1. net.ipv6.ip_nonlocal_bind = 1  ← 宿主重启后回落为 0，必须由容器启动时补
+  #   2. ip -6 route replace local <prefix>::/64 dev lo（代理自己也会做，脚本兜底并守护）
+  # 因此这里必须给 privileged（写宿主 network namespace 的 /proc/sys 与路由表）
+  # 且使用 host 网络（代理的 NDP 代答、3138/3129 端口都直接落在宿主）。
+  # 镜像来自独立项目（go-proxy-ipv6-pool-auto），需先在本地构建后再 up。
+  go-proxy-server:
+    container_name: go-proxy-server
+    image: go-proxy-ipv6-pool-auto-go-proxy-server
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    environment:
+      - NET_IF=${GO_PROXY_NET_IF:-eth0}
+      # 开发环境用 dev：goproxy 打开 Verbose，代理日志会打到 stdout，便于排查出口 IP 问题
+      - RUN_ENV=dev
+      # 复查间隔（秒）：只读探测，只在缺失/前缀变化时才写入（写入会触发
+      # netlink 变更通知，浏览器会判定网络变更 → ERR_NETWORK_CHANGED）
+      - POOL_CHECK_INTERVAL=${GO_PROXY_CHECK_INTERVAL:-300}
+      - TZ=${ENV_TZ:-Asia/Shanghai}
+    volumes:
+      - ./scripts/docker/go-proxy-entrypoint.sh:/app/entrypoint.sh:ro
+      # 优先使用宿主编译出的二进制（子项目 build.sh 产出）：改完 Go 代码只需
+      # ./build.sh + 重启容器，不必重建镜像。新的 dialer 只 bind 随机源地址、
+      # 不再对 eth0 做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
+      # 判定「网络已变更」并中断请求（ERR_NETWORK_CHANGED）。
+      - ./go-proxy-ipv6-pool-auto/bin:/opt/bin:ro
+    command: ["/bin/sh", "/app/entrypoint.sh"]
+networks:
+  default:
+    enable_ipv6: true
+    name: fastapi
+    driver: bridge

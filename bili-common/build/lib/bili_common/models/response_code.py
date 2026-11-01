@@ -1,6 +1,7 @@
 """
 Response Code 模块 - 统一响应码定义（单一来源）
 """
+
 from bili_common.models import IntEnumAutoDoc
 
 
@@ -8,6 +9,7 @@ class ResponseCode(IntEnumAutoDoc):
     """
     统一响应码枚举类
     """
+
     # 成功
     SUCCESS = 0
 

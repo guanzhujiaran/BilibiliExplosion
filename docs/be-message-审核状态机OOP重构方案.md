@@ -56,9 +56,9 @@
 
 ```python
 class ModerationAction(str, Enum):
-    APPROVE = "approve"    # 审核通过 / 单据通过
-    REJECT  = "reject"     # 审核驳回 / 单据驳回
-    HIDE    = "hide"       # 下架（实体类）
+    APPROVE = "approve"  # 审核通过 / 单据通过
+    REJECT = "reject"  # 审核驳回 / 单据驳回
+    HIDE = "hide"  # 下架（实体类）
     # 评审：无申诉恢复场景，不引入 RESTORE；后续需要再加 TRANSITIONS
 ```
 
@@ -66,12 +66,12 @@ class ModerationAction(str, Enum):
 
 ```python
 class ResourceAuditStatusEnum(IntEnum):
-    NORMAL   = 1   # 通过/公开/已通过（可入 Feed、可互动；单据=已批准）
-    AUDITING = 2   # 实体待审（先发后审）
-    PENDING  = 2   # 单据待审（与 AUDITING 同位，语义按表区分；见 §5 取舍）
-    REJECTED = 3   # 驳回（实体/单据）
-    HIDDEN   = 4   # 下架（实体类）
-    DELETED  = 5   # 软删（当前仅评论；动态软删走独立 deletedAt）
+    NORMAL = 1  # 通过/公开/已通过（可入 Feed、可互动；单据=已批准）
+    AUDITING = 2  # 实体待审（先发后审）
+    PENDING = 2  # 单据待审（与 AUDITING 同位，语义按表区分；见 §5 取舍）
+    REJECTED = 3  # 驳回（实体/单据）
+    HIDDEN = 4  # 下架（实体类）
+    DELETED = 5  # 软删（当前仅评论；动态软删走独立 deletedAt）
 ```
 
 > ⚠️ **数值错位迁移**：动态/话题旧 `AUDITING=1`，评论/私信旧 `NORMAL=1`。统一为 `NORMAL=1` 基准时，迁移须按语义映射，不能只改类型（详见 §6 Alembic）。
@@ -112,9 +112,10 @@ class ResourceAuditStatusEnum(IntEnum):
 # app/services/moderation/state_machine.py
 @dataclass(frozen=True)
 class Transition:
-    from_state: ResourceAuditStatusEnum   # 或语义态
+    from_state: ResourceAuditStatusEnum  # 或语义态
     action: ModerationAction
     to_state: ResourceAuditStatusEnum
+
 
 class AuditStateMachine(ABC):
     TRANSITIONS: tuple[Transition, ...] = ()
@@ -125,19 +126,31 @@ class AuditStateMachine(ABC):
     @abstractmethod
     def native_state_of(self, row): ...
 
-    async def on_enter(self, session, row, new_state, *, action, actor_mid, reason, remark) -> None:
+    async def on_enter(
+        self, session, row, new_state, *, action, actor_mid, reason, remark
+    ) -> None:
         """副作用钩子（默认空）：Feed 同步 / FORWARD 计数 / 通知 / 写公开头像等差异显式化。"""
 
-    async def transition(self, session, row, *, action, actor_mid, reason=None, remark=None):
+    async def transition(
+        self, session, row, *, action, actor_mid, reason=None, remark=None
+    ):
         cur = self.native_state_of(row)
         rule = self._rule(cur, action)
         if rule is None:
-            raise StateTransitionError(cur, action)      # 非法流转唯一拦截点
+            raise StateTransitionError(cur, action)  # 非法流转唯一拦截点
         setattr(row, self.state_attr, self.to_native(rule.to_state))
-        await self.on_enter(session, row, rule.to_state, action=action,
-                            actor_mid=actor_mid, reason=reason, remark=remark)
-        await self._write_audit_log(session, row, cur, rule.to_state, action,
-                                    actor_mid, reason, remark)   # 统一写 TResourceAuditLog
+        await self.on_enter(
+            session,
+            row,
+            rule.to_state,
+            action=action,
+            actor_mid=actor_mid,
+            reason=reason,
+            remark=remark,
+        )
+        await self._write_audit_log(
+            session, row, cur, rule.to_state, action, actor_mid, reason, remark
+        )  # 统一写 TResourceAuditLog
         return rule.to_state
 ```
 
@@ -186,13 +199,15 @@ class AuditStateMachine(ABC):
     def flows(cls) -> tuple[AuditFlow, ...]:
         """该资源经历的所有审核环节（可顺序/并列）。"""
 
+
 @dataclass(frozen=True)
 class AuditFlow:
     """一个审核环节：独立的迁移表 + 规则 + 副作用，链到主状态输出。"""
-    name: str                       # 如 "text_auto" / "content_manual" / "report"
+
+    name: str  # 如 "text_auto" / "content_manual" / "report"
     machine: type[AuditStateMachine]  # 本环节自己的状态机（独立 TRANSITIONS）
-    affects_primary: bool           # 该环节结果是否联动主状态 auditStatus
-    when_primary: dict              # 环节结果 -> 主状态应置为什么（或给出推导函数）
+    affects_primary: bool  # 该环节结果是否联动主状态 auditStatus
+    when_primary: dict  # 环节结果 -> 主状态应置为什么（或给出推导函数）
 ```
 
 ### 9.3 主状态由环节共同推出（编排器）

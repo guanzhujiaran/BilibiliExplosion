@@ -106,7 +106,9 @@ class InteractionActionTypeEnum(IntEnumAutoDoc):
     DISLIKE = 8  # 点踩 / 取消点踩（EdgeRank 降权）
     FAVORITE = 9  # 收藏 / 取消收藏（多夹 + 用户去重计数）
     SHARE = 10  # 分享上报（shareCount +1，行为上报不幂等）
-    REPOST = 11  # 转发 / attach（动态=生成 FORWARD；非动态=attach 行为计数 repostCount +1）
+    REPOST = (
+        11  # 转发 / attach（动态=生成 FORWARD；非动态=attach 行为计数 repostCount +1）
+    )
     VIEW = 12  # 浏览上报（弱依赖计数，跨天去重）
     REPORT = 13  # 举报（不改 auditStatus，仅加入审核队列）
     AUDIT_APPROVE = 14  # 审核通过（DAC：仅审核员；驳回复用既有 AUDIT_REJECT=4）

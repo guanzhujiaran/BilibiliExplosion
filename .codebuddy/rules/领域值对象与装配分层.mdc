@@ -1,0 +1,71 @@
+
+---
+description:
+alwaysApply: true
+enabled: true
+updatedAt: 2026-10-08T00:00:00.000Z
+provider:
+---
+
+# 领域值对象与装配分层规范
+
+> 落地实例：`be-message-service/app/services/common/indexed.py`、`app/services/user/space/*`、
+> `app/services/moment/values.py`；迁移记录见 `docs/be-message-统一计划书.md` §5.23 / §5.24。
+
+## 1. 禁止裸 dict（返回、参数、字段，一律禁止）
+
+- **禁止**函数 / 方法返回裸 `dict` / `list[dict]` / `dict[str, Any]`（`-> dict[...]`、`-> Dict[...]` 都算），
+  参数与响应模型字段同理；
+- 业务数据一律用 **pydantic 模型**（对外 DTO / 契约）或 **dataclass**（内部值对象）；
+- **唯一例外是「边界转换」**：外部系统（RPC / HTTP / pptr 直读 / 消息体）返回的 dict
+  必须**在边界处立刻转换一次**成值对象，之后业务层只见值对象；
+  转换函数统一命名 `from_rpc(...)` / `from_row(...)`，并**只出现一处**；
+- 局部临时容器（例如 `{r.dynId: r for r in rows}` 这种一次性中间变量）允许存在，
+  但**不得跨越函数边界**（作为参数或返回值传递）——一旦要传出去就必须值对象化。
+
+## 2. 值对象写法约定
+
+- 一律 `@dataclass(frozen=True, slots=True)`（不可变 + 省内存），需要局部修改时用
+  `dataclasses.replace` 或提供 `with_xxx()` 返回新实例；
+- 构造统一用类方法 `of(...)` / `empty()`，取值统一用 `value_of(key)`（未命中返回 `None`）与
+  `value_or(key, default)`，判断覆盖用 `has(key)`，遍历用 `items()` / `keys()` / `values()` / `__iter__`；
+- **禁止在值对象上复刻 dict 语义**（不要提供 `get()` / `__getitem__` 返回「缺键」的模糊结果），
+  `None` 必须能区分「本批没覆盖」与「查了但值为空」；
+- 批量 `id → 值` 的聚合直接用通用 `Indexed[V]`（`app/services/common/indexed.py`），
+  **不要每个业务各造一个同构的映射类**；只有「一条记录」才定义专属类型
+  （如 `TimelineEntry`、`TagMembership`）；
+- **非 int 键**（`(bizType, bizId)` 复合键 / 枚举键 / 字符串键）用同一个模块里的 `Keyed[K, V]`，
+  不要再造第三个映射类；`Indexed[V]` 就是 `Keyed[int, V]` 的语义化别名；
+- 泛型用 `TypeVar` + `Generic[...]`，**不要用 PEP 695 的 `class X[T]`**
+  （ruff 的 target-version 由 `requires-python` 推断，会被判语法错误）；
+- 值对象/模型要自带语义方法（`includes()` / `count_of()` / `mutual` / `blocked` / `is_dynamic`），
+  让调用方读意图而不是自己拼条件。
+
+## 3. 装配分层：ORM 不许产 DTO
+
+- **ORM 表模型（`app/models/db/*_tbl.py`）禁止依赖 `app/models/schemas`**：
+  依赖方向只能 `schemas → db`、`services → schemas/db`，反向会成环且让表结构与 API 契约耦合；
+- 因此「行 → 对外响应」的装配**不写进 ORM 类方法**，按优先级选：
+  1. **DTO 的类方法**：`MomentCreateResp.from_row(dyn)`（依赖方向合法，字段规则跟着 DTO 走）；
+  2. **服务层 assembler**：涉及 IO / 批量口径 / 需要多次查询时，放 `app/services/<域>/assemblers.py`；
+  3. 模块级私有函数（能接受的最小方案），但不得返回裸 dict；
+- 同一行有多种出参形态时（写操作回执 / Feed 卡片 / 审核条目），**不要**让 ORM 或单一函数
+  知道所有形态，各自在自己的装配点取值；
+- 装配函数必须**只做字段映射，不触发隐式 IO**（ORM 实例可能已 expired，顺手访问未加载关系会
+  造成 N+1）；批量数据必须由调用方查好并以值对象传入。
+
+## 4. 多维度属性用描述符 + 可见性上下文
+
+- 用户的「多维属性」（隐私开关、可见性、分组归属等）**每个维度一个描述符对象**：
+  key（同时是 DB 列名 / 请求字段 / 响应字段）+ 文案 + 适用场景 + 存储位置 + 缺省值 + 裁剪行为；
+- 判定收敛到**唯一的上下文对象**（如 `SpaceVisibility.can_view(key)`），
+  **禁止**在业务代码里 `getattr(flags, "show_xxx")` 用字符串取开关，或逐字段 `if not flags.x`；
+- 加一个维度 = 加一个描述符类 + 注册表加一行；服务层的读写循环由注册表驱动，不得逐个字段抄。
+
+## 5. 自检清单（提交前）
+
+- `grep -rn "\-> dict\[\|-> Dict\[\|list\[dict\]" <改动目录>` 必须**零命中**（边界转换除外，
+  且必须有注释说明「唯一转换点」）；
+- 新增值对象必须有：`frozen=True, slots=True`、`of/empty`、`value_of`、语义方法与 docstring；
+- 新增 DTO 装配不得放进 `app/models/db/`；`app/models/db/**` 里不得出现 `app.models.schemas` 导入；
+- 改动完成后跑：全量 `import` 校验（`pkgutil.walk_packages`）+ `ruff check`（除既有历史告警外零新增）。

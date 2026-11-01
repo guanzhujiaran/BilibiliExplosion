@@ -1,4 +1,5 @@
 """一次性为各语言 .po 填充 msgstr 翻译（仅开发期使用，可删除）。"""
+
 import re
 from pathlib import Path
 

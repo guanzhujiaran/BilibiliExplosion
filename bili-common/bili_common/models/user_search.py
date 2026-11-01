@@ -5,8 +5,9 @@
 - 请求参数 `UserSearchParams`：继承泛型分页基类 `RequestOffsetLimitParams[T]`，
   复用 `offset` / `limit` 分页字段，并补充 `keyword` 关键字；
 - 响应模型 `PptrUserSearchItem` 及其子结构，结构对齐 pptr 网关 `GET /api/v1/user/search`
-  的返回，但统一走 `StandardResponse`（`code=0`）。bigint 一律以字符串返回，避免 JS 端
-  Number 精度丢失。
+  的返回，但统一走 `StandardResponse`（`code=0`）。bigint（mid / uid）出参为 int 数值 +
+  `@auto_str` 自动派生的 `_str` 字符串版（后缀 `_str`），前端只用字符串版，避免 JS 端
+  Number 精度丢失；等级 / 经验 / 大会员等普通数值保持 number。
 
 这些模型被 be-message-service 的 `GET /api/v1/message/admin/user/search` 使用，
 该接口经由 pptr 网关转发，仅系统管理员(root)可调用。
@@ -22,7 +23,7 @@ from typing import ClassVar
 
 from sqlmodel import SQLModel, Field
 
-from bili_common.models._int_str import _IntStrMixin
+from bili_common.models.auto_str import auto_str
 from bili_common.models.pagination import RequestOffsetLimitParams
 
 
@@ -46,30 +47,44 @@ class PptrUserRoleInfo(SQLModel):
     role_description: str = Field(default="", description="角色中文描述")
 
 
-class PptrUserLevelInfo(_IntStrMixin):
+@auto_str(suffix="_str")
+class PptrUserLevelInfo(SQLModel):
     """成长等级信息（对齐 pptr search 出参）。
 
     此为 pptr 等级信息的唯一权威定义，pptr_user_rpc 同样复用本类（rpc 场景下会
     额外传入 uid / updated_at）。
 
-    int 字段在网络上以字符串传输（_IntStrMixin），规避 JS Number 精度问题；
+    雪花 ID（uid）出参为 int + 自动派生的 `uid_str`（防 JS Number 精度丢失）；
+    等级 / 经验是普通数值，出参保持 number，由前端自行按需格式化。
     Python 侧一律拿到 int 做计算。
     """
 
-    _int_fields_: ClassVar[tuple[str, ...]] = ("uid", "current_level", "current_exp", "current_min", "next_exp")
+    _auto_str_suffix: ClassVar[str] = "_str"
 
-    uid: int | None = Field(default=None, description="用户 UID（可空，search 场景无需）")
+    uid: int | None = Field(
+        default=None, description="用户 UID（可空，search 场景无需；前端请用 uid_str）"
+    )
     current_level: int = Field(default=0, description="当前等级")
     current_exp: int = Field(default=0, description="当前累积经验")
     current_min: int = Field(default=0, description="当前等级起始经验")
-    next_exp: int = Field(default=0, description="距下一级还需经验（下一级门槛经验 - 当前累积经验），满级为 0")
-    updated_at: str = Field(default="", description="TUserLevel.updatedAt（ISO），用于每日经验幂等判断")
+    next_exp: int = Field(
+        default=0,
+        description="距下一级还需经验（下一级门槛经验 - 当前累积经验），满级为 0",
+    )
+    updated_at: str = Field(
+        default="", description="TUserLevel.updatedAt（ISO），用于每日经验幂等判断"
+    )
 
 
-class PptrUserVipInfo(_IntStrMixin):
-    """大会员信息（对齐 pptr search 出参）。"""
+@auto_str(suffix="_str")
+class PptrUserVipInfo(SQLModel):
+    """大会员信息（对齐 pptr search 出参）。
 
-    _int_fields_: ClassVar[tuple[str, ...]] = ("vip_status", "vip_type", "vip_due_date", "vip_pay_type")
+    vip_* 均为状态枚举 / 秒级时间戳，不是雪花 ID，出参保持 number。
+    保留装饰器是为了后续新增雪花 ID 字段时自动派生字符串版。
+    """
+
+    _auto_str_suffix: ClassVar[str] = "_str"
 
     vip_status: int = Field(default=0, description="0非vip / 1vip / 2过期")
     vip_type: int = Field(default=0, description="0非vip / 1月 / 2年 / 3十年 / 4百年")
@@ -77,13 +92,23 @@ class PptrUserVipInfo(_IntStrMixin):
     vip_pay_type: int = Field(default=0, description="充值渠道")
 
 
-class PptrUserSearchItem(_IntStrMixin):
-    """搜索用户返回的单条记录（对齐前端 PptrUserSearchItem）。"""
+@auto_str(suffix="_str")
+class PptrUserSearchItem(SQLModel):
+    """搜索用户返回的单条记录（对齐前端 PptrUserSearchItem）。
 
-    _int_fields_: ClassVar[tuple[str, ...]] = ("mid", "uid", "regtime")
+    `mid` 与 `uid` 是同一个雪花 ID（BIGINT），出参为 int 数值 + 自动派生的
+    `mid_str` / `uid_str` 字符串版；**前端只能用字符串版**，避免 JS 精度丢失。
+    `regtime` 是毫秒时间戳，保持 number。
+    """
 
-    mid: int = Field(default=0, description="用户ID（int 内部使用，网络序列化为字符串防精度丢失）")
-    uid: int = Field(default=0, description="用户ID（同 mid）")
+    _auto_str_suffix: ClassVar[str] = "_str"
+
+    mid: int = Field(
+        default=0, description="用户ID（int 内部使用，前端请用 mid_str 字符串版）"
+    )
+    uid: int = Field(
+        default=0, description="用户ID（同 mid；前端请用 uid_str 字符串版）"
+    )
     user_name: str | None = Field(default=None, description="注册默认名")
     uname: str | None = Field(default=None, description="昵称")
     email: str | None = Field(default=None, description="邮箱（脱敏）")
@@ -103,8 +128,12 @@ class PptrUserSearchResult(SQLModel):
     无需服务端统计 total。
     """
 
-    items: list[PptrUserSearchItem] = Field(default_factory=list, description="当前页用户列表")
-    has_more: bool = Field(default=False, description="是否还有下一页，前端据此下拉加载更多")
+    items: list[PptrUserSearchItem] = Field(
+        default_factory=list, description="当前页用户列表"
+    )
+    has_more: bool = Field(
+        default=False, description="是否还有下一页，前端据此下拉加载更多"
+    )
 
 
 __all__ = [

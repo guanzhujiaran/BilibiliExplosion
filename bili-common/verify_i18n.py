@@ -1,4 +1,5 @@
 """验证 fastapi-i18n 随 Accept-Language 切换翻译（开发期验证，可删除）。"""
+
 import os
 import asyncio
 from contextlib import asynccontextmanager
@@ -20,12 +21,17 @@ async def run_with(lang_header: str, label: str):
     try:
         print(f"\n=== Accept-Language: {lang_header} ({label}) ===")
         # 1. 直接 _() 字面量
-        print("  _('请求参数校验失败') ->", _( "请求参数校验失败"))
-        print("  _('权限不足')          ->", _( "权限不足"))
+        print("  _('请求参数校验失败') ->", _("请求参数校验失败"))
+        print("  _('权限不足')          ->", _("权限不足"))
         # 2. ResponseMsg 延迟翻译
-        print("  ResponseMsg.not_logged_in.t() ->", ResponseMsg.exception_not_logged_in.t())
-        print("  ResponseMsg.fp_limit.t(max=3) ->",
-              ResponseMsg.exception_fingerprint_limit_exceeded.t(max=3))
+        print(
+            "  ResponseMsg.not_logged_in.t() ->",
+            ResponseMsg.exception_not_logged_in.t(),
+        )
+        print(
+            "  ResponseMsg.fp_limit.t(max=3) ->",
+            ResponseMsg.exception_fingerprint_limit_exceeded.t(max=3),
+        )
         # 3. 异常 to_response（含 _(self.msg)）
         exc = NotLoggedInException()
         print("  NotLoggedInException.to_response() ->", exc.to_response())

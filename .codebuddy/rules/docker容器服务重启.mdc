@@ -1,0 +1,57 @@
+---
+description: 修改 docker 容器内运行的服务（crawler 等）后需要重启容器
+globs:
+alwaysApply: false
+---
+
+# docker 容器内的服务可以自行重启
+
+1. 本项目用 docker 承载基础设施与部分服务：本地 `docker-compose.dev.yml`、生产 `docker-compose.yml`。
+   服务源码以 **bind mount** 方式挂进容器（如 `./be-bilibili-crawler:/app`、`./bili-common:/bili-common`），
+   因此改完代码 **重启容器即生效，无需重建镜像**。
+
+2. **容器内的改动，agent 可以自己重启，不必等待用户确认**：
+
+   ```bash
+   docker compose -f docker-compose.dev.yml restart be-bilibili-crawler be-bilibili-crawler-query
+   # 或只重启单个容器
+   docker restart be-bilibili-crawler-query
+   ```
+
+   重启后必须自己验证（`docker logs --tail`、curl 接口、实际业务接口调用），把验证结果写进回复，
+   不能只说「已重启」。
+
+   3. 当前由 docker 承载的 crawler 容器（角色差异要分清，改哪一侧就重启哪个）：
+
+   | 容器 | 入口 / 端口 | 角色 |
+   | --- | --- | --- |
+   | `be-bilibili-crawler` | `uvicorn main:app` / 23333 | **与生产同一个角色**：`SERVICE_ROLE` 默认 `crawler`，写接口 / 控制面 / **`bili_data` 入库消费者（写库通道）**都在这里；dev 用 `IS_DEV=1` 关掉定时任务与监控任务（**不自动爬取**）；不提供 RPC |
+   | `be-bilibili-crawler-query` | `uvicorn query_main:app` / 23336 | 只读查询路由（`Get*` / `Search*`）+ **RPC 服务端**（`FastapiApp.rpc.*`，全部只读取数）；前端 `/api/v1/lottery_database/bili/*` 直连它 |
+
+   - 改「只读查询路由 / 汇总 / 详情 / **RPC handler**」→ 重启 `be-bilibili-crawler-query`；
+   - 改「写入路由 / MQ 入库消费者 / 定时任务」→ 重启 `be-bilibili-crawler`；
+   - 涉及 `bili-common` 的改动两个容器都要重启（挂载的是同一份 `/bili-common`）。
+
+   4. **RPC 只读、写库走 MQ**（2.70.0）：
+      - `FastapiApp.rpc.*` 全部是**只读取数**（`get_reserve/official/charge/topic/all_lottery`、
+        `get_others_lot_dyn_list`、`check_lottery_exist`、`check_others_lot_dyn_exist`），
+        服务端只在 `be-bilibili-crawler-query`（handler：`controller/v1/mq/rpc_read_lottery_data.py`，
+        由 `query_main.py` 挂载）；
+      - **写库不走 RPC**：走 `bili_data` 的普通 MQ 消息（`BiliLotDataPublisher` 发布 →
+        `controller/v1/mq/mq_controller.py` 的订阅者落库），只在 `be-bilibili-crawler`。
+        crawler / api 角色都**不注册** RPC 服务端（`rpc_subscriber` 会跳过并打 WARNING），
+        否则两个角色消费同一队列（competing consumers），消息随机落到只读侧。
+      - `SERVICE_ROLE=api` 角色（`main.py` 的 `is_api_only` 分支）不挂 MQ 路由、**既没有写库消费者
+        也没有 RPC 服务端**，消息会被 RabbitMQ 静默丢弃，客户端只能等到超时（RPA 里表现为
+        `RPC 请求超时（70.0s）: routing_key=FastapiApp.rpc.xxx`）；dev 编排已不再使用该角色。
+      - 排查这类「RPC 一直超时」时，先看队列有没有消费者：
+        `curl -s -u $RABBITMQ_USER:$RABBITMQ_PASSWORD http://localhost:15672/api/queues`，
+        `FastapiApp.rpc.*` 的 `consumers=0` 或队列根本不存在 → 是服务端容器没起（READ 类看 query，
+        WRITE 类看 crawler），不是 RPA / 客户端的问题。
+      - 只读查询场景也可走 `be-bilibili-crawler-query`（23336）的只读 HTTP 接口（同样不依赖爬虫）。
+
+5. 不在 docker 里跑的服务（`be-message-service` 由 VS Code 调试会话启动）**不要**擅自 kill / 重启，
+   改完代码在回复里提示用户重启调试会话即可。
+
+6. 只重启本次改动涉及的容器；`mysql` / `redis` / `rabbitmq` / `nginx` / `casdoor` / `milvus` 等基础设施
+   不要因为代码改动去重启，除非任务本身就是修基础设施。

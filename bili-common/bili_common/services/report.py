@@ -28,7 +28,7 @@ class ReportBaseService:
         *,
         reporter_mid: int,
         biz_type: int,
-        biz_id: int,
+        biz_id: str,
         accused_mid: int,
         reason_type: int,
         reason_desc: str | None = None,
@@ -99,7 +99,9 @@ class ReportBaseService:
 
         total = int(
             (
-                await session.exec(select(func.count()).select_from(model).where(*conds))
+                await session.exec(
+                    select(func.count()).select_from(model).where(*conds)
+                )
             ).one()
             or 0
         )

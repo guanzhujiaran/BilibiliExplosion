@@ -81,7 +81,9 @@ await publish_push_message(
     title="[w] 任务失败",
     content="某个工作流执行失败，请检查",
     push_type="text",
-    config={"push_plus_token": "xxx"},  # 或直接传 PushChannelConfig / None（回落全局配置）
+    config={
+        "push_plus_token": "xxx"
+    },  # 或直接传 PushChannelConfig / None（回落全局配置）
     amqp_url="amqp://guest:guest@rabbitmq:5672/",  # 缺省从环境变量 RABBITMQ_URL 读取
 )
 ```
@@ -123,6 +125,7 @@ Docker 构建时通过 `UV_NO_EDITABLE=1` 强制按非 editable 安装，使其�
 
 ```python
 from bili_common.core.config import settings
+
 print(settings.mysql_host)
 ```
 
@@ -141,19 +144,24 @@ from bili_common.models.response import success_response, error_response
 from bili_common.models.response_code import ResponseCodeEnum
 from bili_common.models.response_msg import ResponseMsgEnum
 
+
 @router.get("/demo")
 async def demo():
     return success_response(data={"hello": "world"})
 
+
 @router.get("/fail")
 async def fail():
-    return error_response(code=ResponseCodeEnum.NOT_FOUND, msg=ResponseMsgEnum.NOT_FOUND)
+    return error_response(
+        code=ResponseCodeEnum.NOT_FOUND, msg=ResponseMsgEnum.NOT_FOUND
+    )
 ```
 
 ### 依赖注入
 
 ```python
 from bili_common.models.depends import CommonDepends, PaginationParams
+
 
 @router.get("/list")
 async def list_(
@@ -176,6 +184,7 @@ async def list_(
 ```python
 from bili_common.deps.auth import CurrentUser
 
+
 @router.get("/me")
 async def me(current_user: CurrentUser = Depends(CurrentUser())):
     return success_response(data={"sub": current_user.sub})
@@ -184,7 +193,14 @@ async def me(current_user: CurrentUser = Depends(CurrentUser())):
 ### 数据库 / Redis / 浏览器 / 代理 / 消息
 
 ```python
-from bili_common.core import get_db, get_session, get_redis, AsyncSessionLocal, Base, engine
+from bili_common.core import (
+    get_db,
+    get_session,
+    get_redis,
+    AsyncSessionLocal,
+    Base,
+    engine,
+)
 from bili_common.core.browser import BrowserManager
 from bili_common.core.proxy import ProxyManager, ProxyRule
 from bili_common.core.message import MessageServiceClient
@@ -200,5 +216,6 @@ await client.send_message(payload)
 
 ```python
 from bili_common.core.log import logger
+
 logger.info("hello from bili-common")
 ```

@@ -9,6 +9,7 @@ class ResponseCode(IntEnumAutoDoc):
     """
     统一响应码枚举类
     """
+
     # 成功
     SUCCESS = 0
 
@@ -46,7 +47,9 @@ class ResponseCode(IntEnumAutoDoc):
     BROWSER_ID_NOT_FOUND = 1005
     SESSION_NOT_FOUND = 1006
     BROWSER_NOT_STARTED = 1007
-    USER_NOT_FOUND = 1008  # 目标用户不存在（空间资料等单用户读接口返回，替代空列表/0/404 兜底）
+    USER_NOT_FOUND = (
+        1008  # 目标用户不存在（空间资料等单用户读接口返回，替代空列表/0/404 兜底）
+    )
 
     # 资源冲突 / 缺失（RPA-Browser：名称冲突、通知配置、被引用的动作）
     # 注意：这些是「业务语义」而非 HTTP 语义，一律映射 HTTP 200，业务由 body.code 表达，
@@ -57,7 +60,9 @@ class ResponseCode(IntEnumAutoDoc):
     # 以下 5 个为「业务资源不存在」：历史上控制器里手写了 error_response(404, ...)，
     # 404 在契约里专指「路由不存在」（docs/response-code-design.md §2 R3），
     # 且非 2xx 会让前端 SDK（responseStyle='data'）丢弃整个 body，连 msg 都拿不到。
-    WORKFLOW_NOT_FOUND = 1012  # 工作流不存在 / 无权访问（对外不区分二者，避免泄露存在性）
+    WORKFLOW_NOT_FOUND = (
+        1012  # 工作流不存在 / 无权访问（对外不区分二者，避免泄露存在性）
+    )
     PLUGIN_NOT_FOUND = 1013  # 插件不存在
     PLUGIN_CONF_NOT_FOUND = 1014  # 插件配置不存在（插件已挂载但未配置 / 已删除）
     WORKFLOW_RUN_NOT_FOUND = 1015  # 工作流运行记录不存在
@@ -96,20 +101,39 @@ class ResponseCode(IntEnumAutoDoc):
     BROWSER_WORKFLOW_RUNNING = 2016  # 浏览器正在执行工作流，调试类接口暂不可用
 
     # Casdoor OAuth 相关错误码
-    CASDOOR_OAUTH_ERROR = 3001       # Casdoor 返回错误（如 code 过期、invalid_grant）
+    CASDOOR_OAUTH_ERROR = 3001  # Casdoor 返回错误（如 code 过期、invalid_grant）
     CASDOOR_ENDPOINT_NOT_CONFIGURED = 3002  # Casdoor endpoint 未配置
     CASDOOR_TOKEN_PARSE_FAILED = 3003  # JWT 解析失败
-    CASDOOR_USER_NOT_FOUND = 3004     # Casdoor 用户不存在
+    CASDOOR_USER_NOT_FOUND = 3004  # Casdoor 用户不存在
     CASDOOR_CREATE_USER_FAILED = 3005  # 创建本地用户失败
 
     # 消息（私信）发送限制错误码（2.57.0，be-message 私信发送拦截）
-    DM_SEND_DAILY_LIMIT = 4001        # 单用户当天发送私信达到每日上限（dm_daily_send_limit）
-    DM_SEND_STRANGER_LIMIT = 4002     # 对方未关注且未回过消息时，陌生人单条额度已用尽
+    DM_SEND_DAILY_LIMIT = 4001  # 单用户当天发送私信达到每日上限（dm_daily_send_limit）
+    DM_SEND_STRANGER_LIMIT = 4002  # 对方未关注且未回过消息时，陌生人单条额度已用尽
 
     # 内容发布每日上限错误码（2.58.0，评论 / 动态 / 话题创建拦截）
-    COMMENT_DAILY_CREATE_LIMIT = 4101  # 单用户当天评论创建达到每日上限（comment_daily_create_limit）
-    MOMENT_DAILY_CREATE_LIMIT = 4102   # 单用户当天动态(WORD)创建达到每日上限（moment_daily_create_limit）
-    TOPIC_DAILY_CREATE_LIMIT = 4103    # 单用户当天话题创建达到每日上限（topic_daily_create_limit）
+    COMMENT_DAILY_CREATE_LIMIT = (
+        4101  # 单用户当天评论创建达到每日上限（comment_daily_create_limit）
+    )
+    MOMENT_DAILY_CREATE_LIMIT = (
+        4102  # 单用户当天动态(WORD)创建达到每日上限（moment_daily_create_limit）
+    )
+    TOPIC_DAILY_CREATE_LIMIT = (
+        4103  # 单用户当天话题创建达到每日上限（topic_daily_create_limit）
+    )
+
+    # 时长 / 会员权益错误码（RPA-Browser 浏览器使用时长体系，见计划书 §4）
+    DURATION_INSUFFICIENT = 5001  # 时长余额不足，定时工作流拒绝启动
+    REDEEM_CODE_INVALID = 5002  # 兑换码不存在 / 已停用 / 已过期
+    REDEEM_CODE_EXHAUSTED = 5003  # 兑换码可用次数已用尽
+    REDEEM_CODE_ALREADY_USED = 5004  # 该用户已兑换过此码
+    SIGN_IN_ALREADY_TODAY = 5005  # 今日已签到
+    PAYMENT_VERIFY_FAILED = 5006  # 支付状态核验失败（Casdoor 查询失败/未配置）
+    SIGN_MAKEUP_NOT_ALLOWED = 5010  # 补签目标日期非法（仅当月已漏签的过去日期）
+    SIGN_MAKEUP_ALREADY_SIGNED = 5011  # 补签目标日期已签到
+    SIGN_MAKEUP_CARD_NOT_ENOUGH = 5012  # 补登卡不足
+    SIGN_REWARD_TIER_LOCKED = 5013  # 奖励档位未解锁（累计签到天数不足）
+    SIGN_REWARD_TIER_EXCHANGED = 5014  # 该奖励档位已兑换过
 
 
 __all__ = ["ResponseCode"]

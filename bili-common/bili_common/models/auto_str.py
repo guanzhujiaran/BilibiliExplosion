@@ -7,12 +7,27 @@
 （如 ``mid`` -> ``midStr``），前端只消费字符串版，避免精度丢失。
 
 本模块自动为「雪花 ID 数值字段」注入 ``<field><suffix>`` 计算属性（suffix 默认
-``Str``，可配 ``_str``）：
+``_str``，可配 ``Str``）：
 
 - **自动序列化**：``model_dump()`` 自动带上字符串版，无需手动赋值；
 - **文档可见**：FastAPI 的 OpenAPI 响应 schema 会包含该字段（序列化模式）；
 - **零冗余**：不需要在每个模型里手写 ``xxxStr: str = ...``；
 - **通用**：仅依赖 pydantic，SQLModel 与纯 pydantic 响应模型都能用。
+
+顺带承担**私域字段裁剪**（原 visibility.py 的 ``Private`` / ``VisibilityMixin`` /
+``private_fields`` 已并入本模块，序列化期按访问者身份把私域字段置 ``None``）::
+
+    @auto_str(suffix="_str", owner_field="mid")
+    class UserBriefOut(SQLModel):
+        mid: int
+        email: auto_str.Private() = None            # 本人 + 管理员可见
+        ip_v4: auto_str.Private(admin_only=True) = None  # 仅管理员可见
+
+⚠️ 裁剪**刻意不用** ``@model_serializer(mode="wrap")``：pydantic 会拿 wrap
+序列化器的**返回类型注解**当 serialization schema，标注成 ``dict[str, Any]``
+会让整个模型在 OpenAPI 里塌成 ``{additionalProperties: true}``，前端 SDK 只拿到
+``{[key: string]: unknown}``。改用 ``@field_serializer`` 逐字段裁剪，**不碰 schema**，
+OpenAPI 字段完整、SDK 类型正确。
 
 两种用法
 --------
@@ -47,12 +62,14 @@ core schema，**不会**重新扫描类字典。实测：只 ``setattr`` + ``mod
 命名
 ----
 ``<原字段名> + 后缀``，后缀优先级：装饰器 ``suffix=`` 参数 > 类属性
-``_auto_str_suffix`` > 默认 ``"Str"``：
+``_auto_str_suffix`` > 默认 ``"_str"``：
 
-- 默认 ``"Str"``（与项目既有 ``dynIdStr`` / ``midStr`` 等 camelCase 约定一致）；
-- 出参整体为 snake_case 的模型可用 ``"_str"``（``mid`` -> ``mid_str``）。
-
-**同一接口内不得混用两种后缀**；默认后缀是全局破坏性开关，禁止为单个模型改默认值。
+- **默认 ``"_str"``**（``mid`` -> ``mid_str``、``rpid`` -> ``rpid_str``、
+  ``resource_id`` -> ``resource_id_str``）：全项目统一走下划线，与出参 snake_case 风格一致；
+- 装饰器 ``suffix="Str"`` 可为个别模型切到 camelCase（``midStr``），**但同一接口内
+  不得混用两种后缀**（前端会拿到 ``mid`` 与 ``midStr`` / ``mid_str`` 混排，难以分辨）；
+- 默认后缀是**全局破坏性开关**：改它等于让全项目出参字段名一起变，必须同步
+  重生成前端 SDK 并改完所有消费点，不允许只为单个模型临时切换。
 
 如何判定「哪些字段是雪花 ID」（避免误伤计数 / 时间戳 / 等级等非 ID 数值）：
 0. 可选（``X | None``）字段按内层类型判定，同样派生，字符串版出参为 ``str | None``
@@ -64,19 +81,15 @@ core schema，**不会**重新扫描类字典。实测：只 ``setattr`` + ``mod
 """
 
 from __future__ import annotations
-
 import inspect
 import sys
 import types
 from typing import Annotated, Any, ClassVar, Union, get_args, get_origin, get_type_hints
-
 from pydantic import Field as _PydField
-from pydantic import computed_field
+from pydantic import computed_field, field_serializer
+from bili_common.models.viewer_context import get_viewer
+from pydantic._internal._decorators import DecoratorInfos
 
-try:  # pydantic 私有 API：重建 decorators 的唯一入口（见模块文档「实现说明」）
-    from pydantic._internal._decorators import DecoratorInfos
-except ImportError:  # pragma: no cover - pydantic 内部结构变更时的显式报错
-    DecoratorInfos = None  # type: ignore[assignment]
 
 # ---------------------------------------------------------------------------
 # 雪花 ID 标记类型：仅作注解标记，运行时仍是 int，便于识别「这是雪花 ID」
@@ -270,6 +283,91 @@ def _make_property(src_name: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# 私域字段裁剪（并入本模块，取代原 visibility.py 的 Private/VisibilityMixin）
+# ---------------------------------------------------------------------------
+
+
+class Private:
+    """字段级可见性标记（由 ``@auto_str`` 消费）。
+
+    Args:
+        admin_only: ``True`` 时该字段**仅管理员**可见，对象归属者本人也不可见
+            （如评论原始 IP，见计划书决策 C3）；``False`` 时本人 + 管理员可见
+            （如邮箱、经验、大会员到期、角色）。
+    """
+
+    __slots__ = ("admin_only",)
+
+    def __init__(self, *, admin_only: bool = False) -> None:
+        self.admin_only = admin_only
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Private) and other.admin_only == self.admin_only
+
+    def __hash__(self) -> int:
+        return hash((self.__class__, self.admin_only))
+
+    def __repr__(self) -> str:
+        return f"Private(admin_only={self.admin_only})"
+
+
+PrivateStr = Annotated[str | None, Private()]
+PrivateInt = Annotated[int | None, Private()]
+AdminOnlyStr = Annotated[str | None, Private(admin_only=True)]
+
+
+def _find_private(annotation: Any) -> Private | None:
+    """取注解里的 :class:`Private` 标记（穿透 ``Annotated`` 与 ``X | None``）。"""
+    if get_origin(annotation) is Annotated:
+        for meta in get_args(annotation)[1:]:
+            if isinstance(meta, Private):
+                return meta
+    return None
+
+
+def _make_private_serializer(src_name: str, marker: Private) -> Any:
+    """为私域字段生成 ``field_serializer``：无权访问时返回 ``None``。
+
+    不用 ``model_serializer`` 是为了不破坏 OpenAPI schema（见模块文档）。
+    ``field_serializer`` 只影响该字段的取值，不影响 schema 生成。
+    """
+
+    @field_serializer(src_name)
+    def _ser(self: Any, value: Any, _info: Any) -> Any:
+        # 归属 mid 取自类属性 ``_auto_str_owner_field``（默认 "mid"）：
+        # 必须从类上取，实例上不存在（它不是 pydantic 字段）
+        owner_field = getattr(type(self), "_auto_str_owner_field", "mid") or "mid"
+        viewer = get_viewer()
+        owner_mid = getattr(self, owner_field, None)
+        return (
+            value if viewer.can_see(owner_mid, admin_only=marker.admin_only) else None
+        )
+
+    return _ser
+
+
+def _inject_private_serializers(model_cls: type) -> bool:
+    """为打了 :class:`Private` 标记的字段注入裁剪序列化器。"""
+    owner_field = getattr(model_cls, "_auto_str_owner_field", "mid")
+    if not isinstance(owner_field, str):
+        owner_field = "mid"
+    changed = False
+    for name, annotation in _own_annotations(model_cls).items():
+        if name.startswith("_"):
+            continue
+        marker = _find_private(annotation)
+        if marker is None:
+            continue
+        setattr(
+            model_cls,
+            f"_auto_str_private_{name}",
+            _make_private_serializer(name, marker),
+        )
+        changed = True
+    return changed
+
+
+# ---------------------------------------------------------------------------
 # 注入核心（装饰器与 mixin 共用）
 # ---------------------------------------------------------------------------
 def _inject_str_fields(
@@ -361,16 +459,16 @@ def _module_namespace(model_cls: type) -> dict[str, Any] | None:
 
 
 def _resolve_suffix(model_cls: type, suffix: str | None) -> str:
-    """后缀优先级：装饰器参数 > 类属性 ``_auto_str_suffix`` > 默认 ``"Str"``。"""
+    """后缀优先级：装饰器参数 > 类属性 ``_auto_str_suffix`` > 默认 ``"_str"``。"""
     if suffix:
         return suffix
     raw = getattr(model_cls, "_auto_str_suffix", "")
     if isinstance(raw, str):
-        return raw or "Str"
+        return raw or "_str"
     # 未用 ClassVar 标注时 pydantic 会把它收成 private attribute（ModelPrivateAttr），
     # 真正的值在 .default 上
     default = getattr(raw, "default", None)
-    return default if isinstance(default, str) and default else "Str"
+    return default if isinstance(default, str) and default else "_str"
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +493,7 @@ def auto_str(
         skip: 黑名单，跳过这些字段。
         all_numeric: ``True`` 时对所有 int/float 生成（不推荐，易命中非 ID 数值）。
         suffix: 字符串版字段后缀；``None`` 时取类属性 ``_auto_str_suffix``，
-            再回落 ``"Str"``。
+            再回落 ``"_str"``。
         marker_type: 自定义标记类型（``Annotated[int, marker]`` 中的 marker）；
             内置的 :data:`SnowflakeInt` 始终生效，无需传入。
 
@@ -404,14 +502,18 @@ def auto_str(
     """
 
     def decorate(model_cls: type):
-        if not _inject_str_fields(
+        # 1) 私域字段裁剪（field_serializer，不影响 schema）
+        injected_private = _inject_private_serializers(model_cls)
+        # 2) 雪花 ID 字符串版派生（computed_field）
+        injected_ids = _inject_str_fields(
             model_cls,
             fields=set(fields),
             skip=set(skip),
             all_numeric=all_numeric,
             suffix=_resolve_suffix(model_cls, suffix),
             marker_type=marker_type,
-        ):
+        )
+        if not (injected_private or injected_ids):
             return model_cls
 
         if DecoratorInfos is None:  # pragma: no cover - 仅 pydantic 结构变更时触发
@@ -452,19 +554,19 @@ class AutoStrMixin:
     - ``_auto_str``：仅对这些字段名生成（白名单，优先级最高）；
     - ``_auto_str_skip``：跳过这些字段名（黑名单）；
     - ``_auto_str_all``：``True`` 时对所有 int/float 生成（不推荐，可能命中非 ID 数值）；
-    - ``_auto_str_suffix``：字符串版字段后缀，默认 ``"Str"``（``mid`` -> ``midStr``）；
+    - ``_auto_str_suffix``：字符串版字段后缀，默认 ``"_str"``（``mid`` -> ``mid_str``）；
       snake_case 出参模型可覆盖为 ``"_str"``（``mid`` -> ``mid_str``）。
 
       ⚠️ **必须用 ``ClassVar[str]`` 标注**：写成裸赋值 ``_auto_str_suffix = "_str"`` 时，
       SQLModel 会在 ``__init_subclass__`` 之后才把该属性写进类字典，本 mixin 读不到，
-      会静默回落默认后缀 ``"Str"``。用 ``@auto_str`` 装饰器则无此问题。
+      会静默回落默认后缀 ``"_str"``。用 ``@auto_str`` 装饰器则无此问题。
     """
 
     # 这些由子类选择性覆盖；基类置空避免实例属性冲突
     _auto_str: ClassVar[list[str]] = []
     _auto_str_skip: ClassVar[set[str]] = set()
     _auto_str_all: ClassVar[bool] = False
-    _auto_str_suffix: ClassVar[str] = "Str"
+    _auto_str_suffix: ClassVar[str] = "_str"
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -481,4 +583,12 @@ class AutoStrMixin:
         )
 
 
-__all__ = ["AutoStrMixin", "SnowflakeInt", "auto_str"]
+__all__ = [
+    "AutoStrMixin",
+    "SnowflakeInt",
+    "auto_str",
+    "Private",
+    "PrivateStr",
+    "PrivateInt",
+    "AdminOnlyStr",
+]

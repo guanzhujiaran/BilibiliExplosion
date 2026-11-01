@@ -54,7 +54,9 @@ def _get_broker(amqp_url: str | None = None) -> RabbitBroker:
     return broker
 
 
-def _normalize_config(config: Optional[Union[PushChannelConfig, dict]]) -> PushChannelConfig | None:
+def _normalize_config(
+    config: Optional[Union[PushChannelConfig, dict]],
+) -> PushChannelConfig | None:
     """config 兼容 PushChannelConfig / dict / None，统一转成 PushChannelConfig。"""
     if config is None:
         return None
@@ -69,6 +71,7 @@ async def publish_push_message(
     push_type: Optional[str] = "text",
     config: Optional[Union[PushChannelConfig, dict]] = None,
     amqp_url: Optional[str] = None,
+    mid: Optional[int] = None,
 ) -> None:
     """发布一条「站外推送」请求到 be-message 的 `message.push` 队列。
 
@@ -79,6 +82,8 @@ async def publish_push_message(
         config: 渠道配置，优先传 PushChannelConfig（SQLModel）；若调用方只有 dict
             （例如 NotificationConfig.model_dump()），则就地构造为 PushChannelConfig
         amqp_url: RabbitMQ 连接串；缺省从环境变量 RABBITMQ_URL 读取，再缺省回退本地
+        mid: 接收人 mid；be-message 投递侧据此判定该用户的外部推送总开关
+            （push_enabled / 免打扰时段）。缺省 None 时不做用户级拦截（兼容旧调用）。
 
     Raises:
         Exception: 发布失败时上抛（不静默吞错），调用方可按需 catch
@@ -88,6 +93,7 @@ async def publish_push_message(
         content=content,
         push_type=push_type,
         config=_normalize_config(config),
+        mid=mid,
     )
     broker = _get_broker(amqp_url)
     # 懒连接：首次发布时建立连接，之后复用

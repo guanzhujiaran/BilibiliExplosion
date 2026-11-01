@@ -80,7 +80,9 @@ class PublishNotifyParams(SQLModel):
         default=NotifyLevelEnum.NORMAL, description="通知重要级别"
     )
     jump_url: str | None = Field(default=None, description="跳转链接")
-    publish_now: bool = Field(default=True, description="是否立即发布（False 存为草稿）")
+    publish_now: bool = Field(
+        default=True, description="是否立即发布（False 存为草稿）"
+    )
     creator_mid: int = Field(default=0, description="发布者 mid，0 表示系统自动发布")
 
 

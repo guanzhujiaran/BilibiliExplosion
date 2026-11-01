@@ -1,0 +1,48 @@
+---
+description:
+alwaysApply: true
+enabled: true
+updatedAt: 2026-10-19T00:00:00.000Z
+provider:
+---
+
+# RPA 基础动作通用性规范
+
+> 适用范围：`RPA-Browser/app/services/execution/actions/**`（内置动作）与工作流动作 JSON。
+> 背景：曾把「B 站动态 404 → 记成功」写进 `NavigateAction`，属于把业务逻辑塞进通用动作，
+> 已还原并改为 JSON 方案。
+
+## 1. 内置动作必须通用
+
+- `app/services/execution/actions/**` 下的动作是**通用能力**，禁止出现任何站点 / 业务专属逻辑：
+  域名判断、URL 正则、页面选择器、错误页文案、资源类型（如 `bili_lottery_*`）、业务状态码分支等；
+- 内置动作只做「机制」：导航、等待、点击、取数、记录结果等；**业务差异一律由动作 JSON 表达**
+  （步骤编排、参数、`if_else` 条件、`loop` 的 break/continue、`on_error` 等）；
+- 需要新能力时，只能补**参数化、可配置、与站点无关**的通用能力（如 `break_condition`、
+  随机冷却区间），并在动作参数模型里显式声明，不允许硬编码默认业务行为。
+
+## 2. 修改变更走 JSON + 导入数据库
+
+- 工作流行为调整**先改动作 JSON 文件**（如 `RPA-Browser/action_<action_id>_<name>.json`），
+  JSON 是唯一可读源头；
+- 改完必须**同步到数据库**（`workflowrunrecord` 无关；动作表 `CompositeActionModel.steps`），
+  并保持 JSON 与 DB 一致；禁止只改 DB、不改 JSON，也禁止只改 JSON、不落库；
+- 同步范围要覆盖实际执行入口：源动作与 **Fork 动作**（工作流引用的 `custom_action_id`）都要更新；
+- 同步前先备份 JSON；同步后回读 DB 确认 `steps` 与 JSON 完全一致。
+
+## 3. 必须在 RPA 项目里验证
+
+- 落库前先做静态校验：`workflow_step_adapter.validate_python` + `PipelineBuilder.build`
+  能编译，循环 / 分支 / 条件参数合法；
+- 落库后必须在 **RPA-Browser 项目**里实际跑一次相关工作流（可用测试动作/测试工作流），
+  确认行为符合预期（如 404 动态被记为已处理、后续步骤被跳过、冷却等待仍执行）；
+- 只跑单元测试不算完成；实跑结果（run 记录 / 动作日志 / 资源记录）要能对上。
+
+## 4. 自检清单（提交前）
+
+- [ ] 新增/修改的 `actions/**` 代码中 `grep` 不到具体站点名、域名、选择器、业务资源类型；
+- [ ] 业务差异全部落在动作 JSON（步骤/参数/条件）；
+- [ ] JSON 已同步到数据库，源动作与 Fork 一致，且回读校验通过；
+- [ ] `workflow_step_adapter` + `PipelineBuilder` 编译校验通过；
+- [ ] 在 RPA-Browser 项目里实跑通过，运行记录与日志符合预期；
+- [ ] 如确需改内置动作，改动为通用可配置项，并补充对应单测。

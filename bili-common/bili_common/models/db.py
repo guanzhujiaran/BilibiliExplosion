@@ -11,19 +11,25 @@
 
 from datetime import datetime
 
+from pydantic import NaiveDatetime
 from sqlmodel import Field, SQLModel
 
 
 class BaseTimestamp(SQLModel):
-    """统一创建 / 更新时间字段 mixin（`table=False`，业务子表 `table=True` 继承）。"""
+    """统一创建 / 更新时间字段 mixin（`table=False`，业务子表 `table=True` 继承）。
 
-    created_at: datetime = Field(
+    时间统一存 naive datetime（项目约定，见 RPA app/utils/time_util.py），
+    必须用 ``NaiveDatetime`` 注解，否则新版 sqlmodel 会映射为 UTCDateTime
+    并要求带时区的值，写入直接抛 ValueError。
+    """
+
+    created_at: NaiveDatetime = Field(
         default_factory=datetime.now,
         nullable=False,
         index=True,
         description="创建时间",
     )
-    updated_at: datetime = Field(
+    updated_at: NaiveDatetime = Field(
         default_factory=datetime.now,
         nullable=False,
         sa_column_kwargs={"onupdate": datetime.now},

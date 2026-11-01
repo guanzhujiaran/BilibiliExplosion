@@ -34,6 +34,8 @@ class _IntStrMixin(SQLModel):
 
     @field_serializer("*")
     def _serialize_ints(self, value, _info):
-        if _info.field_name in getattr(type(self), "_int_fields_", ()) and isinstance(value, int):
+        if _info.field_name in getattr(type(self), "_int_fields_", ()) and isinstance(
+            value, int
+        ):
             return str(value)
         return value

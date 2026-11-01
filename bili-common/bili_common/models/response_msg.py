@@ -41,15 +41,33 @@ class ResponseMsg(StrEnumAutoDoc):
 
     exception_browser_fingerprint_not_found = "浏览器指纹不存在"
 
-    exception_fingerprint_limit_exceeded = "已达到最大指纹数量限制，当前等级最多可创建 {max} 个指纹"
+    exception_fingerprint_limit_exceeded = (
+        "已达到最大指纹数量限制，当前等级最多可创建 {max} 个指纹"
+    )
 
-    exception_browser_launch_memory_insufficient = "当前服务器内存不足，浏览器启动请求已进入排队"
+    exception_browser_launch_memory_insufficient = (
+        "当前服务器内存不足，浏览器启动请求已进入排队"
+    )
     exception_browser_launch_queue_timeout = (
         "浏览器启动排队超时（已等待 {seconds} 秒），请稍后重试"
     )
     exception_browser_launch_queue_cancelled = "浏览器启动排队已取消"
 
     exception_browser_workflow_running = "浏览器正在执行工作流，请稍后重试"
+
+    exception_duration_insufficient = (
+        "时长余额不足，请签到、兑换时长卡或开通月卡后再运行定时任务"
+    )
+    exception_redeem_code_invalid = "兑换码无效或已过期"
+    exception_redeem_code_exhausted = "兑换码可用次数已用尽"
+    exception_redeem_code_already_used = "您已兑换过该兑换码"
+    exception_sign_in_already_today = "今日已签到"
+    exception_payment_verify_failed = "支付状态核验失败，请稍后重试"
+    exception_sign_makeup_not_allowed = "该日期不可补签：仅支持补签本月已漏签的过去日期"
+    exception_sign_makeup_already_signed = "该日期已签到，无需补签"
+    exception_sign_makeup_card_not_enough = "补登卡不足，先去奖励兑换补登卡"
+    exception_sign_reward_tier_locked = "累计签到 {days} 天后可兑换该奖励"
+    exception_sign_reward_tier_exchanged = "该奖励已兑换过啦"
 
     def t(self, **kwargs) -> str:
         """返回当前语言下的翻译（含占位符格式化）。

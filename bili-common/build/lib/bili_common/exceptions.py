@@ -25,7 +25,9 @@ class InvalidMidFormatException(HTTPException):
     """无效的 MID 格式"""
 
     def __init__(self):
-        super().__init__(status_code=400, detail="Invalid mid format in x-bili-mid header")
+        super().__init__(
+            status_code=400, detail="Invalid mid format in x-bili-mid header"
+        )
 
 
 __all__ = [

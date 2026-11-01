@@ -105,6 +105,8 @@ class RpcClient:
         except TimeoutError:
             raise TimeoutError(
                 f"RPC 请求超时（{timeout}s）: routing_key={routing_key}"
+                "（该队列没有消费者时消息会被 broker 直接丢弃，客户端只能等到超时；"
+                "请确认对应 RPC 服务端已启动）"
             )
 
         # 解析响应消息体（StandardResponse 序列化后的 JSON）

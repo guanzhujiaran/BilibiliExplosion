@@ -63,9 +63,7 @@ class AuthInfo(SQLModel):
         """是否为 root 管理员（role=root）。"""
         return self.role == "root"
 
-    def has_biz_perm(
-        self, biz: InteractionBizTypeEnum, op: "BizPermOp | int"
-    ) -> bool:
+    def has_biz_perm(self, biz: InteractionBizTypeEnum, op: "BizPermOp | int") -> bool:
         """是否对某资源域持有某操作位（Linux 按位检查）。
 
         - root 恒拥有全部资源域的全部操作位（含 `*` 键全权标记）；

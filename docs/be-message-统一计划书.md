@@ -61,6 +61,77 @@
 - **RPC**（RabbitMQ 同步，非 HTTP）：`message.notify.rpc.publish_notify`、`message.push.rpc.*`、`message.pptr.rpc.*`（用户读写）、`message.geoip.rpc.resolve_ip_region`（IP 属地解析，见 §5.21），be-message 也作为 RPC 客户端调 RPA/lottery 详情。
 - **RPC 调试**（管理端，root）：`/api/v1/message/admin/rpc-debug`（`methods` 列出可测契约方法、`invoke` 真实往返并回显信封，见 §5.22）。
 
+### 4.1 关注 / 粉丝列表的可见性窗口（2026-10-08 新增）
+
+**背景**：个人空间要新增「关注详情页 / 粉丝详情页」（头部「关注 N」「粉丝 N」可点进去）。B 站对**他人**的关注/粉丝列表只开放最新一小段（前端最多 5 页），只有本人可以翻到底；本项目对齐该行为，但把「窗口大小」放在**后端**强制，前端只负责不渲染第 6 页。
+
+**接口变更**（`/api/v1/message/follow`，对标 B 站 `x/relation/followings` / `x/relation/fans`）：
+
+| 接口 | 变更 |
+|---|---|
+| `GET /followings`（原 `/following/list`） | query 改为 **`vmid`**（StrInt，可选，缺省= 当前登录用户）+ **`pn`**（页码，从 1）+ **`ps`**（每页，1~100，默认 24）；`summary` 改为「关注列表」 |
+| `GET /fans`（原 `/followers/list`） | 同上；`summary` 改为「粉丝列表」 |
+
+- `vmid` 缺省时行为与改造前完全一致（我的关注 / 我的粉丝），**旧路径已重命名，无其它调用方**（前端 SDK 有 `listFollowing*` / `listFollowers*` 但从未被页面使用）；
+- 响应结构沿用现有 `FollowListResp`（`items` / `total` / `page_num` / `page_size`），**不引入游标**；B 站的 `order=desc` / `order_type=attention` 本期不做（下轮补）；
+- 访问者身份**不来自 query**：网关注入 `x-bili-mid` → `CurrentUser`，后端只需比较 `viewer == owner`。
+
+**可见性窗口规则**（`FollowService` 内统一实现，API 层不写业务）：
+
+- `viewer == owner`（看自己）：**不限制**，可一直翻页；
+- `viewer != owner`（看他人 / 未登录访客按访客身份）：**只允许前 5 页**（默认 `ps=24` 时即最新 120 条）。`pn > 5` 时**直接返回空 `items`**，`total` 仍返回真实总数（前端据此显示「仅展示最新 N 条」提示，不显示空白页）；
+- 空列表**不是错误**：`code=0`，与用户给的 B 站形状 `{"list": [], "offset": "", "re_version": 0, "total": N}` 语义一致（超出窗口即空列表），前端不需要 try/catch；
+- 「TA 的粉丝」主页模块原有的 `show_fans_list` 隐私门控与 `SPACE_FANS_MAX=500` 截断**保持不变**，本次窗口规则只作用于 `following/list` 与 `followers/list` 两个接口。
+
+**本期不做**（另开需求）：关注分组（建表 + 分组 CRUD + 打标签）、列表内关键词搜索、`sort` 排序参数（B 站的「最近关注 / 最常访问」）。排序当前硬编码 `created_at DESC`。
+
+### 4.2 关注分组（tag，2026-10-08 已实现）
+
+接口（对齐 B 站，`data` 直接是数组/对象，不套 `list`）：
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /api/v1/message/follow/tags` | 我的分组列表（特别关注 → 默认分组 → 自建分组） |
+| `POST /api/v1/message/follow/tags` | 新建分组 `{name, tip?}`（名称 1~20 字、不重名、最多 20 个） |
+| `DELETE /api/v1/message/follow/tags/{tag_id}` | 删除自建分组（连带清关系；系统分组不可删） |
+| `GET /api/v1/message/follow/tags/assigned?target_mid=` | 某用户当前所属的分组 id 列表（分组弹窗预填） |
+| `POST /api/v1/message/follow/tags/assign` | 覆盖式设置某关注对象的分组 `{target_mid, tag_ids[]}`（空数组=移出全部分组） |
+| `GET /api/v1/message/follow/followings?...&tagid=` | 关注列表新增 **`tagid`** 过滤（仅自己视角生效；`0`=未分组的默认分组） |
+
+- **不需要 `kind` 参数**：B 站「关注 / 粉丝 / 分组」是**三个独立接口**，本项目同样按路径分流，不引入 `kind` 之类的分流字段；
+- 分组响应形状（对齐 B 站 `x/relation/tags`）：
+  ```json
+  {"code": 0, "msg": "success", "data": [
+    {"tagid": -10, "name": "特别关注", "count": 5, "tip": "第一时间收到该分组下用户更新稿件的通知"},
+    {"tagid": 0, "name": "默认分组", "count": 3127, "tip": ""}
+  ]}
+  ```
+  本项目用 `StandardResponse`（`code` / `msg` / `data`）包装，不引入 B 站的 `ttl` / `message` 字段。
+
+**存储**（Alembic 迁移 `20261008_follow_tag`，仅 MySQL 主库）：
+
+| 表 | 关键列 | 约束 |
+| --- | --- | --- |
+| `msg_user_follow_tag` | `mid` / `name(20)` / `tip(100)` | `uq(mid, name)`；`idx(mid, created_at)` |
+| `msg_user_follow_tag_user` | `mid` / `tag_id` / `target_mid` | `uq(mid, tag_id, target_mid)`；`idx(tag_id)`、`idx(mid, target_mid)` |
+
+- **关系表必须带 owner `mid`**：`tag_id = -10`（特别关注）是全用户共用的约定值，唯一键只取 `(tag_id, target_mid)` 会跨用户串号；
+- **`msg_user_follow` 不加列**：分组是可解耦的附属标签，取关 / 拉黑时只删关系行（`FollowTagService.clear_target`，与关注关系变更同事务提交）；
+- **系统分组不落定义表**：`-10` 特别关注的关系行落库但定义内置；`0` 默认分组不落关系行，`count = 关注总数 − 各分组 count 之和`；
+- 分组只允许作用于**当前正在关注**的人（`assign` 校验），避免幽灵成员；
+- **列表查询策略**：`GET /tags` 在**同一个 session 内顺序跑 3 条窄查询 + 应用层拼装**，采用**业内最常用的「多条简单查询」方式**（**有意不做 UNION / 巨型 JOIN 压缩**：计数与分组定义本就不同构，拆成 3 条各自都能稳定命中索引，简单直白的多条查询比缝成一条语句更易读、更易测、更好按需加索引）：
+  1. `_tag_counts`：各分组计数（`GROUP BY tag_id`，含特别关注 `-10`）；
+  2. `_count_default`：默认分组计数（`NOT EXISTS`）；
+  3. `_list_tag_defs`：分组定义（含 0 成员的**空分组**，必须单列：计数只覆盖「有成员的分组」）；
+  - 三条互相独立，索引 `idx_follow_tag_user_tag`、`idx_follow_target_status`、`idx_follow_tag_mid`，执行计划简单可测，后续加字段不用改一条缝在一起的巨型 SQL；
+  - 默认分组**不用**「关注总数 − 各分组之和」：同一人可属多个分组，减法会算错，必须用 `NOT EXISTS`；
+  - `AsyncSession` 非并发安全，**不能** `asyncio.gather` 并发跑这几条；同 session 顺序执行即复用同一连接；
+  - 若要压到「一次查询」，业界通行做法是**冗余计数列**（`msg_user_follow_tag.member_count` 写时 ±1），读时只查定义表（B 站 `count` 即服务端缓存值），代价是计数可能短暂不一致 —— 本项目暂不引入。
+
+**本期仍不做**：列表内关键词搜索、`order` / `order_type` 排序（「最近关注 / 最常访问」），排序硬编码 `created_at DESC`。
+
+**可见性门控已统一（2026-10-08 补）**：`follow/followings` 与 `follow/fans` 在 `viewer != owner` 时按空间主人的 `show_follow_list` / `show_fans_list` 开关门控（`FollowService._ledger_visible_to_viewer`），关闭时返回**空列表且 `total = 0`**（整类不出现，连总数都不暴露）。本人视角恒可见。主页粉丝模块沿用的 `community/space/fans` 门控为同一开关，口径一致；其 `SPACE_FANS_MAX=500` 截断保留（主页模块只做概览）。
+
 ---
 
 ## 5. 核心机制
@@ -100,6 +171,21 @@
 
 - **EdgeRank**：`Σ(w·log(count+1))·decay(pubTime)`；综合 Feed 扩展为多维打分 `content_quality·decay + author_signal + fresh_bonus + feedback_penalty + personalized/anon`；时间衰减基准用 `max(pubTime, 最后评论时间)`。
 - **推荐流**：`sort=recommend` 无 page/offset，客户端 `last_showlist`（上限 100）去重；登录个性化（关注/互动作者/话题偏好加权）、未登录匿名随机扰动权重；候选五路召回（热门趋势/社交/内容标签/地理/协同过滤近似）并集去重后 `rank_feed` 精排。
+- **候选召回去时间窗口硬约束（2.65.0）**：`edgerank_candidate_window_hours` 由**硬过滤**降级为**新鲜优先窗口**——窗口只决定「优先召回谁」，不再决定「内容能不能被看到」，新鲜度排序交给 EdgeRank `decay` 表达：
+  - **互动 top 路**自带独立窗口 `edgerank_recall_hot_top_window_hours`（默认 0=不限）：高互动老内容可入池，避免「窗口内没互动、窗口外有爆款」的错配；
+  - **兜底路**（`edgerank_recall_fallback_*`）：五路并集后候选不足**保底条数**（默认 = `page_size`）时，按 pubTime 倒序放宽窗口补全，保证低活跃 / 冷启动 / 存量数据场景 Feed 不见底（与曝光去重「尽力去重 + 自动降级」同一思路）。
+- **重排层 Re-Rank（2.65.0）**：补上业界标准链路「召回 → 粗排 → 精排 → **重排**」缺失的最后一环，解决「纯按分排序 = 同质化 + 老内容没机会」：
+  - **Thompson Sampling（EE 探索）**：`θ ~ Beta(1+pos, 1+neg)`（pos=互动数、neg=曝光未互动数），加分 `w·base·(θ − E[θ])`——数据少的（新内容 / 低曝光）后验宽、波动大 → 有冒头机会；数据多的收敛到真实互动率 → 稳定利用；**零曝光内容不参与**（θ 退化为先验 U(0,1)，纯噪声会盖掉时间序）。计数按 `edgerank_ts_max_count` 截断，防千万级曝光爆款把分布锁死；采样按 `(viewer_key, bizId)` 确定性派生，同一观众刷新不跳变。
+  - **MMR 多样性打散**：`MR_i = λ·rel_i − (1−λ)·max_{j∈S} sim(i,j)`，rel 取批内 min-max 归一化，`sim` = 同作者 + 话题 Jaccard；只对精排 top-K 贪心重排，防整页被同一作者 / 同一话题刷屏；**只调顺序不改集合**。
+- **机器学习推荐（2.66.0）**：在 2.65.0 的链路之上引入**传统机器学习**三件套（均为 CPU 可训练、无 GPU 依赖），EdgeRank 退为**兜底基线 / 对照组**，全链路开关可灰度：
+  - **P0 行为埋点 `TFeedEventLog`**（一切 ML 的前提）：一次事件一行——`impression`（下发时服务端写，含 `position` / 下发分）/ `click`（前端上报进详情）/ `dwell`（前端上报停留毫秒）。事件表与 `TFeedImpression`（去重用的累计表）分离：前者是只追加的明细流水，后者是去重点查表。上报接口 `POST /api/v1/community/feed/events`（批量、匿名可报、单批上限 100）。
+  - **样本构建 `scripts/build_feed_samples.py`**：把「一次曝光」与曝光后 `ml_label_window_hours` 内的互动明细（like/comment/favorite/repost）join 成样本，**graded label** = 0 无互动 / 1 点赞 / 2 评论 / 3 转发或收藏；负样本即「曝光了但没互动」。`groupId = (viewerKey, servedAt 截断到分钟)` 作为 LambdaRank 的 query 分组。产出 CSV 到 `data/ml/`。
+  - **精排 `LightGBM LambdaRank`（`app/services/moment/ml_ranker.py`）**：传统 ML 里做排序的最优解（自动特征交叉、支持 listwise 排序目标、推理快、可解释）。特征三类——内容侧（作者、话题数、是否富媒体/转发、发布时间年龄、历史互动率、作者质量）、用户侧（关注关系、偏好话题命中）、上下文（时段、曝光位置）。**分数融合**用动态量纲对齐 `final = (1−w)·base + w·ml_scaled`（`ml_scaled` 按两列均值对齐到 base 量纲），避免硬编码量纲；`w` 即灰度权重。模型文件 `settings.ml_ranker_model_path`，按 mtime 热重载。
+  - **召回 ALS 协同路（`app/services/moment/als_recall.py`）**：隐语义协同过滤（隐式反馈 ALS），离线训练脚本产出 user/item 因子，在线用「用户向量 · 物品向量」top-N 召回一路（未登录 / 冷启动用户跳过）。优先用 `implicit`，不可用则回退 numpy 版 ALS（避免编译依赖绑架部署）。
+  - **探索 `LinUCB`（`app/services/moment/linucb.py`）**：带上下文特征的线性老虎机（传统在线学习），替代/叠加 2.65.0 的无特征 Thompson Sampling——`ucb = θᵀx + α·√(xᵀA⁻¹x)`，A/b 存 `TFeedBanditArm`，由定时任务回放事件离线更新（不在请求路径写），冷启动 arm 用单位阵。小样本友好。
+  - **训练脚本与闸门**：`scripts/train_feed_ranker.py`（LambdaRank，产出 `data/ml/feed_ranker.txt` + 离线指标 `data/ml/metrics.json`，含与「按下发位次排」baseline 的 NDCG 对比，**打不赢 baseline 就不该上线**；正样本 < 50 直接拒绝产出模型）、`scripts/train_als_recall.py`（`implicit` ALS → `data/ml/feed_als.npz`）、`scripts/train_linucb.py`（回放事件重算 `A += xxᵀ, b += r·x` 覆写臂参数）；行为灌数 `scripts/seed_feed_behavior.py`（`--clean` 清数据并回滚互动计数）。
+  - **开关与灰度（`feed_ml` 运行时配置）**：三件套的开关与权重登记为运行时配置项 **`feed_ml`**（值模型 `FeedMLConfig`），复用既有 `msg_sys_config` 配置中心——`GET/POST /api/v1/message/admin/sys-config` 即可热更新（进程内 TTL 缓存默认 10s，**无需重启**）；`ml_*` settings 仅作代码默认值 / 兜底。只读观测接口 `GET /api/v1/community/feed/ml-status` 返回生效配置 + 模型文件就绪状态 + 上次离线指标 + 臂参数行数 + 曝光样本量（样本 < 千条时模型不可信）。
+  - **数据前提**：模型收益 ≈ f(数据量)。当前库内正样本仅个位数，故上线顺序固定为「先埋点攒数据 → 再训练 → 灰度放量」；`scripts/seed/` 灌行为数据用于跑通链路与离线评测（AUC / NDCG@K），**灌数只验证链路，不代表线上收益**。
 - **曝光去重**：`TFeedImpression`（viewerKey+bizType+bizId+scene）TTL 24h 内不下发重复；尽力去重、候选不足逐级放宽保证 feed 不见底。
 - **计数统一**：高频计数走「明细表 + 原子 ±1」（禁 COUNT），同事务保证一致，无定时对账；`TInteractionStat` 承载全互动计数；浏览去重 `TInteractionViewLog` 每用户每资源一行、跨自然日才 +1。
 - **点踩负反馈闭环**：全局 `−w_dislike·dislike_ratio` 略降 + 对点踩者本人精排后大幅降权（`s'=s·scale−weight`）；点踩计数不外露。
@@ -205,6 +291,15 @@
 ### 5.11 其余机制要点
 
 - **互动接口通用化**：`/thumb /dislike /share /report` 一律 `bizType+bizId` 定位；路由层只做「`resolve_target` 归一 → `get_biz(...).动作()` → 装配」，防乱调/计数/装配在 service 层。
+- **热门抽奖榜一次返回卡片数据（2.67.0 修正）**：`GET /community/interaction/hot-lotteries` 除热度计数外**直接下发抽奖卡片数据**（`HotLotteryItem.card`，形态与 crawler `GetLotteryDetail` 的 `raw` + `extra_info` 完全一致，前端可直接 `normalizeLotteryData` 渲染，无需二次回捞）。
+  - 数据来源：be-message 经 crawler **只读查询服务**的 `GET /api/v1/lottery_database/bili/GetLotteryDetailList` 一次批量回捞（`app/services/infrastructure/crawler_query.py`；配置 `CRAWLER_QUERY_BASE_URL`，默认 `http://127.0.0.1:23336`，容器内指向 `be-bilibili-crawler-query:23336`；超时 `CRAWLER_QUERY_TIMEOUT`=3s + 弱依赖降级）；响应 data 用 `bili_common.rpc.lottery.LotteryCardList` 解析，crawler 侧固定 2 条 SQL（`lotdata IN (...)` + 批量 `t_lot_extra_info`），与 ID 数量无关。
+  - **不走 RPC**：RPC 订阅者只在 crawler 完整爬虫角色（`SERVICE_ROLE=crawler`）里启动，`api` / `query` 角色都不消费 MQ——本地 dev 编排只有这两个容器，`FastapiApp.rpc.*` 会一直超时；只读查询服务在本地与生产都存在，与前端首页直连的查询服务同一口径。
+  - **首页 / 榜单禁止再自行调用 `GetLotteryDetail` / `GetLotteryDetailList`**（detail 域接口）：榜单一次请求拿全量「热度 + 卡片」，避免首页为渲染榜单再打一轮 detail（原 `HotLotteryList.vue` 的 `getLotteryDetailListByIds` 调用已移除）。
+  - 弱依赖：RPC 超时 / 未连接 / 卡片缺失时**服务端直接剔除该项**（`card` 字段保留可为 null 供前端防御），榜单只展示有卡片的热度项，不把下游抖动放大成 500。
+  - 浏览记录口径不变：`TInteractionViewLog` 仍只由 detail 单资源 `GET /interaction/status/{bizId}` 投递（列表批量接口不累计浏览），榜单语义仍是「近 N 天真实详情浏览热度」，首页曝光不计浏览。
+  - **首页「即将开奖」轮播同口径**（`UpcomingLotteryMarquee`，2.67.0）：crawler `GET /lottery_database/bili/GetLotteryDataSummary` 的 `upcoming` 明细**随卡片一次下发** `raw` + `extra_info`（`get_upcoming_lottery` 返回完整 lotdata 行 + 一次批量 `t_lot_extra_info`，无 N+1），前端直接渲染，**不再**调用 `GetLotteryDetailList` 回捞；互动态仍走批量 `/interaction/status`（只读，不累计浏览、不改互动计数）。首页因此不产生任何 detail 域请求，也不会给用户新增浏览记录或抽奖互动次数。
+  - **即将开奖：24h 口径不变 + 明细改后端分页**（2.67.0 调整）：窗口仍为 24h（紧迫度语义，`SUMMARY_UPCOMING_HOURS=24`），**不再设置条数上限**——`GetLotteryDataSummary` 只保留统计行，**不再下发 `upcoming` 明细**；明细改由新增只读接口 `GET /lottery_database/bili/GetUpcomingLottery?page_num=&page_size=&key=&within_hours=24` 分页返回 `ResponsePaginationItems[UpcomingLotteryItem]`（`items` + `total`，固定 2 条 SQL：`count` + 分页查询 + 批量 `t_lot_extra_info`，无 N+1、无静默截断），与普通抽奖列表（`GetOfficialLottery` 等 `page_num` / `page_size`）**同一分页范式**。
+  - 首页 `UpcomingLotteryMarquee`：`el-carousel` 自动滚动 → 统一 `BiliPagination`（`size="large"` / `background` / `pager-count=5` / `layout` 带 `total`，与 `BiliPaginationDataView` 同款外观），每页 = 列数 × 2 行（宽屏 4 列 8 张、窄屏 2 列 4 张）；页码 / 列数 / 抽奖类型变化时**只查当前页**（互动态也只查当前页），不再一次拉全量。
 - **互动态读接口的存在性校验口径（2.63.0）**：校验只为「有副作用的路径」而设，读接口不替归属服务做存在性判定。
   - `GET /community/interaction/status`（批量，列表专用、**不累计浏览**）：**不做资源存在性校验**，直接读本地 `TInteractionStat` + 明细 + 评论/转发计数；资源没有互动态本就应返回 `isLike=false` / 计数 0，这是正确语义而非错误。原「任一缺失 → 整批 400」会把下游 RPC 的可用性抖动放大成整页互动态缺失（第三方抽奖列表踩到过），一并去除。
   - `GET /community/interaction/status/{bizId}`（detail 专用，登录后**投递浏览计数**，有写副作用）：**保留**校验（防任意 bizId 在 `TInteractionStat` / `TInteractionViewLog` 造脏行），但把「校验不通过 / 不可用」从 `400` 改为**降级**：不投递浏览、照常返回本地状态（全 0）。可用性问题不再伪装成业务错误。
@@ -450,6 +545,376 @@
   （前端显示「未知属地」「未知运营商」），调用方不需要重试。
 - **收益**：mmdb 单一来源 + 属地口径与评论 / 动态的 `lbsPoi` 完全一致
   （不会出现「动态显示浙江、观看者显示杭州」）；调用方零新增依赖。
+
+### 5.23 用户空间属性的面向对象模型（2026-10-08）
+
+**背景**：用户的「多维度可见性属性」原先散在四处各自为政 —— `update_flags` 逐字段抄 5 遍、
+`apply_flags_to_info` 逐字段 `if not flags.x`、`FollowService._ledger_visible_to_viewer(..., flag_name: str)`
+用**字符串**取开关（拼错只有运行时才炸）、`list_fans` / `SpaceTimelineService` 又各自内联 `flags.show_xxx`；
+分组归属与统计数字还以裸 `dict` 传递。加一个维度要改 4~5 个文件，且规则容易分叉。
+
+**落地：新增领域层 `app/services/user/space/`**
+
+| 模块 | 内容 |
+| --- | --- |
+| `attributes.py` | `AttributeKey` / `AttributeScene`（profile_field / content_list / timeline_entry）/ `AttributeStorage`、`AttributeSpec`、`UserAttribute` 抽象基类与 6 个维度子类、注册表 `SPACE_ATTRIBUTES` + `attribute_of()` |
+| `visibility.py` | `SpaceVisibility`（owner + viewer + flags），`can_view(key)` 是**唯一可见性判定出口**，`mask_profile(info)` 负责敏感原文裁剪 |
+| `relation.py` | `FollowRelationState`：双向状态 → `mutual` / `blocked` 派生语义，`to_resp()` 出 DTO |
+| `membership.py` | `TagCounts` / `TagMembership`：分组计数与归属值对象（替代裸 dict） |
+| `stats.py` | `SpaceStatSummary`：关注/粉丝/互关/动态/获赞/被访问汇总，`to_follow_stat()` / `to_up_stat()` |
+| `briefs.py` | `UserBriefs`：批量用户展示信息（显式区分「未覆盖」与「已注销」） |
+
+**每个维度自己携带**：key（= DB 列名 = 响应字段名）、设置页 label/hint、适用场景、存储位置
+（`TUserSpacePrivacy` 或 `TUserFavoriteSetting`）、缺省值，以及关闭时如何裁剪（`mask`）。
+因此：
+
+- `SpacePrivacyService.get_flags` / `update_flags` 改为**注册表驱动**（加维度只加一个类 + 注册一行）；
+- 门控统一为 `visibility.can_view(AttributeKey.XXX)`（字符串开关名彻底移除）：
+  `follow/followings` → `FOLLOW_LIST`、`follow/fans` 与主页粉丝模块 → `FANS_LIST`、
+  时间线 → `FOLLOW_LIST` / `LIKE_LIST` / `FAVORITES`；
+- `SpacePrivacyService.apply_flags_to_info` 删除，改由 `visibility.mask_profile(info)`；
+- 路由层 `pptr_user_gateway` 用 `SpaceStatSummary` 聚合统计（来源跨关注 / 动态 / 访问计数三个域），
+  不再在路由里拼两个 DTO。
+
+**顺带修正两处「实现与契约不一致」**（行为变化，方向都是收紧）：
+
+1. `show_personal_info` 关闭时现在**真的**裁剪 `sex` / `birthday`（此前只裁了 `email`，
+   与字段描述「性别 / 生日 / 邮箱」不符）；
+2. 行为时间线对**未登录访客**现在也按开关过滤（此前 `flags = None` 直接放行，
+   未登录能绕过 `show_follow_list` / `show_like_list`，属漏过滤）；
+   与 `space/fans`、`follow/*` 的口径至此完全一致。
+
+### 5.23.1 「上次登录时间与 IP 属地」撤销隐私开关（2026-10-08）
+
+与统计数字同一口径，**固定公开、不提供关闭入口**（需求文档 §0.1.1）：
+
+- `AttributeKey.LOGIN_INFO` / `LoginInfoAttribute` 从属性注册表移除，`SPACE_ATTRIBUTES` 由 6 项降为 5 项；
+- `SpacePrivacyFlags` / `SpacePrivacyUpdateReq` 删除 `show_login_info` 字段；
+- `TUserSpacePrivacy.show_login_info` 列删除（新增一条 alembic 迁移）；
+- `mask_profile` 不再裁剪 `last_login_at` / `ip_location`，路由层**无条件下发**。
+
+> 契约变更（请求 / 响应模型去字段）→ 前端 hey-api SDK 需重新生成。
+
+### 5.23.2 新增「时间线」公开开关（2026-10-08）
+
+时间线此前只有按条目类型的 `show_follow_list` / `show_like_list`，缺少整条时间线的开关。
+新增 `AttributeKey.TIMELINE = "show_timeline"`（`SPACE_ATTRIBUTES` 4 → 5 项）：
+
+- 场景 `CONTENT_LIST`；`SpaceTimelineService.list` 最前面门控 —— 本人恒可见，他人开关关闭 → 空列表；
+- 表列 `TUserSpacePrivacy.show_timeline`（**默认 1 = 开启**，与收藏的「缺省展示」同口径）+ alembic 迁移；
+- `SpacePrivacyFlags` / `SpacePrivacyUpdateReq` 加该字段；
+- 与 follow / like 的关系：`show_timeline` 是**总开关**，关闭即整条时间线不可见；打开后条目仍逐类过滤
+  （关注 / 点赞按各自开关，收藏按逐夹 `is_public`）；
+- 时间线 tab 仍恒展示（不因开关隐藏 tab）；
+- 契约变更 → hey-api SDK **已重新生成**（2026-10-08）：前端切回生成的 `SpacePrivacyFlags` /
+  `SpacePrivacyUpdateReq`，临时交叉类型与断言已删除。
+
+### 5.26 关注 / 粉丝列表换用专用模型 `FollowUserBrief`（2026-10-09）
+
+`FollowListItem.user` 由 `UserBriefOut` 改为新的 `FollowUserBrief`，只保留列表卡片需要的
+`mid / name / face / sign / level / vip_status / vip_type`；装配由 `FollowUserBrief.from_brief()`
+从 pptr 简档裁剪（仍一次 `PptrUser.get_many`，无 N+1）。前端关注 / 粉丝卡片据此展示「个性签名」。
+
+- 契约变更 → hey-api SDK 需重新生成；
+- 消费方（本人黑名单表格）字段从 `user.avatar` / `user.uname` 改为 `user.face` / `user.name`。
+
+### 5.27 ruff 静态检查落地（2026-10-09）
+
+**背景**：`be-message-service` 的 dev 组早已装了 `ruff`，但 `pyproject.toml` 里**没有 `[tool.ruff]`**
+—— 没有项目配置时，检查结果取决于运行环境的默认/用户级配置，**不可复现**（本机实测：无配置时
+默认只跑 `E4/E7/F`，但命令输出混入 SIM/UP/TRY 等 451 条，说明行为随环境漂移）。本次补齐配置并清零。
+
+**配置**（`be-message-service/pyproject.toml`）：
+
+```toml
+[tool.ruff]
+target-version = "py311"
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP", "SIM", "RET", "C4", "RUF"]
+ignore = ["E501", "B008", "RUF001", "RUF002", "RUF003"]
+```
+
+**ignore 的理由**（这几条是本项目必须豁免的，别在 review 里反复讨论）：
+
+| 规则 | 为什么 ignore |
+| --- | --- |
+| `E501`（行太长） | 交给 formatter 处理，linter 不管宽度 |
+| `E712`（`== True/False`） | **SQLModel / SQLAlchemy 列比较必须写 `col(X) == False`**：ruff 建议的 `not X` 在 SQL 表达式里语义不同，照它改会直接改坏查询条件 |
+| `B008`（默认参数里调函数） | **FastAPI 依赖注入的基本写法**（`x: int = Query(...)` / `Depends(...)`），开了等于禁掉 FastAPI |
+| `B024` / `B027` | Biz / 状态机基类用「默认空实现的钩子方法」做约定，子类按需覆盖，不是漏写 `@abstractmethod` |
+| `RUF001/002/003`（歧义 Unicode 字符） | 本项目注释 / docstring 全中文，全角标点（，：（））会被判定为「歧义字符」，**单这一族就 2 万+ 条**，纯噪音 |
+| `RUF012`（可变类属性默认值） | 本项目的类级容器都是**有意共享**的：注册表 `_registry`、常量映射 `ROLE_BIZ_PERMS` / `error_messages`、SQLModel `__table_args__`、测试记录器；逐处补 `ClassVar` 只有注解收益 |
+| `SIM105` | `except: pass` → `contextlib.suppress` 属可读性偏好，不强改既有写法 |
+
+另有 `per-file-ignores`：`alembic/env.py`（`E402`+`F403`，模板要求先 `sys.path` 再 `import *`）、
+`scripts/*` 与 `tests/test_moment_interaction.py`（`E402`，先补 `sys.path` 再 import）。
+
+**落地方式**：先 `uv run ruff check --fix .` 自动修可修项（`I001` import 排序、`F401` 未用导入、
+`RUF100` 失效 noqa、`UP007/035/037/045`、`RUF022` 等），再人工清零剩余项。
+**要求：`uv run ruff check .` 必须 0 报错**（否则 CI 加了等于没加）。
+
+**边界（重要）**：ruff 是 **linter**，查的是「语法 / 风格 / 明显错误」，**查不出类型不匹配**。
+例如 2026-10-09 那个 500（把裸字符串 `"show_fans_list"` 传给声明为 `AttributeKey` 的参数）ruff 一条都报不出来 ——
+这类只能靠**类型检查器**：
+
+```bash
+uv run ty check          # Astral ty（已配 [tool.ty.environment]，快）
+uv run mypy app          # 或 mypy（dev 组已装）
+```
+
+两者是**互补**关系：ruff 管「写得对不对」，类型检查管「类型对不对」。
+
+### 5.28 主库 Alembic 版本管理重建（基线压缩，2026-10-11）
+
+**背景**：`BiliMessageDB` 已与生产环境对齐（以生产库真实结构为准）。实测发现主库
+`alembic_version` 停在 `20260920_stat_viewlog_enum`，而代码 head 是 `20261009_feed_event_log`——
+**库落后 5 个版本**，且这 5 个迁移涉及的真实结构变更（`TUserSpacePrivacy`、
+`msg_user_deactivation`、`msg_user_follow_tag*`、`TFeedEventLog`、`TFeedBanditArm` 建表，
+`TUserFavoriteSetting` 删除 + `TFavoriteFolder.is_public` 新增）**在生产库一次都没落过**。
+继续在旧链上追加迁移，等于让新环境从零重放 11 段历史 DDL，而这些历史本身已经和生产脱节。
+
+**做法**：与 pptr 库（§ 见 `alembic_pptr/versions/` 的 `init_pptr_production_baseline`
++ `sync_models_to_production`）**保持同款口径**，把主库 `alembic/versions/` 压缩成两条：
+
+| Revision | 文件 | 语义 |
+| --- | --- | --- |
+| `20261011_msg_prod_baseline` | `20261011_msg_prod_baseline.py`（**空 `upgrade()`**，`down_revision=None`） | **基线即生产库现状**，不做任何结构变更 |
+| `sync_to_prod` | `20261011_sync_msg_to_prod.py`（结构性差异） | 生产库现状 → 代码模型的**唯一真实差异**，之后所有演进从这里 autogenerate |
+
+> ⚠️ **revision id 必须 ≤ 32 字符**：`alembic_version.version_num` 是 `VARCHAR(32)`，
+> 超长会在 `stamp` / `upgrade` 时直接报 `Data too long for column 'version_num'`。
+> 首版曾用 `20261011_init_message_production_baseline`（39 字符）踩过此坑。
+
+**基线是空 DDL，不做「从零建库」**：与 pptr 库
+（`alembic_pptr/versions/20260810_1030-fda501cc07b2_init_pptr_production_baseline.py`）
+同款口径——基线表达的是「库已经是生产结构」这个既成事实，`stamp` 即可视为已对齐。
+本服务也不存在空库建表路径：私信正文分片本就由 `app/core/sharding.py` 运行时懒创建，
+新环境一律从生产库快照恢复。
+
+| 场景 | 行为 |
+| --- | --- |
+| 存量生产库 | `alembic stamp <基线>` → `alembic upgrade head` 执行 sync |
+| 全新空库 | **不支持**（基线不含建表 DDL） |
+
+**sync 的 DDL 由 `alembic revision --autogenerate` 生成**（未手写），生成后**手工删改**三处：
+
+- 剔除 21 对已有表的复合排序索引重建（`created_at DESC` / `pubTime DESC` 等）——
+  生产索引已能满足查询，基线同步不重排索引；
+- 剔除 `drop_table_comment('msg_sys_config')` —— 注释非结构；
+- 给 `TFavoriteFolder.is_public` 补 `server_default=1` —— 该列 `NOT NULL`，
+  autogenerate 原样输出无默认值，在有存量行的表上会失败；带默认值使存量行回填「公开」，
+  保持迁移前可见行为（§5.25）。
+
+`downgrade()` 与 `upgrade()` 严格对称，只回退上述结构性变更。
+
+**`bizId` 类型：模型改回 `BIGINT` 才让 autogenerate 干净**。原先 `ResourceBase.bizId`
+（`base_tbl.py`）与 `bili-common` 的 `ReportBase.bizId`（`report.py`）声明为 `str` /
+`VARCHAR(64)`，而生产库 7 张表（`TResourceFavorite/Like/Dislike/AuditLog`、`TUserReport`、
+`msg_comment_report`）全是 `bigint`，导致每次 autogenerate 都报这 7 处虚假差异。
+已改为 `int` / `sa_type=BIGINT`，**模型与库一致后该差异自动消失**，无需再靠 sync 剔除。
+下游影响已排查：SQLModel lax 校验会把数字字符串自动转 int；RPA 系资源 id 全是纯数字雪花 id，
+不存在非数字 bizId 的数据风险。
+
+**原生 ENUM 的成员顺序：生产库并存两种历史尾序，sync 不去动它**。旧 `others_lot_dyn_enum`
+用固定顺序 `["OTHERS_LOT_DYN", "RPA_TAG"]` 追加它负责的 11 列；而 `TInteractionStat` /
+`TInteractionViewLog` **不在**该迁移清单内，直到 `stat_viewlog_enum` 才用枚举定义顺序补上，
+尾序因此与那 11 列相反。成员集合一致、仅顺序不同，而顺序决定 MySQL ENUM 的内部索引值。
+基线为空 DDL、sync 不含 `alter_column`，故**两列的历史尾序被原样保留**，不会与模型产生偏差；
+**真要收敛这个历史不一致，应作为独立的数据迁移显式处理，不该混在基线压缩里**。
+
+**幂等与存量数据**：
+
+- `TFavoriteFolder.is_public` 为 `NOT NULL`，故**带 `server_default=1`** 新增，存量行回填公开，
+  保持迁移前的可见行为（对应 §5.25「逐夹可见性」）；
+- `TUserFavoriteSetting` 为**整表删除**（全局开关已被逐夹开关取代），无对应新建；
+- 其余 6 张表生产库不存在，纯新建，无存量数据处理。
+
+**验证**：生产库 `stamp` 到 head 后再跑一次 `autogenerate`，剩余差异为 21 对索引重建 +
+1 处表注释 + `is_public` 的 `server_default` —— **无任何 `create_table` / `drop_table` /
+`add_column` / `drop_column`**，即 sync 已完整覆盖「生产库 → 模型」的全部结构性变更。
+
+**pptr 库不动**：实测仅缺 `TUserActInfoLog.idx_log_mid_created`（即 `20260905_act_log_idx`，
+库停在 `d366ed68066f`），其余均为 `pk` Identity / `TUserInfo.uid` 自增 / `ip_info_id_fkey`
+外键的反射噪音，正常走 `alembic -c alembic_pptr.ini upgrade head` 即可，无需重建版本链。
+
+**已知残留（非缺陷，需知情）**：由于上表刻意剔除了已有表的索引重建与表注释，
+后续每次 `alembic revision --autogenerate` 仍会**反复提出**这两类差异。
+这是「基线同步只收结构变更」的既定代价：接受重复提案，但**不得**在无明确需求时
+把它们顺手写进新迁移，否则等于绕过基线压缩的判断。真正要落地时，按类别单独出一条迁移。
+
+### 5.29 pptr 库 Alembic 版本链压缩（3 条 → 2 条，2026-10-15）
+
+**背景**：pptr 分支（`alembic_pptr/versions/`）当时是 3 条：
+
+| Revision | 语义 |
+| --- | --- |
+| `fda501cc07b2` | `init_pptr_production_baseline`（空 DDL，`down_revision=None`） |
+| `d366ed68066f` | `sync_models_to_production`（建 `TUserExpRecord` + 索引 + 唯一约束、drop 22 张孤儿表） |
+| `20260905_act_log_idx` | `TUserActInfoLog.idx_log_mid_created`（head） |
+
+而**生产 pptr 库的 `alembic_version` 停在 `d366ed68066f`**（sync 已应用，只差那个索引），
+本地库已到 head。也就是说 `fda501cc07b2` 这条基线在真实环境里已经没有任何库停在上面，
+继续留着只是让新库从零重放一段永远不会真实执行的历史。
+
+**做法**：把 sync 那条**提升为新的根**，3 条压成 2 条：
+
+| Revision | 文件 | 语义（压缩后） |
+| --- | --- | --- |
+| `d366ed68066f` | `20260810_1031-d366ed68066f_sync_models_to_production.py`（改：空 `upgrade()` / `downgrade()`，`down_revision=None`） | **基线**：「库已是 sync 之后的状态」这一既成事实 |
+| `20260905_act_log_idx` | `20260905_act_log_idx_.py`（`down_revision=d366ed68066f`） | head：唯一未落生产的索引，原样保留 |
+
+`fda501cc07b2` 文件**删除**。
+
+**为什么保留 `d366ed68066f` 这个 id 而不是另起新 id**：生产库的版本号就是这个值，
+保留它 → 生产只需 `alembic -c alembic_pptr.ini upgrade head` 补索引，**不需要 stamp**。
+若换成新 id，生产库会立刻 `Can't locate revision`，且无法「部分 stamp」——
+它处在「sync 已应用、索引未应用」的中间态，压缩后的链上不再有这个锚点，
+任何 stamp 选择都会导致要么重放 sync（对象已存在报错）、要么跳过索引（永久缺失）。
+
+**索引创建改为幂等**：`20260905_act_log_idx` 的 `create_index` 加 `if_not_exists=True`
+（`drop_index` 加 `if_exists=True`）。生产库无法预先确认是否已手工建过该索引，
+幂等后 `upgrade` 在两种情况下都不会失败。
+
+**代价（需知情）**：sync 的 DDL 从版本链上消失，**不再支持「未 sync 的原始生产快照」
+直接 `upgrade head`**（那样会缺 `TUserExpRecord` 与那条唯一约束）。
+真遇到这种库：先手工 stamp 到 `d366ed68066f` 之前把 sync 的内容补跑，
+或单独出一条迁移承接，不得把 sync 原文塞回基线（那会让已 sync 的库重放报错）。
+
+| 场景 | 行为 |
+| --- | --- |
+| 生产库（停在 `d366ed68066f`） | `upgrade head` 补索引，零 stamp |
+| 本地库（已在 `20260905_act_log_idx`） | `upgrade head` 无操作 |
+| 停在已删除的 `fda501cc07b2` 的库 | 需人工介入（见上「代价」），不接受自动 stamp |
+
+**验证**：`alembic -c alembic_pptr.ini history` 只剩两条；本地 `current` 仍为
+`20260905_act_log_idx (head)`；`upgrade head` 无操作。
+
+### 5.24 裸 dict 清理（2026-10-08）
+
+**约定**：业务层**不得返回裸 `dict` / `list[dict]`**；外部系统（RPC / pptr）返回的 dict
+只允许在**边界处转换一次**，进入业务层即为显式类型（dataclass / pydantic）。
+
+**已完成（用户 / 空间域，100% 清零）**：
+
+| 原裸 dict | 现值对象 |
+| --- | --- |
+| `PptrUser.get_many() -> dict[int, UserBriefOut]`（34 处调用点） | `UserBriefs`（`of_mid` / `has` / `pairs` / `Iterable`），调用点全部改 `of_mid()` |
+| `SpaceTimelineService` 内部 `entries: list[dict]` | `TimelineEntry`（`follow()` / `resource()` / `with_folder()`，`is_dynamic` / `is_lottery` 派生） |
+| `_load_moments() -> dict[int, MomentDetailResp]` | `MomentDetails`（`of_dyn()`） |
+| `_load_lottery_details() -> dict[int, dict[str, str|None]]` | `LotteryResources.from_rpc()` + `LotteryResourceInfo`（RPC dict 仅在边界转换） |
+| `space_view_history` 的 `titles: dict[int, str]` | `DynamicTitles`（`of_dyn()`） |
+| `FollowTagService.tag_ids_of() -> dict[int, list[int]]` | `TagMembership`（`tag_ids` / `includes` / `without_system`） |
+| `FollowTagService._tag_counts() -> dict[int, int]` | `TagCounts`（`count_of`） |
+| `FollowService._briefs_of() -> dict[int, UserBriefOut]` | `UserBriefs` |
+| `SpaceInfoResp` 统计内的临时 dict 拼装 | `SpaceStatSummary`（见 §5.23） |
+
+**已完成（第二批：moment 域，100% 清零）**：
+
+| 原裸 dict | 现值对象 |
+| --- | --- |
+| `_build_lottery_detail_map() -> dict[int, dict[str, str\|None]]` | `Indexed[ResourceDisplay]`（RPC dict 在 `ResourceDisplay.from_rpc` 转换一次） |
+| `_load_stats() -> dict[int, TInteractionStat]` | `Indexed[TInteractionStat]` |
+| `_load_comment_subjects() -> dict[int, CommentSubject]` | `Indexed[CommentSubject]` |
+| `_load_like_states() -> dict[int, bool]` | `Indexed[bool]` |
+| `_load_topic_rel_map() -> dict[int, list[int]]` | `Indexed[tuple[int, ...]]`（值容器也换成不可变 tuple） |
+| `MomentStatService.batch_read_stats() -> dict[int, TInteractionStat]` | `Indexed[TInteractionStat]` |
+| `get_dynamic_stat_counts() -> dict[int, dict[str, int]]` | `Indexed[ResourceCountPair]` |
+| `MomentFeedService.get_upstat() -> dict[str, int]` | `MomentUpStat`（`dynamic_count` / `like_count`） |
+| `moment_publish` 的 8 处 `-> dict[str, Any]`（发布 / 删除 / 置顶 / 转发 / 预校验回执） | `MomentCreateResp` / `MomentRemoveResp` / `MomentTopResp` / `MomentRepostResp` / `MomentCreateCheckResp`（路由层不再 `Resp(**dict)`） |
+| `MomentCreateCheckResp.setting/permission: dict` | `MomentPublishSetting` / `MomentPublishPermission` 强类型占位模型 |
+| `feed_engine._extra / rank_feed` 的 map 参数（`author_quality` / `report_counts` / `comment_subjects` / `counts`） | 全部改 `Indexed[...]`，`.get()` → `.value_of()` |
+| `topic_feed` / `moment_feed` 内的 `author_q` / `report_counts` 局部 map | `Indexed[AuthorQualitySignal]` / `Indexed[ResourceReportCount]` |
+
+> 顺带修正：旧 `_to_base_resp` 手写的 `"dynIdStr"` 键其实一直被 pydantic 丢弃
+> （字符串版雪花 ID 字段名是 `dynId_str`），响应 JSON 契约本就如此，改造后保持一致。
+>
+> 时间线 / 浏览历史的批量回查（`MomentDetails` / `LotteryResources` / `DynamicTitles`）
+> 进一步统一到通用 `Indexed[V]`，专用映射类已删除，只保留 `TimelineEntry`（真正的记录类型）。
+
+**新增通用聚合**（`app/services/common/indexed.py`）：
+`Indexed[V]`（不可变 `id → 值`：`of` / `empty` / `value_of` / `value_or` / `has` / `merge` /
+`items` / `keys` / `values` / `__iter__` / `__contains__`）与 `ResourceDisplay`
+（非 dynamic 资源展示信息，`from_rpc` 是唯一 dict 转换点）。
+> 泛型用 `TypeVar` 而非 PEP 695 语法：ruff 的 target-version 由 `requires-python = ">=3.11"` 推断。
+
+**第三批（2026-10-08，按「先边界、后业务」顺序推进）**：
+
+| 域 | 结果 |
+| --- | --- |
+| `infrastructure`（3） | ✅ 清零：`lottery_rpc` 的 `get_lottery_detail` → `ResourceDisplay`、`get_lottery_details` → `Indexed[ResourceDisplay]`、`get_others_lot_dyn_details` → `Indexed[OthersLotDynDisplay]`（**RPC 边界内一次性转换**，`moment_feed` / `space_timeline` / `others_lot_dyn` 的本地转换全部删除） |
+| `audit`（4） | ✅ 清零：`load_category_levels` → `Keyed[str, str]`、`match_categories` → `Keyed[str, CategoryMatch]`（新值对象 `CategoryMatch(level, words)`）、`match` → `Keyed[WordLevel, tuple[str, ...]]`、`mask_hits_by_category` → `Keyed[str, tuple[str, ...]]`；`AuditResult.hit_words` / `hit_categories` 同步改值对象（消费点仅 `all_hit_words` / `_hits_reason`） |
+
+> 新增通用展示值对象 `OthersLotDynDisplay`（`common/indexed.py`）；
+> 时间线 / Feed 侧的 lottery 详情不再各自转换，直接透传 RPC 返回值对象。
+
+**仍待清理（18 处，按顺序推进）**：
+
+`interaction_actions`（8，含 `folder.py` 的 `list[dict]` 需与 `FavoriteFolderResp` 对齐，是要设计 DTO 的一处）→
+`message`（3）→ `admin`（3）→ `comment`（1）→ `core`（3，其中 `config` 的限流规则属配置模型，
+建议改 pydantic Settings 模型）→ `common`（2，`runtime_config` 的校验入参/返回值）→ `consumers`（1，
+AMQP headers 属消息边界，建议返回强类型 header 值对象）。
+
+**第二批补充（2026-10-08）**：
+
+- **规则固化**：新增规则 `.codebuddy/rules/领域值对象与装配分层.mdc`（RPA-Browser 侧同步一份），
+  明确「禁止裸 dict（返回/参数/字段）」「值对象写法（frozen+slots / of / value_of / 语义方法）」
+  「ORM 不许产 DTO（依赖方向只能 schemas → db；装配走 `DTO.from_row()` 或服务层 assembler）」
+  「多维度属性用描述符 + 可见性上下文」以及提交前自检清单；
+- **`_to_base_resp` 改为 `MomentBaseResp.from_row()`**：装配方法挂在 DTO 上（`TMoment` 通过
+  `TYPE_CHECKING` 仅作类型引用），`moment_publish` 里 3 个调用点改为 `MomentCreateResp.from_row(dyn)`
+  / `MomentRepostResp.from_row(dyn)`，模块级装配函数删除；
+- **通用映射泛化**：`app/services/common/indexed.py` 新增 `Keyed[K, V]`（任意可哈希键），
+  `Indexed[V]` 保留为 `Keyed[int, V]` 的语义化别名（既有用法零改动），
+  供后续 `(bizType, bizId)` / 枚举 / 字符串键场景使用；`Keyed.merge()` 保持子类类型。
+
+**第三批补充（2026-10-11）**：
+
+- **规则固化**：新增规则 `.codebuddy/rules/unix-timestamp.mdc`，明确「对外 HTTP 出参的时间/日期字段一律为
+  秒级 int32 时间戳（`UnixTime` / `OptionalUnixTime`），naive 时间按 `Asia/Shanghai` 解释，未设置为 `0`」，
+  并划清边界：请求模型、DB 表模型、RPC 内部传输模型保持 `datetime`，仅在 HTTP 序列化边界转换；
+- **工具落地**：新增 `bili-common/bili_common/core/time_utils.py`（`to_unix_timestamp` / `UnixTime` /
+  `OptionalUnixTime`），出参模型不再出现 `datetime` 注解，也不再手工 `strftime` / `isoformat()`；
+- **已改造出参**：`notify`、`comment`、`event`、`dm`、`ban`、`space`、`moment`、`follow`、`setting`、
+  `sys_config`、`user_records`、`ml_status`；`GET /api/v1/user/user_info` 的 `birthday` 由 `%m-%d` 字符串
+  改为秒级时间戳（`0` = 未设置）；
+- **待办**：出参类型由 `string(date-time)` 变为 `integer`，需**用户手动重新生成前端 hey-api SDK**，
+  之后同步前端消费点（生日回填 / 展示等）。
+
+后续轮次需要先定两件事（`Keyed` 已就绪，第 1 条只剩落地）：
+
+1. ~~tuple / str 键的映射~~ → **已就绪**：直接用 `Keyed[K, V]`（`admin/report`、`comment_admin`、
+   `base_biz` 的复合键改用它即可）；
+2. **边界类 dict**：`infrastructure/lottery_rpc` 的 RPC 返回值应直接返回 `Indexed[ResourceDisplay]`
+   （让转换点前移到 RPC 客户端）；`core/config`（`list[dict]` 限流规则）属于配置模型，
+   应改成 pydantic 设置模型而不是业务值对象。
+
+**明确保留的两类「类字典」**：
+
+1. `PptrUser.ROLE_BIZ_PERMS: dict[InteractionBizTypeEnum, int]` —— 权限位掩码**常量表**
+   （不是返回值，改成语义对象只会让位运算更难读）；
+2. `BanStatusResp.services: dict[str, BanServiceStatus]` —— 已进入 **API 契约**
+   （改结构会破坏前端），如需改造须先改契约再同步前端。
+
+**验证**：`import` 全量模块通过、`app.main` 可加载、值对象行为逐项实测、
+本次改动文件 `ruff` 除既有 `DTZ005`（`datetime.now()` 无 tz，历史遗留）外无新增告警。
+
+### 5.25 收藏夹逐夹可见性（去掉全局收藏开关，2026-10-08）
+
+B 站用「合集 / 系列」做内容聚合，本项目没有，由「收藏」承担 —— 因此收藏不该有全局开关，
+改为**每个收藏夹各自可选公开 / 隐藏**。需求见 `docs/frontend_requirements/个人空间收藏夹可见性.md`。
+
+- `TFavoriteFolder` 新增 `is_public`（默认 1，存量回填公开；**默认收藏夹也可改**，但不可删除）；
+- 收藏 tab **恒展示**（不再因「他人无公开夹」隐藏，避免额外判断 / 请求）；收藏弹窗
+  `MomentFavoriteDialog` 逐项展示 名称 / 「默认」标记 / 公开·隐藏 / 描述 / 封面；
+- **删除 `TUserFavoriteSetting` 表**与 `GET/POST /favorite/setting`（全局开关被逐夹开关取代）；
+- `FavoriteFolderAction.list_public_folders` / `list_public_items` 去掉全局门控与 403，改为按
+  `is_public` 过滤；本人 / 他人分流仍由前端 `isOwnSpace` 决定（公开接口不引入 viewer 参数）；
+- 空间属性模型删除 `FavoritesAttribute` / `AttributeKey.FAVORITES` /
+  `AttributeStorage.FAVORITE_SETTING`（`SPACE_ATTRIBUTES` 5 → 4 项）；
+  `SpacePrivacyFlags` 去掉 `show_favorites`，`get_flags` 只读隐私表；
+- 时间线收藏条目门槛改为「本人 OR 所属夹公开」（`space_timeline.py`）；
+- 契约变更 → hey-api SDK 需重新生成（`FavoriteFolderResp` / `FavoriteFolderCreateReq` /
+  `FavoriteFolderUpdateReq` / `SpacePrivacyFlags`，并移除 `FavoriteSetting*`）。
 
 ### 5.22 RPC 调试接口（管理端，root 专用）
 

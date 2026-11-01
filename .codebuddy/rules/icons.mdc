@@ -12,24 +12,34 @@ provider:
 
 1. **所有界面图标一律使用 `src/assets/svgs/` 目录下的 SVG 资源**，禁止直接使用 Element Plus 图标（如 `ThumbUp`、`Star`、`Comment` 等）作为业务图标。
 
-2. **SVG 图标引用方式**：`import icon from '@/assets/svgs/xxx.svg?component'` 后以 `<component :is="icon">` 渲染；需区分激活/未激活态时使用 `xxx.svg` / `xxx_active.svg` 成对资源。
+2. **SVG 图标引用方式**：**优先使用统一组件 `src/components/CommonCompo/BiliIcon.vue`**（`<BiliIcon name="like" :class="isLiked ? 'text-msg-pink' : ''" />`），尺寸与颜色全部由外部 class 决定；BiliIcon 未收录的图标才用 `import icon from '@/assets/svgs/xxx.svg?component'` + `<component :is="icon">`。
 
-3. **SVG 资源必须支持外部控制大小与颜色**：
+3. **同一图标禁止按状态 / 颜色拆多份资源**（避免重复资源）：
+   - 激活与未激活**只差颜色**时，用同一份 svg，靠 `text-*` / `fill-*` 染色（例：收藏未激活 `text-text-placeholder`、已收藏 `text-warning`）；
+   - 只有**形状本身不同**（实心 vs 空心）时才允许 `xxx.svg` / `xxx_active.svg` 成对资源（如点赞），且两份都要归一化为下述写法。
+
+4. **SVG 资源必须支持外部控制大小与颜色**：
    - SVG 根节点用 `width="100%" height="100%"`（**禁止内联固定数值**，如 `width="16"`），让外部 `class="w-* h-*"` 控制大小；
-   - SVG 根节点加 `fill="currentColor"`（`<path>` 等不显式 fill，继承 currentColor），让外部 `class="text-*"` 控制颜色；
-   - 使用时通过 `class="w-6 h-6 text-text-primary"` 等外部类控制尺寸与颜色。
+   - SVG 根节点加 `fill="currentColor"`（`<path>` 等不显式 fill，继承 currentColor），让外部 `class="text-*"` 控制颜色；根节点不要写 `fill="none"`（会覆盖继承语义，属冗余）；
+   - 使用时通过 `class="w-6 h-6 text-text-primary"` 等外部类控制尺寸与颜色；也可用 Tailwind `fill-*` 工具类直接染色（CSS 声明优先级高于 SVG presentation attribute）。
 
-4. **缺少所需图标时，必须暂停并请用户补充资源**，不得擅自改用 Element Plus 图标或手写内联 SVG 凑数。等用户提供 `src/assets/svgs/` 下的 SVG 文件后再继续接入。
+5. **缺少所需图标时，必须暂停并请用户补充资源**，不得擅自改用 Element Plus 图标或手写内联 SVG 凑数。等用户提供 `src/assets/svgs/` 下的 SVG 文件后再继续接入。
 
 ## 现有 SVG 资源（src/assets/svgs/）
 
-- `like.svg` / `like_active.svg`：点赞（未激活 / 激活）
-- `dislike.svg` / `dislike_active.svg`：点踩（未激活 / 激活）
-- `svgs/dynamic/detail/side_toolbar/comment.svg`：评论
-- `svgs/dynamic/detail/side_toolbar/favorite.svg`：收藏
-- `svgs/dynamic/detail/side_toolbar/forward.svg`：转发
-- `svgs/dynamic/detail/side_toolbar/like.svg`：点赞
+已由 `BiliIcon` 收录（`<BiliIcon name="..." />`）：
+
+- `like` / `likeActive`：点赞（空心 / 实心，形状不同故成对）
+- `dislike` / `dislikeActive`：点踩（空心 / 实心）
+- `favorite`：收藏（颜色区分激活态）
+- `forward`：转发
+- `comment`：评论
+
+未收录（按需直接 import 或补充进 BiliIcon 映射表）：
+
+- `svgs/dynamic/detail/side_toolbar/*.svg`：详情页侧边栏（与上表同源，24 viewBox 版）
 - `svgs/more.svg`、`svgs/setting.svg`：更多 / 设置
+- `svgs/space/*.svg`、`svgs/audit/*.svg`：消息卡片 / 审核
 - `svgs/login_tip_*.svg`：登录引导图
 
 > 新增业务图标时，若以上资源不覆盖，先确认 `src/assets/svgs/` 下是否已有；没有则**暂停**请用户补充。

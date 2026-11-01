@@ -68,7 +68,10 @@ class ReportBase(SQLModel):
     """
 
     pk: int | None = Field(
-        default=None, primary_key=True, sa_type=BIGINT, sa_column_kwargs={"autoincrement": True}
+        default=None,
+        primary_key=True,
+        sa_type=BIGINT,
+        sa_column_kwargs={"autoincrement": True},
     )
     bizType: int = Field(
         default=None,
@@ -77,17 +80,42 @@ class ReportBase(SQLModel):
         "dynamic=1，lottery=2，rpa_action=3，rpa_workflow=4，rpa_browser=5，rpa_plugin=6，"
         "comment=7，user=8；bizType + bizId 唯一确定被举报资源",
     )
-    bizId: int = Field(default=None, index=True, sa_type=BIGINT, description="被举报对象 id：dynamic→dynId，comment→rpid，user→mid，lottery/rpa_*→各自资源 id")
+    bizId: int = Field(
+        default=None,
+        index=True,
+        sa_type=BIGINT,
+        description="被举报对象 id（整型）：dynamic→dynId，comment→rpid，user→mid，rpa_action→action_id，rpa_workflow→workflow_id 等",
+    )
     accusedMid: int = Field(default=None, sa_type=BIGINT, description="被举报用户 mid")
-    reportMid: int = Field(default=None, index=True, sa_type=BIGINT, description="举报人 mid")
-    reasonType: int = Field(default=None, description="统一举报原因（ReportReasonEnum 值）：1-10")
-    reasonDesc: str | None = Field(default=None, max_length=500, description="补充描述（选填）")
-    pics: str | None = Field(default=None, description="举报证据图片 URL 列表（JSON 数组字符串，最多 3 张，http(s)）")
-    auditStatus: int = Field(default=ReportAuditStatusEnum.PENDING, description="举报审核状态（ReportAuditStatusEnum 值）：1=pending,2=resolved,3=rejected")
-    auditRemark: str | None = Field(default=None, max_length=500, description="审核处理备注")
-    auditAdminMid: int | None = Field(default=None, sa_type=BIGINT, description="处理管理员 MID")
-    created_at: datetime | None = Field(default_factory=datetime.now, description="创建时间")
-    updated_at: datetime | None = Field(default_factory=datetime.now, description="更新时间")
+    reportMid: int = Field(
+        default=None, index=True, sa_type=BIGINT, description="举报人 mid"
+    )
+    reasonType: int = Field(
+        default=None, description="统一举报原因（ReportReasonEnum 值）：1-10"
+    )
+    reasonDesc: str | None = Field(
+        default=None, max_length=500, description="补充描述（选填）"
+    )
+    pics: str | None = Field(
+        default=None,
+        description="举报证据图片 URL 列表（JSON 数组字符串，最多 3 张，http(s)）",
+    )
+    auditStatus: int = Field(
+        default=ReportAuditStatusEnum.PENDING,
+        description="举报审核状态（ReportAuditStatusEnum 值）：1=pending,2=resolved,3=rejected",
+    )
+    auditRemark: str | None = Field(
+        default=None, max_length=500, description="审核处理备注"
+    )
+    auditAdminMid: int | None = Field(
+        default=None, sa_type=BIGINT, description="处理管理员 MID"
+    )
+    created_at: datetime | None = Field(
+        default_factory=datetime.now, description="创建时间"
+    )
+    updated_at: datetime | None = Field(
+        default_factory=datetime.now, description="更新时间"
+    )
 
 
 class ReportEvent(SQLModel):
@@ -99,7 +127,7 @@ class ReportEvent(SQLModel):
     """
 
     bizType: InteractionBizTypeEnum
-    bizId: int  # dynamic→dynId / comment→rpid / user→mid
+    bizId: str  # dynamic→dynId / comment→rpid / user→mid / rpa_*→业务 id
     reportMid: int  # 举报人
     reasonType: ReportReasonEnum
     reportPk: int | None = None  # 各业务表举报记录主键（可选）

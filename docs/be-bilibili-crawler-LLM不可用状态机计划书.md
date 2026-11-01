@@ -29,8 +29,8 @@
 只有两个字段表达可用性：
 
 ```python
-consecutive_failures: int      # 连续失败次数
-disabled: bool                 # 是否熔断
+consecutive_failures: int  # 连续失败次数
+disabled: bool  # 是否熔断
 disabled_reason: str | None
 
 available = (not disabled) and consecutive_failures < MAX_CONSECUTIVE_FAILURES  # 3
@@ -42,7 +42,7 @@ available = (not disabled) and consecutive_failures < MAX_CONSECUTIVE_FAILURES  
 NON_RETRYABLE_STATUS_CODES = frozenset({400, 401, 403, 404})
 status_code = _extract_status_code(error)
 if status_code in NON_RETRYABLE_STATUS_CODES:
-    disabled = True     # 永久熔断：只能重启 / 热更新配置
+    disabled = True  # 永久熔断：只能重启 / 热更新配置
 ```
 
 ### 1.2 问题
@@ -95,11 +95,11 @@ if status_code in NON_RETRYABLE_STATUS_CODES:
 
 ```python
 class LLMState(StrEnumAutoDoc):
-    HEALTHY     = "healthy"      # 正常，可调用
-    COOLING     = "cooling"      # 短暂冷却（限流 / 连续瞬时失败），到点自动恢复
-    QUOTA_WAIT  = "quota_wait"   # 今日额度耗尽，等到次日 0 点自动恢复
-    SUSPENDED   = "suspended"    # 欠费 / 余额不足，长时间冷却，充值或人工热更新可立即恢复
-    REMOVED     = "removed"      # 不可恢复，配置已删除（终态）
+    HEALTHY = "healthy"  # 正常，可调用
+    COOLING = "cooling"  # 短暂冷却（限流 / 连续瞬时失败），到点自动恢复
+    QUOTA_WAIT = "quota_wait"  # 今日额度耗尽，等到次日 0 点自动恢复
+    SUSPENDED = "suspended"  # 欠费 / 余额不足，长时间冷却，充值或人工热更新可立即恢复
+    REMOVED = "removed"  # 不可恢复，配置已删除（终态）
 ```
 
 ### 3.2 迁移图
@@ -138,8 +138,11 @@ class LLMState(StrEnumAutoDoc):
 ### 3.3 数据模型（`Service/llm_service/health.py`，新增）
 
 ```python
-class LLMFailureKind(StrEnumAutoDoc): ...      # 上一节的 6 类
-class LLMState(StrEnumAutoDoc): ...            # 本节的 5 态
+class LLMFailureKind(StrEnumAutoDoc): ...  # 上一节的 6 类
+
+
+class LLMState(StrEnumAutoDoc): ...  # 本节的 5 态
+
 
 class LLMHealth(BaseModel):
     """单个槽位的健康状态机：只负责状态与迁移，不含调用统计口径。"""
@@ -148,14 +151,16 @@ class LLMHealth(BaseModel):
     # 背后是 PrivateAttr，读取时先做一次惰性刷新（过期的冷却自动回 HEALTHY）。
     state: LLMState
     reason: str | None
-    resume_at: float | None          # 自动恢复时间戳；None 表示不会自动恢复
+    resume_at: float | None  # 自动恢复时间戳；None 表示不会自动恢复
     state_since: float | None
-    escalation: int                  # 同类故障的连续升级次数（用于冷却翻倍）
+    escalation: int  # 同类故障的连续升级次数（用于冷却翻倍）
     failure_kind: LLMFailureKind | None
 
     def record_success(self) -> None: ...
-    def record_failure(self, kind, *, consecutive_failures, retry_after=None) -> LLMState: ...
-    def resume_delay(self) -> float | None: ...   # 距自动恢复还有多少秒
+    def record_failure(
+        self, kind, *, consecutive_failures, retry_after=None
+    ) -> LLMState: ...
+    def resume_delay(self) -> float | None: ...  # 距自动恢复还有多少秒
 ```
 
 `classify_llm_failure(error: BaseException) -> LLMFailureKind`：纯函数，从异常的

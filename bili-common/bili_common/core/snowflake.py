@@ -51,6 +51,7 @@ import asyncio
 import threading
 import time
 from loguru import logger
+
 __all__ = ["MinuteSnowflakeIdGenerator", "SnowflakeIdGenerator"]
 
 
@@ -79,10 +80,14 @@ class SnowflakeIdGenerator:
         time_unit: str,
     ) -> None:
         if time_unit not in self._TIME_UNITS:
-            raise ValueError(f"time_unit 必须为 {self._TIME_UNITS} 之一，当前为 {time_unit}")
+            raise ValueError(
+                f"time_unit 必须为 {self._TIME_UNITS} 之一，当前为 {time_unit}"
+            )
         max_worker = (1 << worker_bits) - 1
         if not 0 <= worker_id <= max_worker:
-            raise ValueError(f"worker_id 必须在 0~{max_worker} 之间，当前为 {worker_id}")
+            raise ValueError(
+                f"worker_id 必须在 0~{max_worker} 之间，当前为 {worker_id}"
+            )
         self._worker_id = worker_id
         self._epoch = epoch
         self._time_unit = time_unit

@@ -12,6 +12,7 @@ browser / plugin）的详情，随互动状态一并返回前端。
 """
 
 from bili_common.core.enums import StrEnumAutoDoc
+from bili_common.models.push import PushChannelConfig
 
 from sqlmodel import SQLModel, Field
 
@@ -37,6 +38,9 @@ class RpaRpcMethodName(StrEnumAutoDoc):
     LIST_TAGS = "list_tags"
     LIST_TAGS_BY_TARGET = "list_tags_by_target"
 
+    # 2.62.0：互动事件站外推送——be-message 取用户外部渠道配置（RPA NotificationConfig）
+    GET_NOTIFY_CONFIG = "get_notify_config"
+
 
 # ---------------------------------------------------------------------------
 # 请求参数
@@ -46,8 +50,12 @@ class RpaRpcMethodName(StrEnumAutoDoc):
 class GetResourceDetailParams(SQLModel):
     """获取 RPA 资源详情（get_resource_detail）。"""
 
-    bizType: str = Field(description="资源类型：rpa_action / rpa_workflow / rpa_browser / rpa_plugin")
-    bizId: int = Field(description="资源 id：action_id / workflow_id / browser_id / plugin_id")
+    bizType: str = Field(
+        description="资源类型：rpa_action / rpa_workflow / rpa_browser / rpa_plugin"
+    )
+    bizId: int = Field(
+        description="资源雪花业务 ID：action_id / workflow_id / browser_id / ResourceTag.id（int）"
+    )
 
 
 class HideResourceParams(SQLModel):
@@ -57,8 +65,10 @@ class HideResourceParams(SQLModel):
     lottery → be-bilibili-crawler；rpa_* → 本地下架/停用。
     """
 
-    bizType: str = Field(description="资源类型：lottery / rpa_action / rpa_workflow / rpa_browser / rpa_plugin")
-    bizId: int = Field(description="资源 id")
+    bizType: str = Field(
+        description="资源类型：lottery / rpa_action / rpa_workflow / rpa_browser / rpa_plugin"
+    )
+    bizId: int = Field(description="资源雪花业务 ID（action_id / workflow_id）")
     operatorMid: int = Field(description="处置审核员 mid")
     reason: str = Field(default="", description="处置原因（可选）")
 
@@ -79,7 +89,9 @@ class ReviewResourceParams(SQLModel):
     """
 
     bizType: str = Field(description="资源类型：rpa_action / rpa_workflow / rpa_plugin")
-    bizId: int = Field(description="资源表主键 id（int）")
+    bizId: int = Field(
+        description="资源雪花业务 ID：action_id / workflow_id / ResourceTag.id"
+    )
     decision: str = Field(description="审核结果：approved / rejected")
     operatorMid: int = Field(description="审核员 mid")
     note: str = Field(default="", description="审核意见（可选）")
@@ -90,7 +102,9 @@ class ReviewResourceResult(SQLModel):
 
     success: bool = Field(default=False, description="是否成功审核")
     message: str | None = Field(default=None, description="失败原因 / 补充说明（可选）")
-    approvalId: int | None = Field(default=None, description="被审核的审批单 id（无匹配时为 None）")
+    approvalId: int | None = Field(
+        default=None, description="被审核的审批单 id（无匹配时为 None）"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +175,9 @@ class TagItemRpc(SQLModel):
 class ListTagsParams(SQLModel):
     """列出标签（list_tags）。`auditStatus` 为 None 时默认仅 `normal`。"""
 
-    auditStatus: str | None = Field(default=None, description="过滤状态；None→normal；'all'→全部（管理端）")
+    auditStatus: str | None = Field(
+        default=None, description="过滤状态；None→normal；'all'→全部（管理端）"
+    )
     page: int = Field(default=1, description="页码（从 1 起）")
     perPage: int = Field(default=20, description="每页条数")
 
@@ -187,6 +203,29 @@ class ListTagsByTargetResult(SQLModel):
 
 
 # ---------------------------------------------------------------------------
+# 用户外部推送渠道配置（2.62.0）：互动事件站外推送
+# ---------------------------------------------------------------------------
+
+
+class GetNotifyConfigParams(SQLModel):
+    """获取用户的外部推送渠道配置（get_notify_config）。"""
+
+    mid: int = Field(description="接收人 mid")
+
+
+class GetNotifyConfigResult(SQLModel):
+    """get_notify_config 返回结果。
+
+    ``config`` 为 RPA ``NotificationConfig``（全局配置，browser_id=None）映射而来的
+    ``PushChannelConfig``；用户未配置渠道时为 None（be-message 侧据此跳过外推）。
+    """
+
+    config: PushChannelConfig | None = Field(
+        default=None, description="渠道配置；未配置时为 None"
+    )
+
+
+# ---------------------------------------------------------------------------
 # 响应
 # ---------------------------------------------------------------------------
 
@@ -195,10 +234,12 @@ class ResourceDetail(SQLModel):
     """RPA 资源详情（供前端按 bizType 渲染跳转）。"""
 
     bizType: str = Field(description="资源类型")
-    bizId: int = Field(description="资源 id")
+    bizId: str = Field(description="资源业务 id")
     name: str = Field(default="", description="资源名称")
     cover: str | None = Field(default=None, description="封面图链接（可选）")
-    authorMid: str | None = Field(default=None, description="作者 mid（字符串，避免精度丢失）")
+    authorMid: str | None = Field(
+        default=None, description="作者 mid（字符串，避免精度丢失）"
+    )
     jumpUrl: str | None = Field(default=None, description="落地页跳转地址（可选）")
     extra: dict | None = Field(default=None, description="按类型的扩展字段（可选）")
 
@@ -206,19 +247,31 @@ class ResourceDetail(SQLModel):
 class GetResourceDetailResult(SQLModel):
     """get_resource_detail 返回结果。"""
 
-    detail: ResourceDetail | None = Field(default=None, description="资源详情；不存在时为 None")
+    detail: ResourceDetail | None = Field(
+        default=None, description="资源详情；不存在时为 None"
+    )
 
 
 # 方法名 -> (请求模型, 响应模型) 契约映射（文档 / 校验参考）
 RPA_RPC_CONTRACT: dict[str, tuple[type[SQLModel], type[SQLModel]]] = {
-    RpaRpcMethodName.GET_RESOURCE_DETAIL: (GetResourceDetailParams, GetResourceDetailResult),
+    RpaRpcMethodName.GET_RESOURCE_DETAIL: (
+        GetResourceDetailParams,
+        GetResourceDetailResult,
+    ),
     RpaRpcMethodName.HIDE_RESOURCE: (HideResourceParams, HideResourceResult),
     RpaRpcMethodName.REVIEW_RESOURCE: (ReviewResourceParams, ReviewResourceResult),
     RpaRpcMethodName.CREATE_TAG: (CreateTagParams, CreateTagResult),
     RpaRpcMethodName.ATTACH_TAG: (AttachTagParams, AttachTagResult),
     RpaRpcMethodName.DETACH_TAG: (DetachTagParams, DetachTagResult),
     RpaRpcMethodName.LIST_TAGS: (ListTagsParams, ListTagsResult),
-    RpaRpcMethodName.LIST_TAGS_BY_TARGET: (ListTagsByTargetParams, ListTagsByTargetResult),
+    RpaRpcMethodName.LIST_TAGS_BY_TARGET: (
+        ListTagsByTargetParams,
+        ListTagsByTargetResult,
+    ),
+    RpaRpcMethodName.GET_NOTIFY_CONFIG: (
+        GetNotifyConfigParams,
+        GetNotifyConfigResult,
+    ),
 }
 
 
@@ -240,6 +293,8 @@ __all__ = [
     "ListTagsResult",
     "ListTagsByTargetParams",
     "ListTagsByTargetResult",
+    "GetNotifyConfigParams",
+    "GetNotifyConfigResult",
     "TagItemRpc",
     "ResourceDetail",
     "RPA_RPC_CONTRACT",

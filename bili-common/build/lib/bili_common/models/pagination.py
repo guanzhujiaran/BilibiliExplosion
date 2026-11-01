@@ -23,7 +23,9 @@ class RequestPaginationParams(SQLModel):
     """基于页码的分页请求参数"""
 
     page_num: int = Field(
-        default=1, ge=1, description="页码，从 1 开始，最小值为 1",
+        default=1,
+        ge=1,
+        description="页码，从 1 开始，最小值为 1",
         schema_extra={
             "filter_display_name": "页码",
             "filter_widget": "number",
@@ -32,7 +34,9 @@ class RequestPaginationParams(SQLModel):
         },
     )  # 页码，默认第 1 页，从 1 开始，最小值为 1
     page_size: int = Field(
-        default=10, ge=1, description="每页数量，最小值为 1",
+        default=10,
+        ge=1,
+        description="每页数量，最小值为 1",
         schema_extra={
             "filter_display_name": "每页条数",
             "filter_widget": "number",

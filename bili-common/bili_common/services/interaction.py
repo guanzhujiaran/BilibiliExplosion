@@ -18,7 +18,9 @@ from bili_common.models.interaction import InteractionBizTypeEnum
 DYNAMIC_BIZ_TYPE = InteractionBizTypeEnum.DYNAMIC
 
 
-def _coerce_biz_type(biz_type: InteractionBizTypeEnum | str | int) -> InteractionBizTypeEnum:
+def _coerce_biz_type(
+    biz_type: InteractionBizTypeEnum | str | int,
+) -> InteractionBizTypeEnum:
     """把字符串 / 数字 / 枚举规范化为枚举成员；未知类型抛 ValueError。"""
     if isinstance(biz_type, InteractionBizTypeEnum):
         return biz_type
@@ -50,7 +52,10 @@ class InteractionResourceValidator:
 
     @classmethod
     async def validate(
-        cls, session: AsyncSession, biz_type: InteractionBizTypeEnum | str | int, biz_id: int
+        cls,
+        session: AsyncSession,
+        biz_type: InteractionBizTypeEnum | str | int,
+        biz_id: int,
     ) -> None:
         """校验 (biz_type, biz_id) 资源存在；不存在抛 ValueError。"""
         checker = cls._checkers.get(_coerce_biz_type(biz_type).value)
@@ -79,13 +84,18 @@ class InteractionStatService:
         return _coerce_biz_type(biz_type) == DYNAMIC_BIZ_TYPE
 
     @classmethod
-    def _coerce(cls, biz_type: InteractionBizTypeEnum | str | int) -> InteractionBizTypeEnum:
+    def _coerce(
+        cls, biz_type: InteractionBizTypeEnum | str | int
+    ) -> InteractionBizTypeEnum:
         """把字符串 / 数字 / 枚举规范化为枚举成员；未知类型抛 ValueError。"""
         return _coerce_biz_type(biz_type)
 
     @classmethod
     async def _get_row(
-        cls, session: AsyncSession, biz_type: InteractionBizTypeEnum | str | int, biz_id: int
+        cls,
+        session: AsyncSession,
+        biz_type: InteractionBizTypeEnum | str | int,
+        biz_id: int,
     ):
         bt = cls._coerce(biz_type)
         return (
@@ -99,7 +109,10 @@ class InteractionStatService:
 
     @classmethod
     async def _ensure_row(
-        cls, session: AsyncSession, biz_type: InteractionBizTypeEnum | str | int, biz_id: int
+        cls,
+        session: AsyncSession,
+        biz_type: InteractionBizTypeEnum | str | int,
+        biz_id: int,
     ) -> None:
         """确保存在计数行（惰性创建，首次交互时建行）。
 

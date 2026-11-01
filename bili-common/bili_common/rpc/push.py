@@ -51,9 +51,16 @@ class PushRpcSendParams(SQLModel):
     # pushme/pushplus 的模板类型，例如 text/markdown/html/json 等
     push_type: str | None = Field(default="text", description="推送模板类型")
     # 渠道配置；为空时回落到 message-service 的全局环境变量配置
-    config: PushChannelConfig | None = Field(default=None, description="推送渠道配置（可选）")
+    config: PushChannelConfig | None = Field(
+        default=None, description="推送渠道配置（可选）"
+    )
     # 来源标签，可选；非空时服务端拼进标题前缀，便于区分推送来源
-    user_label: str | None = Field(default=None, description="来源用户标签（拼进标题前缀）")
+    user_label: str | None = Field(
+        default=None, description="来源用户标签（拼进标题前缀）"
+    )
+    # 接收人 mid，可选；服务端投递侧据此判定该用户的外部推送总开关
+    # （push_enabled / 免打扰时段）。为空时不做用户级拦截。
+    mid: int | None = Field(default=None, description="接收人 mid（用户级总开关判定）")
 
 
 class PushRpcSendNowParams(SQLModel):
@@ -68,9 +75,16 @@ class PushRpcSendNowParams(SQLModel):
     # pushme/pushplus 的模板类型，例如 text/markdown/html/json 等
     push_type: str | None = Field(default="text", description="推送模板类型")
     # 渠道配置；为空时使用 message-service 的全局环境变量配置
-    config: PushChannelConfig | None = Field(default=None, description="推送渠道配置（可选）")
+    config: PushChannelConfig | None = Field(
+        default=None, description="推送渠道配置（可选）"
+    )
     # 来源标签，可选；非空时服务端拼进标题前缀，便于区分推送来源
-    user_label: str | None = Field(default=None, description="来源用户标签（拼进标题前缀）")
+    user_label: str | None = Field(
+        default=None, description="来源用户标签（拼进标题前缀）"
+    )
+    # 接收人 mid，可选；服务端据此判定该用户的外部推送总开关
+    # （push_enabled / 免打扰时段）。为空时不做用户级拦截。
+    mid: int | None = Field(default=None, description="接收人 mid（用户级总开关判定）")
 
 
 # ---------------------------------------------------------------------------
@@ -89,9 +103,13 @@ class PushRpcSendNowResult(SQLModel):
     """send_push_now 返回结果（同步发送结果）。"""
 
     success: bool = Field(description="true=至少一个渠道推送成功")
-    message: str = Field(default="", description="结果说明（成功 / 无可用渠道 / 失败原因）")
+    message: str = Field(
+        default="", description="结果说明（成功 / 无可用渠道 / 失败原因）"
+    )
     # 本次成功推送所经过的渠道（由 message-service 统一分发）
-    sent_channels: list[str] = Field(default_factory=list, description="成功推送的渠道列表")
+    sent_channels: list[str] = Field(
+        default_factory=list, description="成功推送的渠道列表"
+    )
 
 
 # 方法名 -> 请求模型 -> 响应模型 的契约映射（仅供文档 / 校验参考）

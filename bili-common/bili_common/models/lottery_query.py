@@ -122,7 +122,9 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
 
     # 时间范围筛选（开奖时间）
     start_ts: int | None = Field(
-        default=None, ge=0, description="开奖时间起始（Unix秒时间戳）",
+        default=None,
+        ge=0,
+        description="开奖时间起始（Unix秒时间戳）",
         json_schema_extra={
             "filter_display_name": "开奖起始时间",
             "filter_widget": "datetime",
@@ -131,7 +133,9 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
         },
     )
     end_ts: int | None = Field(
-        default=None, ge=0, description="开奖时间结束（Unix秒时间戳）",
+        default=None,
+        ge=0,
+        description="开奖时间结束（Unix秒时间戳）",
         json_schema_extra={
             "filter_display_name": "开奖结束时间",
             "filter_widget": "datetime",
@@ -142,7 +146,9 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
 
     # UP主筛选
     sender_uid: int | None = Field(
-        default=None, ge=0, description="UP主UID",
+        default=None,
+        ge=0,
+        description="UP主UID",
         json_schema_extra={
             "filter_display_name": "UP主UID",
             "filter_widget": "number",
@@ -153,7 +159,9 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
 
     # 参与人数筛选
     min_participants: int | None = Field(
-        default=None, ge=0, description="最小参与人数",
+        default=None,
+        ge=0,
+        description="最小参与人数",
         json_schema_extra={
             "filter_display_name": "最小参与人数",
             "filter_widget": "number",
@@ -162,7 +170,9 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
         },
     )
     max_participants: int | None = Field(
-        default=None, ge=0, description="最大参与人数",
+        default=None,
+        ge=0,
+        description="最大参与人数",
         json_schema_extra={
             "filter_display_name": "最大参与人数",
             "filter_widget": "number",
@@ -173,7 +183,8 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
 
     # 状态筛选
     status: str | None = Field(
-        default=None, description="抽奖状态: unfinished/finished/canceled",
+        default=None,
+        description="抽奖状态: unfinished/finished/canceled/deleted/unknown；不传时后端默认按 unfinished 过滤（仅返回未开奖且未超时）",
         json_schema_extra={
             "filter_display_name": "抽奖状态",
             "filter_widget": "select",
@@ -191,7 +202,8 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
 
     # 是否大奖筛选
     is_grand_prize: bool | None = Field(
-        default=None, description="是否大奖: True-是, False-否, None-不过滤",
+        default=None,
+        description="是否大奖: True-是, False-否, None-不过滤",
         json_schema_extra={
             "filter_display_name": "是否大奖",
             "filter_widget": "select",
@@ -206,7 +218,9 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
 
     # 关键词
     keyword: str | None = Field(
-        default=None, max_length=100, description="关键词搜索",
+        default=None,
+        max_length=100,
+        description="关键词搜索",
         json_schema_extra={
             "filter_display_name": "关键词",
             "filter_widget": "input",
@@ -217,7 +231,8 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
 
     # 排序
     sort_by: LotteryDataSortEnum | None = Field(
-        default=None, description="排序字段: lottery_time/participants/first_prize/created_at",
+        default=None,
+        description="排序字段: lottery_time/participants/first_prize/created_at",
         json_schema_extra={
             "filter_display_name": "排序字段",
             "filter_widget": "select",
@@ -232,7 +247,8 @@ class LotteryAdvancedQueryParams(LotteryPaginationParams):
         },
     )
     sort_order: SortOrderEnum | None = Field(
-        default=None, description="排序方向: asc/desc",
+        default=None,
+        description="排序方向: asc/desc",
         json_schema_extra={
             "filter_display_name": "排序方向",
             "filter_widget": "select",

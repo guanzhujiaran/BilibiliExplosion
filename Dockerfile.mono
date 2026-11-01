@@ -99,7 +99,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 # uvicorn / python / alembic 等控制台脚本都在 /opt/venv/bin，统一前置到 PATH
 # /opt/node-dist/bin：Node.js 官方二进制的 node / npm（不走 apt，见下方 apt 层说明）
-ENV PATH="/opt/venv/bin:/opt/node-dist/bin:$PATH"
+# /opt/rust/cargo/bin：cargo / rustc（见下方 Rust 工具链层说明，仅构建期需要）
+ENV PATH="/opt/venv/bin:/opt/node-dist/bin:/opt/rust/cargo/bin:$PATH"
 
 # 配置 Debian 镜像源（地址由 ARG DEBIAN_MIRROR 决定，默认 mirror.nju.edu.cn）
 RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_MIRROR}|g" /etc/apt/sources.list.d/debian.sources && \
@@ -150,6 +151,33 @@ RUN curl -fsSL "https://cdn.npmmirror.com/binaries/node/v${NODE_VERSION}/node-v$
     rm -f /tmp/node.tar.xz && \
     node -v && npm -v
 
+# Rust 工具链（仅构建阶段需要），固定装到 /opt/rust（不写进 cache mount，否则不进镜像层）。
+#
+# 为什么必须有：`bili_ticket_gt_python` 在 PyPI 只发布了 cp312 / cp314 的 manylinux wheel，
+# 本项目是 Python 3.13，uv 只能取 sdist 交给 maturin 源码编译。基础镜像里没有 cargo 时，
+# maturin 不会报错，而是**无限期挂住**——表现就是 `docker compose up -d` 长时间停在
+# `uv sync` 的 "Building bili-ticket-gt-python"，看着像「compose 很慢」，其实永远不会结束。
+#
+# rustup 与 crates 索引都走 rsproxy 国内镜像；只要 uv.lock 不变，本层与后续 uv sync 层
+# 都命中构建缓存，重复构建是秒级（只有首次需要编译）。
+ENV RUSTUP_HOME=/opt/rust/rustup \
+    CARGO_HOME=/opt/rust/cargo
+RUN curl -sSf https://rsproxy.cn/rustup-init.sh -o /tmp/rustup-init.sh && \
+    RUSTUP_DIST_SERVER=https://rsproxy.cn \
+    RUSTUP_UPDATE_ROOT=https://rsproxy.cn/rustup \
+    sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable --no-modify-path && \
+    rm -f /tmp/rustup-init.sh && \
+    mkdir -p /opt/rust/cargo && \
+    printf '%s\n' \
+      '[source.crates-io]' \
+      'replace-with = "rsproxy-sparse"' \
+      '[source.rsproxy-sparse]' \
+      'registry = "sparse+https://rsproxy.cn/index/"' \
+      '[net]' \
+      'git-fetch-with-cli = true' \
+      > /opt/rust/cargo/config.toml && \
+    cargo --version && rustc --version
+
 # ============================ crawler 构建阶段 ============================
 # 只承担「构建」：上面的编译工具链（g++ / gcc / make / pkg-config）、git、npm
 # 与各类 -dev 头文件都只存在于本阶段，不会进入最终运行镜像。
@@ -174,7 +202,10 @@ COPY bili-common /bili-common
 # 仅安装依赖（不装项目本体）：lock + pyproject 通过 bind 挂载，源码变动不会使该层缓存失效
 # 并发参数：本机 lock 有 182 个 wheel，默认并发下 overlayfs 上的 copy 安装（UV_LINK_MODE=copy）
 # 会拖到 8 分钟级；提高下载 / 安装 / 缓存读取并发可明显缩短冷装时间。
+# cargo-registry：bili_ticket_gt_python 走 sdist 时由 maturin 调 cargo 编译，
+# crates 索引与 .crate 包放 cache mount，uv.lock 变更重建时不必重新下载。
 RUN --mount=type=cache,id=uv-cache,target=/cache/uv \
+    --mount=type=cache,id=cargo-registry,target=/opt/rust/cargo/registry,sharing=locked \
     --mount=type=bind,source=be-bilibili-crawler/uv.lock,target=uv.lock \
     --mount=type=bind,source=be-bilibili-crawler/pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=be-bilibili-crawler/.python-version,target=.python-version \
@@ -290,6 +321,42 @@ EXPOSE 23333
 # 即生效；只有 uv.lock / pyproject.toml 变了才需要重建镜像（develop.watch 的 rebuild 规则）。
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "23333"]
 
+# ============================ crawler-query 运行阶段 ============================
+# 「查询 / 爬虫」拆成两个 target，同一份源码、同一套依赖、同一个运行层，
+# 只有入口与端口不同（compose 里是两个容器）：
+#   crawler        23333  main.py       爬虫 + 写入 + 控制面 + alembic 迁移
+#   crawler-query  23336  query_main.py 只读查询（只挂 query_router，不跑 DDL / 调度 / MQ）
+#
+# 刻意 FROM crawler 复用整个运行层，而不是另铺一套最小底座：
+# 1) 两个 target 的依赖版本绝不会漂移（bili_ticket_gt_python 的 glibc 2.38 约束只维护一处）；
+# 2) 构建期 uv sync / chromium / node_modules 全部命中缓存，新增 target 几乎零构建成本。
+# 代价是查询镜像里带着 chromium 与 node（几十 MB，运行期不加载）；确需瘦身时
+# 再单独裁一个只 COPY /opt/venv 的运行阶段，届时两边的系统依赖要各自维护。
+FROM crawler AS crawler-query
+
+# 镜像级默认角色；compose 里同样显式设置，便于 `docker run` 直接跑也不误伤。
+# 该开关只影响 lifespan（不迁移 / 不调度 / 不做写库刷新）与查询链路中的写动作，
+# 路由集合由入口文件决定（query_main.py 根本不会挂载写入路由）。
+ENV SERVICE_ROLE=query
+
+EXPOSE 23336
+CMD ["uvicorn", "query_main:app", "--host", "0.0.0.0", "--port", "23336"]
+
+# ============================ 开发环境不爬取的做法 ============================
+# 「开发环境不自动爬」不靠裁剪角色，而是用环境变量 IS_DEV=1 控制：
+#   dev 编排起的仍是生产同角色的 crawler target（main:app / 23333），
+#   只是 IS_DEV=1 让 FastapiLifespan.life_span 跳过 GLOBAL_SCHEDULER 与监控任务；
+#   迁移 / schema 校验 / Milvus 集合 / MQ 入库消费照常启动（与生产调用链一致）。
+#
+# 两条通道分工（2.70.0）：RPC 只做只读取数、写库走普通 MQ 消息——
+#   RPC（FastapiApp.rpc.*）→ crawler-query target（query_main.py / 23336），只读；
+#   写库（bili_data 入库队列）→ crawler target（main.py / 23333）的 mq_controller 消费者。
+#   两个 target 复用同一份代码，crawler 侧不注册任何 RPC 服务端。
+#
+# 历史遗留：SERVICE_ROLE=api（main.py 的 is_api_only 分支 + FastapiLifespan 同名分支）
+# 是「只提供接口、不爬取」的角色，**不挂 MQ 路由、没有任何 RPC 服务端**，
+# 因此已不再被任何 compose 使用（曾有 dev 容器 be-bilibili-crawler-api，已废弃）。
+
 # ============================ rpa 构建阶段 ============================
 # 与 crawler/message 一致做「构建 / 运行」分离：编译器与 nodejs/npm 只留在本阶段。
 # RPA-Browser 已提交 uv.lock，故改用与 crawler/message 相同的 --locked 两阶段写法
@@ -347,6 +414,9 @@ RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_
 
 # chromium 运行库（现状 base 提供的 libgl*/libglib/libsm/libxext/libxrender/libgomp 运行期对应物）
 # + patchright/chromium 还需要的 nss/atk/cups/drm/gbm/pango/cairo/asound/atspi 等
+# + 字体：slim 镜像不自带任何字体，headless chromium 渲染中文页面/截图会退化成
+#   豆腐块 □□□。fontconfig（字体解析）+ fonts-noto-cjk（Noto 中日韩）+
+#   fonts-wqy-zenhei（文泉驿正黑，中文点阵补充）+ fonts-dejavu-extra（拉丁/符号）
 # + git/curl/ca-certificates：modelscope/HF 拉取模型与 https 访问所需（与 base 现状能力对齐）
 RUN --mount=type=cache,id=apt-archives-bookworm,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-bookworm,target=/var/lib/apt/lists,sharing=locked \
@@ -373,6 +443,10 @@ RUN --mount=type=cache,id=apt-archives-bookworm,target=/var/cache/apt,sharing=lo
     libcairo2 \
     libasound2 \
     libatspi2.0-0 \
+    fontconfig \
+    fonts-noto-cjk \
+    fonts-wqy-zenhei \
+    fonts-dejavu-extra \
     git \
     curl \
     ca-certificates
@@ -476,6 +550,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "18739"]
 # 实际运行镜像由各 --target 独立产出，本阶段不会被 docker-compose 使用。
 FROM base AS default
 COPY --from=crawler /usr/local/bin/uv /tmp/.dep-crawler
+COPY --from=crawler-query /usr/local/bin/uv /tmp/.dep-crawler-query
 COPY --from=rpa /usr/local/bin/uv /tmp/.dep-rpa
 COPY --from=message /usr/local/bin/uv /tmp/.dep-message
 RUN rm -rf /tmp/.dep-*
