@@ -537,10 +537,23 @@ services:
   #   2. ip -6 route replace local <prefix>::/64 dev lo（代理自己也会做，脚本兜底并守护）
   # 因此这里必须给 privileged（写宿主 network namespace 的 /proc/sys 与路由表）
   # 且使用 host 网络（代理的 NDP 代答、3138/3129 端口都直接落在宿主）。
-  # 镜像来自独立项目（go-proxy-ipv6-pool-auto），需先在本地构建后再 up。
+  # 镜像由本服务自己构建（Dockerfile 在子目录 go-proxy-ipv6-pool-auto 里），
+  # 直接用 `docker compose up -d --build go-proxy-server` 即可构建并重建，
+  # 不必先跑去子项目构建一次镜像。
   go-proxy-server:
     container_name: go-proxy-server
+    build:
+      # 构建上下文是子项目目录：Dockerfile 里的 COPY go-proxy-ipv6-pool/... 依赖这个根，
+      # 上下文与 .dockerignore 也都在这层（bin/ 不会被塞进构建上下文）。
+      context: ./go-proxy-ipv6-pool-auto
+      dockerfile: Dockerfile
+    # 显式指定镜像名：不加的话会按「项目名-服务名」生成，与历史镜像名不一致（等于每次都重建新名字）。
     image: go-proxy-ipv6-pool-auto-go-proxy-server
+    # 该镜像从未推送到任何 registry。默认 pull_policy=missing 时，只要本地 tag 解析不到，
+    # compose 就会去 registry-1.docker.io 拉，卡 ~35s 后报
+    # `Error Get "https://registry-1.docker.io/v2/": context deadline exceeded`。
+    # never：永远不碰远端，缺镜像就用上面的 build 现做（只 build 不 pull）。
+    pull_policy: never
     restart: unless-stopped
     network_mode: host
     privileged: true
