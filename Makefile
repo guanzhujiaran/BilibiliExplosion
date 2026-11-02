@@ -25,7 +25,7 @@ start:
 
 # 启动除 fastapi 以外的所有服务
 start-excluding-fastapi:
-	docker-compose up -d go-proxy-server standalone mysql redis rabbitmq unidbg postgres gateway casdoor rpa-browser
+	docker-compose up -d standalone mysql redis rabbitmq unidbg postgres gateway casdoor rpa-browser  # go-proxy-server 只在生产端跑（profile ipv6-proxy）
 
 # 停止所有服务
 stop:
@@ -37,7 +37,7 @@ restart:
 
 # 重启除 fastapi 以外的所有服务
 restart-excluding-fastapi:
-	docker-compose restart go-proxy-server standalone mysql redis rabbitmq unidbg postgres gateway casdoor rpa-browser
+	docker-compose restart standalone mysql redis rabbitmq unidbg postgres gateway casdoor rpa-browser  # go-proxy-server 只在生产端跑（profile ipv6-proxy）
 
 # 查看日志
 logs:

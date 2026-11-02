@@ -511,25 +511,11 @@ services:
       - HF_ENDPOINT=https://hf-mirror.com
     extra_hosts:
       - "host.docker.internal:host-gateway"
-  llama_cpp_gpu_cuda:
-    image: ghcr.nju.edu.cn/ggml-org/llama.cpp:server-cuda13
-    container_name: llama_cpp_gpu_cuda
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    volumes:
-      - ./docker_vol/llama_gpu_model/cache:/root/.cache
-    environment:
-      - LLAMA_ARG_HOST=0.0.0.0
-      - LLAMA_ARG_PORT=12000
-      - LLAMA_ARG_MODEL=HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive:Q4_K_M
-      - LLAMA_ARG_MODEL_URL=https://hf-mirror.com/HauhauCS/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive/resolve/main/Qwen3.5-4B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf?download=true
-    ports:
-      - "12000:12000"
+  # 说明：本编排只保留 CPU 版 llama.cpp（llama_cpp）。
+  # 原先的 GPU 版（llama_cpp_gpu_cuda / server-cuda13）已移除：
+  # 它带 nvidia device reservation，在没有 nvidia 容器运行时的机器上会让
+  # 整个 `docker compose up -d` 因 "could not select device driver nvidia" 直接中断。
+  # 如需 GPU 推理，请单独拉起该服务，或使用 docker-compose.dev.yml 的 `--profile gpu`。
   # ===== IPv6 代理池（go-proxy-ipv6-pool-auto）=====
   # 该代理每次请求从「出口网卡（程序自动探测，可用 .env 的 NET_IF 覆盖）」的 /64 前缀里随机生成源
   # 地址拨号（伪装成池子里不同 IP），
@@ -541,7 +527,15 @@ services:
   # 镜像由本服务自己构建（Dockerfile 在子目录 go-proxy-ipv6-pool-auto 里），
   # 直接用 `docker compose up -d --build go-proxy-server` 即可构建并重建，
   # 不必先跑去子项目构建一次镜像。
+  #
+  # ⚠️ 该服务挂在独立 profile `ipv6-proxy` 下，默认 `docker compose up -d` **不会**起它：
+  #    - 只在「持有公网 IPv6 前缀、且独占代答」的那台机器上跑（目前是生产端）；
+  #    - 同一个 /64 上跑两个实例会互相抢答 NDP，光猫邻居缓存被对方覆盖 → 对方所有随机
+  #      出口都 i/o timeout，而且停掉一台后还要等缓存过期（几分钟）才恢复；
+  #    - 本机如需临时跑，必须先用 POOL_PREFIX 划分子段（见 README），不能直接照样起。
+  # 手动起：docker compose up -d --build go-proxy-server（显式指定服务名会忽略 profile）
   go-proxy-server:
+    profiles: ["ipv6-proxy"]
     container_name: go-proxy-server
     build:
       # 构建上下文是子项目目录：Dockerfile 里的 COPY go-proxy-ipv6-pool/... 依赖这个根，
@@ -569,11 +563,13 @@ services:
       - TZ=${ENV_TZ:-Asia/Shanghai}
     volumes:
       - ./scripts/docker/go-proxy-entrypoint.sh:/app/entrypoint.sh:ro
-      # 优先使用宿主编译出的二进制（子项目 build.sh 产出）：改完 Go 代码只需
-      # ./build.sh + 重启容器，不必重建镜像。新的 dialer 只 bind 随机源地址、
-      # 不再对网卡做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
+      # 注意：这里**不要**再挂载 go-proxy-ipv6-pool-auto/bin 到 /opt/bin。
+      # 二进制统一由镜像构建阶段编译（Dockerfile 里 COPY 源码 + golang 层 build），
+      # 挂了宿主 bin 会盖掉镜像里的版本，于是「build 了却没生效」，还得手动回填二进制。
+      # 改完 Go 代码只需：docker compose up -d --build go-proxy-server
+      #
+      # 运行期只 bind 随机源地址、不对网卡做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
       # 判定「网络已变更」并中断请求（ERR_NETWORK_CHANGED）。
-      - ./go-proxy-ipv6-pool-auto/bin:/opt/bin:ro
     command: ["/bin/sh", "/app/entrypoint.sh"]
 volumes:
   be-gateway_node_modules:

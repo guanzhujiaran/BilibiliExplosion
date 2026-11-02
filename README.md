@@ -81,29 +81,37 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 1. `be-bilibili-crawler`：`uv sync` + `npm install`
 2. `be-message-service`：`uv sync`
 3. `RPA-Browser`：`uv sync`
-4. `go-proxy-ipv6-pool-auto`：`go mod download && go build -o proxy-pool`（另需 `apt install ndppd -y` + `sysctl net.ipv6.ip_nonlocal_bind=1`）
+4. `go-proxy-ipv6-pool-auto`：`docker compose up -d --build go-proxy-server`（NDP 代答已内置在程序里，不再需要 ndppd；宿主要求 `sysctl -w net.ipv6.ip_nonlocal_bind=1`）
 5. `unidbgSpringBoot`：`./mvnw clean package`
 6. `puppeteer_Bili`：`npm install`
-7. ollama（本地 LLM，对应 `llama_cpp` / `llama_cpp_gpu_cuda`）：
+7. ollama（本地 LLM，对应 `llama_cpp`）：
 
-   ```bash
-   curl -fsSL https://ollama.com/install.sh | sh
-   ollama serve
-   # 或 Docker 启动 llama.cpp（无需本机装 ollama）：
-   docker compose up -d llama_cpp          # CPU 版
-   docker compose up -d llama_cpp_gpu_cuda # 有 NVIDIA GPU 时启用 CUDA 版
-   ```
+  ```bash
+  curl -fsSL https://ollama.com/install.sh | sh
+  ollama serve
+  # 或 Docker 启动 llama.cpp（无需本机装 ollama）：
+  docker compose up -d llama_cpp          # CPU 版（生产编排只包含这一版）
+  ```
+
+  > 生产编排 `docker-compose.yml` 只保留 CPU 版 `llama_cpp`：GPU 版带 `nvidia` 设备预留，
+  > 在无 nvidia 容器运行时的机器上会让整条 `docker compose up -d` 中断，因此已移除。
+  > 需要 GPU 推理时用 `docker-compose.dev.yml` 的 gpu profile
+  > （`docker compose -f docker-compose.dev.yml --profile gpu up -d`）。
 
 ## 使用方法
 
 1. 启动 ipv6 代理池（已容器化，`network_mode: host`，无需 pm2）：
 
-   生产与开发两套编排里都已内置 `go-proxy-server` 服务，**不需要单独启动**，
-   跟随主编排一起 `up -d` 即可（镜像需先在子项目里构建：`cd go-proxy-ipv6-pool-auto && ./build.sh`）。
-   只想单独起代理池时仍可用子项目自带编排：
+   `go-proxy-server` 挂在独立 profile `ipv6-proxy` 下，**默认 `docker compose up -d` 不会起它**，
+   因为它必须在「持有公网 IPv6 前缀、且独占该 /64 的 NDP 代答」的那台机器上跑（目前是生产端）。
+   同一个 /64 上跑两个实例会互相抢答，光猫邻居缓存被覆盖后对方所有随机出口都会 `i/o timeout`，
+   停掉一台还要等缓存过期几分钟才恢复。
 
    ```bash
-   cd go-proxy-ipv6-pool-auto && docker compose up -d
+   # 生产端：构建并启动/更新（显式指定服务名会忽略 profile）
+   docker compose up -d --build go-proxy-server
+   # 需要连它一起全量启动时
+   docker compose --profile ipv6-proxy up -d
    ```
 
 2. 本地开发（dev 编排）：

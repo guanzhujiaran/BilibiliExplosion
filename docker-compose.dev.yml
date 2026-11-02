@@ -378,7 +378,15 @@ services:
   # 因此这里必须给 privileged（写宿主 network namespace 的 /proc/sys 与路由表）
   # 且使用 host 网络（代理的 NDP 代答、3138/3129 端口都直接落在宿主）。
   # 镜像来自独立项目（go-proxy-ipv6-pool-auto），需先在本地构建后再 up。
+  #
+  # ⚠️ 该服务挂在独立 profile `ipv6-proxy` 下，默认 `docker compose up -d` **不会**起它：
+  #    - 只在「持有公网 IPv6 前缀、且独占代答」的那台机器上跑（目前是生产端）；
+  #    - 同一个 /64 上跑两个实例会互相抢答 NDP，光猫邻居缓存被对方覆盖 → 对方所有随机
+  #      出口都 i/o timeout，而且停掉一台后还要等缓存过期（几分钟）才恢复；
+  #    - 本机如需临时跑，必须先用 POOL_PREFIX 划分子段（见 README），不能直接照样起。
+  # 手动起：docker compose up -d go-proxy-server（显式指定服务名会忽略 profile）
   go-proxy-server:
+    profiles: ["ipv6-proxy"]
     container_name: go-proxy-server
     image: go-proxy-ipv6-pool-auto-go-proxy-server
     restart: unless-stopped
@@ -396,11 +404,13 @@ services:
       - TZ=${ENV_TZ:-Asia/Shanghai}
     volumes:
       - ./scripts/docker/go-proxy-entrypoint.sh:/app/entrypoint.sh:ro
-      # 优先使用宿主编译出的二进制（子项目 build.sh 产出）：改完 Go 代码只需
-      # ./build.sh + 重启容器，不必重建镜像。新的 dialer 只 bind 随机源地址、
-      # 不再对网卡做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
+      # 注意：这里**不要**再挂载 go-proxy-ipv6-pool-auto/bin 到 /opt/bin。
+      # 二进制统一由镜像构建阶段编译（Dockerfile 里 COPY 源码 + golang 层 build），
+      # 挂了宿主 bin 会盖掉镜像里的版本，于是「build 了却没生效」，还得手动回填二进制。
+      # 改完 Go 代码只需：docker compose up -d --build go-proxy-server
+      #
+      # 运行期只 bind 随机源地址、不对网卡做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
       # 判定「网络已变更」并中断请求（ERR_NETWORK_CHANGED）。
-      - ./go-proxy-ipv6-pool-auto/bin:/opt/bin:ro
     command: ["/bin/sh", "/app/entrypoint.sh"]
 networks:
   default:
