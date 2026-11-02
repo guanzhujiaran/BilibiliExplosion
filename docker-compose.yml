@@ -419,6 +419,7 @@ services:
       # 镜像内 PYTHONPATH 只有 /app，这里必须显式补上 /bili-common。
       - PYTHONPATH=/app:/bili-common
       - TZ=${ENV_TZ:-Asia/Shanghai}
+      - RUNNING_MODE=${RUNNING_MODE:-prod}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
