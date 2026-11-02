@@ -145,6 +145,12 @@ class GetOthersLotDynListRpcParams(SQLModel):
 
     is_lot: bool = Field(default=True, description="是否筛选为抽奖的动态")
 
+    exclude_official_lot: bool = Field(
+        default=True,
+        description="是否排除官方抽奖数据：True-排除预约/充电/官方抽奖类型的记录"
+        "（这三类各自有独立接口，混入第三方列表会造成重复参与）/ False-不过滤",
+    )
+
     is_grand_prize: bool | None = Field(
         default=None,
         description="大奖筛选: True-只看大奖 / False-排除大奖 / None-不过滤。"
