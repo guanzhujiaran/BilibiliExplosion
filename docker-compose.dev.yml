@@ -370,7 +370,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
   # ===== IPv6 代理池（go-proxy-ipv6-pool-auto），与生产编排同一份定义 =====
-  # 该代理每次请求从 eth0 的 /64 前缀里随机生成源地址拨号（伪装成池子里不同 IP），
+  # 该代理每次请求从「出口网卡（程序自动探测，可用 .env 的 NET_IF 覆盖）」的 /64 前缀里随机生成源
+  # 地址拨号（伪装成池子里不同 IP），
   # 依赖两项宿主内核态前置条件（见 scripts/docker/go-proxy-entrypoint.sh）：
   #   1. net.ipv6.ip_nonlocal_bind = 1  ← 宿主重启后回落为 0，必须由容器启动时补
   #   2. ip -6 route replace local <prefix>::/64 dev lo（代理自己也会做，脚本兜底并守护）
@@ -384,7 +385,9 @@ services:
     network_mode: host
     privileged: true
     environment:
-      - NET_IF=${GO_PROXY_NET_IF:-eth0}
+      # NET_IF 只是可选覆盖：每台机器网卡名不一样（eth0 / enp3s0 / ens18 …），
+      # 留空时由容器内的程序自己探测（默认 IPv6 路由 → 带公网 IPv6 的物理网卡，排除虚拟网卡）。
+      - NET_IF=${NET_IF:-}
       # 开发环境用 dev：goproxy 打开 Verbose，代理日志会打到 stdout，便于排查出口 IP 问题
       - RUN_ENV=dev
       # 复查间隔（秒）：只读探测，只在缺失/前缀变化时才写入（写入会触发
@@ -395,7 +398,7 @@ services:
       - ./scripts/docker/go-proxy-entrypoint.sh:/app/entrypoint.sh:ro
       # 优先使用宿主编译出的二进制（子项目 build.sh 产出）：改完 Go 代码只需
       # ./build.sh + 重启容器，不必重建镜像。新的 dialer 只 bind 随机源地址、
-      # 不再对 eth0 做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
+      # 不再对网卡做 addr add/del —— 旧版每次请求都改地址，会让 Chromium
       # 判定「网络已变更」并中断请求（ERR_NETWORK_CHANGED）。
       - ./go-proxy-ipv6-pool-auto/bin:/opt/bin:ro
     command: ["/bin/sh", "/app/entrypoint.sh"]
