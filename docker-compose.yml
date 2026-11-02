@@ -145,9 +145,14 @@ services:
       - MYSQL_USER=root
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Redis 密码（生产 Redis 设了 requirepass 时必填；空 = 无密码）
+      - REDIS_PWD=${CRAWLER_REDIS_PWD:-}
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
       - UNIDBG_HOST=unidbg
+      - UNIDBG_PORT=23335
       - MILVUS_HOST=standalone
+      - MILVUS_PORT=19530
       - MESSAGE_SERVICE_HOST=be-message-service
       - MESSAGE_SERVICE_PORT=18739
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
@@ -158,6 +163,9 @@ services:
       - SERVER_ADDRESS=${SERVER_ADDRESS}
       - PROXY_SERVER=${PROXY_SERVER}
       - V2RAY_HOST=${V2RAY_HOST}
+      - V2RAY_PORT=10809
+      # FastStream（RabbitMQ 框架）自身日志级别，与业务日志 LOG_LEVEL 相互独立
+      - FASTSTREAM_LOG_LEVEL=${FASTSTREAM_LOG_LEVEL:-WARNING}
       - TZ=${ENV_TZ:-Asia/Shanghai}
       # 下面几个键都带 compose 默认值：这些值「漏配也能跑/本就不该随环境变」，
       # 只留 .env 可覆盖。省掉它们不会变成空字符串（空串会盖掉 .env.fastapi.* 里的值，
@@ -175,7 +183,10 @@ services:
       - LLAMA_HOST=llama_cpp
       - LLAMA_PORT=8080
       - sqlalchemy_logging=False
-      # 动态数据归档目录（挂载点，见下方 volumes 的 dyn_backup 项）
+      # dyn_backup 根目录（挂载点，见下方 volumes 的 dyn_backup 项）
+      # 产物统一格式：{DYN_BACKUP_DIR}/{任务名}/{年}/{YYYY_MM_DD}_{任务名}.csv.gz
+      #   - bilidyndetail / t_lotdyninfo：冷数据表归档（校验后删库）
+      #   - lot_dyn_info：每日抽奖信息业务导出
       - DYN_BACKUP_DIR=/app/scripts/database/dyn_backup
     build:
       context: .
@@ -193,9 +204,10 @@ services:
       - ./bili-common:/bili-common
       # 运行期日志落宿主机（容器内外都要可见；子路径挂载优先于父路径 /app）
       - ./docker_vol/fastapi/log:/app/scripts/log
-      # 动态数据归档（CrawlerScheduler 每日 0 点清理过期动态时导出的 *.csv.gz）
+      # 每日 dyn_backup（CrawlerScheduler 0 点：抽奖信息导出 + 冷数据归档，全部 *.csv.gz）
       # 显式落 docker_vol，不跟源码混在一起；代码侧走 DYN_BACKUP_DIR 读取该路径
-      # （见 be-bilibili-crawler/Service/GrpcModule/Models/getLotDynSortByDate.py）。
+      # （见 be-bilibili-crawler/Service/DataArchive/）。
+      # 按「任务名/年/日期」分文件，整个目录打包即可上传网盘。
       - ./docker_vol/fastapi/dyn_backup:/app/scripts/database/dyn_backup
     develop:
       watch:
@@ -250,13 +262,18 @@ services:
       # 以下键在 Settings 里是必填项（无默认值），查询链路不会真正连接，
       # 但必须给值否则 pydantic 校验会拒绝启动
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
       - RABBITMQ_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
       - UNIDBG_HOST=unidbg
+      - UNIDBG_PORT=23335
       - MILVUS_HOST=standalone
+      - MILVUS_PORT=19530
       - LLAMA_HOST=llama_cpp
       - LLAMA_PORT=8080
       - V2RAY_HOST=${V2RAY_HOST}
+      - V2RAY_PORT=10809
+      - FASTSTREAM_LOG_LEVEL=${FASTSTREAM_LOG_LEVEL:-WARNING}
       - MESSAGE_SERVICE_HOST=be-message-service
       - MESSAGE_SERVICE_PORT=18739
       - PROXY_SERVER=${PROXY_SERVER}
@@ -345,6 +362,21 @@ services:
       - CASDOOR_APPLICATION=${CASDOOR_APPLICATION:?请在 .env 里设置 CASDOOR_APPLICATION（Casdoor application）}
       - CASDOOR_REDIRECT_URI=${CASDOOR_REDIRECT_URI:?请在 .env 里设置 CASDOOR_REDIRECT_URI（Casdoor 登录回调地址，如 http://gateway:9923/api/v1/casdoor/callback）}
       - CASDOOR_CERTIFICATE=${CASDOOR_CERTIFICATE:?请在 .env 里设置 CASDOOR_CERTIFICATE（Casdoor 公钥证书 PEM，换行写成反斜杠 n）}
+      # ===== 运行环境 / 会话 Cookie =====
+      # 留空 = 不设置（Express 视为 development，JWT Cookie 不带 Secure 属性）。
+      # 生产走 HTTPS 时必须设 NODE_ENV=production 或 JWT_COOKIE_SECURE=true，
+      # 否则 cookie 的 secure 为 false；反过来对纯 HTTP 部署设 true 会让浏览器丢弃
+      # cookie，表现为「登录成功但立刻 401」。
+      - NODE_ENV=${NODE_ENV:-}
+      - JWT_COOKIE_SECURE=${JWT_COOKIE_SECURE:-}
+      # Redis 逻辑库编号（会话 / 缓存分库）
+      - REDIS_DB=${REDIS_DB:-0}
+      # Casdoor 应用内的 service 名（可选，空 = 不传）
+      - CASDOOR_SERVICE=${CASDOOR_SERVICE:-}
+      # Casdoor 回调后允许跳转的前端来源白名单（逗号分隔）；空 = 不做来源限制
+      - CASDOOR_FRONTEND_ALLOWLIST=${CASDOOR_FRONTEND_ALLOWLIST:-}
+      # 前端地址（Casdoor 回调缺省跳转目标）
+      - FRONTEND_URL=${FRONTEND_URL:-}
       - TZ=${ENV_TZ:-Asia/Shanghai}
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -394,32 +426,221 @@ services:
     ports:
       - "${RPA_BROWSER_PORT:?请在 .env 里设置 RPA_BROWSER_PORT（宿主机映射端口，容器内固定 28000）}:28000"
     environment:
+      # ======================================================================
+      # 本服务的配置**全部**在这里列出。RPA 镜像不含 .env.dev / .env.prod
+      # （见 RPA-Browser/.dockerignore），代码侧 pydantic Settings 只依赖
+      # 「进程环境变量 + 内置默认值」，所以「容器里到底有哪些键」以本段为唯一清单。
+      #
+      # 写法统一为 ${VAR:-代码默认值}：
+      #   - .env 里没写 → 用这里的默认值（逐项对齐 app/config.py 的字段默认值）；
+      #   - .env 里写了 → 覆盖；置空也回落默认值（避免空串让 int/bool 校验失败）。
+      # 例外：JSON 数组字段（GITHUB_PROXY_URLS）与三态字段
+      # （browser_session_expiration_time）不注入，保持代码默认，见对应注释。
+      # ======================================================================
+
+      # ---------- 1. 必填 ----------
       - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
-      - controller_base_path=/api/v1/rpa
-      - proxy_server_url=http://host.docker.internal:10809
+      # dev / prod：影响默认日志级别、MCP 端点是否挂载、会话行为；容器默认 prod
+      - RUNNING_MODE=${RUNNING_MODE:-prod}
+
+      # ---------- 2. 服务标识 / 接口路径 / 日志 ----------
+      - controller_base_path=${CONTROLLER_BASE_PATH:-/api/v1/rpa}
+      - admin_base_path=${ADMIN_BASE_PATH:-/api/admin/rpa}
+      # be-message 服务地址（管理员身份判定 /api/v1/message/admin/me）
+      - message_service_url=${MESSAGE_SERVICE_URL:-http://be-message-service:18739}
+      # 业务日志（loguru）：DEBUG / INFO / WARNING / ERROR；与 crawler / message 共用同名变量
+      - LOG_LEVEL=${LOG_LEVEL:-WARNING}
+      - jwt_algorithm=${JWT_ALGORITHM:-HS256}
+      - jwt_expire_minutes=${JWT_EXPIRE_MINUTES:-10080}
+      - app_timezone=${APP_TIMEZONE:-Asia/Shanghai}
+      # 服主 / 管理员 mid 列表（逗号分隔）：用户提交报错后实时推送的目标；空 = 只落库不推送
+      - feedback_notify_mids=${FEEDBACK_NOTIFY_MIDS:-}
+      # 推送标题 [服务名@地址]；空值分别回落内置服务名 / 容器 hostname
+      - SERVER_NAME=${SERVER_NAME}
+      - SERVER_ADDRESS=${SERVER_ADDRESS}
+
+      # ---------- 3. 推送渠道 / 一言 ----------
+      # 与 be-message-service / be-bilibili-crawler 共用同一份推送渠道配置（JSON），
+      # 作为无 per-user 配置时的全局兜底
+      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
+      - hitokoto_api_url=${HITOKOTO_API_URL:-https://v1.hitokoto.cn}
+      - pushme_url=${PUSHME_URL:-https://push.i-i.me}
+      - pushplus_url=${PUSHPLUS_URL:-http://www.pushplus.plus/send}
+
+      # ---------- 4. 浏览器 / 虚拟显示 / 代理 ----------
+      # 有头模式是反自动化检测的关键；服务器无物理显示器，必须靠 Xvfb 提供虚拟屏幕
+      - xvfb_enabled=${XVFB_ENABLED:-true}
+      - xvfb_display=${XVFB_DISPLAY:-:99}
+      - xvfb_screen=${XVFB_SCREEN:-1920x1080x24}
+      # chromium 可执行目录：必须与下面 volumes 的 chrome_app 挂载点一致，不建议改
+      - chromium_executable_dir=/app/app/chrome
+      - browser_max_pages_per_context=${BROWSER_MAX_PAGES_PER_CONTEXT:-10}
       # 浏览器指纹的默认出口代理：直接复用 crawler 的 PROXY_SERVER（根 .env 里配置），
       # 不再依赖本机 3128 的代理池，容器内也无需额外的 .env.dev
       - default_proxy_server=${PROXY_SERVER}
-      - GEMINI_API_KEY=1234-2234-3234-4234
-      # RabbitMQ RPC 调用 be-bilibili-crawler（auto_attach_auth 模式依赖）
+      # 代理绕过列表（逗号 / 分号分隔的 host 规则）：命中的主机直连；空 = 不绕过
+      - browser_proxy_bypass=${BROWSER_PROXY_BYPASS:-}
+      # 容器访问外网（首次下载 chromium、调用外部 API）用的代理
+      - proxy_server_url=${PROXY_SERVER_URL:-http://host.docker.internal:10809}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-1234-2234-3234-4234}
+      # github_proxy_urls（JSON 数组，chromium 下载加速镜像列表）：默认是代码内置的长列表，
+      # 需要自定义时在 .env 写 GITHUB_PROXY_URLS=["http://127.0.0.1:7890"]，此处不注入。
+
+      # ---------- 5. 浏览器启动准入（内存 / 排队 / 并发护栏） ----------
+      - browser_launch_queue_enabled=${BROWSER_LAUNCH_QUEUE_ENABLED:-true}
+      - browser_launch_min_available_memory_mb=${BROWSER_LAUNCH_MIN_AVAILABLE_MEMORY_MB:-1024}
+      - browser_launch_reserved_memory_mb=${BROWSER_LAUNCH_RESERVED_MEMORY_MB:-768}
+      - browser_launch_admit_cooldown_ms=${BROWSER_LAUNCH_ADMIT_COOLDOWN_MS:-1000}
+      - browser_launch_queue_tick_interval_ms=${BROWSER_LAUNCH_QUEUE_TICK_INTERVAL_MS:-1000}
+      # 排队最大等待（秒），0 = 不限
+      - browser_launch_queue_max_wait_time=${BROWSER_LAUNCH_QUEUE_MAX_WAIT_TIME:-600}
+      # 排队时长估算（ETA）采样窗口
+      - browser_launch_eta_sample_window=${BROWSER_LAUNCH_ETA_SAMPLE_WINDOW:-20}
+      - browser_launch_eta_min_samples=${BROWSER_LAUNCH_ETA_MIN_SAMPLES:-3}
+      # 系统内存使用率红线（%）：超过一律不放行
+      - browser_launch_max_memory_percent=${BROWSER_LAUNCH_MAX_MEMORY_PERCENT:-90.0}
+      # 同时存在的浏览器实例上限，0 = 仅按内存限制
+      - browser_max_concurrent_instances=${BROWSER_MAX_CONCURRENT_INSTANCES:-0}
+
+      # ---------- 6. 浏览器内存实测校准（PSS 采样） ----------
+      - browser_memory_estimate_enabled=${BROWSER_MEMORY_ESTIMATE_ENABLED:-true}
+      - browser_memory_scan_interval=${BROWSER_MEMORY_SCAN_INTERVAL:-15}
+      - browser_memory_post_launch_delay=${BROWSER_MEMORY_POST_LAUNCH_DELAY:-10}
+      - browser_memory_sample_window=${BROWSER_MEMORY_SAMPLE_WINDOW:-20}
+      - browser_memory_min_samples=${BROWSER_MEMORY_MIN_SAMPLES:-3}
+      - browser_memory_safety_factor=${BROWSER_MEMORY_SAFETY_FACTOR:-1.1}
+      - browser_memory_min_sample_mb=${BROWSER_MEMORY_MIN_SAMPLE_MB:-64}
+
+      # ---------- 7. 浏览器会话生命周期 ----------
+      - browser_session_auto_cleanup=${BROWSER_SESSION_AUTO_CLEANUP:-true}
+      # 空闲超过该时长（秒）关实例出池
+      - browser_session_max_idle_time=${BROWSER_SESSION_MAX_IDLE_TIME:-1800}
+      - browser_session_cleanup_interval=${BROWSER_SESSION_CLEANUP_INTERVAL:-60}
+      # 闲置三级软着陆：须满足 degrade_after < suspend_after < max_idle_time
+      - browser_stream_degrade_after=${BROWSER_STREAM_DEGRADE_AFTER:-120}
+      - browser_stream_suspend_after=${BROWSER_STREAM_SUSPEND_AFTER:-300}
+      - browser_session_terminate_grace=${BROWSER_SESSION_TERMINATE_GRACE:-60}
+      # 会话状态 SSE 心跳（秒），必须小于网关空闲超时（180s）
+      - browser_session_sse_heartbeat_interval=${BROWSER_SESSION_SSE_HEARTBEAT_INTERVAL:-15}
+      # browser_session_expiration_time（会话绝对过期秒数，None=不过期）：留空即不过期，
+      # 需要限制单会话最长寿命时在 .env 写 BROWSER_SESSION_EXPIRATION_TIME=3600 并在此追加。
+
+      # ---------- 8. WebRTC 观看与码流档位 ----------
+      # 单会话最大观看者数，0 = 不限制（每多一个观看者多编码一份 H264）
+      - browser_webrtc_max_viewers=${BROWSER_WEBRTC_MAX_VIEWERS:-0}
+      - browser_webrtc_viewer_idle_timeout=${BROWSER_WEBRTC_VIEWER_IDLE_TIMEOUT:-60}
+      - browser_webrtc_viewer_reap_interval=${BROWSER_WEBRTC_VIEWER_REAP_INTERVAL:-20}
+      - browser_webrtc_idle_timeout=${BROWSER_WEBRTC_IDLE_TIMEOUT:-300}
+      # 原画档
+      - browser_stream_original_quality=${BROWSER_STREAM_ORIGINAL_QUALITY:-100}
+      - browser_stream_original_max_fps=${BROWSER_STREAM_ORIGINAL_MAX_FPS:-30}
+      # 超清档
+      - browser_stream_ultra_quality=${BROWSER_STREAM_ULTRA_QUALITY:-90}
+      - browser_stream_ultra_max_fps=${BROWSER_STREAM_ULTRA_MAX_FPS:-30}
+      - browser_stream_ultra_frame_max_width=${BROWSER_STREAM_ULTRA_FRAME_MAX_WIDTH:-1920}
+      - browser_stream_ultra_frame_max_height=${BROWSER_STREAM_ULTRA_FRAME_MAX_HEIGHT:-1080}
+      # 标清档
+      - browser_stream_medium_quality=${BROWSER_STREAM_MEDIUM_QUALITY:-65}
+      - browser_stream_medium_max_fps=${BROWSER_STREAM_MEDIUM_MAX_FPS:-15}
+      - browser_stream_medium_frame_max_width=${BROWSER_STREAM_MEDIUM_FRAME_MAX_WIDTH:-960}
+      - browser_stream_medium_frame_max_height=${BROWSER_STREAM_MEDIUM_FRAME_MAX_HEIGHT:-540}
+      # 流畅档
+      - browser_stream_degrade_quality=${BROWSER_STREAM_DEGRADE_QUALITY:-50}
+      - browser_stream_degrade_max_fps=${BROWSER_STREAM_DEGRADE_MAX_FPS:-5}
+      - browser_stream_degrade_frame_max_width=${BROWSER_STREAM_DEGRADE_FRAME_MAX_WIDTH:-640}
+      - browser_stream_degrade_frame_max_height=${BROWSER_STREAM_DEGRADE_FRAME_MAX_HEIGHT:-360}
+
+      # ---------- 9. 工作流执行 / 调度 / SSE ----------
+      # 控制流（Loop / IfElse）最大嵌套深度
+      - workflow_max_nesting_depth=${WORKFLOW_MAX_NESTING_DEPTH:-10}
+      # 同浏览器工作流排队等待执行权的最长时长（秒）
+      - workflow_queue_timeout_seconds=${WORKFLOW_QUEUE_TIMEOUT_SECONDS:-1800}
+      # 定时任务运行中的计费心跳间隔（秒）
+      - workflow_billing_heartbeat_interval=${WORKFLOW_BILLING_HEARTBEAT_INTERVAL:-300}
+      # 僵尸运行收口：宽限期 + 扫描间隔（秒）
+      - workflow_stale_run_grace_seconds=${WORKFLOW_STALE_RUN_GRACE_SECONDS:-600}
+      - workflow_stale_run_reap_interval=${WORKFLOW_STALE_RUN_REAP_INTERVAL:-300}
+      # 停止宽限期兜底（秒）
+      - workflow_stop_grace_seconds=${WORKFLOW_STOP_GRACE_SECONDS:-30}
+      - workflow_stop_scan_interval=${WORKFLOW_STOP_SCAN_INTERVAL:-10}
+      # Fork 上游自动同步扫描间隔（秒）
+      - workflow_upstream_sync_interval=${WORKFLOW_UPSTREAM_SYNC_INTERVAL:-600}
+      # 运行进度 SSE
+      - workflow_run_sse_heartbeat_interval=${WORKFLOW_RUN_SSE_HEARTBEAT_INTERVAL:-15}
+      - workflow_run_progress_persist_interval=${WORKFLOW_RUN_PROGRESS_PERSIST_INTERVAL:-1.0}
+      # 运行消息 detail 最大字符数，0 = 不裁剪
+      - workflow_run_log_detail_max_length=${WORKFLOW_RUN_LOG_DETAIL_MAX_LENGTH:-0}
+      # 容错熔断：一次运行中被 on_error=continue 跳过的失败步骤达到该数即判失败，0 = 关闭
+      - workflow_tolerated_fail_failed_threshold=${WORKFLOW_TOLERATED_FAIL_FAILED_THRESHOLD:-10}
+      # 重启断点恢复
+      - workflow_resume_on_startup=${WORKFLOW_RESUME_ON_STARTUP:-true}
+      - workflow_resume_max_count=${WORKFLOW_RESUME_MAX_COUNT:-3}
+      - workflow_resume_max_age_seconds=${WORKFLOW_RESUME_MAX_AGE_SECONDS:-21600}
+      # 运行结束是否回收浏览器：false = 只关页面，浏览器交给空闲回收（推荐）
+      - workflow_release_browser_after_run=${WORKFLOW_RELEASE_BROWSER_AFTER_RUN:-false}
+
+      # ---------- 10. 审批开关 ----------
+      # 执行类操作（跑工作流 / 定时计划）是否强制先过审批单
+      - require_approval_enabled=${REQUIRE_APPROVAL_ENABLED:-false}
+      # 公开到社区是否强制先过 publish 审批单
+      - require_publish_approval_enabled=${REQUIRE_PUBLISH_APPROVAL_ENABLED:-true}
+
+      # ---------- 11. 雪花 ID（对外资源 ID） ----------
+      # worker_id 多实例部署时必须互不相同，且各实体之间必须错开；
+      # sequence_bits 变更会改变 ID 数值空间，仅限清库重建的环境调整
+      - browser_id_epoch_sec=${BROWSER_ID_EPOCH_SEC:-1767196800}
+      - browser_id_worker_id=${BROWSER_ID_WORKER_ID:-4}
+      - browser_id_sequence_bits=${BROWSER_ID_SEQUENCE_BITS:-4}
+      - action_id_epoch_sec=${ACTION_ID_EPOCH_SEC:-1767196800}
+      - action_id_worker_id=${ACTION_ID_WORKER_ID:-5}
+      - action_id_sequence_bits=${ACTION_ID_SEQUENCE_BITS:-4}
+      - workflow_id_epoch_sec=${WORKFLOW_ID_EPOCH_SEC:-1767196800}
+      - workflow_id_worker_id=${WORKFLOW_ID_WORKER_ID:-6}
+      - workflow_id_sequence_bits=${WORKFLOW_ID_SEQUENCE_BITS:-4}
+
+      # ---------- 12. 数据库迁移 ----------
+      - alembic_auto_migrate=${ALEMBIC_AUTO_MIGRATE:-true}
+      - alembic_upgrade_target=${ALEMBIC_UPGRADE_TARGET:-heads}
+
+      # ---------- 13. 浏览器操作日志采集 ----------
+      - action_log_default_enabled=${ACTION_LOG_DEFAULT_ENABLED:-false}
+      - action_log_max_payload_length=${ACTION_LOG_MAX_PAYLOAD_LENGTH:-4000}
+      # 保留天数，0 = 永久保留
+      - action_log_default_retention_days=${ACTION_LOG_DEFAULT_RETENTION_DAYS:-7}
+      - action_log_cleanup_interval=${ACTION_LOG_CLEANUP_INTERVAL:-86400}
+      # 日志投递走 RabbitMQ（失败自动回落同步直写）
+      - action_log_use_mq=${ACTION_LOG_USE_MQ:-true}
+      - action_log_mq_cooldown_seconds=${ACTION_LOG_MQ_COOLDOWN_SECONDS:-30.0}
+
+      # ---------- 14. 剩余时长月度清零 ----------
+      - duration_monthly_reset_enabled=${DURATION_MONTHLY_RESET_ENABLED:-true}
+
+      # ---------- 15. RabbitMQ（RPC 调 crawler + 操作日志异步落库 + 后端串行调度） ----------
       - RABBITMQ_URL=amqp://${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}:${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}@rabbitmq:5672/
-      # be-message 服务地址（管理员身份判定 /api/v1/message/admin/me）
-      - message_service_url=http://be-message-service:18739
-      # Casdoor 支付对账（时长权益入账核验，见 RPA-Browser/docs/浏览器使用时长与会员权益计划书.md §3.3）
-      # 复用根 .env 已有的管理员应用凭证，无需新增维护项
-      - CASDOOR_ENDPOINT=http://fastapi-casdoor:8000
+
+      # ---------- 16. Casdoor 支付对账（时长权益入账核验，详见 docs/浏览器使用时长与会员权益计划书.md §3.3） ----------
+      # 复用根 .env 已有的管理员应用凭证（app-built-in），无需新增维护项
+      - CASDOOR_ENDPOINT=${RPA_CASDOOR_ENDPOINT:-http://fastapi-casdoor:8000}
       - CASDOOR_CLIENT_ID=${CASDOOR_ADMIN_CLIENT_ID:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_ID（Casdoor 管理员应用 app-built-in 的 clientId）}
       - CASDOOR_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_SECRET（Casdoor 管理员应用 app-built-in 的 clientSecret）}
-      # 与 be-message-service / be-bilibili-crawler 共用同一份推送渠道配置（JSON），作为无 per-user 配置时的全局兜底
-      - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
-      - SERVER_NAME=${SERVER_NAME}
-      - SERVER_ADDRESS=${SERVER_ADDRESS}
+      - casdoor_verify_timeout=${CASDOOR_VERIFY_TIMEOUT:-5.0}
+
+      # ---------- 17. MCP 端点（app/mcp/config.py，前缀 RPA_MCP_） ----------
+      # 是否挂载 MCP 端点：默认 prod 关闭、dev 开启；容器按 prod 处理
+      - RPA_MCP_ENABLED=${RPA_MCP_ENABLED:-false}
+      - RPA_MCP_MOUNT_SUFFIX=${RPA_MCP_MOUNT_SUFFIX:-/mcp}
+      - RPA_MCP_POLL_INTERVAL=${RPA_MCP_POLL_INTERVAL:-1.5}
+      - RPA_MCP_MAX_WAIT_SECONDS=${RPA_MCP_MAX_WAIT_SECONDS:-300}
+      - RPA_MCP_PAYLOAD_MAX_CHARS=${RPA_MCP_PAYLOAD_MAX_CHARS:-1200}
+      # 额外排除暴露的 operationId（逗号分隔）
+      - RPA_MCP_EXCLUDE_OPERATIONS=${RPA_MCP_EXCLUDE_OPERATIONS:-}
+
+      # ---------- 18. 运行时环境（由镜像 / 挂载决定，不要随意改） ----------
       # /bili-common 优先于 venv/site-packages 里的 bili_common，使宿主 bili-common
       # 源码改动重启即生效（与 be-bilibili-crawler / be-message-service 一致）。
       # 镜像内 PYTHONPATH 只有 /app，这里必须显式补上 /bili-common。
       - PYTHONPATH=/app:/bili-common
       - TZ=${ENV_TZ:-Asia/Shanghai}
-      - RUNNING_MODE=${RUNNING_MODE:-prod}
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -485,6 +706,44 @@ services:
       - CASDOOR_ADMIN_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_SECRET（Casdoor 管理员应用 app-built-in 的 clientSecret）}
       # GeoIP 属地库目录（与挂载点一致）
       - GEOIP_MMDB_DIR=/app/mmdb
+      # ===== 覆盖宿主机 app/.env 的开发值 =====
+      # message 容器把 ./be-message-service/app 整目录挂到 /app/app，而 Settings 的
+      # env_file=("app/.env",) 会读到宿主机那份**开发**配置（localhost、DEBUG、
+      # 放宽的 ID 位宽 / 每日限额）。env_file 的键必须在这里显式覆盖，否则容器会带着
+      # 开发值启动（曾出现 MOMENT_ID_SEQUENCE_BITS=14、日限额 9999999、APP_ENV=development）。
+      - APP_ENV=${APP_ENV:-production}
+      - LOG_FILE_DIR=${LOG_FILE_DIR:-logs}
+      # FastStream（RabbitMQ 框架）自身日志级别，与业务日志 LOG_LEVEL 相互独立
+      - FASTSTREAM_LOG_LEVEL=${FASTSTREAM_LOG_LEVEL:-WARNING}
+      # AsgiFastStream 健康检查监听地址（容器内固定 18739，与 ports 映射一致）
+      - HTTP_HOST=${HTTP_HOST:-0.0.0.0}
+      - HTTP_PORT=18739
+      - MYSQL_POOL_SIZE=${MYSQL_POOL_SIZE:-10}
+      - MYSQL_MAX_OVERFLOW=${MYSQL_MAX_OVERFLOW:-15}
+      - MYSQL_POOL_RECYCLE=${MYSQL_POOL_RECYCLE:-300}
+      - MYSQL_ECHO=${MYSQL_ECHO:-false}
+      - POSTGRES_PPTR_SCHEMA=${POSTGRES_PPTR_SCHEMA:-public}
+      - POSTGRES_PPTR_POOL_SIZE=${POSTGRES_PPTR_POOL_SIZE:-10}
+      - POSTGRES_PPTR_MAX_OVERFLOW=${POSTGRES_PPTR_MAX_OVERFLOW:-20}
+      # 雪花 ID：worker_id 多实例部署必须互不相同；sequence_bits 仅清库重建时可调
+      - MSGKEY_WORKER_ID=${MSGKEY_WORKER_ID:-1}
+      - UID_WORKER_ID=${UID_WORKER_ID:-1}
+      - UID_SEQUENCE_BITS=${UID_SEQUENCE_BITS:-4}
+      - MOMENT_ID_WORKER_ID=${MOMENT_ID_WORKER_ID:-2}
+      - MOMENT_ID_SEQUENCE_BITS=${MOMENT_ID_SEQUENCE_BITS:-4}
+      - TOPIC_ID_WORKER_ID=${TOPIC_ID_WORKER_ID:-3}
+      - TOPIC_ID_SEQUENCE_BITS=${TOPIC_ID_SEQUENCE_BITS:-4}
+      # 内容发布每日上限（0 = 不限制）
+      - COMMENT_DAILY_CREATE_LIMIT=${COMMENT_DAILY_CREATE_LIMIT:-100}
+      - MOMENT_DAILY_CREATE_LIMIT=${MOMENT_DAILY_CREATE_LIMIT:-30}
+      - TOPIC_DAILY_CREATE_LIMIT=${TOPIC_DAILY_CREATE_LIMIT:-10}
+      - SCHEDULER_ENABLED=${SCHEDULER_ENABLED:-true}
+      - ALEMBIC_AUTO_MIGRATE=${ALEMBIC_AUTO_MIGRATE:-true}
+      # JWT 与前端地址：JWT_SECRET 必须与网关 / pptr 侧一致，不一致表现为「登录后立刻 401」
+      - JWT_SECRET=${JWT_SECRET:-关注永雏塔菲喵，关注永雏塔菲谢谢喵！114514}
+      - JWT_EXPIRES_SECONDS=${JWT_EXPIRES_SECONDS:-1296000}
+      - FRONTEND_URL=${FRONTEND_URL:-}
+      - CASDOOR_SERVICE=${CASDOOR_SERVICE:-}
       - TZ=${ENV_TZ:-Asia/Shanghai}
       # /bili-common 优先于 venv/site-packages 里的 bili_common，使宿主 bili-common
       # 源码改动重启即生效（与 be-bilibili-crawler 一致）

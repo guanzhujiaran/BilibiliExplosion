@@ -4,7 +4,11 @@ from bili_common.models.response_code import ResponseCode
 from bili_common.models.response_msg import ResponseMsg
 from bili_common.models.response import StandardResponse
 from bili_common.models.depends import AuthInfo
-from bili_common.deps.auth import UserRole, get_auth_info_from_header
+from bili_common.deps.auth import (
+    UserRole,
+    get_auth_info_from_header,
+    get_optional_auth_info_from_header,
+)
 
 __all__ = [
     "ResponseCode",
@@ -13,4 +17,5 @@ __all__ = [
     "AuthInfo",
     "UserRole",
     "get_auth_info_from_header",
+    "get_optional_auth_info_from_header",
 ]

@@ -47,7 +47,9 @@ group_concat_max_len = 1048576
 innodb_buffer_pool_size = 256M
 innodb_buffer_pool_instances = 1
 
-innodb_redo_log_capacity = 1G
+# redo log 容量：32 个预分配文件的总和（每文件 capacity/32）
+# 1G 对 256M buffer pool 过大，调为 256M（约 buffer pool 1 倍）
+innodb_redo_log_capacity = 256M
 innodb_log_buffer_size = 8M
 innodb_flush_log_at_trx_commit = 2
 innodb_sort_buffer_size = 1M

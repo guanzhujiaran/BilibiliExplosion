@@ -310,6 +310,9 @@ services:
       - ./bili-common:/bili-common
       # 与查询容器分开落日志（log/base_log.py 的文件名是固定的）
       - ./docker_vol/fastapi/log_crawler_dev:/app/scripts/log
+      # dyn_backup 产物（{任务名}/{年}/{日期}_{任务名}.csv.gz），与生产一致落 docker_vol，
+      # 避免写进 bind mount 的源码树；代码侧走 DYN_BACKUP_DIR。
+      - ./docker_vol/fastapi/dyn_backup_dev:/app/scripts/database/dyn_backup
     environment:
       # 开发环境开关：1=不启动定时任务 / 监控任务（不自动爬取）
       - IS_DEV=1
@@ -323,13 +326,18 @@ services:
       - REDIS_PWD=
       # crawler 角色会连 MQ（消费 + RPC 服务端）与 Milvus，启动期还会对这些做 critical 探活
       - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
       - RABBITMQ_USER=${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}
       - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}
       - UNIDBG_HOST=unidbg
+      - UNIDBG_PORT=23335
       - MILVUS_HOST=standalone
+      - MILVUS_PORT=19530
       - LLAMA_HOST=llama_cpp
       - LLAMA_PORT=8080
       - V2RAY_HOST=${V2RAY_HOST}
+      - V2RAY_PORT=10809
+      - FASTSTREAM_LOG_LEVEL=${FASTSTREAM_LOG_LEVEL:-WARNING}
       # be-message-service 地址：**不再是启动依赖**（2.70.1 起 crawler 不再探活它）。
       # crawler 只通过 RabbitMQ 弱耦合推送（message_exchange / message.push），
       # message-service 没起时消息留在队列里，crawler 照常启动与运行。
@@ -345,6 +353,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - llm_apis=${llm_apis:-[]}
       - sqlalchemy_logging=False
+      - DYN_BACKUP_DIR=/app/scripts/database/dyn_backup
     ports:
       - "${FASTAPI_CRAWLER_PORT:-23333}:23333"
     restart: unless-stopped

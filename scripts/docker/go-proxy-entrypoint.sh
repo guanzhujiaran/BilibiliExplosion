@@ -111,17 +111,35 @@ current_prefix() {
     if [ -z "$iface" ]; then
         return 1
     fi
-    # 取网卡上第一个公网 IPv6 的 /64 前缀，例如 2409:8a1e:2e94:84e0
-    ip -6 addr show dev "$iface" scope global 2>/dev/null \
-        | awk '/inet6 (2|3)/ {print $2; exit}' \
-        | cut -d/ -f1 \
-        | cut -d: -f1-4
+    # 取网卡上一个可用公网 IPv6 的 /64 前缀，例如 2409:8a1e:2e93:4fe0。
+    # ⚠️ 必须排除 deprecated / tentative / dadfailed：光猫重新拨号换前缀后，旧前缀的
+    # 地址会以 deprecated 状态在网卡上残留一段时间，继续拿它当池前缀 → 所有随机出口
+    # 都拨不通（i/o timeout）。稳定地址优先，只有临时地址时退回临时地址（前缀一致）。
+    ip -6 -o addr show dev "$iface" scope global 2>/dev/null | awk '
+        /inet6 [23]/ && $0 !~ /deprecated|tentative|dadfailed/ {
+            for (i = 1; i < NF; i++) {
+                if ($i == "inet6") { split($(i + 1), a, "/"); addr = a[1]; break }
+            }
+            if (addr == "") next
+            if ($0 !~ /temporary/) { print addr; found = 1; exit }
+            if (first == "") first = addr
+        }
+        END { if (!found && first != "") print first }
+    ' | cut -d: -f1-4 | head -1
 }
 
 ensure_subnet_route() {
     prefix="$(current_prefix)"
     if [ -z "$prefix" ]; then
         return 1
+    fi
+    # 前缀变了（光猫重新拨号）就把上一轮记录的前缀路由删掉：
+    # 旧 /64 继续声明为本机地址没有任何意义，还会让排障时误判当前前缀。
+    old_prefix="$(cat "$PREFIX_CACHE" 2>/dev/null || true)"
+    if [ -n "$old_prefix" ] && [ "$old_prefix" != "$prefix" ]; then
+        if ip -6 route del local "$old_prefix::/64" dev lo 2>/dev/null; then
+            log "删除旧前缀路由 local $old_prefix::/64 dev lo（当前前缀 $prefix）"
+        fi
     fi
     # ⚠️ 必须先探测再写入：`ip route ... replace` 即使内容完全一致也会发
     # netlink 路由变更通知，Chromium 的 NetworkChangeNotifier 收到后会判定

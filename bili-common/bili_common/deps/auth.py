@@ -102,8 +102,7 @@ def get_auth_info_from_header(
     x_bili_vip_status: str = Header(default=None),
     x_bili_vip_type: str = Header(default=None),
 ) -> AuthInfo:
-    """
-    从请求头中获取认证信息并验证用户是否已登录
+    """从请求头中获取认证信息并验证用户是否已登录
 
     Args:
         x_bili_mid: 请求头中的x-bili-mid字段（必填）
@@ -124,6 +123,92 @@ def get_auth_info_from_header(
     if not x_bili_mid:
         raise NotLoggedInException()
 
+    return _parse_auth_info(
+        x_bili_mid=x_bili_mid,
+        x_bili_level=x_bili_level,
+        x_bili_role=x_bili_role,
+        x_bili_permissions=x_bili_permissions,
+        x_bili_user_name=x_bili_user_name,
+        x_bili_uname=x_bili_uname,
+        x_bili_sign=x_bili_sign,
+        x_bili_sex=x_bili_sex,
+        x_bili_email=x_bili_email,
+        x_bili_vip_status=x_bili_vip_status,
+        x_bili_vip_type=x_bili_vip_type,
+    )
+
+
+def get_optional_auth_info_from_header(
+    x_bili_mid: str | None = Header(default=None),
+    x_bili_level: str | None = Header(default=None),
+    x_bili_role: str = Header(default="normal"),
+    x_bili_permissions: str | None = Header(default=None),
+    x_bili_user_name: str = Header(default=None),
+    x_bili_uname: str = Header(default=None),
+    x_bili_sign: str = Header(default=None),
+    x_bili_sex: str = Header(default=None),
+    x_bili_email: str = Header(default=None),
+    x_bili_vip_status: str = Header(default=None),
+    x_bili_vip_type: str = Header(default=None),
+) -> AuthInfo | None:
+    """可选登录依赖：未登录时返回 None，已登录时返回 AuthInfo。
+
+    用于「游客也能看，但登录后看得更多/带个人态」的公开只读接口
+    （如社区广场的公开动作 / 公开工作流列表）。参数与
+    `get_auth_info_from_header` 完全一致，区别仅在于缺少 x-bili-mid 时不抛 401。
+
+    Args:
+        同 get_auth_info_from_header
+
+    Returns:
+        AuthInfo | None: 已登录返回认证信息；未登录（无 x-bili-mid）返回 None
+
+    Raises:
+        InvalidMidFormatException: 当mid格式无效时抛出
+    """
+    if not x_bili_mid:
+        return None
+
+    return _parse_auth_info(
+        x_bili_mid=x_bili_mid,
+        x_bili_level=x_bili_level,
+        x_bili_role=x_bili_role,
+        x_bili_permissions=x_bili_permissions,
+        x_bili_user_name=x_bili_user_name,
+        x_bili_uname=x_bili_uname,
+        x_bili_sign=x_bili_sign,
+        x_bili_sex=x_bili_sex,
+        x_bili_email=x_bili_email,
+        x_bili_vip_status=x_bili_vip_status,
+        x_bili_vip_type=x_bili_vip_type,
+    )
+
+
+def _parse_auth_info(
+    x_bili_mid: str,
+    x_bili_level: str | None,
+    x_bili_role: str | None,
+    x_bili_permissions: str | None,
+    x_bili_user_name: str | None,
+    x_bili_uname: str | None,
+    x_bili_sign: str | None,
+    x_bili_sex: str | None,
+    x_bili_email: str | None,
+    x_bili_vip_status: str | None,
+    x_bili_vip_type: str | None,
+) -> AuthInfo:
+    """把已确认非空的 x-bili-mid 及配套转发头解析为 AuthInfo。
+
+    Args:
+        x_bili_mid: 已校验非空的 mid 字符串
+        其余参数同 get_auth_info_from_header
+
+    Returns:
+        AuthInfo: 统一认证信息对象
+
+    Raises:
+        InvalidMidFormatException: 当mid格式无效时抛出
+    """
     # 验证mid是否为有效的数字字符串并转换为int
     try:
         mid_int = int(x_bili_mid)
