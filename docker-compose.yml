@@ -184,9 +184,9 @@ services:
       - LLAMA_PORT=8080
       - sqlalchemy_logging=False
       # dyn_backup 根目录（挂载点，见下方 volumes 的 dyn_backup 项）
-      # 产物统一格式：{DYN_BACKUP_DIR}/{任务名}/{年}/{YYYY_MM_DD}_{任务名}.csv.gz
+      # 产物统一格式（一律按月分片）：{DYN_BACKUP_DIR}/{任务名}/{年}/{YYYY_MM}_{任务名}.csv.gz
       #   - bilidyndetail / t_lotdyninfo / t_lotuserspaceresp：冷数据表归档（校验后删库）
-      #   - lot_dyn_info：每日抽奖信息业务导出
+      #   - lot_dyn_info：抽奖信息业务导出（只导已过完的整月）
       - DYN_BACKUP_DIR=/app/scripts/database/dyn_backup
     build:
       context: .
