@@ -185,7 +185,7 @@ services:
       - sqlalchemy_logging=False
       # dyn_backup 根目录（挂载点，见下方 volumes 的 dyn_backup 项）
       # 产物统一格式：{DYN_BACKUP_DIR}/{任务名}/{年}/{YYYY_MM_DD}_{任务名}.csv.gz
-      #   - bilidyndetail / t_lotdyninfo：冷数据表归档（校验后删库）
+      #   - bilidyndetail / t_lotdyninfo / t_lotuserspaceresp：冷数据表归档（校验后删库）
       #   - lot_dyn_info：每日抽奖信息业务导出
       - DYN_BACKUP_DIR=/app/scripts/database/dyn_backup
     build:
@@ -690,6 +690,8 @@ services:
       - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
       # 抽奖卡片只读查询（热门抽奖榜 / 首页轮播一次返回卡片数据）
       - CRAWLER_QUERY_BASE_URL=http://be-bilibili-crawler-query:23336
+      # crawler 写服务：管理端「LLM 配置」页代理 /llm/*（crawler 侧无鉴权、网关不转发）
+      - CRAWLER_BASE_URL=http://be-bilibili-crawler:23333
       # Casdoor OAuth2 配置（与 gateway 共用同一套 Casdoor 应用）
       - CASDOOR_ENABLED=true
       - CASDOOR_ENDPOINT=http://fastapi-casdoor:8000
