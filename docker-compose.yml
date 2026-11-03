@@ -513,12 +513,13 @@ services:
 
       # ---------- 7. 浏览器会话生命周期 ----------
       - browser_session_auto_cleanup=${BROWSER_SESSION_AUTO_CLEANUP:-true}
-      # 空闲超过该时长（秒）关实例出池
-      - browser_session_max_idle_time=${BROWSER_SESSION_MAX_IDLE_TIME:-1800}
+      # 空闲超过该时长（秒）关实例出池；留空 = 用程序默认值（app/config.py）
+      - browser_session_max_idle_time=${BROWSER_SESSION_MAX_IDLE_TIME:-}
       - browser_session_cleanup_interval=${BROWSER_SESSION_CLEANUP_INTERVAL:-60}
-      # 闲置三级软着陆：须满足 degrade_after < suspend_after < max_idle_time
-      - browser_stream_degrade_after=${BROWSER_STREAM_DEGRADE_AFTER:-120}
-      - browser_stream_suspend_after=${BROWSER_STREAM_SUSPEND_AFTER:-300}
+      # 闲置三级软着陆：须满足 degrade_after < suspend_after < max_idle_time，
+      # 且 suspend_after + terminate_grace <= 5 分钟（闲置到关实例的总时长上限）
+      - browser_stream_degrade_after=${BROWSER_STREAM_DEGRADE_AFTER:-60}
+      - browser_stream_suspend_after=${BROWSER_STREAM_SUSPEND_AFTER:-180}
       - browser_session_terminate_grace=${BROWSER_SESSION_TERMINATE_GRACE:-60}
       # 会话状态 SSE 心跳（秒），必须小于网关空闲超时（180s）
       - browser_session_sse_heartbeat_interval=${BROWSER_SESSION_SSE_HEARTBEAT_INTERVAL:-15}

@@ -395,9 +395,11 @@
 
   | 档位 | 闲置阈值（无 touch） | 动作 | 释放资源 |
   | --- | --- | --- | --- |
-  | DEGRADED | ≥ `browser_stream_degrade_after`（120s） | 重启 screencast 降 `quality`（`browser_stream_degrade_quality`）+ 限帧（`browser_stream_degrade_max_fps`） | CPU / 带宽 |
-  | SUSPENDED | ≥ `browser_stream_suspend_after`（300s） | `webrtc_manager.suspend_streams()` 关流、**保留浏览器实例**；`status=IDLE` | CPU（流） |
-  | TERMINATING | ≥ `browser_session_max_idle_time`（1800s） | 先进 `browser_session_terminate_grace`（60s）宽限，到期 `release_browser_session()` 关实例出池 | 内存 / 进程 |
+  | DEGRADED | ≥ `browser_stream_degrade_after`（60s） | 重启 screencast 降 `quality`（`browser_stream_degrade_quality`）+ 限帧（`browser_stream_degrade_max_fps`） | CPU / 带宽 |
+  | SUSPENDED | ≥ `browser_stream_suspend_after`（180s） | `webrtc_manager.suspend_streams()` 关流、**保留浏览器实例**；`status=IDLE` | CPU（流） |
+  | TERMINATING | ≥ `browser_session_max_idle_time`（240s） | 先进 `browser_session_terminate_grace`（60s）宽限，到期 `release_browser_session()` 关实例出池 | 内存 / 进程 |
+
+  > 全链路上限：闲置 0 → 60s 降级 → 180s 挂起 → 240s 进宽限 → 300s 关实例，总时长不超过 5 分钟。
 
 - **自动化占用（pin）**：`entry.pin_count` 在 `ExecutionEngine.execute_action / execute_steps` 进入 +1、退出 -1；`pin_count>0` 跳过一切降级/关闭，退出时刷新 `last_activity`（避免长任务刚结束即被判闲置）。
 - **返回活跃**：任意 `touch` / `pin` 清空 `terminate_scheduled_at`、解除降级（恢复全速 screencast）、`status=RUNNING`；挂起后用户重新 `webrtc/offer` 自动重建流（`start_stream` 幂等）。
