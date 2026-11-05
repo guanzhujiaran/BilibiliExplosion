@@ -313,6 +313,8 @@ services:
       # dyn_backup 产物（{任务名}/{年}/{日期}_{任务名}.csv.gz），与生产一致落 docker_vol，
       # 避免写进 bind mount 的源码树；代码侧走 DYN_BACKUP_DIR。
       - ./docker_vol/fastapi/dyn_backup_dev:/app/scripts/database/dyn_backup
+      # 运行期可变状态文件（爬虫推送开关），与生产分开
+      - ./docker_vol/fastapi/runtime_dev:/app/runtime
     environment:
       # 开发环境开关：1=不启动定时任务 / 监控任务（不自动爬取）
       - IS_DEV=1
@@ -354,6 +356,11 @@ services:
       - llm_apis=${llm_apis:-[]}
       - sqlalchemy_logging=False
       - DYN_BACKUP_DIR=/app/scripts/database/dyn_backup
+      # 爬虫开始 / 结束推送开关（默认全关）：逗号分隔 crawler_name，* 表示全部爬虫
+      - CRAWLER_PUSH_START=${CRAWLER_PUSH_START:-}
+      - CRAWLER_PUSH_END=${CRAWLER_PUSH_END:-}
+      # 运行期可变状态（推送开关等本地 JSON）
+      - RUNTIME_DIR=/app/runtime
     ports:
       - "${FASTAPI_CRAWLER_PORT:-23333}:23333"
     restart: unless-stopped

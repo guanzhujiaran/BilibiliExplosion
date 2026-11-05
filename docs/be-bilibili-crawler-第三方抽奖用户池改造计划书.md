@@ -157,6 +157,30 @@ next=1 mode=2 → replies=1  cursor=0
    - `last_round_lot_count` 不再全为 0；
    - 下一轮 `round.allNum` 不再逐轮衰减。
 
+## 5.1 后续补充（2026-11-05 部署后暴露的问题）
+
+### 5.1.1 低活跃用户告警降噪
+
+`space_dynamic_fetcher.py` 里「本轮获取到的动态数量过少」由逐条 `warning` 降为 `debug`，
+同时给 `BiliSpaceUserItem` 增加 `fetched_dyn_count` 字段，由 `robot.main()` 在第一阶段结束后
+汇总成一条 info，并作为轮次总结的一行（「本轮无新增动态: N 个 [uid...]」）。
+
+不把这批用户直接纳入剔除：刚补充进来的新用户本轮尚未被采集，`total=0` 属于数据未知，
+直接剔除会重演「池子被清空」的问题；是否剔除仍交给 `cull_users` 的窗口统计。
+
+### 5.1.2 MQ 超时未处理动态的补偿
+
+`_after_scrapy` 等待 `t_lot_extra_info` 超时（`_MQ_POLL_MAX_IDLE` / `_MQ_POLL_TOTAL_TIMEOUT`）时，
+此前只打一行 warning 就丢弃，这些动态会被永久判成「非抽奖」。
+
+改为：
+
+- 未能等到 `extra_info` 的 `dynamic_id` 写入 Redis
+  `get_other_lot_redis_manager:pending_extra_refs`（JSON 列表）；
+- 下一轮 `_after_scrapy` 开始前 `_retry_pending_extra_refs()`：按 id 回查 `t_lotdyninfo`，
+  用 `pub_prize_extract_from_dyn` 重新投递到 MQ，投递后清空该键；
+- 本轮全部处理完时也写空列表，避免上一轮的残留被反复重投。
+
 ## 6. 不做的事
 
 - 不改 `actions/**`（本项目无关）。

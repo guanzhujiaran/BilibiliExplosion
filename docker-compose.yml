@@ -183,6 +183,11 @@ services:
       - LLAMA_HOST=llama_cpp
       - LLAMA_PORT=8080
       - sqlalchemy_logging=False
+      # 爬虫开始 / 结束推送开关（默认全关）：逗号分隔 crawler_name，* 表示全部爬虫
+      - CRAWLER_PUSH_START=${CRAWLER_PUSH_START:-}
+      - CRAWLER_PUSH_END=${CRAWLER_PUSH_END:-}
+      # 运行期可变状态（推送开关等本地 JSON），接口改完立即生效、重启后保留
+      - RUNTIME_DIR=/app/runtime
       # dyn_backup 根目录（挂载点，见下方 volumes 的 dyn_backup 项）
       # 产物统一格式（一律按月分片）：{DYN_BACKUP_DIR}/{任务名}/{年}/{YYYY_MM}_{任务名}.csv.gz
       #   - bilidyndetail / t_lotdyninfo / t_lotuserspaceresp：冷数据表归档（校验后删库）
@@ -209,6 +214,8 @@ services:
       # （见 be-bilibili-crawler/Service/DataArchive/）。
       # 按「任务名/年/日期」分文件，整个目录打包即可上传网盘。
       - ./docker_vol/fastapi/dyn_backup:/app/scripts/database/dyn_backup
+      # 运行期可变状态文件（爬虫推送开关），不跟源码混在一起
+      - ./docker_vol/fastapi/runtime:/app/runtime
     develop:
       watch:
         # 源码已 bind mount，不再需要 sync+restart；只有依赖变了才重建镜像
