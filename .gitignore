@@ -43,3 +43,9 @@ docker_vol/llama/models/
 
 # 前端独立仓库（Vue3FrontEndDemoExercise）：单独维护，不纳入主仓库，也不作为 submodule
 /Vue3FrontEndDemoExercise/
+
+# bili-common 的打包产物：真正源码在 bili-common/bili_common/。
+# 容器内 uv 重建 editable 包会刷新 build/ 与 egg-info，属于生成物，不纳入版本库。
+/bili-common/build/
+/bili-common/dist/
+/bili-common/bili_common.egg-info/

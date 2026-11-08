@@ -178,7 +178,7 @@ action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片�
 | --- | --- | --- | --- | --- | --- |
 | click 点击 | 28 | 冲田总司 | new_page 新页面 | 11 | 阿尔托莉雅·潘德拉贡〔Lily〕 |
 | input 输入 | 65 | 阿尔托莉雅·卡斯特 | get_text 获取文本 | 75 | 格蕾 |
-| wait 等待 | 87 | 摩根 | get_window 获取窗口 | 14 | 尼禄·克劳狄乌斯 |
+| wait 等待 | 87 | 摩根 | get_window 获取 window 属性 | 14 | 尼禄·克劳狄乌斯 |
 | scroll 滚动 | 68 | 雨之魔女梣 | fetch_external_data 获取外部数据 | 121 | 所多玛之兽／德拉科 |
 | navigate 导航 | 3 | 阿尔托莉雅·潘德拉贡 | print 打印参数 | 41 | 贞德 |
 | screenshot 截图 | 112 | 谜之女主角XX | loop 循环 | 23 | 莫德雷德 |
@@ -204,6 +204,23 @@ action-icons/{分类}/s_{系列编号}_{系列名称}/i_{图片编号}_{图片�
   ⚠️ 该系列 `i_1~i_16` 自此被内置动作常驻引用（不落库，但每次展示都取），**不可再重排编号**；
   若日后想换成专属图标，把常量改指向其它**现有**系列即可（或新建系列并按 §5.1 编号规则排号）；
 - **兜底**：对应资源缺失时前端回落内置类型图标（`resolveActionTypeIcon`），不报错、不空白。
+
+### 5.6 图标全覆盖补充（2026-11-07）
+
+> 详细设计与验收见 `RPA-Browser/docs/内置动作通用化与图标全覆盖计划书.md` §4.4/§4.5
+> 与 `docs/frontend_requirements/RPA动作图标全覆盖.md`。
+
+本节 §5.5 的 16 项编号表是**历史子集**，后端实际 `BuiltinActionIconId` 已扩展到全部内置动作。
+本次变更：
+
+1. 站点专属 `bili_reserve` 从内置动作移除，其编号 `50` 释放；内置动作数 31 → 30；
+2. `s_33` 实际编号为 `1..121`，原先 `124~128` 越界，改分配真实存在的未占用编号
+   （`press=20` / `wait_for_response=38` / `element_state=44` / `select_option=47` /
+   `wait_for_url=56` / `open_page=59` / `close_page=62` / `parallel=78`）；
+   `notify=90` 实测存在，去掉「未占用编号」注释；
+3. `scripts/check_action_consistency.py` 的 `ICON_ALLOWLIST` 清空，门禁要求「每个内置动作都有唯一有效编号」；
+4. 前端 `ActionIcon` 在 `0/0`（未选图标）时按动作 id 稳定哈希自动分配一张 `s_33` 图库图标，
+   自定义动作不再显示 `QuestionFilled`；仅图库清单为空时才回落 `resolveActionTypeIcon`。
 
 ## 6. 验收清单
 
