@@ -308,6 +308,8 @@ max_payload_length / retention_days`）仍取自动作自身配置，缺失时�
    - 新增配置 `action_log_cleanup_interval`（秒，默认 86400）；
    - `register_background_tasks()` 注册间隔任务 `action_log_cleanup`，调用既有
      `ActionLogCrudService.cleanup_expired()`（幂等删除，失败仅告警不阻塞调度）。
+   - 时间窗口之外再加固定行数上限（`action_log_max_rows`，默认 200 万行）与资源记录
+     上限（`resource_record_max_rows`），见 `docs/操作日志与资源记录容量上限计划书.md`。
 5. **MQ 落库（防丢 + 不阻塞执行线程）**（`app/config.py` / `bili_common/core/log_pub.py` /
    `action_logger._persist` / `main.py`）：
    - `action_log_use_mq` 默认 `False` → `True`：日志默认走 RabbitMQ 异步落库，

@@ -616,6 +616,11 @@ services:
       # 保留天数，0 = 永久保留
       - action_log_default_retention_days=${ACTION_LOG_DEFAULT_RETENTION_DAYS:-7}
       - action_log_cleanup_interval=${ACTION_LOG_CLEANUP_INTERVAL:-86400}
+      # 固定行数上限（0 = 不限制）：超限按时间列从旧到新删除
+      - action_log_max_rows=${ACTION_LOG_MAX_ROWS:-2000000}
+      - resource_record_max_rows=${RESOURCE_RECORD_MAX_ROWS:-2000000}
+      - record_cap_delete_batch_size=${RECORD_CAP_DELETE_BATCH_SIZE:-10000}
+      - resource_record_cleanup_interval=${RESOURCE_RECORD_CLEANUP_INTERVAL:-86400}
       # 日志投递走 RabbitMQ（失败自动回落同步直写）
       - action_log_use_mq=${ACTION_LOG_USE_MQ:-true}
       - action_log_mq_cooldown_seconds=${ACTION_LOG_MQ_COOLDOWN_SECONDS:-30.0}

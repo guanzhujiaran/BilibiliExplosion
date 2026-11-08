@@ -48,7 +48,7 @@
 
 1. 用户池管理接入**调度路径**，每轮采集结束后自动执行。
 2. 剔除口径改为「**用户自己空间里转发的原动态命中抽奖数**」，阈值只按天数和条数。
-3. 列表容量调大（200），补充阶段补满。
+3. 列表容量调大（200），补充阶段补满。**（已被 5.2 修订为「容量 20 + 超容量裁剪」，再被 5.3 修订为容量 40）**
 4. 抓取失败（本轮/窗口内抓到 0 条动态）的用户不参与剔除，避免误杀。
 
 ## 4. 具体改动
@@ -138,14 +138,17 @@ next=1 mode=2 → replies=1  cursor=0
 
 ### 4.6 配置调整
 
+> 本节表格是 2026-11-05 的原始改造记录，**容量相关两项已被 5.2 修订**，
+> 其余三项（`remove_check_days` / `min_valid_lot_threshold` / 新增字段）保持不变。
+
 文件：`be-bilibili-crawler/CONFIG.py`
 
 | 字段 | 原值 | 新值 | 说明 |
 |---|---|---|---|
-| `max_user_list_size` | 20 | 200 | 池子容量 |
+| `max_user_list_size` | 20 | 200 | 池子容量（5.2 改回 20） |
 | `remove_check_days` | 14 | 7 | 剔除统计窗口（天） |
 | `min_valid_lot_threshold` | 10 | 1 | 窗口内命中抽奖数 ≤ 此值剔除 |
-| `supplement_max_per_round` | — | 50（新增） | 单轮最多补入的新用户数 |
+| `supplement_max_per_round` | — | 50（新增） | 单轮最多补入的新用户数（5.2 改为 20） |
 
 ## 5. 验证方式
 
@@ -180,6 +183,82 @@ next=1 mode=2 → replies=1  cursor=0
 - 下一轮 `_after_scrapy` 开始前 `_retry_pending_extra_refs()`：按 id 回查 `t_lotdyninfo`，
   用 `pub_prize_extract_from_dyn` 重新投递到 MQ，投递后清空该键；
 - 本轮全部处理完时也写空列表，避免上一轮的残留被反复重投。
+
+## 5.2 容量回归 20 与超容量裁剪（2026-11-08 修订）
+
+> 本节为本次修订的执行依据，**覆盖第 3 节目标 3 与 4.6 节中「容量 200 / 单轮补充 50」的约定**；
+> 其余改造（调度路径接入、剔除口径、评论区挖人、翻页修复、MQ 补偿）全部保持不变。
+
+### 5.2.1 现象与根因
+
+- 每轮采集（第一阶段）的用户数涨到一百多个，`target_uid_list` 从 20 单调涨到 120 / 194；
+- `max_user_list_size=200` 且 `supplement_max_per_round=50`：单轮最多补 50，`need_count` 恒为正；
+- 剔除条件要求 `total > 0`，`total == 0`（新补入 / 抓取失败）被整体豁免，剔除速度远低于补充速度；
+- `supplement_users()` 只在 `need_count > 0` 时补充，**没有 `len > 容量` 的裁剪分支**，
+  因此把容量改回 20 后，Redis 里已有的超额用户也不会自动减少；
+- 第一阶段遍历 Redis 全量用户，查询量与池子长度线性相关，容量 200 时「查一百多个用户」是必然结果。
+
+### 5.2.2 本轮改动
+
+1. 配置回归：`max_user_list_size: 200 → 20`，`supplement_max_per_round: 50 → 20`（不超过容量）；
+   全部通过 `settings.get_others_lot.*` 读取，不在业务代码里硬编码容量数值。
+2. 新增超容量裁剪（幂等）：在 `cull_users()` 尾部、写回 Redis 前执行，位置等价于
+   「剔除之后、补充之前」，复用同一次 `getUserLotHitStats` 结果，不额外查库。
+   排序规则（明确且稳定）：
+   - 主键：窗口内命中抽奖数 `stat.lot` 降序；统计缺失（含 `total == 0`）视为 `lot = 0`，排后；
+   - 同分：按 Redis 原列表顺序保留（稳定排序，先入池者优先），保持列表原顺序输出；
+   - 被裁掉的 uid 记录在 `trimmed`，按原列表顺序输出，便于日志 / 推送对照；
+   - `len(uid_list) <= 容量` 时原样返回且 `trimmed` 为空 → 连续跑两轮，第二轮不再触发裁剪。
+3. 摘要与推送：`UserPoolCullSummary` / `UserPoolSupplementSummary` / `LotUserPoolSummary`
+   增加 `trimmed: list[int]`；`push_round_summary` 恒输出「剔除 / 超容量裁剪 / 新补充」三行数量，
+   保证第二轮（无剔除、无补充时）也能看到三个数字。
+4. 容量是硬约束：
+   - 补充只取 `need_count = 容量 - len(uid_list)`，并对评论区返回做 `[:need_count]` 二次截断；
+   - `default_user_uids` 兜底的**触发语义不变**（仅列表完全为空时才使用），但数量截断到容量；
+   - `supplement_users()` 写回前再做一次防御性截断，超出部分计入 `trimmed` 并打 warning；
+   - 「`total == 0` 豁免剔除」的防误杀语义保持不变，但豁免不再能让池子超过容量。
+
+### 5.2.3 验证
+
+1. 静态：`uv run python -c "import Service.GetOthersLotDyn.core.robot"`；
+   `uv run pytest test/test_get_other_lot_main.py -v`。
+2. 单测：构造 194 个 uid（`total=0` 与 `lot>0` 混合），验证裁剪后长度 == 20、
+   高 `lot` 用户保留、二次裁剪幂等、`added` 后总长度 <= 20、推送含三行数量。
+3. 实跑：重启 `be-bilibili-crawler` 容器，回读 Redis 长度、第一阶段用户数日志、
+   PushMe 轮次总结，连续两轮稳定在 20 不反弹。
+
+### 5.2.4 不做的事
+
+- 不改 `GetOthersLotDynRobot` 三阶段抓取逻辑、不改 MQ / 判定流程、不改数据库表结构；
+- 不改 `RPA-Browser/app/services/execution/actions/**`；
+- 不采用「容量保留 200、按活跃度只查 Top N」的替代方案：它只是掩盖池子失控，
+  且需要改三阶段抓取逻辑，超出本次范围。
+
+## 5.3 容量回调 40（2026-11-09 修订）
+
+> 本节覆盖 5.2 中「容量 20 / 单轮补充 20」的约定；剔除口径、超容量裁剪、
+> `total == 0` 豁免、推送三行数量等其余逻辑全部保持不变。
+
+### 5.3.1 改动
+
+1. `max_user_list_size: 20 → 40`，`supplement_max_per_round: 20 → 40`（仍不超过容量）；
+   容量依然只从 `settings.get_others_lot.*` 读取，业务代码不硬编码数值。
+2. 逻辑不动：裁剪 / 补充 / 默认名单兜底三条路径本来就是按配置收敛，
+   本轮只调整配置数值，不改 `LotUserPoolService` 的算法。
+3. 20 → 40 无需迁移：`_trim_to_capacity` 幂等（不足上限时原样返回），
+   补充阶段按 `need_count = 40 - 当前长度` 补满，单轮上限 40。
+
+### 5.3.2 影响
+
+- 第一阶段空间采集用户数从 20 涨到 40，查询量约翻倍，`space_dyn_concurrency` 不变；
+- 轮次总结推送里的「超容量裁剪(上限40)」自动跟随配置输出；
+- 单测里对 20 的硬编码断言同步改为 40，`_build_194_users` 用例仍可覆盖「超容量裁剪」。
+
+### 5.3.3 验证
+
+1. `uv run pytest test/test_get_other_lot_main.py -v`；
+2. 重启 `be-bilibili-crawler`，下一轮调度结束后回读 Redis
+   `get_other_lot_redis_manager:target_uid_list`，长度为 40。
 
 ## 6. 不做的事
 

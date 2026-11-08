@@ -1,7 +1,9 @@
 ---
-description: 修改 docker 容器内运行的服务（crawler 等）后需要重启容器
-globs:
-alwaysApply: false
+description: 
+alwaysApply: true
+enabled: true
+updatedAt: 2026-11-08T04:18:28.324Z
+provider: 
 ---
 
 # docker 容器内的服务可以自行重启

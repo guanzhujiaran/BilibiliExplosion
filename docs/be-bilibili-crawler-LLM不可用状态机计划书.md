@@ -14,6 +14,14 @@
 > - `controller/common/CommonRouter.py`（`GET /llm/stats` 观测接口）
 > - 前序计划书：`docs/be-bilibili-crawler-LLM槽位并行计划书.md`（槽位并发闸，已实施）
 >
+> **2026-11-08 修订（配置持久化，见 `docs/be-bilibili-crawler-LLM配置持久化计划书.md`）**：
+> 本文第 4 节「明确不做」中「配置的唯一事实来源是环境变量」与第 7 节风险表
+> 「删除只影响运行时内存…重启即恢复」两处口径已修订 ——
+> 现在**人工显式保存的整份 `llm_apis` 列表**会落盘到 `runtime/llm_apis.json`，
+> 事实来源变为「**runtime 文件 > `.env`**」；而状态机的 `REMOVED` **自动摘除仍然不落盘**
+> （只改运行时内存，重启后该槽位回来），「上游误报 401 → 重启自愈」的防误删兜底保持不变。
+> 即：持久化的是「人工保存的列表」，不是「自动摘除的黑名单」。
+>
 > **2026-10-01 修订**：`Service/llm_service/slot.py`（槽位租约）与进程内 `_SlotLockRegistry`
 > 已整体移除，请求节流改由每个实例的 langchain `InMemoryRateLimiter` 承担 ——
 > 详见 `be-bilibili-crawler-LLM槽位并行计划书.md` 第 0 节。本文件第 4/8/9 节中涉及
@@ -196,8 +204,12 @@ class LLMHealth(BaseModel):
 | 7 | `controller/common/CommonRouter.py` | 无需改动（`get_llm_stats()` 直接透出 `health` 与 `state`），仅在文档中说明响应新增字段 |
 
 **明确不做**：
-- 不做「已删除指纹」的持久化黑名单：配置的唯一事实来源是环境变量 / `POST /llm/config`，
-  服务重启后从配置恢复是预期行为（运维应同步修掉环境变量里的坏配置）。
+- 不做「已删除指纹」的持久化黑名单：~~配置的唯一事实来源是环境变量 / `POST /llm/config`，
+  服务重启后从配置恢复是预期行为（运维应同步修掉环境变量里的坏配置）。~~
+  **（2026-11-08 修订）** 自动摘除（REMOVED）仍然不落盘、重启即恢复；
+  但「人工显式保存的整份列表」现已持久化到 `runtime/llm_apis.json`，
+  事实来源变为「runtime 文件 > `.env`」。详见
+  `docs/be-bilibili-crawler-LLM配置持久化计划书.md`。
 - 不引入后台定时器：冷却到期用「读取时惰性刷新」实现，避免多一份需要关停的生命周期。
 
 ---
@@ -234,7 +246,7 @@ class LLMHealth(BaseModel):
 | 风险 | 说明 | 缓解 |
 |---|---|---|
 | 上游文案差异导致误分类 | 各厂商 429 的 `message` 措辞不同，关键词可能漏匹配 | 分类默认落到 `RATE_LIMITED`（最保守：只短暂冷却，不删配置）；关键词集合集中在常量里便于调整 |
-| 误删配置 | `401/403/404` 被判为 `PERMANENT` 后配置被删，若是上游抖动误报 401 则丢了可用 key | 删除只影响运行时内存，**不写回环境变量**；重启即恢复；同时推送告警让运维确认 |
+| 误删配置 | `401/403/404` 被判为 `PERMANENT` 后配置被删，若是上游抖动误报 401 则丢了可用 key | 删除只影响运行时内存，**不写回环境变量、也不写持久化文件**；重启即恢复（2026-11-08 修订后该兜底仍然保留，见 `docs/be-bilibili-crawler-LLM配置持久化计划书.md`）；同时推送告警让运维确认 |
 | 全部槽位同时进入 `QUOTA_WAIT` | 抽奖提取会整夜停摆（消息保持未确认，不丢，但不处理） | `QUOTA_WAIT` 状态下 `slot._wait_for_any_slot` 会按 `resume_at` 精确睡到次日 0 点，并推送一次告警提示补配置 |
 | `remove_llm_by_fingerprint` 与遍历并发 | 删除发生在 `record_failure`（同步、无 await）中，删除用「整体替换列表」而非原地 mutate | 单线程事件循环内原子；`get_llm_slots()` 的长度校验会在不一致时返回空列表（按「没有可用槽位」处理） |
 

@@ -7,7 +7,7 @@
 
 from typing import Generic, TypeVar
 
-from pydantic import computed_field
+from pydantic import BaseModel, ConfigDict, computed_field
 from sqlmodel import SQLModel, Field
 
 T = TypeVar("T")  # 泛型类型 T
@@ -78,8 +78,19 @@ class BasePaginationReq(SQLModel):
     per_page: int = Field(default=10, description="每页数量")
 
 
-class BasePaginationResp(SQLModel, Generic[T]):
-    """基于页码的分页响应（`page` / `per_page` / `total` / `items`，附带导航计算字段）"""
+class BasePaginationResp(BaseModel, Generic[T]):
+    """基于页码的分页响应（`page` / `per_page` / `total` / `items`，附带导航计算字段）
+
+    为什么用 ``pydantic.BaseModel`` 而不是 ``SQLModel``：本类是纯响应 DTO（非
+    ``table=True`` 模型）。``SQLModel + Generic[T]`` 在当前 SQLModel 0.0.48 下
+    不会把 ``T`` 替换进 ``items`` 的注解，FastAPI 生成的 OpenAPI 里 ``items``
+    退化成空对象 ``{}``，hey-api 只能生成 ``Array<unknown>``。换成
+    ``BaseModel + Generic[T]`` 后 schema 会正确展开为指向具体项类型的 ``$ref``。
+    显式保留 ``from_attributes=True``，与 SQLModel 默认配置一致，避免影响
+    ORM 对象转响应模型的既有调用。
+    """
+
+    model_config = ConfigDict(from_attributes=True)
 
     page: int = Field(default=1, description="页码")
     per_page: int = Field(default=10, description="每页数量")
