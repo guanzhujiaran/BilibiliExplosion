@@ -167,7 +167,7 @@
 - 路由常量加到 `ApiRoutes/__init__.py`（`RouterPaths.LLM_CONFIG_OVERRIDE` / `RouterNames.DELETE_LLM_CONFIG_OVERRIDE`）；
 - 前端管理页本次不改。
 
-### 3.6 单实例连通性测试（2026-11-08 追加）
+### 3.6 单实例连通性测试（2026-11-08 追加，2026-11-11 修订探测方式）
 
 管理页需要「点一下就知道这条实例现在还能不能用」，而状态列只能反映**最近一次业务调用**的结果，
 新建 / 刚改过密钥的实例根本没统计（`state` 缺省），所以必须有一个**主动探测**入口。
@@ -179,19 +179,32 @@
 {"index": 7, "base_url": "https://...", "model_name": "...", "token": ""}
 ```
 
+2026-11-11 修订：**放弃 `httpx` 裸打 `/chat/completions` + `max_tokens=1` 的最小 completion**，
+改为**用裸 `langchain_openai.ChatOpenAI` 真发一次提问 `1+1=?`**，拿到模型回复才算通。
+原因：最小 completion 只证明「HTTP 层 2xx」，测不到生产真正走的 SDK 链路
+（`base_url` 拼接、鉴权头、请求参数、响应解析、SDK 版本兼容）；运维看到「测试成功」
+却在业务调用里报错，诊断价值为零。与生产同链路但**用裸类**，二者不冲突。
+
 - `token` 为空或含 `****` 时，按 `index` 从 `settings.llm_apis` 取原密钥（越界 / 无密钥 → `ok=false`，
   `error="未提供密钥"`，**不发请求**）；
-- 探测方式：直接 `POST {base_url}/chat/completions`，`max_tokens=1`、`stream=false`，
-  超时 `llm_test_timeout`（默认 45s，`CONFIG.settings` 可覆盖）；
-- 响应：`{ok, base_url, model_name, status_code, latency_ms, error}`（crawler 侧 `status_code` /
-  `latency_ms` 是 int，be-message 代理层转成字符串，遵守「数值对外用 str」；
+- 探测方式：`ChatOpenAI(model=..., base_url=..., api_key=SecretStr(token), timeout=..., max_retries=0)`
+  后 `await ainvoke("1+1=?")`；不设 `max_tokens`（各厂商对新版 `max_completion_tokens` 支持不一，
+  简单问题本身输出很短）；`max_retries=0` 保证「一次探测 = 一次上游请求」，
+  超时沿用 `llm_test_timeout`（默认 45s）；
+- **只用裸 `ChatOpenAI`，不碰实例池里的 `TrackedChatOpenAI`**：池实例带限流器与统计埋点，
+  借用会污染统计口径，且限流排队会把「测试」拖成几十秒；
+- 响应结构**保持不变**：`{ok, base_url, model_name, status_code, latency_ms, error}`
+  （成功时 SDK 不回传 HTTP 状态，记 `200`；失败时取 `openai.APIStatusError.status_code`；
+  crawler 侧 `status_code` / `latency_ms` 是 int，be-message 代理层转成字符串；
   错误文案先抹掉密钥再截断 200 字符）；
+- 模型回复**只写 info 日志（截断 100 字符），不进响应**：避免变更响应 schema 牵动
+  be-message 代理层与前端 hey-api SDK 重新生成；
 - be-message 代理这条用**独立超时** `crawler_llm_test_timeout`（默认 60s），
   必须大于 crawler 的 `llm_test_timeout`（默认 45s），否则慢模型会被代理层提前掐断；
 - **不写任何状态**：探测不参与健康状态机、不改统计、不落盘 —— 它只是一次诊断，
   避免「测一下就影响冷却 / 摘除」；
-- 走 `httpx` 直连而不是实例池里的 `TrackedChatOpenAI`：池里的实例带限流器与统计埋点，
-  借用它会污染统计口径。
+- 失败归一化：SDK 抛出的 `APIStatusError` / `APITimeoutError` / `APIConnectionError`
+  及其它异常统一转成 `ok=false` + 可读文案（超时单独提示「请求超时」），日志不带 token。
 
 前端（be-message 代理 + 管理页）：
 
@@ -223,10 +236,10 @@
 | 7 | `ApiRoutes/__init__.py` | 新增路径 / 名称常量 |
 | 8 | `CONFIG.py` | `RUNTIME_DIR` 注释补充 `llm_apis.json` |
 | 9 | `test/test_llm_config_store.py` | **新增**单测（见第 5 节） |
-| 10 | `Service/llm_service/probe.py` | **新增**：单实例连通性探测（`LLMApiTestRequest` / `LLMProbeResult` / `probe_llm_api()` + 密钥回填） |
+| 10 | `Service/llm_service/probe.py` | **新增**：单实例连通性探测（`LLMApiTestRequest` / `LLMProbeResult` / `probe_llm_api()` + 密钥回填）。2026-11-11 起探测体改为**裸 `ChatOpenAI.ainvoke("1+1=?")`**（`max_retries=0`，回复只进日志），响应结构不变 |
 | 11 | `controller/common/CommonRouter.py` + `ApiRoutes/__init__.py` | 新增 `POST /llm/config/test`（声明在 `/llm/config/{index}` 之前） |
 | 12 | `CONFIG.py` | 新增 `llm_test_timeout`（默认 45s） |
-| 13 | `test/test_llm_probe.py` | **新增**单测：密钥回填、成功 / 非 2xx / 超时 / 未提供密钥 |
+| 13 | `test/test_llm_probe.py` | **新增**单测：密钥回填、成功 / SDK 错误状态码 / 超时 / 连接错误 / 未提供密钥 / 不写状态。2026-11-11 起改用假 `ChatOpenAI` 注入（`monkeypatch`），不再 mock `httpx.AsyncClient` |
 
 ---
 
@@ -253,6 +266,11 @@
 3. `GET /llm/stats` 正常返回、`docker logs` 无新异常；
 4. `DELETE /llm/config/override` → 回到 `.env` 配置，再重启仍以 `.env` 为准；
 5. 若管理端可用：`PUT /api/v1/crawler/admin/llm/config`（token 传脱敏值）保存后重启，配置同样保留。
+6. 探测实跑（2026-11-11）：`POST /llm/config/test`（或管理端
+   `POST /api/v1/crawler/admin/llm/config/test`）对一条真实实例点「测试」→ `ok=true` +
+   `latency_ms`，且 crawler 日志出现 `LLM 探测成功 ... 回答=2`；
+   故意传错误密钥 → `ok=false` 且错误文案不含密钥；
+   `GET /llm/stats` 前后调用计数不变（证明真实调用没有污染统计）。
 
 ---
 
@@ -273,6 +291,6 @@
 - 不改 `.env` 的写法、**不把配置写回 `.env`**（容器改宿主机文件不可靠且无审计）；
 - 不引入 MySQL / Redis / 任何数据库表、alembic 迁移或 ORM 模型，不把 token 存进数据库；
 - 不做配置多实例同步协议（单写容器 + 共享挂载文件即可）；
-- 不改 be-message 管理端页面与前端；
+- 不改 be-message 管理端页面与前端；探测响应结构保持不变，不新增字段、不触发前端 hey-api SDK 重新生成；
 - 不把「自动摘除」做成持久化黑名单，不引入后台定时器；
 - 不碰 RPA / 站点专属业务逻辑。

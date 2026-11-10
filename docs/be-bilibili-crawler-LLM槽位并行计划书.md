@@ -277,3 +277,50 @@ while True:                                  # 外层：永不 nack，本轮没�
 | 心跳期间持连接 | 租约期间占用一个 redis 连接 | 槽位数为个位数，池上限 4096 |
 | 重复副本会多跑一次 | 去重锁抢不到的副本会等锁释放后重试，若届时库里仍无结果则会重复提取 | 写库是 upsert（幂等）；重复率由去重锁压低 |
 | 配置热更新 | 改 token 后指纹变化，新槽位从零开始（旧锁自然到期） | 属预期行为，文档说明 |
+
+---
+
+## 8. 修订（2026-11-11）：提取吞吐修复（解析前置清洗 + 并发消费）
+
+> 本节只改「读/解析/消费」环节，**第 0 节的健康状态机、去重锁、ack/nack 语义、
+> `ConsumeBudget` 预算全部保持不变**；不重新引入槽位锁，不改 `is_lot` 口径
+> （仍只认 `t_lot_extra_info.lot_type='common'`），不动官方/预约/充电/话题抽奖链路。
+
+### 8.1 现象与根因
+
+- 生产 `PrizeExtractBiliOpusQueue` 单消费者约 1.7 条/s，抓一轮产生的新动态提取不完，
+  堆积后轮次收尾超时（见《第三方抽奖用户池改造计划书》5.4）；
+- `llm_apis` 在生产由 `runtime/llm_apis.json` 于 **lifespan** 加载，而 `base.py` 的
+  `_PRIZE_EXTRACT_PREFETCH = max(8, len(settings.llm_apis) * 2)` 在 **import 时**计算 ⇒
+  多数部署固定为 8 条在途未确认消息；`aiormq` 虽对每个消息创建独立 task，实际并行度
+  仍被 prefetch 卡死在 8；
+- thinking 模型即使传了 `enable_thinking=False`，仍可能返回
+  `<think>…</think> ```json {…} ```；`with_structured_output()` 的解析器直接 `json.loads`，
+  抛的是 `JSONDecodeError` / `OutputParserException` 而不是 `ValidationError`，
+  现有 `_repair_structured_output()`（只在 `ValidationError` 时生效）救不回来 →
+  一条消息串行试完全部 LLM 后退避重试，吞吐进一步塌陷。
+
+### 8.2 改动清单
+
+| # | 文件 | 改动 |
+|---|---|---|
+| 1 | `Service/GetOthersLotDyn/parser/prize_extractor.py` | 抽出 `_strip_llm_wrappers()`（剥离完整/截断的 `<think>` 块与 ```json 围栏）与 `_parse_llm_result_text()`（清洗后再 `json.loads` + pydantic 校验）；`with_structured_output(..., include_raw=True)` 让解析失败时能拿到 `raw`，先清洗再解析，成功才采用；`_repair_structured_output` 复用同一套解析逻辑 |
+| 2 | `Service/MQ/base/MQClient/PrizeExtract.py` | 新增「在途提取闸」`asyncio.Semaphore`（上限可配），只圈住真正调用 LLM 的 `_do_extract_and_store`；新增 `register_parallel_consumers()`，在同一队列上注册多个并行 subscriber，把「单消费者」变成 N 个竞争消费者。`consume / _consume_once / process_prize_extract` 的 ack/nack、预算、去重锁逻辑一行不改 |
+| 3 | `Service/MQ/base/MQClient/base.py` | `_PRIZE_EXTRACT_PREFETCH` 下限 8 → 32、倍数 2 → 4，并对「配置在 lifespan 才加载」加注释说明。注意 `global_qos=True`：同一队列的多个消费者共用 channel 级 prefetch，实际在途上限 = prefetch（重启后实测 52），**抬 prefetch 才是吞吐旋钮**，多消费者只负责分散投递 |
+| 4 | `CONFIG.py` | 新增 `mq_prize_extract_consumers`（默认 3）、`mq_prize_extract_concurrency`（默认 32），可环境变量覆盖；不写死在业务代码里 |
+| 5 | `test/test_prize_extractor_parse.py` / `test/test_prize_extract_concurrency.py` | 新增解析形态与并发/ack 语义回归用例 |
+
+### 8.3 语义约束
+
+- 仍然只有「确认库里已有」与「本轮成功写库」两处 ack；预算耗尽才主动 `nack(requeue=True)`；
+  闸与并行消费者不改变任何一条消息的确认路径，进程崩溃时未确认消息仍由 broker 重投；
+- 并行消费者是**同一队列的 competing consumers**，不是重复订阅：一条消息只会被一个 handler 拿到；
+- 解析清洗只作用于「模型返回文本」，不改变 prompt、不新增 LLM 调用、不改变结果模型字段。
+
+### 8.4 验证
+
+1. `uv run pytest test/test_prize_extract_flow.py test/test_prize_extractor_parse.py test/test_prize_extract_concurrency.py -v`；
+2. 重启 `be-bilibili-crawler`：RabbitMQ 管理接口里 `PrizeExtractBiliOpusQueue` 的
+   `consumers` = 配置值、各 channel `prefetch_count` = 新下限；
+3. 手动触发一轮：`ready` 持续下降、日志出现「已本地清洗后采用」而不是整串 LLM 失败退避；
+   `select max(pubTime) … is_lot=1` 在 1 小时内推进到当前时间附近。

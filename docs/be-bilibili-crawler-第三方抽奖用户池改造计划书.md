@@ -260,6 +260,58 @@ next=1 mode=2 → replies=1  cursor=0
 2. 重启 `be-bilibili-crawler`，下一轮调度结束后回读 Redis
    `get_other_lot_redis_manager:target_uid_list`，长度为 40。
 
+### 5.4 轮次收尾只等「本轮实际产生/更新的 dynId」（2026-11-11 修订）
+
+> 本节覆盖 5.1.2 中「`_after_scrapy` 等待整轮动态」的约定；补偿重投（Redis
+> `pending_extra_refs` + `pub_prize_extract_from_dyn`）与用户池管理逻辑保持不变。
+
+#### 5.4.1 现象与根因
+
+- 生产 GET_OTHERS_LOT_DYN 轮次 370 自 2026-11-09 01:40 起一直 `isRoundFinished=0`，被跨进程复用 3 天；
+  2026-01 起的历史动态全部被 `addDynInfo` 的 `session.merge` 改写成该轮，整轮 2913 条；
+- `_after_scrapy()` 用 `getAllLotDynInfoByRoundNum(nowRound.lotRound_id)` 取「整轮」动态等待
+  `t_lot_extra_info`，其中 345 条历史脏数据既没有 MQ 在途消息也不会再被处理 → 964s 才超时
+  （上限 900s），本轮新抓的动态全部进入待补偿列表，前端第三方抽奖列表 `is_lot` 缺失，
+  最新可见 `pubTime` 停在 2026-11-10 10:33；
+- 轮次一直不结束的另一半原因：`init_round()` 复用未完成轮次时又用旧对象
+  `addLotMainInfo()` 覆写 `isRoundFinished`；多进程/被取消的上一轮会把刚被别人关掉的轮次重新打开。
+  此外 `bili_space_user_items_set` 只 `update` 不 `clear`，旧 `BiliSpaceUserItem` 的
+  `dynamic_infos / pub_lot_users` 跨轮残留，待判定集合本来就不是「本轮」的。
+
+#### 5.4.2 本轮改动（`Service/GetOthersLotDyn/core/robot.py`）
+
+1. 新增每轮清空的 `self._run_dyn_ids: set[int]`；阶段 3 的 `handle_fetch()` 在
+   `judge_lottery()` 返回后，从 `BiliDynamicItemJudgeLotteryResult` 的
+   `cur_dynamic / orig_dynamic / attached_card` 收集「本次 run 实际写入且已投 MQ」的 dynId
+   （`dynContent` 为空的失效动态不投 MQ，跳过）。
+2. `main()` 开头清空 `_run_dyn_ids` 与 `bili_space_user_items_set`（连同其它跨轮残留状态一起重置）。
+3. `_after_scrapy()` 用 `getDynInfoByIds(sorted(_run_dyn_ids))` 取代
+   `getAllLotDynInfoByRoundNum(round)`；官方/预约/充电分支、common 等待循环、超时补偿、
+   `is_lot` 口径（`t_lot_extra_info.lot_type='common'`）、`allNum/lotNum/uselessNum` 统计口径
+   全部不变，只是集合从「整轮」缩到「本次 run」。日志输出集合规模，便于与超时日志对照。
+4. `init_round()`：每次重置 `isPreviousRoundFinished`；未完成轮次若 `created_at` 早于
+   `_ROUND_REUSE_MAX_AGE`（默认 6 小时）则先强制关闭旧轮、再新建 `lotRound_id + 1`，
+   避免一个僵死轮次被无限复用；用 `created_at` 而不是 `updated_at`（后者每次
+   `addLotMainInfo` 都会被刷新，正是「复用 3 天」看不出陈旧的原因）。
+5. `main()` 中 `_after_scrapy()` 用 `try/finally` 包住 `isRoundFinished = 1` +
+   `addLotMainInfo()`：收尾等待异常/被取消时也一定关闭轮次，单轮超时不再拖住后续轮次。
+
+#### 5.4.3 验证
+
+1. 新增单测：构造「本轮 3 条 + 历史脏数据 345 条挂在同轮」的场景，断言
+   `_after_scrapy` 只按 3 条查 `extra_info`、不调用 `getAllLotDynInfoByRoundNum`；
+   断言 `_after_scrapy` 抛异常时轮次仍被标记为完成；断言陈旧未完成轮次会新开一轮。
+2. `uv run pytest test/test_get_others_lot_round.py test/test_get_other_lot_main.py -v`。
+3. 重启 `be-bilibili-crawler` 容器并手动触发一轮（`GET /get_others_lot_dyn`）：
+   日志中「本轮实际产生/更新」规模为本轮新增量级、不再出现「本轮有 N 条动态未等到
+   extra_info」中 N 为整轮量级；轮次结束后 `isRoundFinished=1`。
+
+#### 5.4.4 不做的事
+
+- 不改 `addDynInfo` 的 merge / MQ 发布逻辑，不动官方/预约/充电/话题抽奖链路；
+- 不新增表、不改 `t_lot_extra_info` 的 `is_lot` 判定口径；
+- 不改 `pending_extra_refs` 跨轮补偿语义（仍由下一轮 `_retry_pending_extra_refs` 重投）。
+
 ## 6. 不做的事
 
 - 不改 `actions/**`（本项目无关）。
