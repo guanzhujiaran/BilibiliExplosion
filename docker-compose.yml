@@ -366,11 +366,12 @@ services:
       - REDIS_PORT=6379
       - REDIS_PWD=
       - BILI_CRAWLER_URI=${BILI_CRAWLER_URI:-http://be-bilibili-crawler:23333}
-      # 只读查询服务（crawler-query target）。**故意不给默认值**：
-      # 空值时网关按 `process.env.BILI_CRAWLER_QUERY_URI || process.env.BILI_CRAWLER_URI`
-      # 回落到爬虫容器，只起一个 crawler 容器的部署方式行为不变；
-      # 一旦在这里写死默认值，没起查询容器的部署会被指到一个不存在的地址。
-      - BILI_CRAWLER_QUERY_URI=${BILI_CRAWLER_QUERY_URI:-}
+      # 只读查询服务（crawler-query target）：默认指向本编排的 be-bilibili-crawler-query，
+      # 与 be-message-service 的 CRAWLER_QUERY_BASE_URL 同一口径。
+      # 网关侧仍是 `process.env.BILI_CRAWLER_QUERY_URI || process.env.BILI_CRAWLER_URI`
+      # （BiliPPTR/utils/utils.js 的 query_base_url），显式设置该变量时以环境变量为准，
+      # 只有「网关不在本套编排里、也没起查询容器」的部署才需要把它覆盖回爬虫地址。
+      - BILI_CRAWLER_QUERY_URI=${BILI_CRAWLER_QUERY_URI:-http://be-bilibili-crawler-query:23336}
       - RPA_SERVICE_URI=${RPA_SERVICE_URI:-http://rpa-browser:28000}
       - MESSAGE_SERVICE_URI=${MESSAGE_SERVICE_URI:-http://be-message-service:18739}
       - CASDOOR_ENABLED=true
