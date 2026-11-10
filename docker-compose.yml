@@ -128,6 +128,13 @@ services:
       resources:
         limits:
           memory: 5G
+    # 打开文件数上限：Docker 默认 soft=1024（与宿主 `ulimit -n` 无关），
+    # 抓取链路（代理池健康检查 + 大量并发 httpx/grpc 连接 + 日志文件）
+    # 在高并发时容易撞到 EMFILE（Too many open files）。
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     container_name: be-bilibili-crawler
     depends_on:
       - mysql
@@ -312,6 +319,12 @@ services:
           path: ./be-bilibili-crawler/pyproject.toml
     ports:
       - "${FASTAPI_QUERY_PORT:-23336}:23336"
+    # 与 crawler 容器同一口径：查询侧同样有大量并发连接（前端 + RPA RPC），
+    # Docker 默认 nofile soft=1024 偏低。
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"

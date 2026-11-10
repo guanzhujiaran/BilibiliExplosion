@@ -8,7 +8,7 @@ provider:
 
 # docker 容器内的服务可以自行重启
 
-1. 本项目用 docker 承载基础设施与部分服务：本地 `docker-compose.dev.yml`、生产 `docker-compose.yml`。
+1. 本项目用 docker 承载基础设施与部分服务：开发环境使用 `docker-compose.dev.yml`、生产环境使用 `docker-compose.yml`。
    服务源码以 **bind mount** 方式挂进容器（如 `./be-bilibili-crawler:/app`、`./bili-common:/bili-common`），
    因此改完代码 **重启容器即生效，无需重建镜像**。
 
