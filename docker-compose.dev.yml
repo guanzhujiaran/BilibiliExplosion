@@ -417,6 +417,18 @@ services:
       # 复查间隔（秒）：只读探测，只在缺失/前缀变化时才写入（写入会触发
       # netlink 变更通知，浏览器会判定网络变更 → ERR_NETWORK_CHANGED）
       - POOL_CHECK_INTERVAL=${GO_PROXY_CHECK_INTERVAL:-300}
+      # 回程 NS 代答后端（决定出口地址能不能覆盖整个 /64）：
+      #   ndppd（默认）    —— ndppd 对整段 /64 代答，内核 neigh 表一条都不写；
+      #   userspace       —— 内置代答器兜底；kernel —— 内核 proxy_ndp，逐条 pneigh。
+      - NDP_BACKEND=${NDP_BACKEND:-ndppd}
+      # userspace 后端把网卡置为 allmulticast：整段代答必须能收到任意 solicited-node 组播组的 NS
+      - NDP_ALLMULTICAST=${NDP_ALLMULTICAST:-on}
+      # 出口地址池：留空 = 按后端取默认值（userspace 每请求 /64 内全新地址；kernel 512）。
+      - EXIT_POOL_SIZE=${EXIT_POOL_SIZE:-0}
+      # 池内地址轮换周期（秒）：到期换一批新的 /64 随机地址（0 = 不轮换；仅在配了池时生效）
+      - EXIT_POOL_RENEW_SECONDS=${EXIT_POOL_RENEW_SECONDS:-600}
+      # kernel 后端下内置代答器的开关：auto = proxy_ndp 可用就不启；on / off 可强制。
+      - NDP_RESPONDER=${NDP_RESPONDER:-auto}
       - TZ=${ENV_TZ:-Asia/Shanghai}
     volumes:
       - ./scripts/docker/go-proxy-entrypoint.sh:/app/entrypoint.sh:ro
