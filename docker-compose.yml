@@ -715,6 +715,14 @@ services:
       - POSTGRES_PPTR_URL=postgresql+asyncpg://${POSTGRES_USER:?请在 .env 里设置 POSTGRES_USER（Postgres 账号）}:${POSTGRES_PASSWORD:?请在 .env 里设置 POSTGRES_PASSWORD（Postgres 密码）}@${POSTGRES_HOST:-postgres}:5432/PPTR_Bili_Lot
       # 与 be-bilibili-crawler / rpa-browser 共用同一份推送渠道配置（JSON）
       - MESSAGE_CONFIG=${MESSAGE_CONFIG:?请在 .env 里设置 MESSAGE_CONFIG（推送渠道配置 JSON，留空会让各服务启动时 pydantic 校验失败）}
+      # 推送聚合（失败告警「首条直推 + 冷却期内合并」，见 app/services/message/external/push_aggregator.py）
+      # 只聚合 [f] 失败主题；同一个 push key（接收人）一个桶，标题不参与分桶。
+      # 冷却期（秒，下限 1）：同一 push key 在该窗口内的后续告警并入摘要，默认 60
+      - PUSH_AGGREGATE_COOLDOWN_SECONDS=${PUSH_AGGREGATE_COOLDOWN_SECONDS:-60}
+      # 摘要正文硬上限（字符，下限 200）
+      - PUSH_AGGREGATE_MAX_LEN=${PUSH_AGGREGATE_MAX_LEN:-1800}
+      # 到期桶扫描间隔（秒，下限 0.5）：摘要最多比冷却到期晚多久发出
+      - PUSH_AGGREGATE_SWEEP_SECONDS=${PUSH_AGGREGATE_SWEEP_SECONDS:-2}
       # 抽奖卡片只读查询（热门抽奖榜 / 首页轮播一次返回卡片数据）
       - CRAWLER_QUERY_BASE_URL=http://be-bilibili-crawler-query:23336
       # crawler 写服务：管理端「LLM 配置」页代理 /llm/*（crawler 侧无鉴权、网关不转发）
