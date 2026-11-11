@@ -411,7 +411,11 @@ RabbitMQ 有 `consumer_timeout`（broker 端配置，默认 **30 分钟 = 1800s*
 | 全部槽位被删除（`REMOVED`，不可恢复） | `_push_all_llms_disabled_error` | 需人工补回 `llm_apis` 配置 |
 | 未配置任何云端 LLM | `_push_no_llm_configured_error` | 需人工配置 |
 
-> 重复推送的去重 / 冷却仍由 message-service 的 `push_aggregator` 统一治理（按「接收人 × 标题」聚合）；
+> 重复推送的去重 / 冷却仍由 message-service 的 `push_aggregator` 统一治理。
+> 2026-11-11 修订：**同一个 push key（同一个接收人 / 同一份合并后的渠道配置）只设一个桶**，
+> 标题不再参与分桶 —— 一次故障同时产生的「MQ消费失败 / 服务异常 / 抽奖判断失败」等多类告警
+> 会合并成一条摘要，而不是各自占一个冷却窗口、各发一条。摘要标题取桶内标题的公共前缀
+> （如 `[f][crawler@host] 合并告警`），正文按标题分组列出明细。
 > 本次改动只收敛「什么时候该发」——冷却期与单轮失败根本不发，terminal（全都不能用）才发。
 
 ### 10.5 验证
