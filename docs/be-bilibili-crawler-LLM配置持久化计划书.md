@@ -201,6 +201,11 @@
   be-message 代理层与前端 hey-api SDK 重新生成；
 - be-message 代理这条用**独立超时** `crawler_llm_test_timeout`（默认 60s），
   必须大于 crawler 的 `llm_test_timeout`（默认 45s），否则慢模型会被代理层提前掐断；
+- 网关侧按**命名空间**分流而非写死单个接口路径：`/api/v1/crawler/admin/llm` 整段前缀
+  在通用 `/api/v1` 代理之前注册，统一放大到 90s（`clearTimeout` + `setTimeout` +
+  `proxyTimeout`），具体路由全由 be-message 的 APIRouter 决定。三级预算
+  **网关 90s > be-message 60s > crawler 45s** 不再倒挂；该命名空间以后新增慢接口
+  无需再改网关，前端 URL 不变、不需要重新生成 hey-api SDK；
 - **不写任何状态**：探测不参与健康状态机、不改统计、不落盘 —— 它只是一次诊断，
   避免「测一下就影响冷却 / 摘除」；
 - 失败归一化：SDK 抛出的 `APIStatusError` / `APITimeoutError` / `APIConnectionError`
