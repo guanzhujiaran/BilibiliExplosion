@@ -538,3 +538,157 @@ GetProxyStatus：200
 - 本次 `refresh_proxy_zset()` 的僵尸过滤是手动触发一次生效的；此后新僵尸会在
   `redis_update_proxy`（`status != 0`）时即时从两个池摘掉，不依赖定时重建。
 
+
+---
+
+## 8. 方案 D：代理健康度改「前缀级决策」+ 自建出口改「专线」（2026-11-14）
+
+### 8.1 问题：地址级打分对「换地址 = 同 IP」的出口完全失效
+
+实测（生产日志 + 代理池快照）：
+
+| 事实 | 影响 |
+|---|---|
+| 自建 go-proxy 出口每拨号在同一个 `/64` 内随机选地址 | 风控按 `/64` 聚合，**换地址等于换了个寂寞**；日志里 `get_lot_notice` 等请求持续 `-352`，来源就是这一条出口 |
+| 该出口在 `ProxyEvent._pool_proxy_key` 被排除健康记账；`RedisRequestProxy._local_ipv6_proxy` 伪造 `score=10000 / success_times=10000` | 永不降权、永不冷却；`refresh_proxy` 也无法复位它（它不在 `proxy_tab` 里） |
+| `_select_proxy` 在池里没有符合 tier 的代理时**无条件**回该出口 | 池空时 100% 流量压在这条 `/64` 上，等于把「冷却」这个机制整个绕过 |
+| 绝大多数 B 站请求 `is_use_custom_proxy=True` | 固定走这条 `/64`，地址级健康度形同虚设 |
+| public 池也是段级同生共死：hot 936 条仅来自 455 个 `/24`，单 `/24` 最多 108 条 | 单个 `/24` 被整段封时，池里同时报废 108 条「hot」；地址级 fast 准入看到的是 108 个互相独立的「好代理」 |
+
+结论：**判定维度错了**。健康度（连续失败 / EWMA / 冷却）与并发配额必须按网段前缀归并；
+地址级明细只保留给日志与排障。
+
+### 8.2 设计
+
+#### 8.2.1 前缀归并（通用，不写死任何站点）
+
+新增 `Utils/代理/mdoel/ProxyPrefix.py`：
+
+| 输入 | 前缀口径 | 例 |
+|---|---|---|
+| IPv4 | `prefix_v4_length`（默认 24） | `http://45.74.31.7:8080` → `v4:45.74.31.0/24` |
+| IPv6 | `prefix_v6_length`（默认 64） | `socks5://[2001:db8:1:2::7]:1080` → `v6:2001:db8:1:2::/64` |
+| 域名 | 按主机名归并（无法判断托管段） | `http://proxy.example.com:80` → `host:proxy.example.com` |
+| 无法解析 | 按代理串自身归并（不误伤其它代理） | `raw:<原串>` |
+
+前缀串带 `v4:` / `v6:` / `host:` 命名空间，Redis key 不会与地址级 key 撞车。
+
+#### 8.2.2 Redis 结构（与地址级并存，互不影响）
+
+| key | 类型 | 含义 |
+|---|---|---|
+| `proxy_health:v1:prefix_detail:<prefix>` | hash | 前缀级明细（state / cf / ewma / cd / rl / 计数） |
+| `proxy_health:v1:prefix_state:<state>` | set | 前缀分档集合（hot/warm/suspect/quarantine/dead） |
+| `proxy_health:v1:prefix_cooling` | zset | 前缀冷却（member=prefix，score=到期时间） |
+| `proxy_health:v1:prefix_inflight:<prefix>` | string | 前缀在途并发（`prefix_inflight_limit` 依据） |
+| `proxy_health:v1:prefix_members:<prefix>` | set | 该前缀下**被实际用过**的代理串（冷却时据此把整段写回 MySQL `status=-412`） |
+| `proxy_health:v1:prefix_episode:<prefix>` | string | 一轮风控冷却的互斥标记（`SET NX EX`），并发 412 只算一次升级 |
+| `proxy_health:v1:qps:<channel>:<window>` | string | 通道 QPS 配额（固定 1 秒窗口，专线出口用） |
+
+地址级 key 全部保持原样（`proxy_health:v1:detail:<proxy>` 等），只作日志明细。
+
+#### 8.2.3 判定口径
+
+- **准入**：`prefix_cooling` 未到期 → 该前缀下所有代理（含 fast 车道）一律不取；
+  另外 `prefix_inflight >= prefix_inflight_limit` 时也不取（同段并发打满会被整段封）。
+- **412/352**：前缀级 `QUARANTINE`，冷却阶梯 **2h → 6h → 24h**（`prefix_risk_cooldown_first/second/max`），
+  每次新一轮冷却升一级；成功后回落一级。**同一轮冷却内的重复命中不再升级**（`prefix_episode` 互斥）。
+- **网络层失败**：前缀级连续失败 ≥ `prefix_network_fail_threshold`（默认 3）才冷却，时长沿用 10~30min 区间
+  （避免单个坏代理掉线就把整个 `/24` 停掉）。
+- **成功**：前缀级 EWMA 上升、连续失败清零；但**风控冷却期内不解冻**（风控信号优先）。
+- **同前缀不换地址重试**：任务内失败代理的**前缀**写入排除集，下一次选代理直接跳过同前缀所有地址。
+- **专用通道**：自建 IPv6 出口不再伪造 `score/success_times=10000`，也不再豁免记账；
+  走「独立通道 + 独立 QPS 配额」（`local_ipv6_qps`，默认 3 req/s），352 同样按前缀冷却；
+  作为兜底时先过配额闸门，而不是无条件使用。
+
+#### 8.2.4 选代理保持 O(1)
+
+- 随机主键起点逻辑不变；前缀过滤只对**已取回的候选行**（默认 32 条）做内存判定，
+  前缀明细 / 在途数用 `pipeline` / `MGET` 一次取回，**不新增任何全表扫描**；
+- 已验证分档（hot/warm）取样后同样按前缀二次过滤；
+- `flush_proxy_health` 只对**当前冷却中的前缀**读成员集合（`SMEMBERS`，通常几条到几十条），
+  再分批 `UPDATE ... WHERE computed_proxy_str IN (...)` 复用原逻辑。
+
+#### 8.2.5 配置（`CONFIG.proxy_health`，env 可覆盖）
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `prefix_v4_length` | 24 | IPv4 归并前缀长度 |
+| `prefix_v6_length` | 64 | IPv6 归并前缀长度 |
+| `prefix_inflight_limit` | 2 | 同前缀在途并发上限 |
+| `prefix_network_fail_threshold` | 3 | 前缀级连续网络失败多少条才冷却 |
+| `prefix_risk_cooldown_first` | 7200 | 412/352 第 1 级冷却 |
+| `prefix_risk_cooldown_second` | 21600 | 第 2 级冷却 |
+| `prefix_risk_cooldown_max` | 86400 | 第 3 级（及以后）冷却上限 |
+| `local_ipv6_channel` | `local-ipv6` | 自建出口的通道名（QPS 配额按通道独立计数） |
+| `local_ipv6_qps` | 3.0 | 自建出口独立 QPS 配额（≤0 表示不限） |
+| `local_ipv6_qps_wait` | 1.0 | 超配额时最多等待多久，之后快速失败 |
+| `local_ipv6_weight` / `pool_weight` | 10 / 1000 | 非强制场景下「专线 / 代理池」的抽样权重 |
+| `local_ipv6_cooling_pool_fallback` | True | 专线冷却/超额时，强制专线的请求是否允许降级到代理池（False = 快速失败交回队列） |
+
+### 8.3 验收
+
+1. 同一 `/64`（或 `/24`）多个代理，其中一个 412 → 其余同前缀代理在 `_pick_proxy_by_tier` 中一并被拒，
+   且 `prefix_cooling` 有该前缀；
+2. 池空时自建出口受 `local_ipv6_qps` 限制（固定 1 秒窗口，超配额快速失败而不是硬打）；
+   352 之后再次请求该出口走冷却分支而不是继续重试；
+3. 日志里同一前缀只出现一次「进入冷却」，不再「换地址反复撞墙」；`proxy_health` 分档同时打印前缀口径计数。
+
+### 8.4 回滚
+
+删 `proxy_health:v1:prefix_*` / `qps:*` 系列 key + 代码回退即可；无 DDL、无数据迁移，
+`proxy_tab` 字段语义未改动（仍只复用 status / score / success_times / update_ts）。
+
+### 8.5 实施记录与验证（2026-11-14 23:05~23:12）
+
+改动文件：
+
+| 文件 | 改动 |
+|---|---|
+| `Utils/代理/mdoel/ProxyPrefix.py`（新增） | 前缀归并：v4 /24、v6 /64（长度可配）、域名按主机、无法解析按代理串自身 |
+| `CONFIG.py` | `prefix_v4_length` / `prefix_v6_length` / `prefix_inflight_limit` / `prefix_network_fail_threshold` / `prefix_risk_cooldown_first|second|max` / `local_ipv6_channel|qps|qps_wait|weight` / `pool_weight` / `local_ipv6_cooling_pool_fallback` |
+| `ProxyHealth.py` | 前缀级明细 / 分档集合 / 冷却 zset / 在途计数 / 成员集合 / 冷却轮次互斥标记 / 通道 QPS 配额；`read_selection_state` 把「地址 + 前缀 + 两级在途」合并成**一次 pipeline** |
+| `ProxyEvent.py` | 去掉 `/local` 出口的记账豁免（`_pool_proxy_key` 不再返回空串），412/352 口径改为前缀级长冷却 |
+| `async_proxy_op_alchemy_mysql_ver.py` | `_pick_proxy_by_tier` / `_pick_from_verified_pool` 加前缀闸门；`select_random_proxy` 按失败代理**前缀**排除；`flush_proxy_health` 按冷却前缀的成员集合整段回写 MySQL |
+| `RedisRequestProxy.py` | 自建出口不再伪造 `score/success_times=10000`；新增 `_acquire_local_exit` 三道闸门（本任务排除 → 前缀冷却 → 独立 QPS 配额）；池空兜底同样受限流约束；池代理额外记前缀在途 |
+| `grpc_api.py` | 同一出口的伪造分值同步改为 0（gRPC 链路的本地出口） |
+| `test/test_proxy_prefix_health.py`（新增）/`test/test_proxy_pool_selection.py` | 前缀归并、冷却阶梯、风控期不解冻、闸门三条件、QPS 配额、同段整片拒绝 |
+
+验证（真实 Redis / MySQL，脚本跑完已自清现场）：
+
+```
+prefix(A)=v4:203.0.113.0/24 prefix(B)=v4:203.0.113.0/24 同段=True
+[412] state=quarantine risk_level=1 cooldown=7200s (期望≈7200)
+[412] 同段另一地址是否被挡：is_prefix_cooling=True
+[412-重复] risk_level=1 cooldown=7200s（同一轮并发命中不升级）
+[412-新轮次] risk_level=2 cooldown=21600s（阶梯升级到第 2 级）
+[成功] 冷却期内 success_total=1 still_cooling=True state=quarantine
+[在途] prefix_in_flight=2 limit=2 eligible=False
+[QPS] qps=3.0 结果=['过','过','过','限','限','限']（过=3）
+[counts] hot=4 warm=2832 ... | prefix(hot=0 warm=0 suspect=0 quarantine=0 dead=0 cooling=0)
+```
+
+端到端（真实池子取一组同 /24 代理）：
+
+```
+选定前缀 v4:123.54.197.0/24：3 条可用代理
+412 后：前缀冷却=True state=quarantine risk_level=1 cd=7200s
+fast 选代理 20 次：命中冷却前缀 0 次（期望 0）
+自建出口=http://192.168.81.172:3128 前缀=v4:192.168.81.0/24 qps=3.0
+专线闸门 8 次：放行 8 次，耗时 1.71s（限速下界≈1.33s，qps=3.0）
+352 后：前缀冷却=True 闸门 5 次全部拒绝=True
+强制专线快速失败：code=-4 自建出口不可用（风控冷却 / 超出 QPS 配额）
+```
+
+单测：`uv run pytest test/test_proxy_prefix_health.py test/test_proxy_pool_selection.py test/test_proxy_health.py
+test/test_proxy_retry_yield.py test/test_proxy_fetch_ingest.py test/test_proxy_source_mirror.py -q` → **118 passed**。
+
+容器：`docker compose -f docker-compose.dev.yml restart be-bilibili-crawler be-bilibili-crawler-query`，
+两者启动无异常（`Traceback|ERROR` 计数 0），`GET /api/v1/background_service/GetProxyStatus` 返回 200。
+
+遗留观测项（不影响本次验收）：
+- `test/test_background_service.py::TestScrapyStatus::test_single_scrapy_status_valid` 为**既有失败**
+  （`GetSingleScrapyStatus` 路由在 `controller/v1/lotttery_database/bili/ScrapyStatus.py`，
+  该用例的 app fixture 只挂了 `BackgroundServiceController.router`，与本次改动无关）；
+- 前缀在途上限 `prefix_inflight_limit=2` 与地址级 `fast_max_in_flight=2` 叠加后，单段最多 2 并发；
+  若观测到 hot 代理吞吐不足，可只调大前缀上限（地址级仍守住单代理并发）。
