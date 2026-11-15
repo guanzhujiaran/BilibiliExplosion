@@ -624,7 +624,10 @@ GetProxyStatus：200
 | `local_ipv6_qps` | 3.0 | 自建出口独立 QPS 配额（≤0 表示不限） |
 | `local_ipv6_qps_wait` | 1.0 | 超配额时最多等待多久，之后快速失败 |
 | `local_ipv6_weight` / `pool_weight` | 10 / 1000 | 非强制场景下「专线 / 代理池」的抽样权重 |
-| `local_ipv6_cooling_pool_fallback` | True | 专线冷却/超额时，强制专线的请求是否允许降级到代理池（False = 快速失败交回队列） |
+| `local_ipv6_cooling_pool_fallback` | True | 专线冷却/超额时，强制专线的请求是否允许降级到代理池（False = 快速失败交回队列）；**不作用于 `local_exit_only`** |
+| `local_exit_only_channel` | `local-ipv6-cookie-meta` | 专线独占请求的通道名（QPS 按通道独立计数，见 8.6） |
+| `local_exit_only_qps` | 10.0 | 专线独占通道的独立 QPS 配额（≤0 表示不限） |
+| `local_exit_ignore_risk_cooldown` | True | 是否允许 `RequestConf.ignore_risk_cooldown` 生效（跳过自建出口前缀风控冷却） |
 
 ### 8.3 验收
 
@@ -692,3 +695,71 @@ test/test_proxy_retry_yield.py test/test_proxy_fetch_ingest.py test/test_proxy_s
   该用例的 app fixture 只挂了 `BackgroundServiceController.router`，与本次改动无关）；
 - 前缀在途上限 `prefix_inflight_limit=2` 与地址级 `fast_max_in_flight=2` 叠加后，单段最多 2 并发；
   若观测到 hot 代理吞吐不足，可只调大前缀上限（地址级仍守住单代理并发）。
+
+## 9. 专线独占通道 `local_exit_only`（2026-11-15）
+
+### 9.1 问题
+
+cookie 生成与 metadata 激活此前只声明了 `is_use_custom_proxy=True`（只想走自建 IPv6 出口），
+但 `_acquire_local_exit` 的三道闸门（本任务内已失败 / 前缀风控冷却 / QPS 配额）任一不通过就返回
+`None`，而 `local_ipv6_cooling_pool_fallback=True` 会直接降级到公共代理池。线上表现：
+
+- `自建出口前缀 host:host.docker.internal 处于风控冷却中，本次不使用` →
+  `Failed to connect to www.bilibili.com:443 over proxy 178.128.84.59`（公共池地址）；
+- cookie 预热停在 `已生成 0/2`（buvid3 阶段 proxy 超时）、metadata 激活失败
+  （`resource_abtest_abserver` 重试预算耗尽）；
+- 这些失败还会把公共池的坏前缀写进健康统计，进一步污染池子。
+
+根因是「通道语义」不够表达：「想走专线」不等于「只准走专线」。
+
+### 9.2 语义（`RequestConf`，与站点/业务无关）
+
+| 字段 | 语义 |
+|---|---|
+| `local_exit_only` | 专线独占：只允许 `CONFIG.custom_proxy`；闸门不通过就抛 `RequestProxyUnavailableError(reason=local_exit_only)`，**不降级池、不直连** |
+| `ignore_risk_cooldown` | 该请求不因「自建出口前缀风控冷却」被拒（总闸 `local_exit_ignore_risk_cooldown` 可全局收回）；**保留**本任务内失败去重与 QPS 限流 |
+
+- QPS 使用独立通道 `local_exit_only_channel` / `local_exit_only_qps`（默认 10 req/s），
+  与业务通道 `local_ipv6_*`（3 req/s）分开计数，互不抢占；
+- `local_exit_only` 请求**不写**池健康 / 前缀冷却（cookie/meta 的 412/352 不代表公共池网段质量，
+  也不该把自建前缀打进 2h 冷却拖累业务通道）；`note_failed_proxy` 仍保留，避免同一任务内反复撞同一个死出口；
+- 失败可观测：异常 / 日志带 `reason=local_exit_only` 与出口地址，告警沿用 `_warn_local_gate` 60s 限流；
+- `is_use_custom_proxy` 的既有行为（冷却 → 池，受 `local_ipv6_cooling_pool_fallback` 控制）**保持不变**。
+
+### 9.3 改动文件
+
+| 文件 | 改动 |
+|---|---|
+| `Utils/代理/mdoel/RequestConf.py` | 新增 `local_exit_only` / `ignore_risk_cooldown`（中英文义说明） |
+| `Service/GrpcModule/Models/CustomRequestErrorModel.py` | 新增 `REASON_LOCAL_EXIT_ONLY = "local_exit_only"` |
+| `CONFIG.py` | `local_exit_only_channel` / `local_exit_only_qps` / `local_exit_ignore_risk_cooldown` |
+| `Utils/代理/redisProxyRequest/RedisRequestProxy.py` | `_acquire_local_exit` 返回 `LocalExitGate`（带挡下来的原因）；新增 `_local_exit_quota` / `_check_risk_cooldown` / `_local_exit_only_error` / `_local_exit_tag`；`_select_proxy` 对 `local_exit_only` 不再调 `_pool_proxy`；`account_health = not local_exit_only` 跳过池健康记账 |
+| `Service/GrpcModule/Grpc/Bapi/BiliApiBase.py` | `get_frontend_finger_spi` / `gen_web_ticket` / `get_bili_main_page_raw_resp` / `gaia_gateway_ExClimbWuzhi` 及空实现的 `gaia_gateway_ExClimbCongling` 统一补两个标记 |
+| `Service/GrpcModule/Grpc/Bapi/BiliApi.py` | `resource_abtest_abserver`（metadata 激活）补两个标记 |
+| `Utils/GrpcUtils/metadata/makeMetaData.py` | `make_metadata` 不再硬编码代理形状，统一 `_local_exit_proxies`（只接受 `DIRECT`/`False` 调试哨兵）；`get_bili_ticket` / `active_buvid` 固定自建出口且失败即抛（删掉「代理 ↔ 直连」来回切换的死循环）；`device.fetch_region` 由调用方固定传自建出口 |
+| `Utils/代理/SealedRequests.py` | `TRUST_ENV = False`：不读 `HTTP(S)_PROXY` 等环境变量，避免容器/宿主环境代理截胡显式出口 |
+| `test/test_local_exit_only_channel.py`（新增） | 通道独立配额 / 冷却豁免与总闸 / 不降级池 / 黑洞快速失败 / 失败不写池健康 |
+
+### 9.4 验证（dev 容器实跑，脚本跑完已自清现场）
+
+```
+[配置] 出口=http://192.168.81.172:3128 前缀=v4:192.168.81.0/24
+[配置] 业务通道=local-ipv6/3.0req/s 专线独占通道=local-ipv6-cookie-meta/10.0req/s
+[注入] 前缀风控冷却 7200s -> is_prefix_cooling=True
+[业务请求] 放行=False 原因=自建出口前缀 v4:192.168.81.0/24 处于风控冷却中
+[cookie/meta] 放行=True 通道=local-ipv6-cookie-meta 配额=10.0
+[QPS 计数] 业务通道=None 专线独占通道=1        ← 两条通道独立计数
+[cookie 预热] 已生成 2/2，用时 4.96s            ← 冷却期内仍只走自建出口（_pool_proxy 被禁止调用）
+[冷却复核] cookie 预热后 is_prefix_cooling=True ← 不写前缀冷却
+[metadata 激活] 成功 code=0
+[黑洞出口] ProxyRetryBudgetExhausted 用时 6.36s
+  ...（reason=local_exit_only，出口=http://127.0.0.1:1，未降级到公共池 / 直连）
+[清理] is_prefix_cooling=False
+```
+
+日志里的代理地址统计（`docker logs --since 6m | grep -oE 'https?://<ip>:<port>'`）：
+只有 `http://192.168.81.172:3128`（自建出口）与 `http://0.0.0.0:23333`（服务监听），**无任何公共代理 IP**。
+
+单测：`uv run pytest test/test_local_exit_only_channel.py test/test_proxy_prefix_health.py
+test/test_push_and_cookie_hardening.py -q` → **32 passed**。
+容器：重启 `be-bilibili-crawler` / `be-bilibili-crawler-query`，启动无异常，`/openapi.json` 返回 200。
