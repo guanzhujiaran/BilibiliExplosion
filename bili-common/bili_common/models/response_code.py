@@ -69,6 +69,7 @@ class ResponseCode(IntEnumAutoDoc):
     ACTION_LOG_NOT_FOUND = 1016  # 操作日志不存在
     APPROVAL_NOT_FOUND = 1017  # 审批单不存在
     TAG_NOT_FOUND = 1018  # 资源标签不存在
+    ERROR_REPORT_NOT_FOUND = 1019  # 报错 / 反馈记录不存在（管理端 CRUD 按 report_id 定位）
 
     # WebRTC 相关错误码
     WEBRTC_OFFER_FAILED = 2001
