@@ -158,6 +158,101 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
    docker compose up -d
    ```
 
+## 自动部署（脚本一键式）
+
+整套部署只依赖 **bash + git + docker compose**：服务器上的 timer 轮询 `origin/main`，
+发现新提交就调 `scripts/deploy/remote_deploy.sh` 完成「依赖层判定 → 按需重建镜像 →
+重启容器 → 健康检查 → 失败自动回滚 → 记录」。不引入 Jenkins / GitHub Actions 之类的外部编排。
+
+| 文件 | 作用 |
+| --- | --- |
+| `scripts/deploy/install_auto_deploy.sh` | 一键安装/卸载 systemd timer（替代 cron，跑完即退） |
+| `scripts/deploy/auto_deploy.sh` | 一次轮询：判断是否有新提交、失败退避、暂停开关、日志 |
+| `scripts/deploy/remote_deploy.sh` | 真正的发布动作（含 `flock` 互斥、健康检查、回滚） |
+
+为什么是「服务器主动拉」：生产机在内网/家里，不需要可被外部回连的 SSH，也不用把私钥寄存在第三方；
+拉不到就什么都不做，不会留下「部署到一半」的状态。
+
+> `docker-compose.yml` 里业务服务源码是 **bind mount**，镜像只承载依赖层。
+> 所以**发布 = 服务器上更新工作区 + 重启容器**；只有 `Dockerfile.mono` / `uv.lock` / compose
+> 文件变化时才 rebuild。
+
+### 一次性安装（生产机，仓库根目录执行）
+
+```bash
+sudo bash scripts/deploy/install_auto_deploy.sh --interval 120
+#   --user deploy   指定跑部署的系统用户（默认 sudo 调用者）
+#   --dry-run       只打印 systemd unit 内容
+#   --uninstall     卸载
+```
+
+装完即生效：`biliexplosion-auto-deploy.timer` 每 120s 跑一次，跑完即退。
+
+前置条件（缺一不可）：
+
+1. 仓库已克隆到生产机、`.env` 已按 `.env.example` 配好、`docker_vol/` 已创建；
+2. 执行部署的用户**在 docker 组内**，且能 `git fetch` 根仓库与所有 submodule
+   （私有仓库需 deploy key / credential helper；服务器走代理时配置 `git config --global http.proxy`）。
+
+### 日常操作
+
+```bash
+bash scripts/deploy/auto_deploy.sh --status          # 本地 SHA / 远端 SHA / 上次成功 / 是否暂停
+systemctl list-timers biliexplosion-auto-deploy.timer
+systemctl start biliexplosion-auto-deploy.service    # 立刻跑一次，不等 timer
+tail -f docker_vol/deploy/auto.log                   # 部署记录（自动轮转 5MB）
+touch docker_vol/deploy/pause                        # 维护窗口：暂停自动部署
+rm -f docker_vol/deploy/pause                        # 恢复
+
+# 手工发布（与自动部署共用一把锁，不会并发）
+DEPLOY_PATH=/opt/BilibiliExplosion ./scripts/deploy/remote_deploy.sh
+DRY_RUN=1 SERVICES="be-bilibili-crawler" ... ./scripts/deploy/remote_deploy.sh   # 演练，不改工作区
+REBUILD=1 ... ./scripts/deploy/remote_deploy.sh                                 # 强制重建镜像
+```
+
+保护机制：
+
+| 场景 | 行为 |
+| --- | --- |
+| 自动 / 手工 / timer 同时触发 | `flock` 互斥，后到的直接跳过，下个周期重试 |
+| 工作区有未提交改动 | 拒绝发布（退出码 2；`FORCE=1` 覆盖），自动部署会退避 30 分钟并告警 |
+| 健康检查失败 | 自动 `git reset --hard` 回上一个 SHA + 重建重启，并对该版本退避 30 分钟 |
+| 同一版本反复失败 | 30 分钟内不重试，避免「回滚 → 重试 → 回滚」死循环 |
+| 维护窗口 | `touch docker_vol/deploy/pause` |
+
+健康检查用 `docker compose port` 反查宿主机端口（不写死）：crawler `23333/health`、
+query `23336/health`、message `18739/health`；另外 `docker compose ps` 里出现 `exited` /
+`restarting` 也算失败。
+
+### 完整交付链路（没有 CI 服务器也能跑）
+
+```text
+开发机改代码 → git push → 生产机 timer 拉取并发布 → 健康检查 → 失败自动回滚
+```
+
+```bash
+# 1. 开发机：改代码 → 提交 → 推送
+git add -A && git commit -m "feat: xxx" && git push origin main
+
+# 2. 生产机：什么都不用做（timer 每 2 分钟自动拉取并发布）
+#    想立刻发就执行：
+systemctl start biliexplosion-auto-deploy.service
+
+# 3. 看结果
+tail -n 50 docker_vol/deploy/auto.log
+docker compose ps
+```
+
+发布脚本自己完成「依赖层判定 → 按需重建 → 重启 → 健康检查 → 失败回滚 → 记录」，
+所以不需要外部 CI 来做这些编排；单测/语法检查在提交前本地跑即可：
+
+```bash
+cd be-bilibili-crawler && uv run pytest test -q \
+  --ignore=test/test_prize_extract_flow.py --ignore=test/test_other_routers.py \
+  --ignore=test/test_background_service.py --ignore=test/test_get_others_lot_round.py \
+  --ignore=test/test_lottery_data.py --ignore=test/test_chatgpt.py
+```
+
 ## 许可证
 
 MIT
