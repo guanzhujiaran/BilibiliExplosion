@@ -598,8 +598,9 @@ GetProxyStatus：200
 - **成功**：前缀级 EWMA 上升、连续失败清零；但**风控冷却期内不解冻**（风控信号优先）。
 - **同前缀不换地址重试**：任务内失败代理的**前缀**写入排除集，下一次选代理直接跳过同前缀所有地址。
 - **专用通道**：自建 IPv6 出口不再伪造 `score/success_times=10000`，也不再豁免记账；
-  走「独立通道 + 独立 QPS 配额」（`local_ipv6_qps`，默认 3 req/s），352 同样按前缀冷却；
-  作为兜底时先过配额闸门，而不是无条件使用。
+  走「独立通道 + 独立 QPS 配额」（`local_ipv6_qps`，**默认 0 = 业务通道不限速**，
+  可用 `PROXY_HEALTH__LOCAL_IPV6_QPS=3` 回滚），352 同样按前缀冷却；
+  作为兜底时配额 >0 才先过配额闸门，否则只看风控冷却 / 本任务内失败。
 
 #### 8.2.4 选代理保持 O(1)
 
@@ -621,8 +622,8 @@ GetProxyStatus：200
 | `prefix_risk_cooldown_second` | 21600 | 第 2 级冷却 |
 | `prefix_risk_cooldown_max` | 86400 | 第 3 级（及以后）冷却上限 |
 | `local_ipv6_channel` | `local-ipv6` | 自建出口的通道名（QPS 配额按通道独立计数） |
-| `local_ipv6_qps` | 3.0 | 自建出口独立 QPS 配额（≤0 表示不限） |
-| `local_ipv6_qps_wait` | 1.0 | 超配额时最多等待多久，之后快速失败 |
+| `local_ipv6_qps` | 0.0（不限速） | 自建出口**业务通道**独立 QPS 配额（≤0 表示不限）；默认不限速，回滚开关 `PROXY_HEALTH__LOCAL_IPV6_QPS=3` |
+| `local_ipv6_qps_wait` | 1.0 | 超配额时最多等待多久，之后快速失败（仅 `local_ipv6_qps > 0` 时生效） |
 | `local_ipv6_weight` / `pool_weight` | 10 / 1000 | 非强制场景下「专线 / 代理池」的抽样权重 |
 | `local_ipv6_cooling_pool_fallback` | True | 专线冷却/超额时，强制专线的请求是否允许降级到代理池（False = 快速失败交回队列）；**不作用于 `local_exit_only`** |
 | `local_exit_only_channel` | `local-ipv6-cookie-meta` | 专线独占请求的通道名（QPS 按通道独立计数，见 8.6） |
@@ -633,8 +634,8 @@ GetProxyStatus：200
 
 1. 同一 `/64`（或 `/24`）多个代理，其中一个 412 → 其余同前缀代理在 `_pick_proxy_by_tier` 中一并被拒，
    且 `prefix_cooling` 有该前缀；
-2. 池空时自建出口受 `local_ipv6_qps` 限制（固定 1 秒窗口，超配额快速失败而不是硬打）；
-   352 之后再次请求该出口走冷却分支而不是继续重试；
+2. 池空时自建出口可兜底；若把 `local_ipv6_qps` 设回 >0，则重新受固定 1 秒窗口配额限制
+   （超配额快速失败而不是硬打）；352 之后再次请求该出口走冷却分支而不是继续重试；
 3. 日志里同一前缀只出现一次「进入冷却」，不再「换地址反复撞墙」；`proxy_health` 分档同时打印前缀口径计数。
 
 ### 8.4 回滚
