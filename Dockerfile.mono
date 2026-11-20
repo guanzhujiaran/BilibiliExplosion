@@ -418,6 +418,8 @@ RUN sed -i "s|deb.debian.org|${DEBIAN_MIRROR}|g; s|security.debian.org|${DEBIAN_
 #   豆腐块 □□□。fontconfig（字体解析）+ fonts-noto-cjk（Noto 中日韩）+
 #   fonts-wqy-zenhei（文泉驿正黑，中文点阵补充）+ fonts-dejavu-extra（拉丁/符号）
 # + git/curl/ca-certificates：modelscope/HF 拉取模型与 https 访问所需（与 base 现状能力对齐）
+# + xvfb：服务器无物理显示器，有头 chromium 必须靠 Xvfb 提供虚拟屏幕（DISPLAY=:99），
+#   否则启动即报 "Missing X server or $DISPLAY"（见 app/utils/virtual_display.py）
 RUN --mount=type=cache,id=apt-archives-bookworm,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=apt-lists-bookworm,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -447,6 +449,7 @@ RUN --mount=type=cache,id=apt-archives-bookworm,target=/var/cache/apt,sharing=lo
     fonts-noto-cjk \
     fonts-wqy-zenhei \
     fonts-dejavu-extra \
+    xvfb \
     git \
     curl \
     ca-certificates
