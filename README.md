@@ -158,6 +158,12 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
    docker compose up -d
    ```
 
+   > `rpa-browser` 使用 **host 网络**（`network_mode: host`），直接监听宿主机 `28000`，
+   > 以便 WebRTC offer 带出宿主机公网 IPv6 host 候选、让外网手机直连媒体；
+   > 依赖服务一律走 `127.0.0.1:<宿主机映射端口>`。`28000` 必须用
+   > `scripts/docker/rpa-host-firewall.sh` 限制来源（仅 loopback 与 Docker 网段），
+   > 媒体 UDP `32768:60999` 按需放行。**Docker Desktop 不支持 host 网络，仅限 Linux 宿主机。**
+
 ## 自动部署（脚本一键式）
 
 整套部署只依赖 **bash + git + docker compose**：服务器上的 timer 轮询 `origin/main`，

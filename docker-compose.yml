@@ -372,7 +372,9 @@ services:
       # （BiliPPTR/utils/utils.js 的 query_base_url），显式设置该变量时以环境变量为准，
       # 只有「网关不在本套编排里、也没起查询容器」的部署才需要把它覆盖回爬虫地址。
       - BILI_CRAWLER_QUERY_URI=${BILI_CRAWLER_QUERY_URI:-http://be-bilibili-crawler-query:23336}
-      - RPA_SERVICE_URI=${RPA_SERVICE_URI:-http://rpa-browser:28000}
+      # rpa-browser 使用 host 网络（WebRTC 需要宿主机公网 IPv6 host 候选），
+      # 网关在 bridge 网内无法解析其容器名，固定走 host-gateway 访问宿主机 28000。
+      - RPA_SERVICE_URI=${RPA_SERVICE_URI:-http://host.docker.internal:28000}
       - MESSAGE_SERVICE_URI=${MESSAGE_SERVICE_URI:-http://be-message-service:18739}
       - CASDOOR_ENABLED=true
       # 网关只用它做服务端反向代理（/api/v1/casdoor/backend），不需要浏览器可达的公网地址
@@ -417,11 +419,18 @@ services:
       - "host.docker.internal:host-gateway"
   rpa-browser:
     container_name: fastapi-rpa-browser
+    # 外网手机（IPv6）直连 WebRTC 媒体：必须共享宿主机网络命名空间，
+    # offer 里才会出现宿主机公网 IPv6 的 host 候选（bridge 网只能给出 172.x 容器地址）。
+    # host 网络下没有 Docker DNS：env 里所有容器名都必须改成
+    # 127.0.0.1:<宿主机映射端口>（depends_on 只控制启动顺序，不解决 DNS）；
+    # 端口也不再做 ports 映射（28000 直接监听宿主机，改由防火墙限制来源）。
+    network_mode: host
     build:
       context: .
       dockerfile: ./Dockerfile.mono
       target: rpa
     depends_on:
+      # 仅控制启动顺序；host 网络下不能用服务名互访
       - postgres
       - redis
       - rabbitmq
@@ -444,8 +453,6 @@ services:
       # 不挂载时 bili_common 只能来自镜像内 venv 的构建期副本（rpa 运行阶段没有 COPY /bili-common），
       # 改 bili-common 必须重建镜像才生效；挂载后改 bili-common 只需重建容器（docker compose up -d）。
       - ./bili-common:/bili-common
-    ports:
-      - "${RPA_BROWSER_PORT:?请在 .env 里设置 RPA_BROWSER_PORT（宿主机映射端口，容器内固定 28000）}:28000"
     environment:
       # ======================================================================
       # 本服务的配置**全部**在这里列出。RPA 镜像不含 .env.dev / .env.prod
@@ -460,7 +467,8 @@ services:
       # ======================================================================
 
       # ---------- 1. 必填 ----------
-      - mysql_browser_info_url=mysql+aiomysql://mysql/BiliRPADB?user=root&password=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
+      # host 网络无 Docker DNS：mysql 容器名 → 127.0.0.1:宿主机映射端口（.env 的 MYSQL_PORT）
+      - mysql_browser_info_url=mysql+aiomysql://127.0.0.1:${MYSQL_PORT:-10000}/BiliRPADB?user=root&password=${MYSQL_PASSWORD:?请在 .env 里设置 MYSQL_PASSWORD（MySQL root 密码，mysql 容器与各服务共用）}
       # dev / prod：影响默认日志级别、MCP 端点是否挂载、会话行为；容器默认 prod
       - RUNNING_MODE=${RUNNING_MODE:-prod}
 
@@ -468,7 +476,8 @@ services:
       - controller_base_path=${CONTROLLER_BASE_PATH:-/api/v1/rpa}
       - admin_base_path=${ADMIN_BASE_PATH:-/api/admin/rpa}
       # be-message 服务地址（管理员身份判定 /api/v1/message/admin/me）
-      - message_service_url=${MESSAGE_SERVICE_URL:-http://be-message-service:18739}
+      # host 网络无 Docker DNS：be-message-service 容器名 → 127.0.0.1:宿主机映射端口
+      - message_service_url=${MESSAGE_SERVICE_URL:-http://127.0.0.1:${MESSAGE_SERVICE_PORT:-10013}}
       # 业务日志（loguru）：DEBUG / INFO / WARNING / ERROR；与 crawler / message 共用同名变量
       - LOG_LEVEL=${LOG_LEVEL:-WARNING}
       - jwt_algorithm=${JWT_ALGORITHM:-HS256}
@@ -649,11 +658,13 @@ services:
       - duration_monthly_reset_enabled=${DURATION_MONTHLY_RESET_ENABLED:-true}
 
       # ---------- 15. RabbitMQ（RPC 调 crawler + 操作日志异步落库 + 后端串行调度） ----------
-      - RABBITMQ_URL=amqp://${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}:${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}@rabbitmq:5672/
+      # host 网络无 Docker DNS：rabbitmq 容器名 → 127.0.0.1:宿主机映射端口（.env 的 RABBITMQ_PORT）
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:?请在 .env 里设置 RABBITMQ_USER（RabbitMQ 账号）}:${RABBITMQ_PASSWORD:?请在 .env 里设置 RABBITMQ_PASSWORD（RabbitMQ 密码）}@127.0.0.1:${RABBITMQ_PORT:-5672}/
 
       # ---------- 16. Casdoor 支付对账（时长权益入账核验，详见 docs/浏览器使用时长与会员权益计划书.md §3.3） ----------
       # 复用根 .env 已有的管理员应用凭证（app-built-in），无需新增维护项
-      - CASDOOR_ENDPOINT=${RPA_CASDOOR_ENDPOINT:-http://fastapi-casdoor:8000}
+      # host 网络无 Docker DNS：casdoor 容器名 → 127.0.0.1:宿主机映射端口（.env 的 CASDOOR_PORT）
+      - CASDOOR_ENDPOINT=${RPA_CASDOOR_ENDPOINT:-http://127.0.0.1:${CASDOOR_PORT:-10011}}
       - CASDOOR_CLIENT_ID=${CASDOOR_ADMIN_CLIENT_ID:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_ID（Casdoor 管理员应用 app-built-in 的 clientId）}
       - CASDOOR_CLIENT_SECRET=${CASDOOR_ADMIN_CLIENT_SECRET:?请在 .env 里设置 CASDOOR_ADMIN_CLIENT_SECRET（Casdoor 管理员应用 app-built-in 的 clientSecret）}
       - casdoor_verify_timeout=${CASDOOR_VERIFY_TIMEOUT:-5.0}
