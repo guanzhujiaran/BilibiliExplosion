@@ -515,6 +515,8 @@ services:
       - browser_launch_queue_tick_interval_ms=${BROWSER_LAUNCH_QUEUE_TICK_INTERVAL_MS:-1000}
       # 排队最大等待（秒），0 = 不限
       - browser_launch_queue_max_wait_time=${BROWSER_LAUNCH_QUEUE_MAX_WAIT_TIME:-600}
+      # 同步创建请求等待浏览器真正落地的最长时间（秒），超时返回明确错误并强制清理
+      - browser_launch_settle_timeout=${BROWSER_LAUNCH_SETTLE_TIMEOUT:-30}
       # 排队时长估算（ETA）采样窗口
       - browser_launch_eta_sample_window=${BROWSER_LAUNCH_ETA_SAMPLE_WINDOW:-20}
       - browser_launch_eta_min_samples=${BROWSER_LAUNCH_ETA_MIN_SAMPLES:-3}
@@ -542,6 +544,10 @@ services:
       - browser_stream_degrade_after=${BROWSER_STREAM_DEGRADE_AFTER:-60}
       - browser_stream_suspend_after=${BROWSER_STREAM_SUSPEND_AFTER:-180}
       - browser_session_terminate_grace=${BROWSER_SESSION_TERMINATE_GRACE:-60}
+      # 会话回收整体超时（秒）：超时直接杀进程组并清理 entry / 池对象
+      - browser_session_release_timeout=${BROWSER_SESSION_RELEASE_TIMEOUT:-45}
+      # terminating 连续回收失败的重试上限，达到后强制清理
+      - browser_session_terminate_max_retries=${BROWSER_SESSION_TERMINATE_MAX_RETRIES:-3}
       # 会话状态 SSE 心跳（秒），必须小于网关空闲超时（180s）
       - browser_session_sse_heartbeat_interval=${BROWSER_SESSION_SSE_HEARTBEAT_INTERVAL:-15}
       # browser_session_expiration_time（会话绝对过期秒数，None=不过期）：留空即不过期，
