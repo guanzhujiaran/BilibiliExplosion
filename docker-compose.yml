@@ -821,7 +821,10 @@ services:
     restart: unless-stopped
     environment:
       - LLAMA_ARG_MODELS_PRESET=/models.ini
-      - LLAMA_ARG_MODELS_MAX=1
+      # 至少保留「对话模型 + 向量模型」两个槽位：max=1 时任何一次 Qwen 推理都会把
+      # embedding 模型挤下线，下一次关键词搜索要重新加载 e5（实测 ~7-9s）。
+      # 两个模型都很小（e5-base Q8 约 120MB / Qwen0.8B Q4 约 500MB），同时常驻无压力。
+      - LLAMA_ARG_MODELS_MAX=2
       - HF_ENDPOINT=https://hf-mirror.com
     extra_hosts:
       - "host.docker.internal:host-gateway"

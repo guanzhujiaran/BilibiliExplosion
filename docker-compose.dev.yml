@@ -194,7 +194,9 @@ services:
     restart: unless-stopped
     environment:
       - LLAMA_ARG_MODELS_PRESET=/models.ini
-      - LLAMA_ARG_MODELS_MAX=1
+      # 与 docker-compose.yml 同口径：至少容纳「对话模型 + 向量模型」，
+      # 避免 Qwen 推理把 embedding 模型挤下线后，搜索请求重新加载 e5（~7-9s）。
+      - LLAMA_ARG_MODELS_MAX=2
       - HF_ENDPOINT=https://hf-mirror.com
     extra_hosts:
       - "host.docker.internal:host-gateway"
