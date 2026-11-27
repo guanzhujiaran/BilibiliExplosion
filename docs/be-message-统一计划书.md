@@ -414,6 +414,7 @@
 - **帧节奏（背压式限帧）**：利用 CDP screencast 的 **ack 驱动**特性（未 ack 不发下一帧）——在 `on_frame` 回调内按 `1/max_fps` 做帧间隔对齐，**入队前**才 ack。既避免「丢弃 + 立即 ack」导致浏览器以 60fps 空转编码，也真正把降级 `degrade_max_fps` 落到实处（CPU / 带宽同步下降）。
 - **解码路径**：① 帧进入解码前先**合并积压**（`qsize()>0` 时把旧帧全部丢弃，只解码最新一帧），落后时不再做无意义的 JPEG 解码；② 解码改投**模块级专用线程池**（`webrtc-frame-decode`），不再抢占 `asyncio.to_thread` 的默认全局执行器，避免多流互相拖慢事件循环；③ 奇数宽高对齐到偶数（yuv420p / H264 编码器要求）；④ 绿屏兜底帧按尺寸缓存复用，不再每帧新建 PIL Image。
 - **分辨率降级**：降级态通过 screencast 的 `size` 参数在**浏览器侧**降分辨率（`browser_stream_degrade_frame_max_width/height`，默认 640×360），JPEG 编码 / CDP 传输 / Python 解码三端同时降载；正常态沿用浏览器默认（viewport 等比缩放到 800×800 内），不改动画面观感。
+  > **后续调整（`docs/rpa-多观看者并发直播计划书.md` §10.10）**：降级不再改分辨率——所有档位恒定按页面真实视口采集，只降 JPEG 质量 / 帧率 / 编码码率；上述 `*_frame_max_width/height` 配置项已移除。
 - **生命周期修正**：`stop()` 统一走 `session.dispose()`（回退 `page.screencast.stop()`），并向队列投递哨兵唤醒阻塞的 `get_next_frame()`，停止后清空队列与 `_last_frame` 释放帧缓冲；解码失败返回上一帧 / 绿屏而**不终止轨道**。`start()` / 降级重启共用同一个 `_start_screencast()`，去掉重复分支。
 - **可观测**：新增 `dropped_frames` / `emitted_frames` 计数，`stats` 快照统一用 SQLModel `VideoFrameProducerStats`（丢帧率 = `dropped/(dropped+emitted)`），用于校验降级是否真正生效。
 - **解码快路径（第二期）**：JPEG 解码由「PIL → RGB → av 转 yuv420p」改为 **libavcodec MJPEG 直接解到 YUV** 再 `reformat(yuv420p)`，省掉一次全画幅 RGB 中间转换与拷贝。实测（800×450，quality=80）：平坦图 5.5ms → 2.8ms（-50%），高熵图 6.9ms → 4.7ms（-32%），8 线程并发 -45%+；`CodecContext` 非线程安全，按 `threading.local()` 每线程各持一个，解码异常时丢弃重建并**回退 PIL 路径**（兼容 CMYK / 异常 JPEG）。
@@ -468,6 +469,9 @@
   | `high` 高清（默认） | 80 | 浏览器自适应（≤800×800） | 30fps |
   | `medium` 标清 | 65 | 960×540 | 15fps |
   | `low` 流畅 | 50 | 640×360 | 5fps |
+
+  > **后续调整（`docs/rpa-多观看者并发直播计划书.md` §10.10）**：上表的分辨率列已作废 ——
+  > 档位不再改分辨率，所有档位统一按页面真实视口采集，只差 JPEG 质量 / 编码码率 / 帧率。
 
   `high` / `low` 与改造前的「正常档 / 降级档」参数完全一致，**行为向后兼容**；`medium` 为新增中间档。
 - **「取最省」仲裁**：三个来源各自只表达「我想要哪一档」，最终生效档位取其中最省的一个，彼此无需感知对方：

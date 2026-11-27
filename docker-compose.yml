@@ -525,7 +525,8 @@ services:
       # 排队最大等待（秒），0 = 不限
       - browser_launch_queue_max_wait_time=${BROWSER_LAUNCH_QUEUE_MAX_WAIT_TIME:-600}
       # 同步创建请求等待浏览器真正落地的最长时间（秒），超时返回明确错误并强制清理
-      - browser_launch_settle_timeout=${BROWSER_LAUNCH_SETTLE_TIMEOUT:-30}
+      # 冷启动（AppImage 首次 FUSE 挂载 + 指纹注入）可能超过 30s，默认 60
+      - browser_launch_settle_timeout=${BROWSER_LAUNCH_SETTLE_TIMEOUT:-60}
       # 排队时长估算（ETA）采样窗口
       - browser_launch_eta_sample_window=${BROWSER_LAUNCH_ETA_SAMPLE_WINDOW:-20}
       - browser_launch_eta_min_samples=${BROWSER_LAUNCH_ETA_MIN_SAMPLES:-3}
@@ -574,18 +575,12 @@ services:
       # 超清档
       - browser_stream_ultra_quality=${BROWSER_STREAM_ULTRA_QUALITY:-90}
       - browser_stream_ultra_max_fps=${BROWSER_STREAM_ULTRA_MAX_FPS:-30}
-      - browser_stream_ultra_frame_max_width=${BROWSER_STREAM_ULTRA_FRAME_MAX_WIDTH:-1920}
-      - browser_stream_ultra_frame_max_height=${BROWSER_STREAM_ULTRA_FRAME_MAX_HEIGHT:-1080}
       # 标清档
       - browser_stream_medium_quality=${BROWSER_STREAM_MEDIUM_QUALITY:-65}
       - browser_stream_medium_max_fps=${BROWSER_STREAM_MEDIUM_MAX_FPS:-15}
-      - browser_stream_medium_frame_max_width=${BROWSER_STREAM_MEDIUM_FRAME_MAX_WIDTH:-960}
-      - browser_stream_medium_frame_max_height=${BROWSER_STREAM_MEDIUM_FRAME_MAX_HEIGHT:-540}
       # 流畅档
       - browser_stream_degrade_quality=${BROWSER_STREAM_DEGRADE_QUALITY:-50}
       - browser_stream_degrade_max_fps=${BROWSER_STREAM_DEGRADE_MAX_FPS:-5}
-      - browser_stream_degrade_frame_max_width=${BROWSER_STREAM_DEGRADE_FRAME_MAX_WIDTH:-640}
-      - browser_stream_degrade_frame_max_height=${BROWSER_STREAM_DEGRADE_FRAME_MAX_HEIGHT:-360}
 
       # ---------- 9. 工作流执行 / 调度 / SSE ----------
       # 控制流（Loop / IfElse）最大嵌套深度

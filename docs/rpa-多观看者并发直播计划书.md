@@ -79,38 +79,32 @@
 - 慢消费者只丢自己槽里的旧帧，**不影响其他人**，也不再需要 `_coalesce_pending`。
 - 「背压限帧」（`_wait_for_frame_slot`：延迟 ack 让浏览器降帧）**保留**，仍按帧源档位生效。
 
-### 2.3 约束三：档位直接改 screencast 参数
+### 2.3 约束三：档位直接改 screencast 压缩参数
 
-```267:275:RPA-Browser/app/services/RPA_browser/webrtc/video_frame_producer.py
+```370:383:RPA-Browser/app/services/RPA_browser/webrtc/video_frame_producer.py
         changed = (
             params.quality != self._quality
             or params.frame_interval != self._frame_interval
-            or params.size != self._screencast_size
         )
 ```
 
-`quality` / `size` / `frame_interval` 是**帧源级**参数，无法同时满足不同观看者。
+`quality` / `frame_interval` 是**帧源级**参数，无法同时满足不同观看者。
 
 → **两级档位**：
 
 | 层级 | 取值 | 作用 |
 | --- | --- | --- |
-| 帧源档位 | `max(所有未暂停且在线观看者的档位)` | 重建 screencast（quality / size / fps） |
-| 观看者档位 | 各观看者自己选择 | 在 track 内 `reformat(width, height)` 缩放 + 按自己的 fps 抽帧 |
+| 帧源档位 | `max(所有未暂停且在线观看者的档位)` | 重建 screencast（JPEG 质量 / fps） |
+| 观看者档位 | 各观看者自己选择 | 按自己的 fps 抽帧 + 本端编码码率（`target_bitrate`） |
 
 要点：
 
-- **缩放是零解码成本的**：帧源已经是 YUV420P 的 `av.VideoFrame`，
-  `frame.reformat(w, h)` 底层走 swscale，只需重采样一次。
-- 当观看者档位 == 帧源档位时（单人观看、或全员同档），**不做任何缩放**，路径与现状完全一致。
-- 帧源档位取 `max` 而非固定 HIGH：全员选低档时，浏览器侧 screencast 也降下来，
-  不会出现「没人要 1080p 却一直按 1080p 编码」的浪费。
-- `ultra`（超清）不设「浏览器自适应」而是显式 `1920×1080`，因此同页只要有 1 个超清观看者，
-  帧源就按 1080p 采集；`medium` / `low` 各自 `reformat` 缩放下去，`high` 因不设上限
-  也会拿到同源的更高分辨率帧（观感更好，代价是该端编码量上升）。
-- `original`（原画）是最高档：JPEG 质量 100，且 screencast **显式传页面真实视口尺寸**
-  （浏览器侧默认会把画面等比缩放进 800×800，只有给出视口尺寸才是未缩放的原始图像），
-  因此同页只要有 1 个原画观看者，其余档位都从这份未缩放的帧源缩放下来。
+- **分辨率与档位解耦**：screencast 恒定传页面真实视口尺寸（H264 要求偶数，向下取偶），
+  切档只改压缩率（JPEG 质量 / 编码码率）与帧率，画面尺寸与布局不跳变（见 §10.10）。
+- **不做本地缩放**：帧源与各观看者尺寸一致，`ViewerMediaTrack._prepare_frame`
+  只做共享帧克隆，不再 `reformat`。
+- 帧源档位取 `max` 而非固定 HIGH：全员选低档时，浏览器侧 JPEG 质量与码率也降下来，
+  避免「没人要高清却一直按高质量编码」的浪费。
 - 帧源档位变化才触发 screencast 重启；`_apply_effective_level()` 已有「参数没变就跳过」的去重，
   避免多个观看者切档时反复重启。
 
@@ -540,8 +534,8 @@ status 的 `viewers[]` 与 SSE 共用 `manager.viewer_summaries()` 同一构造�
    两端**同时有画面**，互不踢流；后端日志可见两个 `viewer_id` 各一条流。
 2. **暂停隔离**：A 端暂停 → A 定格、B 继续播放；B 的画面与码率不受影响。
 3. **全暂停省电**：两端都暂停后，后端日志出现「帧源暂停」（screencast 已停）。
-4. **档位隔离**：A 选 `low`、B 保持 `high` → A 收到 640×360/5fps，B 仍为高分辨率/30fps；
-   帧源按 HIGH 采集（后端日志 `VideoFrameProducer 档位生效: level=high`）。
+4. **档位隔离**：A 选 `low`、B 保持 `high` → 两端**画面尺寸一致**，A 只有 5fps、编码码率更低，
+   B 仍为 30fps / 3Mbps；帧源按 HIGH 采集（后端日志 `VideoFrameProducer 档位生效: level=high`）。
 5. **全员低档**：两端都选 `low` → 帧源档位自动降到 `low`（浏览器侧编码降下来）。
 6. **保活**：静看 10 分钟，**不出现**降级 / 挂起（对照现状：120s 降级、300s 黑屏）。
 7. **异常回收**：A 端直接关闭标签页 → 60~80s 内后端回收该观看者的连接并留日志；
@@ -589,7 +583,7 @@ status 的 `viewers[]` 与 SSE 共用 `manager.viewer_summaries()` 同一构造�
 - 核心语义脚本验证通过（临时脚本已删除）：
   - 广播槽：多槽各取同一帧、慢消费者丢旧保新、关闭后返回 `None`
   - 共享帧克隆的独立性（`pts` 不互相改写）；单人观看零拷贝
-  - 观看者轨道：按本端档位缩放到 640×360、PTS 单调、暂停时 `recv` 挂起
+  - 观看者轨道：按本端档位缩放到 640×360（该缩放已于 §10.10 移除）、PTS 单调、暂停时 `recv` 挂起
   - 帧源仲裁：全员暂停 → 停采；有人看 → 取最高档；只剩低档 → 降为 `low`
   - 管理器：未知观看者心跳返回 `False`、空表回收为 0、关闭不存在的观看者幂等
 - 前端 `nuxt typecheck` 对改动文件 **0 报错**。
@@ -689,6 +683,9 @@ failed 回收 / `has_live_viewer` 空表与断线为 False / 会话豁免只认 
 
 ### 10.8 同档位观看者共享缩放结果
 
+> **已废弃（见 §10.10）**：分辨率与档位解耦后所有观看者尺寸一致，广播不再分组缩放，
+> 本节仅作历史记录。
+
 帧源按最高档采集，低档观看者此前各自 `reformat` 一次 —— 3 个同选「流畅」的观看者
 = 每帧 3 次相同的重采样（1080p→360p 约 1~2ms/帧）。
 
@@ -717,3 +714,27 @@ failed 回收 / `has_live_viewer` 空表与断线为 False / 会话豁免只认 
   已切到生成的类型化方法 `addIceCandidatesApiV1RpaBrowserControlWebrtcIceCandidatesPost`；
 - 候选顺序约束不变：必须先 answer（`setRemoteDescription`）再 addIceCandidate，
   攒批只发生在 answer 之后，不会破坏该顺序。
+
+### 10.10 档位只调压缩率，不再改画面分辨率
+
+**问题**：此前各档位直接改 screencast 采集尺寸（`ultra` 1920×1080、`medium` 960×540、
+`low` 640×360），切档时画面尺寸骤然变化，小字 / 二维码变糊、布局观感跳变；
+而「清晰度」本应只影响压缩质量，不应该改变画面尺寸。
+
+**改动**：
+
+- `WebRTCSessionConfig` 删除全部 `*_frame_max_width/height` 字段与 `_size()`；
+  `StreamQualityParams` 删除 `size` / `native_size`，只保留 `quality` / `max_fps` / `bitrate`；
+- `VideoFrameProducer._resolve_screencast_size()` 恒定返回页面真实视口尺寸（向下取偶），
+  与档位无关；`_apply_effective_level()` 的重启判断只剩 `quality` / `frame_interval`；
+- 删除 `_scaled()` 与 `_broadcast()` 的按档位分组缩放，`_slots` 回归 `set[FrameSlot]`，
+  多订阅者时统一 `shared=True`；`set_slot_level()` / `WebRTCStreamManager._sync_slot_level`
+  随之删除（不再有槽位档位）；
+- `ViewerMediaTrack._prepare_frame()` 只保留共享帧克隆；档位差异改由本端编码码率
+  （`encoder.target_bitrate`）与抽帧帧率体现；
+- 配置项 `browser_stream_{ultra,medium,degrade}_frame_max_width/height` 从
+  `app/config.py`、`.env.example`、`docker-compose.yml` 移除（档位只配质量与帧率）。
+
+**验证**（临时脚本，已删）：五档 `_resolve_screencast_size()` 返回同一尺寸（1600×900，
+视口 1601×901 向下取偶）；无视口时退回浏览器自适应；双订阅槽广播同帧且 `shared=True`；
+模块导入 / `py_compile` 全部通过。
