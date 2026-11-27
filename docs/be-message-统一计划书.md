@@ -206,6 +206,7 @@
 
 - 受众解析 `resolve_target_mids`（按 `recv_notify`）；投放类型 ALL/CUSTOM/LEVEL/ROLE/VIP；免打扰由 `can_push_now` 判定。
 - **读取即已读**：`/notify/pull` 等构造出参后批量 upsert 本页为已读，出参 `is_read` 是读取前快照；无 `/notify/read` 接口、无 `only_unread` 参数（翻页收缩跳条）。
+- **进入通知页即清空红点（2.71.0）**：用户侧 `GET /notify/list` 在返回本页后，额外调用 `NotifyService.mark_all_read` 把该用户**全部可见未读**通知置为已读（判定条件与 `unread_count` 完全一致：`NotifyState` 缺行，或 `is_read=False` 且未删除；分批 500 条幂等 upsert）。因此通知红点不再受 `page_size`（默认 20）限制——前端通知页加载完成后 `emit('refreshUnread')`，`msg_feed/unread` 的 `notify` 即为 0。出参 `is_read` 仍是读取前快照，不影响「本次新到」高亮。`/notify/system`（B 站形态）与 `/notify/pull` 不触发全清。
 - **网关匿名白名单（评论读接口）**：`GET /api/v1/comment/latest`（首页最新评论）与 `comment/main`、`comment/detail/{rpid}`、`comment/sub` 同口径放入 be-gateway jwtAuth `unless` 白名单——be-message 侧本就经 `resolve_optional_viewer` 允许匿名（匿名仅不回填点赞态），此前 latest 漏配导致未登录访问首页 401。评论写接口（add / reply / delete / audit 等）仍走 jwtAuth + 上游 RequiredUser。
 
 ### 5.7 seed 灌数（`scripts/seed_cli.py` 唯一入口 + `scripts/seed/` 功能分包）
@@ -297,7 +298,14 @@
   - **首页 / 榜单禁止再自行调用 `GetLotteryDetail` / `GetLotteryDetailList`**（detail 域接口）：榜单一次请求拿全量「热度 + 卡片」，避免首页为渲染榜单再打一轮 detail（原 `HotLotteryList.vue` 的 `getLotteryDetailListByIds` 调用已移除）。
   - 弱依赖：RPC 超时 / 未连接 / 卡片缺失时**服务端直接剔除该项**（`card` 字段保留可为 null 供前端防御），榜单只展示有卡片的热度项，不把下游抖动放大成 500。
   - 浏览记录口径：`TInteractionViewLog` 由 detail 单资源 `GET /interaction/status/{bizId}` 投递，卡片上的「查看源动态 / 抽奖详情」外链点击也复用该接口上报（列表批量接口不累计浏览），榜单按「近 N 天去重浏览人数」（每用户每资源一行 COUNT）排序，首页曝光不计浏览；详情页互动栏不再 `count-view`，避免同一次详情访问投递两条浏览消息；`hot-lotteries` 与 `interaction/status` 一样在网关匿名放行。
-  - **双口径榜单**：`GET /community/interaction/hot-lotteries?rank_by=site|bili`——`site`（默认）按近 N 天去重浏览人数；`bili` 按 crawler 抓取时 `lotdata.participants` 降序，仅统计进行中的官方 / 预约 / 充电抽奖。crawler 新增只读接口 `GET /api/v1/lottery_database/bili/GetTopLotteryByParticipants`（固定 2 条 SQL；预约有效性跨库查询慢，走进程内 5 分钟缓存 + 后台刷新，不阻塞请求）。前端热门面板用「本站热门 / B站热门」Tab 切换，卡片分别展示 `X 人浏览` / `X 人参与`（参与人数为抓取时快照）。
+  - **三口径榜单（2.71.0 拆分）**：`GET /community/interaction/hot-lotteries?rank_by=site|site_third|bili`。
+    - `site`（默认）：近 N 天 `TInteractionViewLog` 去重浏览人数降序，**仅官方 / 预约 / 充电抽奖**（`bizType=lottery`，bizId=`lottery_id`）；
+    - `site_third`：近 N 天去重浏览人数降序，**仅第三方抽奖动态**（`bizType=others_lot_dyn`，bizId=`dynId`）；
+    - `bili`：crawler 抓取时 `lotdata.participants` 降序，仅统计进行中的官方 / 预约 / 充电抽奖。
+    第三方动态与官方抽奖是**两个独立命名空间**（id 语义不同、卡片形态不同），**不做聚合也不合榜**：`site` 只统计 `lottery`，`site_third` 只统计 `others_lot_dyn`。前端热门面板按「本站抽奖 / 第三方动态 / B站热门」三个 Tab 切换，卡片分别展示 `X 人浏览` / `X 人浏览` / `X 人参与`。
+    - `bili` 口径由 crawler 只读接口 `GET /api/v1/lottery_database/bili/GetTopLotteryByParticipants` 提供（固定 2 条 SQL；预约有效性跨库查询慢，走进程内 5 分钟缓存 + 后台刷新，不阻塞请求）。
+    - `site_third` 的卡片回捞：crawler 新增只读接口 `GET /api/v1/lottery_database/bili/GetOthersLotDynDetailList?dyn_ids=...`（逗号分隔、≤50 个、去重保序，固定 2 条 SQL：`t_lotdyninfo IN (...)` + 批量 `t_lot_extra_info`，无 N+1），响应 data 用 `bili_common.rpc.lottery.OthersLotDynCardList` 解析；元素形态与 `GetOthersLotDynDetail` / `GetOthersLotDynList` 的 item 完全一致（含 `dynId` / `dynId_str` / `dynamicUrl`，前端 `normalizeLotteryData` 直接识别为 `THIRD_PARTY`）。卡片缺失的项同样由服务端剔除。
+    - `HotLotteryItem.card` 为 `LotteryCard | OthersLotDynCard`：`site` / `bili` 返回 `{raw, extra_info}`，`site_third` 返回第三方动态 item 形态；两者不会出现在同一次响应里。
   - **首页「即将开奖」轮播同口径**（`UpcomingLotteryMarquee`，2.67.0）：crawler `GET /lottery_database/bili/GetLotteryDataSummary` 的 `upcoming` 明细**随卡片一次下发** `raw` + `extra_info`（`get_upcoming_lottery` 返回完整 lotdata 行 + 一次批量 `t_lot_extra_info`，无 N+1），前端直接渲染，**不再**调用 `GetLotteryDetailList` 回捞；互动态仍走批量 `/interaction/status`（只读，不累计浏览、不改互动计数）。首页因此不产生任何 detail 域请求，也不会给用户新增浏览记录或抽奖互动次数。
   - **即将开奖：24h 口径不变 + 明细改后端分页**（2.67.0 调整）：窗口仍为 24h（紧迫度语义，`SUMMARY_UPCOMING_HOURS=24`），**不再设置条数上限**——`GetLotteryDataSummary` 只保留统计行，**不再下发 `upcoming` 明细**；明细改由新增只读接口 `GET /lottery_database/bili/GetUpcomingLottery?page_num=&page_size=&key=&within_hours=24` 分页返回 `ResponsePaginationItems[UpcomingLotteryItem]`（`items` + `total`，固定 2 条 SQL：`count` + 分页查询 + 批量 `t_lot_extra_info`，无 N+1、无静默截断），与普通抽奖列表（`GetOfficialLottery` 等 `page_num` / `page_size`）**同一分页范式**。
   - 首页 `UpcomingLotteryMarquee`：`el-carousel` 自动滚动 → 统一 `BiliPagination`（`size="large"` / `background` / `pager-count=5` / `layout` 带 `total`，与 `BiliPaginationDataView` 同款外观），每页 = 列数 × 2 行（宽屏 4 列 8 张、窄屏 2 列 4 张）；页码 / 列数 / 抽奖类型变化时**只查当前页**（互动态也只查当前页），不再一次拉全量。

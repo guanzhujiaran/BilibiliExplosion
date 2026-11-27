@@ -8,6 +8,8 @@ be-bilibili-crawler（RPC 服务端）与 RPA-Browser（RPC 客户端）统一�
 - RPA-Browser/app/models/execution/rpc_method_params.py
 """
 
+from datetime import datetime
+
 from pydantic import Field
 from sqlmodel import SQLModel
 
@@ -418,6 +420,63 @@ class LotteryCardList(SQLModel):
     )
 
 
+class OthersLotDynCardExtraInfo(SQLModel):
+    """第三方抽奖动态卡片附加信息（crawler ``CommonLotExtraInfoResp`` 的渲染子集）。"""
+
+    is_lot: bool | None = Field(default=None, description="LLM 判断是否为抽奖")
+    is_grand_prize: bool | None = Field(default=None, description="大奖标志")
+    need_comment: bool | None = Field(default=None, description="是否需要评论")
+    need_repost: bool | None = Field(default=None, description="是否需要转发")
+    required_topic_text: str | None = Field(
+        default=None, description="转发 / 评论所需携带的话题文本"
+    )
+    prize_names: list[str] | None = Field(
+        default=None, description="LLM 提取的奖品名称列表"
+    )
+    lottery_time: str | None = Field(default=None, description="LLM 提取的开奖时间字符串")
+    lot_type: str | None = Field(default=None, description="抽奖类型（common）")
+    predicted_at: datetime | None = Field(default=None, description="LLM 判断时间")
+
+
+class OthersLotDynCard(SQLModel):
+    """第三方抽奖动态卡片（形态与 crawler ``GetOthersLotDynDetail`` 的 data 一致）。
+
+    供「本站第三方动态热门榜」（``rank_by=site_third``）经 HTTP 回捞卡片：
+    前端 ``normalizeLotteryData`` 以 ``dynId`` + ``dynamicUrl`` 两个字段识别
+    ``THIRD_PARTY``，因此二者必须始终出现在 JSON 中（为 None 也不可被剔除）。
+    """
+
+    dynId: int = Field(description="第三方抽奖动态 dynId（雪花 ID）")
+    dynId_str: str = Field(default="", description="dynId 的字符串副本（JS 精度安全）")
+    dynamicUrl: str | None = Field(default=None, description="B 站动态链接")
+    authorName: str | None = Field(default=None, description="作者昵称")
+    up_uid: int | None = Field(default=None, description="作者 mid")
+    up_uid_str: str | None = Field(default=None, description="作者 mid 的字符串副本")
+    pubTime: datetime | None = Field(default=None, description="发布时间")
+    dynContent: str | None = Field(default=None, description="动态正文（前端解析参与要求）")
+    commentCount: int | None = Field(default=None, description="评论数")
+    repostCount: int | None = Field(default=None, description="转发数")
+    likeCount: int | None = Field(default=None, description="点赞数")
+    officialLotType: str | None = Field(default=None, description="官方抽奖类型")
+    isOfficialAccount: int | None = Field(default=None, description="是否官方账号")
+    created_at: datetime | None = Field(default=None, description="收录时间")
+    isManualReply: bool | None = Field(default=None, description="是否人工判定")
+    extra_info: OthersLotDynCardExtraInfo | None = Field(
+        default=None, description="附加信息（奖品名 / 开奖时间，无记录时为 None）"
+    )
+
+
+class OthersLotDynCardList(SQLModel):
+    """crawler ``GetOthersLotDynDetailList`` 的响应 data。"""
+
+    items: list[OthersLotDynCard] = Field(
+        default_factory=list, description="卡片列表（与请求顺序一致，未命中的不放入）"
+    )
+    missing_ids: list[int] = Field(
+        default_factory=list, description="t_lotdyninfo 中不存在的 dynId"
+    )
+
+
 __all__ = [
     "BaseLotteryRpcParams",
     "GetReserveLotteryRpcParams",
@@ -436,6 +495,9 @@ __all__ = [
     "LotteryCardList",
     "LotteryCardRaw",
     "LotteryCardExtraInfo",
+    "OthersLotDynCard",
+    "OthersLotDynCardList",
+    "OthersLotDynCardExtraInfo",
     "RPC_METHOD_PARAMS_MODEL_MAP",
     "RPC_METHOD_PARAMS_FIELD_MAP",
 ]
